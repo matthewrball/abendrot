@@ -24,6 +24,7 @@ A free, open-source, native macOS menu-bar app that warms screen color temperatu
 - **Pricing:** free forever, optional GitHub Sponsors, never a paywall.
 - **Design refs:** dopedrop.app (aesthetic + "tiny native app" boast), Wispr Flow (calm HUD/named-states/motion), Liquid Glass. Brand direction = twilight palette where warmth is default, pure white reserved for the true-color reveal; New York serif wordmark + SF Pro Text.
 - **Brand picks (provisional, 2026-06-16):** accent = **Ember amber** `#FFAB5C`; icon = **Sunset arc**. Tokens in `brand/brand-direction.md`. NOT final — a dedicated iterate-en-masse brand-refinement exercise comes next (plan §5.5).
+- **Open decision (CCG audit §21.6):** precede the polished 1.0 with signed public betas (0.1→0.9) for hardware validation? Recommended (preserves the 1.0 moment); DDC opt-in-per-display until restore tooling proven. **Awaiting founder confirm.** Full audit in `docs/research/plan-audit-ccg.md`; accepted improvements folded into plan **§21**.
 
 ## Done
 - 3 background research sweeps (market/UX/naming/tech/analytics/marketing/science + stack-decision/exemplar-teardowns) → synthesized.
@@ -51,3 +52,14 @@ A free, open-source, native macOS menu-bar app that warms screen color temperatu
 - Private APIs (IOAVService, CBBlueLightClient) → no App Store, no sandbox; `dlopen`/`dlsym` + version-gate.
 - macos-app-skills repo is README-only "MIT" with no LICENSE file → reimplement patterns, don't copy code.
 - This project home (`Documents/abendrot`) is outside the original session's working dir — the founder will resume the session here directly.
+
+## Session continuity — preserve on /clear (ephemeral / conversation-only context)
+Things that live only in the dying session or in ephemeral `/tmp`, and how to recover them:
+- **Localhost exploration server is ephemeral** (was on port 8733; dies on session end/reboot). The page itself is committed — re-serve with: `python3 -m http.server 8733 --directory /Users/ball/Documents/abendrot/brand/explorations` then open `http://localhost:8733`.
+- **Background task outputs live in `/private/tmp/.../tasks/*.output` and are ephemeral.** All important ones are already copied into `docs/research/` (research sweeps, naming pools, plan-audit). If resuming mid-audit, re-run the audit rather than hunting `/tmp`.
+- **CCG advisor artifacts** are written under `Documents/experiment/.omc/artifacts/ask/` (the OLD session dir), NOT this repo. The ones that matter are copied into `docs/research/`.
+- **Canonical plan = `docs/abendrot-plan.md`.** A stale snapshot exists at `Documents/experiment/.omc/plans/abendrot-plan.md` — ignore it; only edit the one in this repo.
+- **Project memory** is at `~/.claude/projects/-Users-ball-Documents-experiment/memory/abendrot-app-project.md` (note: under the *experiment* session path; it auto-loads). Update it there.
+- **Local git identity** for this repo is set to personal: `Matthew Ball <matthew.robert.ball@gmail.com>` (GitHub `matthewrball`), NOT the OnrampBitcoin email. Public repo not yet created (held until push-ready).
+- **Build-critical reference detail** that was only in chat is now saved: `docs/research/reference-macos-app-skills.md` (NSPanel/Sparkle/Settings-glass/DMG patterns + gaps), `docs/research/name-clearance.md` (why Abendrot), `brand/brand-direction.md` (tokens + DopeDrop Liquid-Glass CSS recipe). Wispr Flow deep-dive + DopeDrop sit in `docs/research/research-sweep-stack-exemplars.json`.
+- **Plan audit (CCG, 2026-06-16):** the Codex+Gemini full-plan audit and the improvements applied from it are recorded in plan + `docs/research/plan-audit-ccg.md` (see that file for the raw advisor findings).

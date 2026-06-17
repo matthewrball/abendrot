@@ -159,7 +159,7 @@ The visual identity is a first-class, **separate, iterate-en-masse workstream**,
   - `WarmthEngine` — actor; per-display state machine keyed by **stable identity** (`CGDisplayCreateUUIDFromDisplayID`, *not* the reassigned displayID); `setWarmth(cct/strength)`; best-available-layer selection per display.
   - `MetalOverlayBackend` — per-`NSScreen` borderless click-through `NSWindow` at screen-saver level hosting a `CAMetalLayer` per-channel-multiply warm shader. **The reliable universal fallback** (works on LG UltraFine / Studio Display / Pro Display XDR / M5 Tahoe). Draw-on-change only → ~0% idle GPU.
   - `DDCBackend` — `IOAVService` write path (VCP 0x16/0x18/0x1A gain) + IORegistry `AppleCLCD2`/`DCPAVServiceProxy` ↔ `CGDirectDisplayID` matching via `CoreDisplay_DisplayCreateInfoDictionary`. Capability-probe (read 0x16) before writing; fire-and-verify with retry.
-  - `GammaBackend` — `CGSetDisplayTransferByTable` wrapper **gated behind a runtime self-test that MEASURES actual pixel change** (screen-capture probe), not the `kCGErrorSuccess` return; auto-demote to overlay on M5 Tahoe. Reset via `CGDisplayRestoreColorSyncSettings`.
+  - `GammaBackend` — `CGSetDisplayTransferByTable` wrapper, gated behind a **per-device/OS capability classification** — **not** a default runtime screen-capture probe (post-compositor pixel measurement needs Screen Recording permission and would break our no-permission promise; see §21‑E1). Default-off on M5 Tahoe; **overlay is always the safe default**. Optional lab/advanced verification only. Reset via `CGDisplayRestoreColorSyncSettings`.
   - `NightShiftBridge` — `CBBlueLightClient` (`getBlueLightStatus:` + `setStatusNotificationBlock:`) read-only schedule follow.
   - `CInterop` — C/Obj-C module map declaring private `IOAVService*`, `CBBlueLightClient`, `CoreDisplay_DisplayCreateInfoDictionary`. Resolve private symbols via `dlopen`/`dlsym` with null checks + version gating.
   - `HotkeyService` — wraps `sindresorhus/KeyboardShortcuts` (Carbon `RegisterEventHotKey`; no Accessibility permission; supports keyDown **and** keyUp → exact fit for hold-to-reveal).
@@ -303,7 +303,7 @@ Per the founder's directive: **keep this main session on planning, design, brand
 
 ## 16. Decisions — CONFIRMED (2026-06-16)
 
-1. **Build scope:** ✅ **Fully-featured 1.0 in one push** — all three layers + advanced mode + Settings + analytics at public launch, internally milestoned (§7).
+1. **Build scope:** ✅ **Fully-featured 1.0 in one push** — all three layers + advanced mode + Settings + analytics at public launch, internally milestoned (§7). **Audit refinement (§21.6, confirm):** keep the polished 1.0 as the public launch, but precede it with signed betas (0.1→0.9) for real-hardware validation. DDC ships **opt-in per display** until its restore/recovery tooling is proven (§21‑E3).
 2. **In-app analytics:** ✅ **Aptabase, opt-in, OFF by default** (open-source/self-hostable; strongest OSS-health trust). Downloads always tracked via GitHub/Homebrew.
 3. **Reveal-true-color:** ✅ **Ship both; default hold** (toggle option in Settings).
 4. **Schedule default:** ✅ **Follow system sunset** (Night Shift schedule, read-only) + Custom + Always-on.
@@ -341,7 +341,7 @@ Per the founder's directive: **keep this main session on planning, design, brand
 ## 19. Success Metrics & Acceptance Criteria
 
 **Product acceptance (v1.0):**
-- Warmth visibly applies to **built-in + ≥2 external display types** including one buttonless Apple panel (via overlay) and one DDC panel (via hardware), on **M5 Tahoe** (where gamma is broken) — verified by screen-capture probe, not API return.
+- Warmth visibly applies to **built-in + ≥2 external display types** including one buttonless Apple panel (via overlay) and one DDC panel (via hardware), on **M5 Tahoe** (where gamma is broken) — verified by **lab/manual capture or capability classification** (NOT a default in-app screen-capture probe; see §21‑E1), with overlay as the guaranteed default.
 - Each display shows the **correct method badge**; engine never silently no-ops (self-test demotes broken layers).
 - Reveal-true-color: hold restores true color across all displays in <150ms and resumes on release; watchdog recovers a lost keyUp within N s; zero stuck-suspended in a 100-cycle test.
 - Schedule follow tracks the system Night Shift `active` flip without altering the user's Night Shift setting; degrades to solar scheduler if the private API fails.
@@ -362,7 +362,56 @@ Deep detail and full source lists live in the persisted research artifacts:
 - **Naming (CCG):** `docs/research/naming-codex.md`, `docs/research/naming-gemini.md`
 - **Name clearance:** Ruhe/Schimmer/Abendrot clearance report (Abendrot = cleanest namespace, GO)
 - **Reference apps studied:** github.com/fayazara/macos-app-skills (build/Sparkle/DMG/overlay patterns — reimplement, license caveat), dopedrop.app (aesthetic + "tiny native" copy formula), wisprflow.ai (HUD/motion/onboarding feel)
+- **Reference build patterns:** `docs/research/reference-macos-app-skills.md` · **Name clearance:** `docs/research/name-clearance.md` · **Plan audit:** `docs/research/plan-audit-ccg.md`
 
 ---
 
-*Status: pending approval. On approval → `/team` execution across the lanes in §15, with heavy backend dispatched to Opus 4.8 `/goal` sessions and the hardest engine logic optionally retained in the planning session.*
+## 21. Audit Revisions (CCG — Codex + Gemini, 2026-06-16)
+
+These refine the sections above; where they conflict with earlier prose, **§21 wins.** Full findings: `docs/research/plan-audit-ccg.md`.
+
+### 21.1 Engineering & correctness (refines §6, §8, §17)
+- **E1 — Gamma is NOT screen-capture-verified by default** (fixed inline §6.1/§19). Post-compositor pixel measurement needs Screen Recording permission and breaks the no-permission promise. Gamma = per-device/OS **capability classification** + optional lab verification; **overlay is always the default**.
+- **E2 — Overlay = documented-limitation UX fallback, not "hardware warmth."** Spec its limits (native fullscreen Spaces, Mission Control, login/lock, protected/HDR/EDR video, screenshots, multi-Space ordering). UI badge says `Overlay`; never market it as hardware.
+- **E3 — DDC safety is a v1.0 gate, and DDC ships opt-in per display until proven.** Required before default-on: EDID native-state snapshot, per-display transaction queue, rate-limit/backoff, write-then-read verify, **emergency "Restore Displays" command**, launch-time stale-state recovery, and a user-facing "hardware mode active" note. Crash handlers can't reliably do async DDC → rely on launch-time recovery, not just exit handlers.
+- **E4 — `DisplayIdentity` model** (not bare display UUID): `cgUUID` + current `CGDirectDisplayID` + EDID vendor/product/serial + transport + IORegistry path + NSScreen frame/scale (transient). Debounce `CGDisplayRegisterReconfigurationCallback` / `didChangeScreenParameters` bursts on the main actor; redaction rules for logs/analytics.
+- **E5 — Private-API kill switch + release policy:** runtime feature flags, OS-build denylist, a "private APIs disabled → overlay-only" fallback mode, and **signed+notarized private-API smoke tests from M0** (not just at release).
+- **E6 — Night Shift follow is best-effort:** rename internally `SystemNightShiftStateFollower`; UI copy "follow system Night Shift *when available*"; add manual/approx-timezone fallback **before** requesting Location Services.
+- **E7 — Defer auto screenshot/recording-suspend** (no clean public API). v1.0 ships manual Reveal True Color + a "reveal during captures" shortcut.
+- **E8 — v1.0 = per-app exclusions only** (`NSWorkspace.frontmostApplication`); per-website needs browser integration/Accessibility → **future**.
+- **Module split (refines §6.1):** `WarmthCore` (pure, no AppKit/IOKit) · `DisplayServices` (identity/hotplug/ColorSync/gamma) · `HardwareDDC` (private IOAVService behind protocols) · `OverlayRenderer` (AppKit/Metal, main-actor) · `NightShiftBridge` (optional private) · `AbendrotApp`. `CInterop` stays thin; every private lookup returns a typed capability result.
+- **E14 — Failure-injection/persistence test suite (refines §8):** crash-during-DDC-write, SIGKILL, wake-while-service-gone, hotplug-during-reveal-hold, lost-keyUp-across-Space, duplicate identical monitors, ColorSync changes, Night Shift/TrueTone/HDR on, competing apps (f.lux/Lunar/BetterDisplay/MonitorControl).
+
+### 21.2 Release & DMG robustness (refines §9)
+- **Two DMG modes:** `pretty-dmg` (branded Finder window on a logged-in UI runner) + `plain-dmg` (deterministic `hdiutil` fallback). **Gate every release on ≥1 notarized + stapled DMG.** In CI/UI-runner: mount the final DMG and verify layout, signature, quarantine first-launch, and `/Applications` drag-install. (create-dmg AppleScript hangs headless — issue #154.)
+- **One Sparkle release authority** (resolves the keychain-vs-CI contradiction): either a **local release machine** (keychain-only EdDSA key) **or** a **GitHub Actions environment-protected secret with manual approval** — not both. Document key rotation/revocation.
+- **M0 signed+hardened+notarized smoke build**; parse `notarytool log`; verify `spctl -a -vvv`.
+- **Homebrew cask contract:** `livecheck`, `auto_updates true`, `zap` stanzas, SHA256, versioned URLs; publish only after Sparkle/appcast + DMG are coherent.
+- **CI split:** hosted (lint/unit/archive/sign-dry-run) + **self-hosted physical matrix** (M5 Tahoe gamma-broken, M3/M4, Apple display, DDC monitor, HDMI/dock) + manual fresh-user Gatekeeper gate. (Hosted runners can't give every point release or real displays.)
+
+### 21.3 Liquid Glass & UX — Tahoe-native (refines §4, §5.2)
+- **Make the glass feel "wet," not flat:** cursor-aware **specular tracking** (edge glint follows pointer), **variable-thickness/lens blur** (tighter blur at edges implies volume) — the gap between "looks like Tahoe" and "is Tahoe."
+- **Material hierarchy:** clear transient Liquid Glass for the popover; a more-opaque **"frosted ember"** for the persistent/data-heavy **Settings** so text stays legible over busy backgrounds.
+- **Reduce-Transparency fallback = ember-tinted SOLID**, never neutral grey — keep the warm identity when opaque. (Critical a11y + brand fix.)
+- **Reveal = spring, not fade:** SwiftUI `.interactiveSpring` "lift the veil" so it feels physical/elastic.
+- **Advanced mode = "liquid expansion"** of the popover (the glass grows to hold power rows) for inline use; the Settings window remains for deep config.
+- **Onboarding = "3 clicks to warmth"** (permit notifications → set max warmth → confirm schedule); everything else in Settings. (Tightens §4.6's 90-second flow.)
+
+### 21.4 Icon iteration & DMG experience (refines §5.5, §9)
+- **Icon: 3-3-1 variation strategy** — pure glyph / glass-pebble squircle / abstract orb — then converge. Build a **"vibrant template"** 18px menu-bar icon that subtly **glows amber when active**, validated against **wallpaper desktop-tinting** (faint outer glow or 0.5pt stroke so it never disappears on warm wallpapers).
+- **DMG as unboxing:** split-screen **cold→warm** background (dragging the app from "cold/blue" to the "warm" Applications side demos the product); higher-gloss DMG-internal icon; and a **"move to /Applications" Liquid Glass HUD** (LetsMove-style) instead of a stock dialog.
+
+### 21.5 GTM refinements (refines §10, §14)
+- **"Audit the engine" on the landing page:** a code-snippet showing the real `WarmthKit` DDC write — transparency proof for the NightOwl-burned audience.
+- **Tailor the launch LEAD by channel:** Show HN / PH lead with the **reliability/designer hook** ("f.lux is broken on my M5", Reveal True Color) — the tech crowd is cynical about "circadian health." Keep **health as the brand story** (positioning unchanged). Not a reversal — a channel-framing nuance.
+- **Add a v0.9 designer beta ~2 weeks pre-PH** (X/Mastodon) to harvest real Liquid-Glass-UI screenshots for "social proof of beauty" in the PH gallery.
+
+### 21.6 Decision change to confirm — staged betas before the polished 1.0
+Codex flags "fully-featured 1.0 in one push" as the riskiest launch choice (the hard parts fail only on real hardware/point releases). **Recommended refinement (preserves the 1.0 moment):** precede the branded 1.0 launch with signed public betas — `0.1` overlay+hotkey+schedule+DMG+notarization → `0.2` DDC opt-in + restore tooling → `0.3` Sparkle → **`1.0` branded launch after the hardware matrix passes.** This complements the GTM soft-pre-launch and the v0.9 designer beta. **→ Founder confirm before §16 item 1 is updated to final.**
+
+### 21.7 Validated (no change needed)
+- "Show each display's warmth method (Hardware/Gamma/Overlay)" — already a core differentiator (§4.1); independently flagged by Gemini as a top trust lever. Keep.
+
+---
+
+*Status: pending approval (now incl. §21 audit revisions; one open item: §21.6 staged-beta confirmation). On approval → `/team` execution across the lanes in §15, with heavy backend dispatched to Opus 4.8 `/goal` sessions and the hardest engine logic optionally retained in the planning session.*
