@@ -285,6 +285,39 @@ Two separate channels, both privacy-first:
 - **Newsletters/curators:** MacStories/AppStories (personal pitch w/ embargoed access), Indie Dev Monday, iOS Dev Weekly (pitch a "how I built the warmth engine" technical post), Console.dev; AlternativeTo listing; 9to5Mac/MacRumors/AppleInsider post-traction.
 - **Timeline:** Weeks −6→−4 finalize app + README + landing + reserve handles; −4→−2 build-in-public + warm-up + draft all assets; −1 pitch press privately + rehearse PH/HN + pre-write Reddit; **T-0** PH→Show HN→Reddit→socials in one orchestrated day; +1→+14 sustain replies, awesome-\* PRs, "how I built it" post, capture social proof; +2→+8 sequence more channels, ship visible updates, SEO the converting terms.
 
+### 14.1 Future Initiative (TABLED 2026-06-17) — SEO/AEO content & AI-visibility engine
+
+> **Status: parked, not yet started.** Founder vision (2026-06-17): build a large, durable
+> **SEO + AEO (Answer-Engine Optimization)** content engine so Abendrot is *the* answer when a
+> human searches — or an AI assistant is asked — "best f.lux alternative for Mac," "warm my
+> external monitor," "screen warmth for circadian health," etc. Goal: front-of-mind in both
+> classic search results **and** AI recommendations (ChatGPT/Claude/Perplexity/Gemini/Google AI
+> Overviews). **Integrate with the website (`abendrot.app`) before the 1.0 launch.** Scope it as a
+> dedicated workstream — likely a **large multi-agent team** producing the content + technical SEO
+> at volume — when we pick it up; this entry just captures the vision so it isn't lost.
+
+Anticipated pillars (to be fleshed out when un-tabled):
+- **Technical SEO/AEO foundation on the site:** `robots.txt` + XML sitemap; an **`llms.txt`** (and
+  per-page machine-readable summaries) so answer engines can cite us cleanly; rich **structured
+  data** — `SoftwareApplication`, `FAQPage`, `Article`/`BlogPosting`, `BreadcrumbList` JSON-LD;
+  clean factual copy LLMs can quote verbatim (extends §10's AI-visibility notes); canonical URLs,
+  OG/Twitter cards, fast Core Web Vitals.
+- **FAQ corpus:** a deep, schema-marked FAQ (does it work on external monitors? on M-series Tahoe?
+  does it need permissions? is it private? how is it different from Night Shift/f.lux?) — high-
+  intent, directly answer-engine-quotable.
+- **Circadian-health editorial (cited, hedged — must obey §13's general-wellness guardrails):** a
+  series of writeups/blogs on evening light, melanopic exposure, the science (cite-don't-assert,
+  never medical claims), each targeting a real query cluster.
+- **Comparison/alternative pages:** Abendrot vs f.lux, vs Night Shift, vs Lunar/MonitorControl, vs
+  NightOwl — honest, feature-table-driven, capturing the large "f.lux alternative" evergreen
+  traffic (ties to the AlternativeTo listing in §10/§12). Keep claims accurate and defensible.
+- **Distribution/measurement:** internal linking, programmatic pages for the long tail, and a way
+  to track AI-citation share + organic rankings over time (privacy-respecting analytics per §11).
+
+Cross-refs: §10 (landing/SEO), §12 (repo/AlternativeTo/community), §13 (health-claim guardrails —
+**binding** on all content), §14 (launch sequencing). When un-tabled, stand up the agent team via
+the §15 orchestration model.
+
 ---
 
 ## 15. Execution Orchestration (OMC teams + tmux + /goal)
@@ -334,7 +367,7 @@ Per the founder's directive: **keep this main session on planning, design, brand
 
 - **MVP (M0–M1 internal):** overlay warmth on all displays (stable identity, persisted), simple `MenuBarExtra` UI + strength + on/off, hold-to-reveal hotkey + watchdog, three schedule modes, crash/quit neutral-reset, Developer-ID signed + notarized, DMG+ZIP, MIT repo, a11y-respecting template icon.
 - **v1.0 (public launch, M2–M6):** DDC layer + capability probe; measured best-available-wins + auto-demote; per-display transparency UI; advanced mode (per-display curves, per-app exclusions, fine Kelvin/ramp, layer override); gamma behind self-test; Night Shift external "TV" re-identify fix; coexistence detection (f.lux/Lunar/MonitorControl); Sparkle + Homebrew cask; tabbed Liquid Glass Settings; branded DMG; landing page; opt-in analytics; "The Science" panel.
-- **Future:** ColorSync ICC injection (Layer 1.5) to bypass broken gamma; per-channel multiply shader so blacks stay black + HDR/EDR clamp; melanopic-aware warmth + dimming guidance; scenes/presets (Reading/Movie/Color-Critical) + Shortcuts/Siri/Control Center; ambient-light adaptive curves; localization; broader DDC panel-capability database.
+- **Future:** ColorSync ICC injection (Layer 1.5) to bypass broken gamma; per-channel multiply shader so blacks stay black + HDR/EDR clamp; melanopic-aware warmth + dimming guidance; scenes/presets (Reading/Movie/Color-Critical) + Shortcuts/Siri/Control Center; ambient-light adaptive curves; localization; broader DDC panel-capability database. **GTM/content:** the SEO/AEO content & AI-visibility engine (§14.1, tabled — integrate with the site before 1.0).
 
 ---
 
