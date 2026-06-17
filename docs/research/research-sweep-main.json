@@ -1,0 +1,1445 @@
+{
+  "summary": "Research sweep for a free, open-source macOS screen-warmth app: market, UX, naming, tech, analytics, marketing, science",
+  "agentCount": 8,
+  "logs": [],
+  "result": {
+    "competitive": {
+      "competitors": [
+        {
+          "name": "f.lux",
+          "license": "Proprietary freeware (closed source)",
+          "pricing": "Free",
+          "openSource": false,
+          "platforms": "macOS, Windows, Linux (limited), iOS (jailbreak/profile)",
+          "externalMonitorWarmthOnAppleSilicon": "partial - yes via the macOS gamma API (CGSetDisplayTransferByTable), works per-display including externals, but is software gamma not hardware DDC. Reliability is degraded in 2026: users on M5 Pro/Max under macOS Tahoe report gamma changes are silently ignored (no visual warmth), and some have to toggle display profiles nightly. Flicker/ghosting reported on some Dell/LG panels on M1 Max.",
+          "method": "gamma table (CoreGraphics CGSetDisplayTransferByTable) + writes a system/ICC color profile for some external 'HDTV' displays",
+          "strengths": [
+            "Most configurable: exact Kelvin per day/sunset/sleep, very wide warmth range",
+            "Always-on 24/7, mature scheduling (location-based), Darkroom mode",
+            "Free, cross-platform, works per-display including externals",
+            "Long track record and large user base"
+          ],
+          "weaknesses": [
+            "Dated, non-native UI that has not kept up with modern macOS design",
+            "Owns the single global gamma API, so it conflicts with any other gamma app (Lunar software dimming, MonitorControl, Gamma Dimmer) causing color glitches",
+            "Closed source",
+            "Breaks on M5 Pro/Max + Tahoe due to Apple's CGSetDisplayTransferByTable regression (gamma silently ignored)",
+            "Higher battery use than Apple's hardware Night Shift; multi-display full-screen disable is buggy"
+          ]
+        },
+        {
+          "name": "Apple Night Shift (built-in)",
+          "license": "Proprietary (part of macOS)",
+          "pricing": "Free (bundled with macOS)",
+          "openSource": false,
+          "platforms": "macOS, iOS, iPadOS",
+          "externalMonitorWarmthOnAppleSilicon": "partial - works on external monitors but is inconsistent and not exposed per-display. Many users report Night Shift applies to the built-in display but not (or differently to) an external one, or produces a pink/wrong tint. A common cause is macOS identifying the monitor as a 'TV' rather than 'Computer monitor'; the BetterDisplay re-identification workaround often fixes it. There is no per-display schedule and the toggle is global.",
+          "method": "Hardware/GPU-level color-temperature shift (CCT in CIE xyY), applied in the display compositing pipeline below userspace",
+          "strengths": [
+            "Zero/near-zero battery and performance cost (runs at GPU level)",
+            "Native, no install, integrated into Control Center and Shortcuts/Siri",
+            "Smooth transitions, location-aware sunset-to-sunrise schedule"
+          ],
+          "weaknesses": [
+            "External-monitor behavior is unreliable and panel-dependent; often does nothing or tints pink",
+            "No per-display control, narrow warmth range, won't stay on permanently without a helper",
+            "No designer 'instant true-color' hotkey, no app/site exclusions",
+            "Closed; users can't extend it"
+          ]
+        },
+        {
+          "name": "BetterDisplay (free + Pro)",
+          "license": "Proprietary; source was historically public but is now closed/source-available restricted",
+          "pricing": "Free tier with most DDC features; Pro ~$19-25 one-time (14-day full trial)",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "yes (most reliable path) - can drive real hardware color via DDC RGB gain on DDC-capable external monitors on Apple Silicon, and can also re-identify a monitor so Apple Night Shift starts working on it. DDC color depends on the specific panel honoring DDC RGB/temperature registers (many cheaper panels ignore or clamp them), and BetterDisplay's own DDC detection sometimes fails where Lunar/MonitorControl succeed.",
+          "method": "DDC/CI (hardware brightness/RGB/color), virtual/dummy displays, plus EDID/identity override; gamma fallback for software dimming",
+          "strengths": [
+            "Best-in-class external display toolbox: DDC, virtual displays, HiDPI/resolution unlock, EDID override",
+            "Can fix Night Shift on externals by re-identifying the display as a computer monitor",
+            "Generous free tier, very active development, deep config",
+            "Hardware DDC color stays accurate and survives gamma-API breakage"
+          ],
+          "weaknesses": [
+            "Power-user oriented and complex; overwhelming for a casual 'just make it warm' user",
+            "Not focused on circadian warmth/scheduling — it is a display-utility Swiss-army knife",
+            "DDC RGB changes can persist/'stick' on the monitor and require manual reset (GitHub complaints)",
+            "DDC detection inconsistency on some Apple Silicon HDMI paths; not open source"
+          ]
+        },
+        {
+          "name": "Lunar",
+          "license": "Proprietary; source-available on GitHub (custom non-OSI license)",
+          "pricing": "Free core; Lunar Pro ~$23-32 one-time (Test/Pro tiers)",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "yes - controls real brightness via DDC on DDC-capable external monitors on Apple Silicon; XDR/Sub-zero and 'software dimming' use gamma overlays. Warmth specifically is achievable via DDC where the panel supports it, otherwise via gamma. Lunar explicitly recommends running alongside (not duplicating) Night Shift/True Tone and warns its gamma usage can conflict with f.lux and can make XDR colors overblown.",
+          "method": "DDC/CI primarily; gamma tables and a white/dim overlay for software dimming and sub-zero brightness; ambient-light-sensor adaptive control",
+          "strengths": [
+            "Real hardware DDC brightness on externals, ambient-light adaptive curves",
+            "Mature, actively maintained, source-available, strong Apple Silicon support",
+            "Sub-zero dimming and XDR brightness control",
+            "Good multi-monitor handling"
+          ],
+          "weaknesses": [
+            "Primarily a brightness app; color-temperature/warmth is secondary and not its headline feature",
+            "Gamma/overlay paths conflict with f.lux and can distort XDR colors",
+            "UI is dense; Pro paywall for many features; not a circadian/eye-health product",
+            "Affected by the same Tahoe gamma regression for its software-dimming/gamma paths on M5 Pro/Max"
+          ]
+        },
+        {
+          "name": "Iris (full)",
+          "license": "Proprietary (closed source)",
+          "pricing": "Iris Pro one-time license (commonly ~$10-15 in promos; vendor page also lists inflated/subscription tiers); subscription option exists",
+          "openSource": false,
+          "platforms": "macOS, Windows, Linux, Android",
+          "externalMonitorWarmthOnAppleSilicon": "partial - reduces color temperature via software gamma across displays, so it can warm externals where the gamma API works, but it is the same software-gamma path that is unreliable/broken on M5 Pro/Max + Tahoe and conflicts with other gamma apps. Not DDC-based for color.",
+          "method": "Software gamma color-temperature shift plus PWM-flicker-free brightness reduction and many screen effects",
+          "strengths": [
+            "Most feature-complete eye-health suite: flicker reduction, break timers, brightness below minimum, many modes",
+            "Explicit circadian/health and productivity framing (the closest existing product to a health angle)",
+            "Cross-platform; one-time license option"
+          ],
+          "weaknesses": [
+            "Confusing/aggressive pricing and upsell (many tiers, subscription, promo-driven); perceived as 'salesy'",
+            "Heavier resource use and feature bloat; closed source",
+            "Color path is software gamma — same external-monitor and Tahoe limitations as f.lux",
+            "Cluttered UI, not a clean native-Mac experience"
+          ]
+        },
+        {
+          "name": "Iris mini",
+          "license": "Proprietary (closed source)",
+          "pricing": "Free; Iris mini Pro paid (one-time)",
+          "openSource": false,
+          "platforms": "macOS, Windows, Android",
+          "externalMonitorWarmthOnAppleSilicon": "partial - same software-gamma approach as Iris; warms whatever displays the gamma API affects, subject to the same Apple Silicon/Tahoe gamma regression. Minimal per-display control.",
+          "method": "Software gamma color-temperature + brightness (3 simple modes: automatic/manual/paused)",
+          "strengths": [
+            "Minimalist, lightweight, free, portable menu-bar utility",
+            "Dead-simple 3-mode model (5000K day / 3400K night)",
+            "PWM-flicker-free dimming"
+          ],
+          "weaknesses": [
+            "Very limited control (no fine scheduling, no per-display, no Kelvin slider in free tier)",
+            "Closed source; pushes upgrade to paid Iris",
+            "Software-gamma limitations on externals and on M5 Pro/Max + Tahoe",
+            "No designer hotkey, dated presentation"
+          ]
+        },
+        {
+          "name": "Redshift",
+          "license": "GPLv3 (open source)",
+          "pricing": "Free",
+          "openSource": true,
+          "platforms": "Linux primarily (X11/Wayland); no official supported macOS build",
+          "externalMonitorWarmthOnAppleSilicon": "no - Redshift is built around the Linux X11/Wayland/DRM gamma ramp APIs and has no working native macOS/Apple Silicon backend; not a real option for Mac externals.",
+          "method": "Gamma ramps via X11 RANDR / DRM / Wayland (Linux), location-based scheduling",
+          "strengths": [
+            "Fully open source (GPLv3), scriptable, the canonical Linux f.lux alternative",
+            "Lightweight CLI + simple config",
+            "Trusted, transparent codebase"
+          ],
+          "weaknesses": [
+            "Effectively Linux-only; no maintained macOS/Apple Silicon support",
+            "No GUI by default, no DDC, no native Mac integration",
+            "Project maintenance has been slow; not relevant for Mac users"
+          ]
+        },
+        {
+          "name": "Gammy",
+          "license": "GPLv3 (open source)",
+          "pricing": "Free",
+          "openSource": true,
+          "platforms": "Windows, Linux; no macOS support",
+          "externalMonitorWarmthOnAppleSilicon": "no - Gammy targets Windows and Linux only; there is no macOS port, so it cannot warm Mac externals at all.",
+          "method": "Adaptive screen brightness + temperature via OS gamma ramps (Win/Linux)",
+          "strengths": [
+            "Open source (GPLv3), adaptive content-based dimming + temperature",
+            "Good Redshift alternative on Win/Linux"
+          ],
+          "weaknesses": [
+            "No macOS build whatsoever",
+            "Not applicable to Apple Silicon",
+            "Niche, small community"
+          ]
+        },
+        {
+          "name": "Vivid",
+          "license": "Proprietary (closed source)",
+          "pricing": "~$15/£15 one-time (also on Setapp subscription); free Splitscreen trial",
+          "openSource": false,
+          "platforms": "macOS only (Apple Silicon)",
+          "externalMonitorWarmthOnAppleSilicon": "no - Vivid does the opposite of warmth: it unlocks full HDR/EDR brightness on the built-in MacBook Pro XDR/mini-LED panel and Pro Display XDR. It does not apply color-temperature warmth and explicitly does not support the MacBook Air panel, Studio Display, or general external monitors.",
+          "method": "Metal/EDR brightness boost (raises the panel's EDR headroom system-wide), not color temperature",
+          "strengths": [
+            "Excellent at its niche: doubling perceived brightness on XDR/mini-LED built-in displays",
+            "Native, cheap one-time price, on Setapp",
+            "Clean modern app"
+          ],
+          "weaknesses": [
+            "Not a warmth/blue-light app at all (included for landscape completeness)",
+            "Built-in XDR/mini-LED only; no externals, no Air, no Studio Display",
+            "Closed source"
+          ]
+        },
+        {
+          "name": "NightOwl",
+          "license": "Proprietary (closed source)",
+          "pricing": "Was free; ownership changed",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "no - NightOwl is a Dark/Light Mode appearance scheduler, not a color-temperature/warmth tool; it does not apply gamma or DDC warmth to any display.",
+          "method": "Toggles macOS Dark/Light appearance mode on a schedule (no color-temperature control)",
+          "strengths": [
+            "Granular per-app light/dark control and scheduling (original concept was well liked)"
+          ],
+          "weaknesses": [
+            "Major trust failure: after a 2022 ownership transfer the app shipped a hidden HTTP proxy/botnet component in 2023; Apple revoked its code-signing cert and security press urged users to delete it",
+            "Not a warmth app; reputation effectively destroyed",
+            "Closed source — the controversy is a cautionary tale that favors an open-source alternative"
+          ]
+        },
+        {
+          "name": "Shifty",
+          "license": "GPLv3 (open source)",
+          "pricing": "Free",
+          "openSource": true,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "partial - Shifty is a thin controller/wrapper around Apple's Night Shift, so external-monitor warmth is exactly as good (or as broken) as Night Shift itself on that hardware. It adds a Kelvin slider, per-app/site disabling and custom schedules but cannot apply warmth where Night Shift can't.",
+          "method": "Night Shift wrapper (private CoreBrightness/Night Shift APIs) — no independent gamma or DDC engine",
+          "strengths": [
+            "Free and open source (GPLv3), genuinely native and lightweight menu-bar app",
+            "Adds the controls Apple omitted: Kelvin slider, disable for specific apps/websites/time, quick toggle",
+            "Designer-friendly: can disable tint for color-critical apps"
+          ],
+          "weaknesses": [
+            "Inherits all of Night Shift's external-monitor unreliability — it cannot fix warmth on a panel where Night Shift fails",
+            "Bound to private Apple APIs that break across macOS releases; maintenance has been intermittent",
+            "No DDC, no independent color engine, narrow Night Shift warmth range"
+          ]
+        },
+        {
+          "name": "MonitorControl",
+          "license": "MIT (open source)",
+          "pricing": "Free",
+          "openSource": true,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "partial - on DDC-capable externals it can adjust DDC contrast/RGB and gamma, and it supports gamma-table software control; true color-temperature warmth is possible via gamma (subject to the Tahoe M5 Pro/Max regression) and via DDC RGB where the panel honors it. It is fundamentally a brightness/volume tool, so warmth is not a first-class, well-presented feature.",
+          "method": "DDC/CI for external brightness/contrast/volume; native protocol for Apple displays; gamma-table control for software dimming; shade overlay for AirPlay/Sidecar/DisplayLink",
+          "strengths": [
+            "Truly open source (MIT), ~30k+ GitHub stars, trusted community standard",
+            "Real hardware DDC control on externals, native OSDs, F1/F2 key interception",
+            "Apple Silicon support, gamma + overlay fallbacks, custom shortcuts",
+            "The strongest open-source precedent and the model to emulate for an OSS warmth app"
+          ],
+          "weaknesses": [
+            "Brightness/volume focused; color-temperature warmth is buried and not health-framed",
+            "No circadian scheduling, no Kelvin-centric UI, no designer 'reveal true color' hotkey",
+            "Gamma path hit by the Tahoe regression on newest chips",
+            "Setup can be fiddly for DDC detection on some panels"
+          ]
+        },
+        {
+          "name": "Gamma Dimmer (lowtechguys)",
+          "license": "Proprietary (closed source; from the Lunar developer)",
+          "pricing": "Low-cost / freemium one-time",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "no - explicitly a brightness dimmer, not a warmth tool. It dims by altering the gamma formula (or a dark overlay where gamma is unavailable) and does NOT change color temperature or use DDC for hardware brightness.",
+          "method": "Gamma-formula dimming + dark overlay fallback (no DDC, no color-temperature shift)",
+          "strengths": [
+            "Simple sync-all-displays dimming below hardware minimum, works with Sidecar/DisplayLink/externals",
+            "From a reputable developer (Lunar/lowtechguys)"
+          ],
+          "weaknesses": [
+            "Brightness only — no warmth/color-temperature at all",
+            "Gamma-based, so it conflicts with f.lux and is exposed to the Tahoe gamma regression",
+            "Closed source"
+          ]
+        },
+        {
+          "name": "QuickShade",
+          "license": "Proprietary (Mac App Store)",
+          "pricing": "Paid (low one-time, App Store)",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "no - QuickShade applies a semi-transparent dark overlay to reduce apparent brightness; it does not change color temperature and does not warm any display.",
+          "method": "Semi-transparent dark software overlay (dimming only)",
+          "strengths": [
+            "Simple App-Store-sandboxed dimming below the hardware minimum",
+            "Works on any display including externals (overlay-based)"
+          ],
+          "weaknesses": [
+            "No color-temperature/warmth feature at all",
+            "Overlay reduces contrast and isn't true warmth; closed source",
+            "Minimal feature set"
+          ]
+        },
+        {
+          "name": "Dimmer",
+          "license": "Proprietary",
+          "pricing": "Paid one-time",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "no - Dimmer is a brightness-reduction overlay/utility; it does not perform color-temperature warmth.",
+          "method": "Dark overlay / software dimming (no color-temperature control)",
+          "strengths": [
+            "Simple brightness reduction below hardware limits, works on externals"
+          ],
+          "weaknesses": [
+            "No warmth/blue-light reduction; brightness only",
+            "Closed source, minimal, not a circadian tool"
+          ]
+        },
+        {
+          "name": "Gamma Control",
+          "license": "Proprietary / abandonware (closed source)",
+          "pricing": "Free (legacy)",
+          "openSource": false,
+          "platforms": "macOS only (legacy)",
+          "externalMonitorWarmthOnAppleSilicon": "no - an old gamma-curve tweaking utility predating Apple Silicon; relies on the same global gamma API now broken on M5 Pro/Max + Tahoe and is effectively unmaintained.",
+          "method": "Manual gamma-curve / color adjustment via CoreGraphics gamma API",
+          "strengths": [
+            "Direct manual gamma/RGB curve control (historically)"
+          ],
+          "weaknesses": [
+            "Abandoned/legacy, no Apple Silicon or modern-macOS support",
+            "Subject to the gamma-API regression, closed source, no scheduling/health framing"
+          ]
+        },
+        {
+          "name": "FreeDisplay",
+          "license": "Unclear / niche utility",
+          "pricing": "Free",
+          "openSource": false,
+          "platforms": "macOS",
+          "externalMonitorWarmthOnAppleSilicon": "no - a minor/obscure display-utility with no evidence of real color-temperature warmth on external monitors; not a meaningful warmth competitor and barely documented as of mid-2026.",
+          "method": "other / unclear (display utility, not a dedicated gamma/DDC warmth engine)",
+          "strengths": [
+            "Free"
+          ],
+          "weaknesses": [
+            "Obscure, poorly documented, no verified external-monitor warmth capability",
+            "No traction, no clear maintenance, not health-framed"
+          ]
+        },
+        {
+          "name": "DisplayBuddy (discovered)",
+          "license": "Proprietary (closed source)",
+          "pricing": "~$13-19 one-time",
+          "openSource": false,
+          "platforms": "macOS, Windows",
+          "externalMonitorWarmthOnAppleSilicon": "yes (for DDC-capable panels) - talks directly to monitors over DDC for real hardware brightness/contrast and color on Apple Silicon, including externals. Warmth via DDC RGB is possible where the panel supports it; like all DDC tools it depends on the monitor honoring the registers.",
+          "method": "DDC/CI hardware control (brightness/contrast/RGB/input/volume), presets, scheduling",
+          "strengths": [
+            "Real DDC hardware control on externals, clean modern UI, presets and scheduling",
+            "Cross-platform, no OSD-button needed"
+          ],
+          "weaknesses": [
+            "Brightness/utility focused, warmth is secondary; closed source and paid",
+            "Same DDC panel-support caveats; not a circadian/health product"
+          ]
+        },
+        {
+          "name": "TeenyDisplay (discovered)",
+          "license": "Proprietary (closed source)",
+          "pricing": "Low one-time / freemium",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "partial - DDC brightness control on Apple Silicon (tries IOKit I2C first, falls back to IOAVService for built-in HDMI). Color-temperature warmth is not its focus; brightness-centric.",
+          "method": "DDC/CI via IOKit I2C with IOAVService fallback (Apple Silicon HDMI), shortcuts, OSD",
+          "strengths": [
+            "Lightweight, good Apple Silicon DDC fallback handling, brightness sync and presets"
+          ],
+          "weaknesses": [
+            "Brightness-only focus, no real warmth/circadian feature; closed source"
+          ]
+        },
+        {
+          "name": "NightShifter (discovered)",
+          "license": "Proprietary freeware",
+          "pricing": "Free",
+          "openSource": false,
+          "platforms": "macOS only",
+          "externalMonitorWarmthOnAppleSilicon": "partial - like Shifty, it is a Night Shift wrapper, so warmth on externals is exactly as reliable as Night Shift on that hardware; it adds quick toggles, a temperature slider, and per-app disabling (designer-friendly) but no independent color engine.",
+          "method": "Night Shift wrapper (Apple CoreBrightness APIs)",
+          "strengths": [
+            "Free menu-bar Night Shift controller with quick disable-per-app — close to the 'designer reveal true color' idea",
+            "Lightweight and native"
+          ],
+          "weaknesses": [
+            "Inherits Night Shift's external-monitor unreliability; no DDC or independent gamma",
+            "Closed source; depends on private Apple APIs"
+          ]
+        }
+      ],
+      "marketGaps": [
+        "No app combines a beautiful, native, modern macOS UI with reliable real warmth on ALL displays including externals. The reliable-external-warmth tools (BetterDisplay, Lunar, MonitorControl, DisplayBuddy) are brightness/display-utility apps where warmth is buried; the warmth-first apps (f.lux, Iris, Shifty, Night Shift) are either dated, closed, or can't reliably warm externals.",
+        "The single global gamma API (CGSetDisplayTransferByTable) is a shared, conflicting resource: f.lux, Iris, Lunar's software dimming, MonitorControl and Gamma Dimmer all fight over it, causing color glitches when more than one runs. No product gracefully coordinates or replaces this; an app that intelligently picks DDC-first (hardware, conflict-free) and only falls back to gamma is missing.",
+        "2026 platform regression gap: CGSetDisplayTransferByTable is broken on M5 Pro/Max (and MacBook Neo) under macOS Tahoe 26.3.1/26.4 — gamma writes succeed but produce no visual change. Every gamma-based warmth app (f.lux, Iris, Gamma Control, Lunar/MonitorControl software paths) is silently failing on the newest hardware. There is an open opportunity for an app that detects this and routes warmth through DDC RGB and/or ColorSync/ICC profile paths (ColorSyncDeviceSetCustomProfiles) that bypass the broken pipeline.",
+        "Apple Night Shift does not reliably reach external monitors (often does nothing, or tints pink, frequently because macOS mis-identifies the panel as a TV). No warmth-first app both fixes this identity issue AND applies warmth in one product — BetterDisplay can re-identify but doesn't frame itself as a warmth/health app.",
+        "No open-source, warmth-first, DDC-capable app exists. MonitorControl (MIT) is the trusted OSS precedent but is brightness/volume-focused; Shifty/Redshift/Gammy are OSS but are either Night-Shift wrappers or non-macOS. There is no MIT/GPL native warmth engine that does real DDC + gamma + overlay warmth.",
+        "No app pairs warmth with a genuine circadian-health framing in a credible, non-salesy way. Iris owns the health angle but is widely seen as bloated and aggressively monetized; Night Shift/f.lux are utilitarian. A clean, evidence-based circadian narrative with a free OSS product is unoccupied.",
+        "No first-class 'designer reveal true color' instant hotkey across all displays. NightShifter/Shifty can disable Night Shift per app, but there is no polished, animated, global hold-to-reveal-true-color hotkey that momentarily restores accurate color on every display (built-in + externals) for color-critical work, then smoothly restores warmth.",
+        "Trust gap created by NightOwl's 2023 malware incident: a closed display-utility shipped a hidden proxy/botnet and got its cert revoked. The market is primed for a transparent, auditable, open-source, signed-and-notarized alternative.",
+        "Per-display, per-app, and per-time granularity is fragmented: f.lux has scheduling but conflicts; Shifty has per-app but only via Night Shift; DDC tools have per-display but no circadian logic. No single app offers per-display warmth curves + per-app exclusions + location-based circadian scheduling together.",
+        "DDC color-temperature support is inconsistent across panels and no app clearly communicates capability/fallback to the user. A product that probes each external monitor, reports 'hardware warmth available / gamma fallback / overlay only,' and chooses the best method transparently would solve a real, undocumented pain."
+      ],
+      "differentiationOpportunities": [
+        "Be DDC-first for externals: apply real hardware color-temperature warmth via DDC RGB gain where panels support it (conflict-free, survives the Tahoe gamma regression), with automatic, clearly-explained fallback to gamma, then to a Metal warm overlay — and tell the user exactly which method each display is using.",
+        "Ship a polished, animated 'Reveal True Color' global hotkey (hold or toggle) that momentarily restores accurate color on ALL displays for color-critical work and smoothly eases warmth back — the headline feature for designers/photographers that no incumbent does well across externals. Follow the design-motion-principles for the transition feel.",
+        "Lead with a credible, non-salesy circadian-health narrative (melatonin/CCT, sunset-to-sunrise curves, evidence-based) — own the health framing that Iris discredited through bloat and pricing, but as a free OSS product.",
+        "Be free and genuinely open source (MIT or GPL) and reproducibly built, signed and notarized — directly answering the NightOwl trust collapse and differentiating from closed f.lux/Iris/BetterDisplay; lean on the MonitorControl OSS precedent for community trust.",
+        "Solve the Apple Silicon + Tahoe gamma breakage head-on: detect M5 Pro/Max where CGSetDisplayTransferByTable is silently ignored and route warmth through DDC and/or ColorSync ICC profile injection (ColorSyncDeviceSetCustomProfiles), positioning the app as 'the warmth app that still works on the newest Macs.'",
+        "Fix Night Shift's external-monitor failure as a feature: detect mis-identified 'TV' panels and offer one-click re-identification or independent warmth so externals actually warm — bundling BetterDisplay's workaround into a warmth-first UX.",
+        "Coexist cleanly: detect f.lux/Lunar/MonitorControl/Night Shift and avoid the gamma-API tug-of-war (prefer DDC, or coordinate/own gamma explicitly) so users don't get color glitches — a pain every multi-tool user hits today.",
+        "Native, beautiful, modern macOS design (menu-bar + optional window, SwiftUI, Control Center / Shortcuts / Siri integration) to beat f.lux's dated UI and Lunar/BetterDisplay/Iris's density, with per-display warmth curves, per-app exclusions, and location-based scheduling unified in one clean app.",
+        "Per-display intelligence and transparency: probe each connected monitor, surface its true warmth capability (hardware DDC vs gamma vs overlay), let users set independent curves per display, and never silently no-op — turning the biggest hidden frustration into a trust advantage.",
+        "Zero-cost, privacy-respecting, no telemetry, no network calls — an explicit anti-NightOwl stance that pairs with open source and notarization to build durable trust in a category burned by malware and aggressive monetization."
+      ],
+      "sources": [
+        "https://developer.apple.com/forums/thread/819331",
+        "https://developer.apple.com/forums/thread/795074",
+        "https://justgetflux.com/news/pages/mac/",
+        "https://forum.justgetflux.com/topic/8172/flickering-lines-and-ghosting-on-dell-monitor-whenever-f-lux-activates-on-mbp-m1-max",
+        "https://forum.justgetflux.com/topic/7150/ddc-control-of-monitor-brightness",
+        "https://en.wikipedia.org/wiki/F.lux",
+        "https://en.wikipedia.org/wiki/Night_Shift_(software)",
+        "https://nightshiftkeeper.com/blog/flux-vs-night-shift-vs-other-blue-light-apps-mac/",
+        "https://betterdisplay.pro/",
+        "https://github.com/waydabber/BetterDisplay/discussions/4160",
+        "https://github.com/waydabber/BetterDisplay/discussions/2037",
+        "https://github.com/waydabber/BetterDisplay/discussions/3576",
+        "https://lunar.fyi/",
+        "https://lunar.fyi/faq",
+        "https://lunar.fyi/pro",
+        "https://github.com/alin23/Lunar/blob/master/CHANGELOG.md",
+        "https://iristech.co/buy/",
+        "https://iristech.co/iris-mini/",
+        "https://outliyr.com/iristech-review",
+        "https://mac.softpedia.com/get/Utilities/Iris-mini.shtml",
+        "https://en.wikipedia.org/wiki/Redshift_(software)",
+        "https://alternativeto.net/software/gammy",
+        "https://www.getvivid.app/",
+        "https://apps.apple.com/us/app/vivid-double-your-brightness/id6443470555",
+        "https://nightowlapp.co/",
+        "https://www.intego.com/mac-security-blog/did-the-nightowl-app-really-join-macs-to-a-botnet-army/",
+        "https://gizmodo.com/how-nightowl-for-mac-added-a-botnet-1850740785",
+        "https://github.com/thompsonate/Shifty",
+        "https://shifty.natethompson.io/en/",
+        "https://github.com/MonitorControl/MonitorControl",
+        "https://lowtechguys.com/gammadimmer/",
+        "https://apps.apple.com/us/app/quickshade/id931571202",
+        "https://displaybuddy.app/",
+        "https://displaybuddy.app/control-external-monitor-brightness-on-mac",
+        "https://teenydisplay.com/articles/teenydisplay-vs-betterdisplay-vs-lunar-vs-monitorcontrol/",
+        "https://www.panozzaj.com/blog/2026/01/26/external-monitor-brightness-control/",
+        "https://forums.macrumors.com/threads/night-shift-not-taking-effect-on-external-display.2341729/",
+        "https://discussions.apple.com/thread/253117688",
+        "https://www.makeuseof.com/tag/mac-night-shift-apps-save-eyes/"
+      ]
+    },
+    "ux": {
+      "frameworkRecommendation": "Use a hybrid: SwiftUI for the app/scene structure and all popover/settings views, AppKit (NSStatusItem) for the status item itself when you need anything beyond a static icon. The widely-reported 2026 split is roughly \"70% SwiftUI / 30% AppKit\" — SwiftUI for views and state, AppKit for system integration. SwiftUI MenuBarExtra (Scene type, SwiftUI 4 / macOS 13+) is the fastest path and is fine for simple utilities: it auto-sizes, supports `.menuBarExtraStyle(.menu)` (context-menu-style, native keyboard-shortcut rendering, item highlight) and `.menuBarExtraStyle(.window)` (arbitrary SwiftUI view in a popover-like window). But MenuBarExtra has hard limits: the button can only be image / text / image+text (no custom NSView, no dynamic width, no left-vs-right click differentiation), there is NO first-party API to get/set the menu presentation state, disable the extra, reach the underlying NSStatusItem, or access the popup's NSWindow, and SettingsLink/openSettings are unreliable from it because menu bar apps run as `.accessory` activation policy. For complex apps (custom drawn icon, badges, drag-and-drop onto the icon, color beyond template images, precise window control) drop to NSStatusItem directly, or keep MenuBarExtra and bridge the gaps with the open-source MenuBarExtraAccess package (Mac App Store safe, no private APIs) which adds `.menuBarExtraAccess(isPresented:isEnabled:){ statusItem in ... }` to bind presentation state and hand you the real NSStatusItem, plus `.introspectMenuBarExtraWindow { window in }` for the `.window` style. Set LSUIElement=true (or NSApp.setActivationPolicy(.accessory)) to suppress the Dock icon. Recompile with Xcode 26 to get Liquid Glass on the system-managed popover/window chrome automatically. Two open-source SwiftUI helpers worth studying/forking: lfroms/fluid-menu-bar-extra (better fade/resize/dismiss than the stock control) and orchetect/MenuBarExtraAccess.",
+      "menuBarPatterns": [
+        "Static-icon simple utility: SwiftUI MenuBarExtra with systemImage and .menuBarExtraStyle(.menu). Native keyboard-shortcut display, item highlight, minimal code. Best for apps whose whole UI is a short command list (e.g. quick toggles).",
+        "Rich popover: MenuBarExtra(...).menuBarExtraStyle(.window) renders an arbitrary SwiftUI view as a popover-style window. Use for dashboards, lists, sliders, mini-players. You own the layout like any window, so design it deliberately.",
+        "Custom status item: NSStatusItem via NSStatusBar.system.statusItem(withLength:). Set statusItem.button?.image to an SF Symbol or template image; for left/right discrimination set button.action and button.sendAction(on: [.leftMouseUp, .rightMouseUp]) then branch on NSApp.currentEvent?.type. Required for dynamic-width text, badges, drag-destination icons, or colored (non-template) glyphs.",
+        "Do not set both NSStatusItem.button action AND NSStatusItem.menu — assigning .menu makes the system show that menu on every click and suppresses your custom button action. Pick one model, or attach/detach the menu on the fly for right-click only.",
+        "Right-click highlight bug workaround (long-standing, still relevant): trigger your menu on .rightMouseUp, not .rightMouseDown, otherwise the item stays stuck highlighted and feels unresponsive (Jesse Squires writeup).",
+        "Tahoe regression to handle: right-clicking the top edge of the menu bar no longer reliably fires a statusItem action in macOS 26 (Apple Developer Forums thread 811718) — test edge clicks and avoid relying on a 1px-tall hit zone.",
+        "Bridge MenuBarExtra limits with MenuBarExtraAccess: .menuBarExtraAccess(isPresented: $shown, isEnabled: $enabled) { statusItem in self.statusItem = statusItem } to programmatically open/close the menu, disable the extra, and grab the NSStatusItem — no private APIs, MAS-safe.",
+        "Icon design for Tahoe's transparent/Liquid-Glass menu bar: ship template (monochrome, single-color, alpha-defined) images so the system tints them correctly over the now-transparent, wallpaper-blending menu bar (System Settings has a 'Show menu bar background' toggle, default transparent). Provide a crisp shape that reads at ~16-18pt; Rogue Amoeba and TidBITS document in 2026 how tiny monochrome glyphs are hard to distinguish, so favor a distinctive silhouette over detail.",
+        "Reflect real status in the icon (Apple HIG): the icon should convey current state at a glance (battery-strength style), e.g. swap the SF Symbol / template image to mirror app state rather than a static logo."
+      ],
+      "hideFromMenuBarApproaches": [
+        "Give users an explicit 'Show icon in menu bar' setting and let them turn it OFF entirely — Apple HIG: 'let people — not your app — decide whether to put your menu bar extra in the menu bar, typically by changing a setting in an app's settings window.'",
+        "Always provide a non-icon way back to Settings when the icon is hidden: register a global hotkey that opens Settings/the main window, and/or rely on Spotlight / Raycast launching the app to re-open Settings (the standard fallback that menu bar managers document). Re-launching the app while it's already running should surface Settings rather than silently no-op.",
+        "Right-click-the-empty-menu-bar pattern (Ice): Ice surfaces its own controls by right-clicking empty menu-bar space; for a single app, a 'reopen Settings on second launch / on Dock-less relaunch' plus hotkey is the practical equivalent.",
+        "Divider/drawer hide model (Hidden Bar, Vanilla, Ice, Thaw): items left of a draggable divider collapse behind a chevron and expand on click; Vanilla adds fluid show/hide animation, Pro adds permanent hiding + auto-rehide-after-delay + keyboard shortcut to toggle. Study these if your app manages OTHER icons; for your own single icon, expose the same 'hide / always-hide' choice in Settings.",
+        "Note for Tahoe (2026): Ice does not yet support macOS 26 (beta dev builds only); Thaw is the maintained open-source successor adding hidden + always-hidden sections, a separate Thaw Bar for notch machines, and hotkey access. Use Thaw/Bartender as current references.",
+        "When the Dock icon is also hidden (LSUIElement / .accessory), the ONLY discoverability surfaces are the menu bar icon, the global hotkey, and Spotlight — so never let a user end up with icon hidden AND no hotkey AND no Dock icon with no way back. Gate 'hide icon' behind first assigning a hotkey, or keep a tiny re-entry affordance."
+      ],
+      "liquidGlassNotes": [
+        "Recompiling with Xcode 26 (SDK macOS 26) automatically applies Liquid Glass to system-managed chrome: toolbar, sidebar, menu bar, Dock, window controls, NSPopover, sheets, and the Settings window. You often get the look for free on the popover/settings window backgrounds without writing glassEffect code.",
+        "Custom glass: .glassEffect(_ glass:in:isEnabled:) — default is .regular in a .capsule. Variants: .regular (adaptive, default for navigation/controls), .clear (high transparency for media-rich backgrounds, needs a dimming layer for legibility), .identity (conditionally disables the effect WITHOUT triggering layout recalculation — ideal for accessibility toggles). On macOS the .interactive() shimmer/scale is iOS-oriented; rely on .regular for menu bar UIs.",
+        "Shape it: .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16)) or .rect(cornerRadius: .containerConcentric); other shapes .capsule/.circle/.ellipse.",
+        "Group with GlassEffectContainer { ... } (optionally GlassEffectContainer(spacing: 40)). Critical rule: glass cannot sample other glass — a container provides shared sampling so multiple glass elements render correctly and efficiently. Putting .glassEffect on sibling views WITHOUT a container is both visually inconsistent and slower.",
+        "Morphing between states: assign @Namespace + .glassEffectID(\"id\", in: namespace) to elements so they fluidly merge/split; .glassEffectUnion(id:namespace:) merges elements too far apart for container spacing.",
+        "Glass button styles: .buttonStyle(.glass) (translucent secondary) and .buttonStyle(.glassProminent) (opaque primary) with .tint() and .controlSize(.large).",
+        "Do NOT stack glass on glass, do NOT put glass on the content layer (lists, tables, media, scrollable content, full-screen backgrounds), and do NOT tint for decoration — tint only carries semantic meaning (e.g. a primary action). Reserve glass for the navigation/control layer floating above content. For a menu bar popover, this means: glass background is largely system-provided; apply custom glass only to a small floating control cluster, not the whole content list.",
+        "Performance: always batch glass in a GlassEffectContainer; use .identity to toggle glass off without relayout; limit continuous animations and let glass rest in steady states; profile GPU with Instruments; test on ~3-year-old hardware. Excess independent glass surfaces are the main cost.",
+        "Known interaction bug (iOS 26.1, watch for macOS parity): a Menu inside a GlassEffectContainer can break the morph animation — workaround is to apply .glassEffect(.regular.interactive()) directly on the Menu or keep Menus out of the container.",
+        "Backward compatibility: glassEffect is macOS 26.0+ only. Wrap in if #available(macOS 26, *) and provide a .background(.regularMaterial) / vibrancy fallback for older systems so the app still builds and runs pre-Tahoe."
+      ],
+      "onboardingBestPractices": [
+        "List your commands in the menu/popover even when they're reachable elsewhere — Apple HIG: people look in the menu bar first, especially on first use. The menu IS part of onboarding.",
+        "Stage permission requests just-in-time with rationale, not all at front. Menu bar utilities commonly need Accessibility, Screen Recording, Input Monitoring, and sometimes Mic/Camera; show a short explainer screen describing WHY before triggering the system prompt, then deep-link to the exact pane (e.g. open System Settings > Privacy & Security > Accessibility). alt-tab-macos issue #127 is a canonical example of building better permissions onboarding.",
+        "Sandbox caveat: with App Sandbox enabled the Accessibility prompt may not appear/behave correctly (Apple Forums thread 810677). Decide your sandbox posture early; many power utilities ship non-sandboxed (notarized, outside MAS) specifically to get reliable Accessibility access.",
+        "Detect-and-recover, don't assume granted: poll the relevant permission API and show an in-app 'not granted yet — open settings' state with a retry, because users can revoke at any time.",
+        "Make launch-at-login a first-run choice via SMAppService (modern replacement for the deprecated helper-login-item flow). Read status live from SMAppService.mainApp.status rather than caching a bool, since the user can remove the login item in System Settings at any time.",
+        "Point first-run users at the icon: a brief one-time tip ('Your controls live up here ↑' anchored near the status item) solves the #1 menu-bar discoverability problem, especially since Tahoe's transparent menu bar makes a new monochrome icon easy to miss.",
+        "If you hide the Dock icon, teach the hotkey and Spotlight re-entry during onboarding so users never feel they 'lost' the app.",
+        "Keep onboarding short and skippable; a simple TabView-paged window (welcome → permission rationale → hotkey + launch-at-login → done) is the conventional SwiftUI pattern. Open it as a normal Window scene, NOT inside MenuBarExtra, because window activation from the extra is unreliable."
+      ],
+      "simpleVsAdvancedPatterns": [
+        "Primary click = the one core action; secondary (right-click) or modifier (Option/⌥) = advanced. Real example: Dropover defaults to shake-to-create-shelf and exposes power options (modifier-key-only appearance: Shift/Command/Control, custom hotkey, notch drop) behind settings rather than the main gesture.",
+        "Copy-vs-move via modifier (Dropover): dragging from the shelf MOVES by default; hold Option while dragging to COPY. This 'sensible default, modifier for the variant' is the canonical macOS idiom — mirror it for any destructive/alternate variant of your primary action.",
+        "Left vs right click on the status item: left-click = open the simple popover/primary view; right-click = a compact NSMenu of advanced/utility commands (Quit, Settings, Pause, About). Implement by sending actions on [.leftMouseUp, .rightMouseUp] and branching on event type (Medium/clyapp writeup); remember NOT to set NSStatusItem.menu simultaneously or it hijacks the left click.",
+        "Option-click to reveal alternate menu items: NSMenuItem supports .isAlternate with a matching key-equivalent modifier mask so holding ⌥ swaps a menu item for its 'advanced' twin (e.g. 'Quit' → 'Quit and Disable at Login', or 'Refresh' → 'Force Refresh'). This is how system menus and many utilities surface power features without cluttering the default menu.",
+        "Bartender/Ice model for 'advanced': keep the default surface minimal (a couple of always-visible controls) and tuck the full configuration into a dedicated Settings window reached on demand, not in the popover.",
+        "Progressive disclosure inside the popover: ship a compact default view and a 'More'/disclosure region, or a ⌥-reveal of extra rows, so the 95% case stays clean."
+      ],
+      "globalHotkeyImplementation": "[\"Recommended library: sindresorhus/KeyboardShortcuts — user-customizable global hotkeys, fully sandbox + Mac App Store compatible, no permission dialogs, used in production by Plash/Dato/Jiffy/Lungo. Strongly preferred over hand-rolling Carbon RegisterEventHotKey or maintaining MASShortcut.\", \"Define a name: extend KeyboardShortcuts.Name with static let toggleThing = Self(\\\"toggleThing\\\"). Let users record it with the SwiftUI component KeyboardShortcuts.Recorder(\\\"Toggle:\\\", name: .toggleThing) — it persists to UserDefaults automatically and warns on conflicts with system/app shortcuts.\", \"Press handlers: KeyboardShortcuts.onKeyDown(for: .name){ } and KeyboardShortcuts.onKeyUp(for: .name){ }. Listening to keyDown (not just keyUp) is supported, which is exactly what HOLD-to-activate needs.\", \"HOLD-to-activate (push-to-talk / hold-to-show) pattern: pair onKeyDown to ACTIVATE (show the popover / start the action) with onKeyUp to DEACTIVATE (hide / stop). So press-and-hold reveals, release dismisses. The keyDown/keyUp split is the supported mechanism for this; there is no single 'hold' flag — you compose it from the two callbacks.\", \"For auto-repeat while held (e.g. nudge selection), use the macOS 13+ async stream: for await _ in KeyboardShortcuts.repeatingKeyDownEvents(for: .name) { ... } — emits once on initial press then repeats per the system key-repeat settings.\", \"SwiftUI convenience: v2.1.0+ adds the View modifier .globalKeyboardShortcut() for binding a global shortcut directly in SwiftUI.\", \"Implementation note: the library uses Carbon hotkey APIs under the hood (still functional despite deprecation) and triggers no privacy prompts — distinct from key-LOGGING approaches that would need Input Monitoring. If you need true global key MONITORING (not a registered hotkey), that requires Accessibility/Input-Monitoring permission and is a different, more invasive path.\", \"Use the global hotkey as the guaranteed re-entry point when the menu bar icon and Dock icon are both hidden.\"]",
+      "settingsWindowPatterns": [
+        "Use the SwiftUI Settings scene in your App body — it auto-creates the standard 'Settings…' (⌘,) menu item and a properly-styled preferences window (Tahoe Liquid Glass applied on Xcode 26 recompile).",
+        "Tabbed settings: put a TabView inside the Settings view with .tabItem { Label(\"General\", systemImage: \"gear\") } per tab (General / Shortcuts / Advanced / About) — the conventional macOS preferences layout; each tab loads its own view.",
+        "Opening Settings from a menu bar extra is the hard part (Steinberger's '5-hour journey'): SettingsLink and even @Environment(\\.openSettings) are unreliable from MenuBarExtra because the app is .accessory and has no active foreground window. Pre-Sonoma private selectors (NSApp.sendAction(Selector((\"showSettingsWindow:\")))) are deprecated — avoid.",
+        "Working recipe (macOS 14+): (1) declare a hidden Window scene BEFORE the Settings scene in the App body so openSettings() has a valid SwiftUI window context — order matters, openSettings fails silently otherwise; (2) from the menu action post a NotificationCenter message to decouple from the extra's context; (3) momentarily setActivationPolicy(.regular) + NSApp.activate(ignoringOtherApps: true), call openSettings(), then makeKeyAndOrderFront(nil)/orderFrontRegardless() on the settings window, with a ~100-200ms delay, and restore .accessory after. This is the reliable-but-fiddly pattern people land on.",
+        "Simpler alternative: skip the Settings scene entirely and manage a normal Window/WindowGroup that you show via NSApp.activate + bring-to-front, sidestepping the openSettings activation quirks — many menu bar apps do this for full control.",
+        "Always make Settings reachable WITHOUT the icon: also bind a global hotkey and handle relaunch-while-running to surface Settings, so a user who hid the icon isn't stranded.",
+        "Persist with @AppStorage / UserDefaults; read launch-at-login from SMAppService live rather than caching."
+      ],
+      "accessibility": [
+        "Respect Reduce Transparency: glass is auto-substituted with solid/opaque backgrounds by the system, but verify your custom popover/settings still has sufficient contrast; gate custom glass with @Environment(\\.accessibilityReduceTransparency) and fall back to .identity or .regularMaterial/solid fill.",
+        "Respect Reduce Motion: the system dampens Liquid Glass lensing/morph animations (more reliably as of 26.4); read @Environment(\\.accessibilityReduceMotion) and skip your own glassEffectID morph / popover spring animations when set. Avoid motion-as-the-only-feedback.",
+        "Use the new system controls as honest fallbacks: Display & Brightness Liquid Glass = Clear vs Tinted (Tinted is more opaque), and Accessibility 'Reduce Bright Effects' (minimizes interaction flashing) — design so the app reads well in Tinted/Reduced modes, not only the default Clear.",
+        "VoiceOver: every status item and popover control needs a clear .accessibilityLabel (the monochrome icon is unintelligible to VO without one) and, where state-bearing, .accessibilityValue (e.g. 'Connected', 'Paused'). For a custom NSStatusItem button set accessibilityLabel/accessibilityRole on the button. Make the popover focus-order logical and ensure VO can reach Quit/Settings.",
+        "Keyboard operability: provide the global hotkey AND ensure every popover action has a keyboard path; expose the customizable shortcut via KeyboardShortcuts.Recorder so users can pick non-conflicting keys (it warns on conflicts).",
+        "Contrast & size: Tahoe's transparent menu bar plus tiny monochrome icons (documented as hard to distinguish even on Retina by Rogue Amoeba/TidBITS, 2026) means you must test the icon against light AND dark wallpapers and at small sizes; ship a template image so the system can invert/tint for contrast, and consider Increase Contrast support.",
+        "Don't rely on color alone to convey status (color-blind users) — pair color with shape/symbol changes in the icon and text in the popover.",
+        "Dynamic Type / large text: let the popover and Settings layouts reflow with larger system text rather than truncating."
+      ],
+      "exemplarApps": [
+        {
+          "name": "Ice (open source, jordanbaird/Ice)",
+          "whatTheyDoWell": "Free Bartender alternative; hide/show icons behind a drawer, Command-click to reposition dividers, right-click empty menu-bar space to reach its own controls, plus menu-bar styling (rounded corners, borders, tinting). Caveat: does not yet support macOS 26 Tahoe (dev betas only) — study it but reference Thaw for current Tahoe behavior."
+        },
+        {
+          "name": "Thaw (open-source Ice successor)",
+          "whatTheyDoWell": "Maintained for macOS 26: hidden + always-hidden sections, a separate Thaw Bar for notch machines, and hotkey access to hidden items — the current open-source reference for hide/re-show UX on Tahoe."
+        },
+        {
+          "name": "Bartender",
+          "whatTheyDoWell": "The category-defining menu-bar manager: granular show/hide/always-hide per icon, search, hotkey reveal, and triggers — the gold standard for 'let the user control what's in the menu bar.'"
+        },
+        {
+          "name": "Hidden Bar (open source)",
+          "whatTheyDoWell": "Minimal divider model — drag a divider, everything left of it hides; click the arrow to reveal; optional always-hidden section with right-click access. Clean reference for the simplest hide pattern."
+        },
+        {
+          "name": "Vanilla",
+          "whatTheyDoWell": "Fluid show/hide animation of icons; Pro adds permanent hiding, keyboard shortcut toggle, and auto-re-hide-after-delay — good motion-design reference for menu-bar reveal/collapse."
+        },
+        {
+          "name": "Dropover",
+          "whatTheyDoWell": "Exemplary simple-by-default/advanced-via-modifier UX: shake-to-create-shelf default, modifier-key-only appearance (Shift/Cmd/Ctrl), notch drop, custom hotkey, and Option-to-copy vs default-move on drag. Clever progressive disclosure."
+        },
+        {
+          "name": "Plash / Dato / Lungo (Sindre Sorhus apps)",
+          "whatTheyDoWell": "Production users of the KeyboardShortcuts library and clean MenuBarExtra-style utilities — reference implementations for customizable global hotkeys and tidy popover/settings design."
+        },
+        {
+          "name": "fluid-menu-bar-extra (lfroms, open source)",
+          "whatTheyDoWell": "A drop-in SwiftUI replacement that fixes MenuBarExtra(.window)'s fade-out, dismissal, and resizing rough edges — study/fork for a polished popover."
+        },
+        {
+          "name": "MenuBarExtraAccess (orchetect, open source)",
+          "whatTheyDoWell": "Adds binding-based show/hide, isEnabled, and real NSStatusItem + NSWindow access to MenuBarExtra with no private APIs (MAS-safe) — the practical bridge between SwiftUI simplicity and AppKit control."
+        }
+      ],
+      "sources": [
+        "https://github.com/orchetect/MenuBarExtraAccess",
+        "https://github.com/orchetect/MenuBarExtraAccess/discussions/1",
+        "https://multi.app/blog/pushing-the-limits-nsstatusitem",
+        "https://steipete.me/posts/2025/showing-settings-from-macos-menu-bar-items",
+        "https://mjtsai.com/blog/2025/06/18/showing-settings-from-macos-menu-bar-items/",
+        "https://cindori.com/developer/hands-on-menu-bar",
+        "https://github.com/lfroms/fluid-menu-bar-extra/blob/main/README.md",
+        "https://www.anaghsharma.com/blog/macos-menu-bar-app-with-swiftui",
+        "https://dev.to/heocoi/what-i-learned-building-a-native-macos-menu-bar-app-4im6",
+        "https://developer.apple.com/design/human-interface-guidelines/the-menu-bar",
+        "https://www.conor.fyi/writing/liquid-glass-reference",
+        "https://www.atelier-socle.com/en/articles/swiftui-liquid-glass-guide",
+        "https://dev.to/diskcleankit/liquid-glass-in-swift-official-best-practices-for-ios-26-macos-tahoe-1coo",
+        "https://developer.apple.com/forums/thread/791540",
+        "https://www.macstories.net/roundups/managing-your-mac-menu-bar-a-roundup-of-my-favorite-bartender-alternatives/",
+        "https://www.drbuho.com/how-to/bartender-alternatives",
+        "https://syntackle.com/blog/the-most-useful-macos-app/",
+        "https://github.com/sindresorhus/KeyboardShortcuts",
+        "https://swiftpackageindex.com/sindresorhus/KeyboardShortcuts",
+        "https://dropoverapp.com/",
+        "https://dropoverapp.com/faq",
+        "https://daringfireball.net/linked/2026/05/15/dropover",
+        "https://github.com/onmyway133/blog/issues/707",
+        "https://medium.com/@clyapp/implementing-left-click-and-right-click-for-menu-bar-status-button-in-macos-app-c3fc0b981cf0",
+        "https://www.jessesquires.com/blog/2019/08/16/workaround-highlight-bug-nsstatusitem/",
+        "https://developer.apple.com/forums/thread/811718",
+        "https://developer.apple.com/documentation/appkit/nsstatusitem",
+        "https://weblog.rogueamoeba.com/2026/01/10/removing-tahoes-unwanted-menu-icons/",
+        "https://tidbits.com/2026/01/06/how-tahoes-menu-icons-undermine-usability/",
+        "https://mjtsai.com/blog/2025/12/10/icons-in-menus-everywhere/",
+        "https://www.macrumors.com/2025/06/23/macos-tahoe-beta-2-menu-bar-background/",
+        "https://www.idownloadblog.com/2025/06/25/how-to-toggle-mac-menu-bar-background-tutorial/",
+        "https://9to5mac.com/2025/08/07/macos-26-tahoe-customization-options/",
+        "https://nilcoalescing.com/blog/LaunchAtLoginSetting/",
+        "https://eclecticlight.co/2024/04/30/swiftui-on-macos-settings-defaults-and-about/",
+        "https://medium.com/@clyapp/customizing-swiftui-settings-window-on-macos-4c47d0060ee4",
+        "https://github.com/lwouis/alt-tab-macos/issues/127",
+        "https://developer.apple.com/forums/thread/810677",
+        "https://support.apple.com/en-us/122868"
+      ]
+    },
+    "naming": {
+      "candidates": [
+        {
+          "name": "Gloam",
+          "theme": "dusk/twilight/gloaming/dim",
+          "rationale": "Old-English word for the warm half-light of dusk; poetic, ownable, and instantly evokes evening warmth without saying 'night'.",
+          "collisionRisk": "Low for macOS. Verified: a Steam stealth game 'GLOAM' exists and an unrelated 'Gloo' messaging app, but no macOS color-temperature/blue-light app uses it (web-checked, no conflicts found).",
+          "urlPath": "gloam",
+          "tagline": "The warm half-light, on your screen."
+        },
+        {
+          "name": "Gloaming",
+          "theme": "dusk/twilight/gloaming/dim",
+          "rationale": "The fuller, lyrical form of Gloam — literally the twilight hour, aligning the product name with the moment it serves.",
+          "collisionRisk": "Low-medium. Shares roots with the Steam game and an Irish music group 'The Gloaming'; longer string is more ownable as a domain but less punchy than Gloam.",
+          "urlPath": "gloaming",
+          "tagline": "Soften into the evening."
+        },
+        {
+          "name": "Ember",
+          "theme": "warmth/amber/ember/glow/hearth",
+          "rationale": "The single most evocative warm-light word — a glowing coal that radiates gentle heat, perfect for a screen-warming metaphor.",
+          "collisionRisk": "HIGH. 'Ember' is a major brand: the Ember temperature-control smart mug (Ember.com, trademarked) plus Ember.js framework. Strong dilution and trademark risk; avoid as primary mark.",
+          "urlPath": "ember",
+          "tagline": "Warm light for tired eyes."
+        },
+        {
+          "name": "Emberglow",
+          "theme": "warmth/amber/ember/glow/hearth",
+          "rationale": "Compounds ember + glow to escape the bare 'Ember' trademark while keeping the warm-coal imagery and adding the screen 'glow' double meaning.",
+          "collisionRisk": "Medium. Dilutes the Ember mark and 'Glow' (a popular macOS menu-bar manager at macglow.app); the compound is distinctive enough to likely clear, but still adjacent to two known brands.",
+          "urlPath": "emberglow",
+          "tagline": "Your screen, lit like a low fire."
+        },
+        {
+          "name": "Cinder",
+          "theme": "warmth/amber/ember/glow/hearth",
+          "rationale": "The smouldering remnant of a fire — warm, calm, slightly more masculine and minimalist than Ember, and a clean single word.",
+          "collisionRisk": "Low for macOS color apps. 'Cinder' is a known C++ creative-coding framework (libcinder.org), so some dev-tool confusion, but no blue-light/screen-warmth app uses it (web-checked).",
+          "urlPath": "cinder",
+          "tagline": "The screen, gently smouldering."
+        },
+        {
+          "name": "Smolder",
+          "theme": "warmth/amber/ember/glow/hearth",
+          "rationale": "A slow, persistent warm burn — captures an always-on warm display that never flares blue. Distinctive and verb-like.",
+          "collisionRisk": "Low. No macOS screen-warmth or notable software product found under this name (web-checked); appears clear for both app name and domain.",
+          "urlPath": "smolder",
+          "tagline": "A low warm burn, all evening."
+        },
+        {
+          "name": "Hearth",
+          "theme": "warmth/amber/ember/glow/hearth",
+          "rationale": "The fireplace as the warm heart of a home — cozy, human, health-and-comfort coded, premium feel.",
+          "collisionRisk": "HIGH. 'Hearth' and 'Hearth Display' are registered trademarks of Hearth Display Inc. (family touchscreen org) and there are multiple 'Hearth' App Store apps. Trademark collision; avoid.",
+          "urlPath": "hearth",
+          "tagline": "The warm heart of your screen."
+        },
+        {
+          "name": "Hush",
+          "theme": "calm/rest",
+          "rationale": "A one-syllable instruction to quiet down — frames the app as quieting the harsh blue light and the day itself. Calm, soft, memorable.",
+          "collisionRisk": "Medium. 'Hush' is used by several unrelated apps (a notable iOS Safari content blocker, podcast tools); no macOS screen-warmth app found, but the common word raises App Store search-collision and SEO risk.",
+          "urlPath": "hush",
+          "tagline": "Quiet the blue. Keep the warm."
+        },
+        {
+          "name": "Dusklight",
+          "theme": "dusk/twilight/gloaming/dim",
+          "rationale": "Plainly descriptive of warm end-of-day light while staying poetic; communicates function and mood in one compound.",
+          "collisionRisk": "Low. No macOS app of this exact name found (web-checked). Generic-ish components mean weak trademark strength, but practical collision is low.",
+          "urlPath": "dusklight",
+          "tagline": "Light that follows the sun down."
+        },
+        {
+          "name": "Vesper",
+          "theme": "dusk/twilight/gloaming/dim",
+          "rationale": "Latin for 'evening' (and the evening star); elegant, premium, design-conscious — pairs well with a glassy native macOS aesthetic.",
+          "collisionRisk": "Medium. Famous as the discontinued Vesper notes app (by John Gruber et al.) and a Bond cocktail; no current macOS screen-warmth app, but the notes-app legacy is well known in the Apple community.",
+          "urlPath": "vesper",
+          "tagline": "For the evening hours."
+        },
+        {
+          "name": "Gloamy",
+          "theme": "dusk/twilight/gloaming/dim",
+          "rationale": "A softer, friendlier diminutive of gloaming — approachable and ownable, good for a free open-source community feel.",
+          "collisionRisk": "Low. No software product found under this name (web-checked); highly distinctive and almost certainly domain-available.",
+          "urlPath": "gloamy",
+          "tagline": "Cozy up to the dusk."
+        },
+        {
+          "name": "Amberly",
+          "theme": "warmth/amber/ember/glow/hearth",
+          "rationale": "Turns 'amber' (the literal warm hue the app shifts toward) into a soft, name-like mark — warm, friendly, brandable.",
+          "collisionRisk": "Medium. 'Amberlight' is an existing Mac art-generation app and 'Amber' is a common name/brand (and a Haven & Hearth game client on GitHub); the '-ly' twist helps but adjacency exists.",
+          "urlPath": "amberly",
+          "tagline": "Everything, in a warmer light."
+        },
+        {
+          "name": "Candela",
+          "theme": "light/photon/candela",
+          "rationale": "The SI unit of luminous intensity — a smart, design-literate nod for the 'true color reveal' hotkey crowd; sounds warm (candle).",
+          "collisionRisk": "Low-medium. Used by some unrelated lighting/medical brands generally, but no macOS blue-light app found (web-checked). Distinctive in this category.",
+          "urlPath": "candela",
+          "tagline": "Measured warmth for your eyes."
+        },
+        {
+          "name": "Kelvin",
+          "theme": "light/photon/candela",
+          "rationale": "Color temperature is literally measured in Kelvin — the most technically honest name possible, instantly legible to the designer audience.",
+          "collisionRisk": "Medium. Generic technical term used by various color/white-balance tools and meters; no dominant macOS warmth app owns it, but weak trademark strength and search collisions.",
+          "urlPath": "kelvin",
+          "tagline": "Tune your screen by the degree."
+        },
+        {
+          "name": "Lumen",
+          "theme": "circadian/rhythm/melatonin/lumen",
+          "rationale": "The unit of luminous flux — short, clean, light-coded, easy to say and type.",
+          "collisionRisk": "HIGH. 'Lumen' is heavily used: a metabolism/health device brand, a screen-dimmer app, and others (Lumina/Lumie/CF.lumen variants abound). Crowded and confusing; avoid.",
+          "urlPath": "lumen",
+          "tagline": "Just the light you need."
+        },
+        {
+          "name": "Sundown",
+          "theme": "dusk/twilight/gloaming/dim",
+          "rationale": "Evening transition stated plainly and warmly; strong everyday word that signals 'warms at sunset'.",
+          "collisionRisk": "HIGH. 'Sundown' (trysundown.com) is a current, actively-marketed 2026 Mac blue-light filter — a direct competitor. Direct collision; do not use.",
+          "urlPath": "sundown",
+          "tagline": "Warm as the sun goes down."
+        },
+        {
+          "name": "Hygge",
+          "theme": "cozy/hygge",
+          "rationale": "The Danish concept of cozy wellbeing — perfectly on-theme for a warm, comforting, health-oriented screen experience.",
+          "collisionRisk": "Medium. A widely-used lifestyle term and the name of various wellness/decor products; no macOS screen app found, but pronunciation ('hoo-gah') and genericness hurt memorability/SEO.",
+          "urlPath": "hygge",
+          "tagline": "Cozy light for your Mac."
+        },
+        {
+          "name": "Cozylight",
+          "theme": "cozy/hygge",
+          "rationale": "Says exactly what it delivers — cozy, warm light — in friendly, approachable language fitting a free open-source app.",
+          "collisionRisk": "Low. No macOS app of this name found (web-checked). Descriptive, so weak as a trademark, but practical collision risk is low.",
+          "urlPath": "cozylight",
+          "tagline": "Make your screen feel like home."
+        },
+        {
+          "name": "Lull",
+          "theme": "calm/rest",
+          "rationale": "A lull is a soothing pause; evokes winding down and the calm before sleep — short, soft, and ownable.",
+          "collisionRisk": "Low-medium. 'Lullaby' apps (music, baby sleep) exist, but bare 'Lull' for a macOS warmth app appears unused (web-checked). Distinctive and short.",
+          "urlPath": "lull",
+          "tagline": "Ease your screen into night."
+        },
+        {
+          "name": "Solace",
+          "theme": "calm/rest",
+          "rationale": "Comfort in difficult moments — premium, calming, health-and-wellbeing coded.",
+          "collisionRisk": "HIGH. 'Solace' is already a known macOS app that changes appearance/color temperature by weather and sun — direct category overlap. Avoid.",
+          "urlPath": "solace",
+          "tagline": "Comfort for your eyes."
+        },
+        {
+          "name": "Filament",
+          "theme": "light/photon/candela",
+          "rationale": "The glowing wire of an incandescent bulb — warm, retro-cozy, evokes 2700K tungsten glow; distinctive and design-friendly.",
+          "collisionRisk": "Medium. 'Filament' is used by some dev/PHP-admin and lighting products generally, but no macOS screen-warmth app found (web-checked). Adjacent dev-tool usage only.",
+          "urlPath": "filament",
+          "tagline": "The warm glow of an old bulb."
+        },
+        {
+          "name": "Circa",
+          "theme": "circadian/rhythm/melatonin/lumen",
+          "rationale": "Short root of 'circadian' — clever, minimal, signals the health/rhythm science without the clinical mouthful.",
+          "collisionRisk": "Medium. 'Circa' is a common word/brand (a date-night app, a casino, design tools); no macOS warmth app owns it, but it is a busy general term.",
+          "urlPath": "circa",
+          "tagline": "In rhythm with your day."
+        },
+        {
+          "name": "Warmly",
+          "theme": "warmth/amber/ember/glow/hearth",
+          "rationale": "An adverb that doubles as a warm sign-off — friendly, human, and literally describes what the app does to the screen.",
+          "collisionRisk": "Medium. 'Warmly' is a known B2B sales/website-intent SaaS brand (warmly.ai); different category so coexistence is plausible, but the name is already in commercial use.",
+          "urlPath": "warmly",
+          "tagline": "We warm your screen, warmly."
+        },
+        {
+          "name": "Glim",
+          "theme": "dusk/twilight/gloaming/dim",
+          "rationale": "Archaic/dialect word for a faint light or candle ('glim'); tiny, rare, ownable, and warmly evocative of low light.",
+          "collisionRisk": "Low. No macOS color/warmth app found (web-checked). Very distinctive; short domains plausible.",
+          "urlPath": "glim",
+          "tagline": "A small warm light at dusk."
+        }
+      ],
+      "brandDirections": [
+        {
+          "name": "Gloam",
+          "palette": "Twilight gradient: deep indigo #2B2A4A and dusk plum #4A3B5C grounding the dark UI, warming up through ember amber #E8A24C to a soft candle cream #F4E3C7 for highlights; pure-white reserved only for the 'reveal true color' state so warmth reads as the default.",
+          "typography": "New York / a refined high-contrast serif for the wordmark and hero numbers (color-temperature Kelvin readout), paired with SF Pro Text for UI labels — literary warmth over clinical sans.",
+          "tone": "Poetic but precise. Speaks like a thoughtful friend at dusk: 'Soften into the evening.' Calm, unhurried, never alarmist about blue light — invites rather than warns."
+        },
+        {
+          "name": "Ember (as Emberglow)",
+          "palette": "Charcoal hearth base #1C1A19 with translucent macOS glass layers, glowing coal core #FF7A3D to #FFB066 amber gradient, warm ash grey #8A817C for secondary text, and a single cool accent #C9D6E3 used ONLY in true-color reveal mode for dramatic contrast.",
+          "typography": "SF Pro Rounded for headings (soft, friendly, glowing) with SF Mono for the Kelvin/hotkey readouts — a cozy-meets-precise pairing that suits a designer tool with a playful warmth.",
+          "tone": "Warm, tactile, slightly playful. Talks about 'a low fire,' 'embers,' and 'cozy.' Confident and inviting; leans into the fireplace metaphor without being twee."
+        },
+        {
+          "name": "Vesper",
+          "palette": "Near-black evening-star ground #14141A under heavy frosted glass, muted gold #D9B26A and warm taupe #B89B82 as primaries, faint starlight #EDE6D8 highlights; reveal-true-color flips to crisp neutral #FFFFFF on a cool slate panel #2A2E36 for a deliberate, premium 'before/after' moment.",
+          "typography": "A refined humanist serif (e.g., New York display) for the mark with SF Pro Text for chrome — editorial, restrained, Apple-design-award coded; tight tracking, generous line height.",
+          "tone": "Quiet luxury. Minimal words, high confidence: 'For the evening hours.' Speaks to designers and Apple aesthetes who value restraint, native feel, and craft over feature lists."
+        }
+      ],
+      "topRecommendations": [
+        {
+          "name": "Gloam",
+          "why": "Best overall: a real, poetic Old-English word for warm twilight that maps exactly onto the product's purpose, avoids Apple's 'Night Shift' entirely, and web-checks clean of any macOS color-temperature app collision (only an unrelated Steam game and a 'Gloo' messaging app exist). Short, ownable, brandable, and almost certainly domain-available — strongest mark + cleanest field."
+        },
+        {
+          "name": "Cinder",
+          "why": "Strong warm-fire metaphor that sidesteps the heavily-trademarked 'Ember' (mug) while keeping the smouldering-warmth imagery. One clean syllable, premium and minimal, and no blue-light/screen-warmth app uses it. Only caveat is the Cinder C++ creative-coding framework, which lives in a different category and is unlikely to cause real confusion."
+        },
+        {
+          "name": "Smolder",
+          "why": "Captures the always-on, never-flaring 'slow warm burn' of an evening display perfectly, is verb-like and memorable, and came back completely clear in web checks — no software or screen app found. Distinctive enough to own outright as both an app name and a domain."
+        },
+        {
+          "name": "Vesper",
+          "why": "The most premium, design-award-coded option — Latin for 'evening,' elegant, and ideal for a glassy native macOS aesthetic and the designer 'true color' audience. Docked from #1 only because the discontinued Vesper notes app is well remembered in Apple circles, but it sits in a different category so practical collision is low."
+        },
+        {
+          "name": "Gloamy",
+          "why": "The safest field of all: a friendly diminutive of gloaming that web-checks with zero software collisions, making the .app/domain almost guaranteed available. It keeps Gloam's twilight meaning with a warmer, more approachable open-source-community vibe — an excellent fallback if Gloam's exact domain is taken."
+        }
+      ]
+    },
+    "tech": {
+      "architectureOverview": "App = SwiftUI MenuBarExtra (LSUIElement, no Dock icon) wrapping a \"WarmthEngine\" actor. The engine owns a per-display state machine: enumerate displays via NSScreen + CGGetActiveDisplayList, key each by a STABLE identity (CGDisplayCreateUUIDFromDisplayID -> IOKit registry path / EDID serial, NOT displayID, which is reassigned on reconnect), then per display run a capability probe to pick a warmth LAYER. Layered pipeline, best-available-wins, per display independently: (1) DDC RGB-gain (VCP 0x16/0x18/0x1A) over IOAVService — true hardware color temp, but only on DDC-capable externals; (2) gamma transfer table via CoreGraphics — historically the universal path, but BROKEN on M5 Tahoe 26.3.1+/26.4 (see warmthLayers); (3) Metal/CAMetalLayer per-screen overlay NSWindow at screenSaver level with multiply-style warm tint — the ONLY universal fallback that works on every display including buttonless Apple-blessed panels (LG UltraFine, Studio Display, Pro Display XDR) and on M5 where gamma is dead. A small ColorSync path (ColorSyncDeviceSetCustomProfiles, suggested by Apple DTS as the alternate that bypasses the broken gamma pipeline) is a candidate Layer 1.5 to evaluate at runtime. The engine exposes a single setWarmth(cct/strength) call; a SchedulerService reads the SYSTEM Night Shift schedule via CBBlueLightClient and drives the engine (we are NOT Night Shift, we only mirror the user's existing schedule/sun times). A HotkeyService (sindresorhus/KeyboardShortcuts, onKeyDown/onKeyUp) implements hold-to-reveal-true-color by suspending all layers while held and restoring on release. Persistence in UserDefaults keyed by display identity. Combine/AsyncStream publishes engine state to the SwiftUI menu. Distribution is Developer ID + notarization + hardened runtime, outside the App Store (private frameworks + IOAVService preclude the MAS). Sources: https://developer.apple.com/documentation/swiftui/menubarextra , https://developer.apple.com/documentation/coregraphics/1455261-cggetactivedisplaylist , https://developer.apple.com/documentation/coregraphics/1455894-cgdisplaycreateuuidfromdisplayid",
+      "needsPrivilegedHelper": "A privileged helper / LaunchDaemon is NOT required for the warmth functionality itself. DDC over IOAVService, CoreGraphics gamma, the Metal overlay, CBBlueLightClient, and a CGEventTap/KeyboardShortcuts hotkey all run fully in the user session with no root. IOAVServiceCreate / IOAVServiceReadI2C / IOAVServiceWriteI2C work from a normal user-session app on Apple Silicon (this is how MonitorControl/Lunar/BetterDisplay operate without a daemon for DDC). The only things needing elevated/special handling are NON-root: (a) Accessibility permission (TCC) IF the hotkey is implemented via a low-level CGEventTap that observes/holds keyup across all apps (the KeyboardShortcuts library uses RegisterEventHotKey and does NOT need Accessibility, which is the reason to prefer it); (b) optionally a LaunchAgent (NOT daemon) plist or SMAppService.loginItem for \"launch at login\" — user-level, no root. Recommendation: ship NO privileged helper. Use ServiceManagement SMAppService.mainApp.register() for login-item. Reserve a LaunchDaemon only if a future feature needs pre-login or cross-user display state, which warmth does not. Avoiding the helper dramatically simplifies notarization (no separate helper signing, no SMJobBless/SMAppService.daemon entitlement plist pairing). Sources: https://developer.apple.com/documentation/servicemanagement/smappservice , https://github.com/MonitorControl/MonitorControl",
+      "warmthLayers": [
+        {
+          "layer": "Layer 1 — DDC/CI RGB-gain (true hardware color temperature)",
+          "howItWorks": "Write the display's per-channel video gain VCP registers over the DDC/CI I2C side-channel: VCP 0x16 = Red gain, 0x18 = Green gain, 0x1A = Blue gain (0x6B/0x6C/0x6E on some panels for 6-axis; 0x14 'select color preset' can also pick a warmer factory preset). To warm: lower blue gain and slightly lower green relative to red. On Apple Silicon there is no IOFramebuffer I2C; you use the private IOAVService. Flow: enumerate AppleCLCD2/external service nodes in the IORegistry, match to a CGDisplayID via CoreDisplay_DisplayCreateInfoDictionary, IOAVServiceCreate()/IOAVServiceCreateWithService(), then IOAVServiceWriteI2C(service, 0x37 (chip), 0x51 (subaddr), packet, len). DDC write packet: bytes [0x84, 0x03, VCP, valHi, valLo] with checksum = XOR of 0x6E and all preceding bytes. This is REAL warmth in the panel, persists in the panel, survives our app, and is independent of GPU gamma.",
+          "apiSurface": "IOAVServiceCreate / IOAVServiceCreateWithService / IOAVServiceReadI2C / IOAVServiceWriteI2C (private IOKit AppleVADriver/IOAVService); IORegistry traversal (IOServiceGetMatchingServices on 'AppleCLCD2'/'DCPAVServiceProxy'); CoreDisplay_DisplayCreateInfoDictionary. VCP codes 0x16/0x18/0x1A (gain), 0x14 (preset), 0x0C/0x0B (color temp request/increment).",
+          "appleSiliconViability": "Works and is the basis of MonitorControl/Lunar/BetterDisplay on M-series. Caveat: built-in HDMI port on many M1/M2 minis and 14/16in MBPs does NOT pass DDC (use USB-C/DP/TB instead); reads fail ~30% of the time so writes should be fire-and-verify with retry. Private API => no App Store, and IOAVService symbols can shift between macOS builds (resolve via dlopen/dlsym, guard for nil).",
+          "externalMonitorViability": "BEST real warmth for DDC-capable externals (most Dell/LG/Samsung/Gigabyte). FAILS on Apple-blessed buttonless displays — LG UltraFine, Studio Display, Pro Display XDR expose no DDC color VCPs (only native brightness via a different path), so these MUST fall through to Layer 3.",
+          "gotchas": "Per-monitor VCP support varies wildly; probe with a read of 0x16 before trusting writes. Some monitors clamp/round gain; some 'bricked' reports exist when writing unsupported VCPs (avoid 0x?? writes without capability probe via VCP 0xF0/capabilities string). HDMI-on-AS unreliable. Not all panels honor gain in their current picture mode (must select a User/Custom preset via 0x14 first)."
+        },
+        {
+          "layer": "Layer 2 — GPU gamma transfer table (CoreGraphics)",
+          "howItWorks": "Replace the display's per-channel transfer (gamma) LUT so blue/green output is attenuated, shifting white point warm. Classic f.lux/Night-Shift-style software warmth applied in the GPU scanout, affecting the whole display uniformly.",
+          "apiSurface": "CGSetDisplayTransferByTable(display, tableSize, redTable, greenTable, blueTable); CGGetDisplayTransferByTable; CGSetDisplayTransferByFormula; CGDisplayRestoreColorSyncSettings (reset). Alternate Apple-DTS-suggested path: ColorSyncDeviceSetCustomProfiles / ColorSyncDeviceSetCustomProfileForRange to install a warm-white-point profile (reported to use a different pipeline that may bypass the gamma breakage).",
+          "appleSiliconViability": "BROKEN ON M5 TAHOE as of 26.3.1 and 26.4 RC/beta4: CGSetDisplayTransferByTable returns kCGErrorSuccess and CGGetDisplayTransferByTable reads back the set values, but NO visual change occurs (confirmed by Apple DTS repro on M5 Pro/Max/Neo; FB22273782/FB19136488; briefly fixed in a dev beta then regressed). On built-in displays with 'Automatically adjust brightness' ON, gamma is silently overridden — disabling auto-brightness lets it apply after ~1s on some Apple Silicon. M3/M4 and non-Max M5 still work. So this layer is UNRELIABLE on the target M5 and must NOT be the primary path.",
+          "externalMonitorViability": "Even pre-breakage, gamma on Apple-Silicon externals was historically flaky (overridden on hotplug, resolution change, sleep/wake, and by HDR/EDR). On Tahoe M5 it is effectively dead for both built-in and external. Treat as a 'try and verify' layer only.",
+          "gotchas": "Must re-apply on display reconfiguration (register CGDisplayRegisterReconfigurationCallback). HDR/EDR multiplies the whole range under Tahoe auto-brightness, corrupting the table on toggle. ALWAYS verify by sampling a known pixel or by comparing read-back AND a screen-capture probe — do not trust kCGErrorSuccess. Reset with CGDisplayRestoreColorSyncSettings on quit/crash. Because of the M5 breakage, gate this layer behind a runtime self-test that actually measures effect; if no measurable change, demote to Layer 3."
+        },
+        {
+          "layer": "Layer 3 — Per-screen Metal/CAMetalLayer overlay window (universal fallback)",
+          "howItWorks": "For each NSScreen, create a borderless transparent NSWindow sized to screen.frame, hosting a CAMetalLayer / MTKView (or a simple CALayer with a warm color and a multiply-like compositing via low-alpha warm fill). The overlay tints everything beneath it warm. This does not change the panel or GPU LUT; it composites a warm veil in the window server, so it is display-agnostic and survives the M5 gamma breakage and the LG/Studio Display no-DDC case. Strength maps to tint color + alpha; for higher fidelity use a Metal fragment shader doing per-channel multiply so blacks stay black (true color-temperature look) rather than a flat alpha wash.",
+          "apiSurface": "NSWindow (styleMask .borderless, backgroundColor .clear, isOpaque=false, hasShadow=false); window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow))) (or .maximumWindow-1 to sit below the actual screensaver/notification HUD as desired); ignoresMouseEvents=true; collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.stationary,.ignoresCycle]; one window per NSScreen; CAMetalLayer + MTLRenderPipelineState multiply shader; sharingType=.none. Recreate windows on NSApplication.didChangeScreenParametersNotification.",
+          "appleSiliconViability": "Fully works on Apple Silicon; GPU-cheap (static frame, draw-on-change only, present at vsync only when strength changes — no continuous redraw, so ~0% idle GPU). Compatible with ProMotion/EDR.",
+          "externalMonitorViability": "Universal — works on EVERY display type including buttonless Apple displays and any external regardless of DDC, because it lives in WindowServer. The ONLY path guaranteed on LG UltraFine / Studio Display / Pro Display XDR.",
+          "gotchas": "Cannot tint over other apps' true full-screen (a native fullscreen Space) unless collectionBehavior includes .fullScreenAuxiliary and the window joins that space — test per app; some fullscreen games/video on a separate Space won't be covered. Color picker/screenshot tools will 'see' the tint (acceptable for a warmth app; offer a screenshot-exempt toggle via the hold-to-reveal hotkey). Must not capture clicks (ignoresMouseEvents). Mind HDR: on EDR displays a multiply veil can crush highlights — clamp shader output. Accessibility: respect Reduce Transparency / contrast. This layer should be the DEFAULT on M5 Tahoe given Layer 2 is broken."
+        }
+      ],
+      "nightShiftScheduleDetection": "We READ the user's existing Night Shift configuration without being Night Shift and without toggling it. Use the private CoreBrightness framework class CBBlueLightClient (dlopen('/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness'), then NSClassFromString(\\\"CBBlueLightClient\\\")). Call getBlueLightStatus: which fills CBBlueLightClient_StatusData_t { BOOL active; BOOL enabled; BOOL sunsetToSunrise; int mode; CBBlueLightClient_Schedule_t schedule; unsigned long long disableFlags; BOOL available; } where Schedule = { Time from; Time to; } and Time = { int hour; int minute; }. Field semantics: `enabled` = Night Shift master toggle on; `active` = currently in the warm window right now; `mode` = 0 (off/manual), 1 (custom from/to schedule), 2 (sunset-to-sunrise); `sunsetToSunrise` mirrors mode 2. To MIRROR the schedule as our own warmth WITHOUT touching Night Shift: (1) read status, (2) if mode==1 use schedule.from/.to to compute our own on/off times, (3) if mode==2 we cannot read the exact sun times from this struct directly, so derive sunrise/sunset ourselves from CLLocationManager coordinates + a solar-position calc (or read `active` and follow it as a live boolean). The cleanest, race-free approach: subscribe to CoreBrightness change notifications (CBBlueLightClient supports a status-change callback block — setStatusNotificationBlock:) and simply FOLLOW the `active` boolean each time it flips, applying/removing OUR warmth via the engine. That way we exactly track the system's sun-based schedule without computing astronomy and without ever calling setEnabled:/setMode:/setStrength: (so the user's real Night Shift stays exactly as they left it — typically OFF, since we are its replacement). Provide a user setting: 'Follow system Night Shift schedule' vs 'Custom schedule' vs 'Always on'. NOTE: CBBlueLightClient is the same private API used by NightShifter/displayutil; symbols and struct can change across macOS releases — version-gate, null-check, and degrade gracefully to a built-in solar scheduler if getBlueLightStatus: fails. Sources: https://github.com/srirangav/displayutil/blob/main/CBBlueLightClient.h , https://github.com/LeoNatan/Apple-Runtime-Headers/blob/master/macOS/PrivateFrameworks/CoreBrightness.framework/CBBlueLightClient.h",
+      "globalHotkeyTrueColor": "Hold-to-reveal-true-color: a global hotkey that, WHILE HELD, suspends all warmth (restores native color) and on release restores it. Implementation: use sindresorhus/KeyboardShortcuts (SwiftPM). It is built on Carbon RegisterEventHotKey, is sandbox/MAS-safe, requires NO Accessibility (TCC) permission, supports user-customizable bindings via a recorder UI, and crucially supports BOTH onKeyDown and onKeyUp — exactly the down/up pair needed for press-and-hold. Wire: KeyboardShortcuts.onKeyDown(for:.revealTrueColor){ engine.suspend() } and KeyboardShortcuts.onKeyUp(for:.revealTrueColor){ engine.resume() }. engine.suspend() = for each display, fade out the active layer (DDC: write neutral gain / restore previous gain; gamma: CGDisplayRestoreColorSyncSettings or push identity LUT; overlay: animate alpha->0 over ~120ms so it feels instant but not jarring). engine.resume() re-applies the target warmth. Use a short ease (Emil-Kowalski-style: fast, ~100-150ms, ease-out) so the reveal feels like lifting a veil, not a hard cut. Edge cases: if the key is released while app is busy, debounce so we never get stuck suspended (watchdog timer auto-resumes after N seconds if no keyUp arrives — guards against missed keyUp when a Space switch eats the event). ALTERNATIVE if you ever need modifier-only or chord holds that RegisterEventHotKey can't express: a CGEventTap on keyDown/keyUp/flagsChanged — but that REQUIRES Accessibility permission and is more fragile, so prefer KeyboardShortcuts and only fall back to CGEventTap for power-user modifier-hold. Sources: https://github.com/sindresorhus/KeyboardShortcuts , https://developer.apple.com/documentation/coregraphics/cgevent/1454426-tapcreate",
+      "sipGammaConstraints": "SIP and gamma constraints on M5 / Tahoe 26.3+: (1) The gamma breakage is NOT a SIP/entitlement gate — CGSetDisplayTransferByTable still returns kCGErrorSuccess and read-back succeeds; the failure is in the GPU/DCP scanout applying the LUT (a regression, Apple DTS-confirmed, FB22273782). No entitlement unlocks it; you cannot fix it from userspace. So the architectural consequence is: DO NOT depend on gamma on M5; make the Metal overlay the default and gate gamma behind a measured self-test. (2) CoreGraphics display APIs (CGGetActiveDisplayList, CGDisplayRegisterReconfigurationCallback, CGSetDisplayTransferByTable) need NO entitlement and are not SIP-blocked. (3) IOAVService DDC is a PRIVATE API but is not SIP-protected for read/write from a user app; the risk is symbol churn across builds, not SIP denial. (4) CBBlueLightClient is private; reading status is not SIP-gated, but App Sandbox would block dlopen of the private framework — another reason to ship NON-sandboxed Developer-ID. (5) The Metal overlay uses only PUBLIC APIs (NSWindow/CAMetalLayer) and is SIP-immune — this is why it is the safe universal fallback. (6) No need to disable SIP for any of this; instruct users NOTHING about SIP. Net: design for 'gamma may silently no-op' as a permanent condition on M5 and let the engine's runtime capability probe demote to overlay automatically. Sources: https://developer.apple.com/forums/thread/819331 , https://developer.apple.com/forums/thread/795074 , https://developer.apple.com/documentation/coregraphics/1455261-cggetactivedisplaylist",
+      "codeSigningNotarization": "Distribute OUTSIDE the Mac App Store as a Developer ID application (the app uses private frameworks IOAVService + CoreBrightness, which the MAS forbids). Sign with 'Developer ID Application' cert + Hardened Runtime enabled, then notarize. Hardened Runtime entitlements: because we dlopen private system frameworks (CoreBrightness) and resolve private IOKit symbols, set com.apple.security.cs.disable-library-validation = true ONLY if a code-signature/team-ID mismatch arises (loading Apple's own system frameworks via dlopen does NOT inherently need it — they are platform binaries; add it only if testing shows a load failure, and prefer NOT to, since it triggers extra Gatekeeper scrutiny). Do NOT enable App Sandbox (would block dlopen of private frameworks and IOAVService). Sign nested code (Sparkle.framework, its XPC services and Autoupdate/Updater.app, KeyboardShortcuts is source so compiled in) with the same Developer ID, hardened runtime, inside-out (deep is discouraged; sign each nested bundle explicitly). Notarize the .zip (or notarize the .app then staple, then build DMG and notarize+staple the DMG too) via notarytool: `xcrun notarytool submit App.zip --keychain-profile NOTARY --wait` then `xcrun stapler staple App.app` and `xcrun stapler staple App.dmg`. Verify with `spctl -a -vvv -t install App.app` and `codesign --verify --deep --strict --verbose=2`. Provide a hardened-runtime entitlements.plist; request no special entitlements beyond (optionally) disable-library-validation. Notarization does NOT inspect for private API usage (that is an App Store review concern only), so a Developer-ID notarized app using IOAVService/CBBlueLightClient passes notarization and Gatekeeper — confirmed by how MonitorControl/Lunar/BetterDisplay ship. Sources: https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution , https://developer.apple.com/documentation/security/hardened-runtime , https://developer.apple.com/documentation/security/disabling-library-validation",
+      "autoUpdate": "Use Sparkle 2 (current major, requires macOS 10.13+; latest 2.x series mid-2026). Auth model: EdDSA (ed25519) signatures over each update archive PLUS Apple code signing (Sparkle verifies both). Setup: (1) generate keys once with Sparkle's `generate_keys` (private key stored in the login keychain — NEVER in the repo; public key goes in Info.plist as SUPublicEDKey). (2) Add SUFeedURL pointing to a static appcast.xml hosted on GitHub Pages / a CDN over HTTPS. (3) On each release, build the archive (zip or DMG), then run `generate_appcast` which signs every archive with the keychain EdDSA key and emits/updates appcast.xml with sparkle:edSignature, sparkle:version, length, and optional release-notes/minimum-system-version. NOTE the `-s <key>` CLI flag to pass the private key as an argument is DEPRECATED — rely on the keychain. (4) Embed Sparkle.framework, sign its nested XPC services + Updater/Autoupdate with your Developer ID + hardened runtime. Since the app is NON-sandboxed, you do NOT need the sandboxed Installer/Downloader XPC dance (Sparkle 2.2 renamed those; 2.6 stopped sandboxing the Downloader XPC by default) — simpler. (5) Wire SPUStandardUpdaterController (SwiftUI: a CheckForUpdatesView/menu item bound to updater.canCheckForUpdates) and an automatic-check toggle in the menu. Host appcast + DMG/zip on GitHub Releases or Pages. Sources: https://sparkle-project.org/documentation/ , https://sparkle-project.org/documentation/upgrading/ , https://github.com/sparkle-project/Sparkle",
+      "packagingAndCustomDmg": "Ship BOTH a .zip (for Sparkle delta-friendly updates and quick downloads) and a branded .dmg (for first-run human installs). ZIP: `ditto -c -k --keepParent App.app App-x.y.z.zip` (ditto preserves the signature/xattrs; do NOT use `zip`). Notarize the zip, staple the .app before zipping for offline first-launch. For a FULLY custom, on-brand DMG window, prefer the shell-script create-dmg (create-dmg/create-dmg, `brew install create-dmg`) over sindresorhus' npm create-dmg (the npm one is intentionally minimal/opinionated and won't let you fully art-direct the window). create-dmg drives Finder via AppleScript to set: background image, window position/size, icon size/positions, the app icon coordinate, and the drag-to-Applications drop link. Example: `create-dmg --volname \\\"Warmth\\\" --volicon Warmth.icns --background assets/dmg-bg.png --window-pos 200 120 --window-size 660 420 --icon-size 120 --icon \\\"Warmth.app\\\" 165 220 --hide-extension \\\"Warmth.app\\\" --app-drop-link 495 220 --codesign \\\"$DEVID\\\" --notarize \\\"$NOTARY_PROFILE\\\" Warmth-x.y.z.dmg build/export/`. The background PNG (with a tasteful arrow from app icon -> Applications and brand art) goes in the source folder as .background/bg.png referenced via the window. Gotchas: create-dmg/AppleScript needs Finder automation entitlement on CI (grant in TCC or use --no-internet-enable / a UI-session runner; headless CI fails the AppleScript step — see create-dmg issue #85; mitigate by running the DMG step on a logged-in agent or using a Retina @2x background and `--hdiutil-quiet`). Alternatives for richer art direction: DropDMG (GUI/CLI, layout templates, Retina-aware, can code-sign) for a designer-driven workflow, or a hand-rolled hdiutil + AppleScript template (create-dmg's template.applescript) for full control. Staple the final DMG (`xcrun stapler staple Warmth.dmg`). Sources: https://github.com/create-dmg/create-dmg , https://github.com/sindresorhus/create-dmg , https://github.com/create-dmg/create-dmg/issues/85",
+      "risks": [
+        {
+          "risk": "GPU gamma (CGSetDisplayTransferByTable) is silently broken on M5 Tahoe 26.3.1+/26.4 — returns success but does nothing, so a gamma-first design produces an app that 'works' in code but shows no warmth on the target hardware.",
+          "mitigation": "Make the Metal overlay the DEFAULT layer on Apple Silicon Tahoe. Gate gamma behind a runtime self-test that MEASURES actual pixel change (screen-capture probe), not the kCGErrorSuccess return; auto-demote to overlay when no effect detected. Track Apple FB22273782/FB19136488 and re-enable gamma per-OS-version when fixed."
+        },
+        {
+          "risk": "Apple-blessed buttonless displays (LG UltraFine, Studio Display, Pro Display XDR) expose no DDC color VCPs, so DDC RGB-gain can't warm them.",
+          "mitigation": "Capability-probe DDC (read VCP 0x16) before using it; on failure fall straight to the Metal overlay, which covers these displays via WindowServer regardless of DDC."
+        },
+        {
+          "risk": "IOAVService and CBBlueLightClient are PRIVATE APIs whose symbols/struct layouts can change between macOS builds, breaking DDC and schedule-following on an OS update.",
+          "mitigation": "Resolve all private symbols via dlopen/dlsym with null checks; version-gate the CBBlueLightClient struct; wrap every private call in defensive failure handling that degrades to overlay (for DDC) and to a built-in solar scheduler (for schedule). Add a self-diagnostic that disables a layer if its probe fails. Keep these in isolated, swappable modules."
+        },
+        {
+          "risk": "Private-API usage blocks the Mac App Store and could in theory draw Gatekeeper/notarization friction.",
+          "mitigation": "Distribute Developer-ID + notarized OUTSIDE the MAS (notarization does not scan for private APIs; only App Store review does). Proven by MonitorControl/Lunar/BetterDisplay shipping the same APIs. Do not enable App Sandbox (it would block the private-framework dlopen)."
+        },
+        {
+          "risk": "Metal overlay cannot tint other apps' native full-screen Spaces / some games, and is visible to screenshots and screen recording.",
+          "mitigation": "Set collectionBehavior [.canJoinAllSpaces,.fullScreenAuxiliary] and test top apps; document the limitation. Use the hold-to-reveal hotkey (and an auto-suspend-during-screenshot option) so users can momentarily get true color for captures."
+        },
+        {
+          "risk": "Hold-to-reveal can get 'stuck suspended' if a keyUp is lost (e.g., during a Space switch), leaving warmth off.",
+          "mitigation": "Use KeyboardShortcuts onKeyDown/onKeyUp plus a watchdog timer that auto-resumes after N seconds if no keyUp arrives; debounce rapid toggles."
+        },
+        {
+          "risk": "Gamma/overlay/DDC state can be left applied after a crash, leaving the user's display warm or color-shifted.",
+          "mitigation": "On launch, reset all displays to neutral before re-applying (CGDisplayRestoreColorSyncSettings, write neutral DDC gain, remove overlay). Register a crash/exit handler and CGDisplayRegisterReconfigurationCallback to re-baseline on hotplug/wake. Store last-known native gain to restore DDC exactly."
+        },
+        {
+          "risk": "create-dmg's AppleScript Finder automation fails on headless CI, breaking the branded DMG build.",
+          "mitigation": "Run the DMG packaging step on a logged-in/UI CI agent (or local), grant Finder Automation in TCC, use --hdiutil-quiet; keep the zip pipeline fully headless so releases never block on the DMG. Consider DropDMG CLI as a fallback."
+        },
+        {
+          "risk": "Sparkle EdDSA private key leakage would let an attacker push malicious updates.",
+          "mitigation": "Keep the EdDSA private key only in the login keychain (never in the repo; the -s CLI flag is deprecated). Serve appcast + archives over HTTPS. Sparkle also verifies Apple code signing as a second factor."
+        },
+        {
+          "risk": "DDC writes to unsupported VCP codes can misconfigure or (rarely) 'brick'/confuse certain monitors.",
+          "mitigation": "Probe the monitor capabilities string (VCP 0xF0/caps) and read 0x16 before writing; only write gain VCPs the panel reports; select a User/Custom picture preset (0x14) first; fire-and-verify with read-back and bounded retries."
+        }
+      ],
+      "appleDocs": [
+        "https://developer.apple.com/documentation/swiftui/menubarextra",
+        "https://developer.apple.com/documentation/coregraphics/1455261-cggetactivedisplaylist",
+        "https://developer.apple.com/documentation/coregraphics/1454426-cgsetdisplaytransferbytable",
+        "https://developer.apple.com/documentation/coregraphics/1455894-cgdisplaycreateuuidfromdisplayid",
+        "https://developer.apple.com/documentation/coregraphics/1455823-cgdisplayregisterreconfiguration",
+        "https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct",
+        "https://developer.apple.com/documentation/appkit/nswindow/collectionbehavior-swift.property",
+        "https://developer.apple.com/documentation/quartzcore/cametallayer",
+        "https://developer.apple.com/documentation/coregraphics/cgevent/1454426-tapcreate",
+        "https://developer.apple.com/documentation/servicemanagement/smappservice",
+        "https://developer.apple.com/documentation/security/hardened-runtime",
+        "https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution",
+        "https://developer.apple.com/documentation/security/disabling-library-validation",
+        "https://developer.apple.com/forums/thread/819331",
+        "https://developer.apple.com/forums/thread/795074"
+      ]
+    },
+    "analytics": {
+      "recommendedStack": "Recommendation: Treat \"downloads\" and \"in-app usage\" as two separate, low-cost channels, and bias the whole design toward truly anonymous, aggregate-only data so a health audience never has to trust you with personal data.\n\n(1) DOWNLOAD TRACKING (zero in-app code, zero PII):\n- GitHub Releases: poll GET /repos/{owner}/{repo}/releases and sum the per-asset download_count field. Free, no auth needed, no user data. This is the primary number for direct .dmg/.zip downloads.\n- Homebrew: if you ship your own tap/cask, the same GitHub download_count captures brew installs (the tarball is fetched from your release). Once the cask graduates into homebrew-cask central, those installs no longer hit your release assets, so additionally read the public Homebrew analytics JSON API: https://formulae.brew.sh/api/analytics/cask-install/homebrew-cask/30d.json (also 90d/365d) and look up your cask token. Homebrew's own analytics are opt-out and aggregate, hosted on EU InfluxDB.\n- Landing-page download-click events: use Plausible (or Aptabase web) for a single 'download_click' goal/event. Cookieless, no consent banner required. Do NOT put GA4 on a health app's site.\n\n(2) IN-APP USAGE ANALYTICS — recommended: TelemetryDeck as the default, Aptabase as the self-host/fully-open alternative.\n- TelemetryDeck: purpose-built for Swift/macOS, EU-only hosting (migrated entirely to Hetzner/Germany in April 2026, German GmbH, German+EU law). SDKs are open source (Modified MIT, SwiftSDK v2.12.0, Mar 2026) so you can audit the wire format; backend is closed/no self-host. Free tier 100,000 signals/month (daily refresh), paid from EUR 9/month (funnels, retention, custom dashboards), ~EUR 19 next tier. Double salted hashing (client device salt + server salt) means the original identifier cannot be reconstructed, so it claims the result is anonymous (not merely pseudonymous), keeps App Tracking Transparency and App Store privacy labels clean, and does not require ATT consent.\n- Aptabase: choose this if you (or your community) want a fully open-source server you can self-host or one with EU data residency. SDK + server are 100% open source; no device identifiers, no cookies, no fingerprinting, no long-term user IDs; data is anonymised (not pseudonymised); GDPR + CCPA + PECR compliant. Free tier 20,000 events/month (smaller than TelemetryDeck); managed paid tiers scale by event volume; self-host is free on your own box. This is the strongest fit for an OSS health tool that wants to tell users 'we run our own analytics server, here is the code.'\n\nFor the single concrete pick: if the developer wants the least operational work and best Swift ergonomics, ship TelemetryDeck behind an explicit opt-in. If maximum trust/auditability matters more (likely for a health audience), self-host Aptabase. Either way, gate it behind opt-in and ship aggregate-only.",
+      "downloadTracking": [
+        "GitHub Releases API: GET /repos/{owner}/{repo}/releases, sum the per-asset download_count field across releases. No auth, no PII, no in-app code. Captures direct .dmg/.zip downloads and brew installs that fetch the tarball from YOUR tap/cask.",
+        "Limitation to disclose internally: once the app graduates into homebrew-cask central, brew installs no longer hit your GitHub release assets and become invisible to download_count.",
+        "Homebrew central analytics JSON API: https://formulae.brew.sh/api/analytics/cask-install/homebrew-cask/30d.json (also 90d, 365d). Look up your cask token to get aggregate install counts after central adoption. Homebrew's analytics are aggregate/opt-out and EU-hosted on InfluxDB.",
+        "Landing-page download-click event: a single cookieless 'download_click' goal via Plausible (or Aptabase web) — no consent banner needed, no GA4 on a health site.",
+        "Practical caveat for all download metrics: download_count counts downloads/CI re-pulls/mirrors, not unique humans or installs — report it as a trend, not a user count."
+      ],
+      "usageTracking": [
+        {
+          "option": "TelemetryDeck",
+          "openSource": true,
+          "privacyPosture": "Privacy-first; EU-only hosting (Hetzner/Germany, April 2026), German GmbH + German/EU law. Client device-salt + server-salt double hashing makes identifiers non-reconstructable, so it claims anonymous (not pseudonymous) data, keeps ATT and App Store privacy labels clean, and requires no ATT consent in default mode.",
+          "notes": "Best Swift/macOS ergonomics; setup in minutes. SDKs open source (Modified MIT, SwiftSDK v2.12.0 Mar 2026) but BACKEND IS CLOSED — no self-host. Free 100,000 signals/month; paid from EUR 9/mo (funnels/retention/custom dashboards), ~EUR 19 next tier. Most generous free tier of the dedicated app tools."
+        },
+        {
+          "option": "Aptabase",
+          "openSource": true,
+          "privacyPosture": "Privacy-first and fully open (server + SDKs). No device identifiers, no cookies, no fingerprinting, no long-term user IDs; data anonymised not pseudonymised; GDPR + CCPA + PECR compliant; EU or US data residency on managed cloud.",
+          "notes": "Best for an OSS health tool that wants maximum auditability/self-hosting ('we run our own analytics, here's the code'). Native Swift SDK. Free tier 20,000 events/month (smaller than TelemetryDeck); managed paid scales by event volume; self-host is free. Strongest trust story."
+        },
+        {
+          "option": "PostHog",
+          "openSource": true,
+          "privacyPosture": "Capable of cookieless/anonymous mode and GDPR config, but it is a full product-analytics suite (session replay, feature flags, surveys, A/B). That breadth is more data surface than a health utility should collect and signals a heavier posture.",
+          "notes": "MIT license; very generous free cloud (~1M events/mo) but self-hosting is community-build-only and heavy (ClickHouse + Kafka + Postgres + Redis). Overkill and over-collecting for this use case; not recommended as the in-app tool here."
+        },
+        {
+          "option": "Plausible",
+          "openSource": true,
+          "privacyPosture": "Privacy-friendly, cookieless, no personal data, GDPR/CCPA out of the box — but it is WEB analytics, not a native macOS app SDK.",
+          "notes": "AGPL; cloud from $9/mo; self-host is a single Docker Compose + ClickHouse (much lighter than PostHog). Use it for the LANDING-PAGE download-click event, not for in-app analytics."
+        },
+        {
+          "option": "Self-hosted (Aptabase self-host, or Plausible CE for web)",
+          "openSource": true,
+          "privacyPosture": "Maximum control and trust — data never leaves infrastructure you (or the project) operate; you are the sole data controller. Strongest possible privacy story for a health audience.",
+          "notes": "Operational cost: you run/patch a server and ClickHouse, handle backups and uptime. Aptabase self-host is the recommended path if the team has ops capacity; otherwise managed TelemetryDeck/Aptabase EU is the pragmatic middle ground."
+        }
+      ],
+      "consentUX": "Use explicit OPT-IN, defaulted OFF, for in-app usage analytics — this is both the ethically correct choice for an open-source health tool and the legally safe one. Rationale: (a) the audience self-selected for privacy; the Audacity precedent (99.97% negative reactions when telemetry was added) shows opt-out triggers community revolt and reputational damage; (b) health context means any data that could be considered personal is Article 9 'special category' data requiring EXPLICIT consent (a pre-ticked box or opt-out is invalid under GDPR). Concrete UX: on first launch (or in a clearly labeled Privacy section of Preferences) show a short, plain-language panel: 'Help improve [App]? We can collect anonymous, aggregate usage stats — no account, no identifiers, no health data. Off by default. You can turn this off anytime.' Provide a single clear toggle, a 'What we collect / What we never collect' link to the privacy policy, and ensure ALL app functionality works fully with analytics declined. Keep it one decision (analytics yes/no) — do not bundle it with anything else. Do not re-prompt aggressively. The landing-page download-click event can stay cookieless/no-banner since it collects no personal data; the in-app toggle is where explicit opt-in matters.",
+      "eventsToTrack": [
+        "app_activated / launch (count of active installs and DAU/WAU/MAU as aggregate counts only — drives the 'how many people use it' answer)",
+        "warmth_mode_used: schedule vs manual (two values; reveals whether automation or manual control is the dominant workflow)",
+        "advanced_mode_enabled (boolean event when a user turns on advanced mode — sizes how many need power features vs simple defaults)",
+        "hotkey_used (single counter that a global hotkey was triggered at all; do NOT log which keys or per-press payloads — just that the feature is used)",
+        "warmth_method_chosen_per_display (the technique selected, e.g. gamma-table vs other method, as a categorical value; helps prioritize per-display engineering without identifying displays or users)",
+        "retention signal: returning vs first-run sessions over time, derived only from TelemetryDeck/Aptabase's built-in anonymous retention cohorts — never a stable user ID you create",
+        "app_version + macOS major version (low-cardinality, for support/compat prioritization — coarse only, no build/serial/hostname)",
+        "Explicitly EXCLUDE: any health/wellness data, schedule times, screen content, display serial numbers, locale precise enough to single out a user, IP storage, crash payloads containing paths/usernames, and free-text. Cap to ~6-8 categorical events; no per-event user identifier you control."
+      ],
+      "privacyPosture": "GDPR posture: design so the in-app analytics qualify as ANONYMOUS data, which falls outside GDPR scope entirely — this is the cleanest path and is exactly what TelemetryDeck (irreversible double-salted hashing) and Aptabase (no identifiers/cookies/fingerprinting, anonymised not pseudonymised) are built to deliver. As long as you (a) collect no health/special-category data, (b) collect no identifier you can reverse, (c) store only aggregates, and (d) keep core functionality working when declined, you avoid the Article 9 'explicit consent for special category data' trap. Belt-and-suspenders: still ship explicit opt-in so the posture survives even if a regulator views any datum as personal. Be aware EDPB enforcement in 2026 focuses on the 'technical truth gap' — your actual back-end data flows must match your disclosures; do not claim 'anonymous' while sending anything re-identifiable. Privacy policy MUST state, in plain language: the analytics vendor/processor and where data is hosted (EU — TelemetryDeck Hetzner/Germany or Aptabase EU residency, or 'self-hosted by us'); exactly which event categories are collected and that they are anonymous/aggregate; that NO health data, accounts, cookies, device identifiers, fingerprinting, or IP storage are used; the legal basis (consent / or 'data is anonymous, outside GDPR' if you go that route, stated honestly); retention period and that data is aggregate-only; how to opt out (the in-app toggle) and exercise data-subject rights; and a contact. Also fill Apple's App Store privacy 'nutrition label' consistently (TelemetryDeck's default mode lets you keep it clean / not-linked-to-user).",
+      "tradeoffs": [
+        "Opt-in (recommended) vs opt-out: opt-in protects trust and is legally safe for a health audience but yields lower, self-selected sample sizes (Go team's exact objection). For this audience, lower-but-trusted data beats higher-but-resented data — the Audacity backlash is the cautionary tale.",
+        "Managed TelemetryDeck vs self-hosted Aptabase: TelemetryDeck = best Swift DX, EU hosting, generous 100k free tier, but closed backend you can't self-host. Aptabase = fully open and self-hostable (strongest trust story) but smaller 20k free tier and you carry ops burden (server + ClickHouse, patching, uptime, backups).",
+        "PostHog's huge free tier (~1M events) is tempting but its product-analytics breadth (session replay, surveys, flags) is over-collection for a health utility and self-hosting is heavy (ClickHouse+Kafka+Postgres+Redis) — wrong tool here.",
+        "Anonymous-by-design (no user ID you control) means you cannot compute true unique-user retention or per-user funnels; you rely on the vendor's anonymous cohort math. That's an intentional, healthy limit for this audience — resist the urge to add a stable ID.",
+        "Download counts are directional, not exact: GitHub download_count includes CI/mirror pulls and goes blind once the cask is in homebrew-cask central (then you must read Homebrew's aggregate API). No single number = 'real installs'; triangulate GitHub + Homebrew + landing-page clicks.",
+        "More events = more insight but more privacy surface and policy text; capping at ~6-8 categorical, payload-free events keeps the privacy policy short, honest, and easy to keep truthful (the EDPB 'technical truth gap' risk)."
+      ],
+      "sources": [
+        "https://telemetrydeck.com/blog/spring-2026/",
+        "https://telemetrydeck.com/platforms/swift/",
+        "https://telemetrydeck.com/docs/articles/anonymization-how-it-works/",
+        "https://telemetrydeck.com/docs/guides/privacy-faq/",
+        "https://telemetrydeck.com/blog/ios-open-source/",
+        "https://analytics-alternatives.com/tools/telemetrydeck/",
+        "https://aptabase.com/",
+        "https://aptabase.com/for-swift",
+        "https://github.com/aptabase/aptabase",
+        "https://github.com/aptabase/aptabase-swift",
+        "https://openalternative.co/aptabase",
+        "https://docs.github.com/en/rest/releases/assets",
+        "https://george.mand.is/2026/05/tracking-homebrew-downloads-with-githubs-api/",
+        "https://formulae.brew.sh/docs/api/",
+        "https://docs.brew.sh/Analytics",
+        "https://formulae.brew.sh/analytics/cask-install/365d/index.html",
+        "https://posthog.com/blog/posthog-vs-plausible",
+        "https://openpanel.dev/articles/open-source-web-analytics",
+        "https://www.themomentum.ai/blog/gdpr-consent-requirements-health-data",
+        "https://secureprivacy.ai/blog/gdpr-compliance-mobile-apps",
+        "https://www.clarip.com/data-privacy/gdpr-special-data/",
+        "https://blog.notesnook.com/telemetry-opt-in-vs-opt-out/",
+        "https://www.techradar.com/news/audacity-reverses-opt-in-telemetry-plans-following-user-revolt",
+        "https://www.theregister.com/2023/05/17/googles_go_data_collection/",
+        "https://www.cookieyes.com/blog/privacy-policy-checklist/",
+        "https://termly.io/resources/articles/data-privacy-regulations-guide/"
+      ]
+    },
+    "marketing": {
+      "productHunt": "PRODUCT HUNT PLAYBOOK (tuned for 2026)\n\nWHY/WHETHER: PH still drives a real spike for indie Mac apps, but in 2026 the algorithm de-weights brute-force upvote pushes. Sudden vote spikes trigger manual review; brand-new accounts created right before launch carry weak signal weight. The lever is \"assets + narrative + execution + post-launch conversion,\" not raw votes (innmind 2026 playbook). A free open-source tool is a GOOD PH fit (no paywall friction = high conversion).\n\nTIMING: Launch Tue/Wed/Thu. Avoid Mon (low engagement), Fri (weekend drop-off), and US holidays. Go live right after the 12:01am Pacific reset to capture the full 24h window and let momentum build organically across timezones (US-morning wave -> EU/US overlap -> closing wave). Thursday has solid weekday activity with slightly lighter top-tier competition.\n\nHUNTER vs SELF-LAUNCH: Self-launching is fully viable in 2026 and often preferable for an indie open-source tool — you keep the maker narrative and the maker comment. Only use a hunter if they are genuinely relevant/engaged in the productivity/health/Mac space; a big-name hunter with no topical fit adds little now. Build YOUR maker profile in advance (real photo, bio, a few weeks of genuine commenting on other launches) so your account has signal weight on launch day.\n\nASSETS (prepare 2-4 weeks out): (1) Clean, mobile-legible thumbnail/logo; (2) Hero gallery image showing the app in context on a real Mac desktop; (3) 4-6 screenshots that tell a story (the warm-shift in action, menu-bar UI, schedule/scene settings, before/after); (4) A short demo video or GIF (15-30s) that shows the \"aha moment\" — the screen visibly warming as evening approaches — this is your strongest asset for a visual app; (5) A crisp tagline (outcome-driven, e.g., \"Protect your sleep. Warm your Mac's screen automatically. Free and open source.\"); (6) Fast-loading landing page with ONE CTA (download).\n\nFIRST MAKER COMMENT (critical): Post it within ~5 minutes of going live — sources cite ~85% correlation between a fast first maker comment and reaching top 10. Structure: (a) 1-2 line personal story / why you built it (the circadian-health angle), (b) who it's for, (c) what's genuinely new or different vs Night Shift/f.lux, (d) note it's free + open source with GitHub link, (e) an invitation/question to drive replies. Treat comments as live onboarding + customer interviews.\n\nDAY-OF CADENCE: Notify supporters in 4-5 staggered timezone waves, NOT one mass blast (staggered outperforms single blast ~2-3x in sustained engagement and looks organic). Never ask for upvotes directly — ask for honest feedback/try-it. Reply to every comment within ~15 minutes for the first several hours. Avoid any artificial spike pattern. Cross-post the launch to your own channels (X, Mastodon, GitHub README badge, relevant Reddit per each sub's rules) but space it out.\n\nSources: blog.innmind.com/how-to-launch-on-product-hunt-in-2026, tooljunction.io/guides/product-hunt-launch-checklist-2026, smollaunch.com/guides/launching-on-product-hunt",
+      "reddit": [
+        "GENERAL APPROACH: Reddit blocks automated fetching of its rule pages, so verify each subreddit's CURRENT sidebar/rules and pinned posts manually before posting. Reddit-wide norm is the 9:1 / 1:10 rule (for every 1 self-promo post, ~9 genuine non-promo contributions); subreddit-specific rules override sitewide norms. Build a real account history in each community FIRST. Because the app is FREE and OPEN SOURCE, lead with that — it dramatically softens self-promo objections and is your single biggest non-spammy advantage.",
+        "r/macapps (~172k members): The most permissive and highest-value target. This sub is unusually welcoming to developers self-posting their own Mac apps (corroborated by devs reporting success there). Still: use a clear non-clickbait title, disclose you are the developer, state FREE + OPEN SOURCE + GitHub link prominently, include screenshots/GIF, and engage with every comment. Do NOT repost frequently. Check for any required flair (e.g., 'Self Promotion'/'Developer') and weekly threads in the current sidebar before posting.",
+        "r/macOS and r/apple: Far stricter on self-promotion than r/macapps. r/apple in particular heavily restricts/removes self-promo and app-announcement posts; do NOT drop a launch post cold. Approach as a contributor: answer questions in existing threads about blue light / Night Shift / eye strain and mention your tool only where genuinely relevant, or seek mod permission. r/macOS is more tolerant of useful free tools but still expects a discussion framing, not an ad.",
+        "r/QuantifiedSelf: Receptive to self-tracking/health-optimization tools when framed around DATA and METHOD, not marketing. Post about the circadian/light-exposure rationale, what the app measures or schedules, and invite methodological feedback. Avoid hype language. Disclose authorship.",
+        "r/sleep: Health-sensitive and moderation-heavy. Do NOT make medical/treatment claims (it will be removed and damages credibility). Frame as a free tool that supports healthy evening light habits, cite the general circadian-light science neutrally, link the research rather than asserting outcomes, and disclose you built it. Check rules for an explicit self-promo ban; if one exists, contribute helpfully instead and let your flair/profile carry the link.",
+        "r/eyestrain: A natural, motivated audience (people actively seeking screen-comfort relief). Frame around reducing eye strain / screen warmth / flicker comfort. Be honest about what it does and does not do (it is not a cure). Disclose authorship, free + open source. Smaller, niche, high-intent — quality over reach.",
+        "ADJACENT SUBS to consider with the same discipline: r/productivity, r/opensource (very receptive to FOSS, lead with the license + repo), r/selfhosted is N/A but r/freesoftware and r/degoogle-style FOSS communities welcome open tools, r/Biohackers and r/HubermanLab (circadian-light audience — be rigorous and non-promotional). Always read the specific rules; many health subs route promo to a weekly/'Self-Promo Saturday'-style thread.",
+        "NON-SPAMMY CHECKLIST for every post: (1) genuine title, no emoji-spam; (2) screenshots or a GIF in-post (Reddit favors native media); (3) explicitly say developer + free + open-source + GitHub; (4) one ask: feedback, not upvotes; (5) reply to all comments same-day; (6) never cross-post the identical text to multiple subs the same hour; (7) no medical claims in any health sub."
+      ],
+      "twitter": [
+        "PLATFORM REALITY (2026): The indie-Mac-dev audience is now split across X, Mastodon, and Bluesky. Run X as primary reach but mirror to Mastodon (where many Apple/indie devs and FOSS people live) and Bluesky (fast-growing Apple-dev presence — Tapbots' Phoenix app signals the migration). Cross-post with a tool like Croissant or Indigo to hit all three with correct per-platform handles.",
+        "STRATEGY: Build in public for 2-4 weeks pre-launch — short clips of the warm-shift animation, the menu-bar UI, dev progress, and the circadian rationale. Visual app = video/GIF posts outperform text. Post the GitHub repo early for FOSS credibility. On launch day, post the demo GIF + PH link + 'free and open source' in the first line; thread the why (sleep/circadian health) below.",
+        "KINDS OF ACCOUNTS TO ENGAGE: (1) Indie Mac/iOS developers and 'build in public' makers; (2) Mac power-user / app-recommendation accounts and Apple-blog writers; (3) Design/UI accounts (a screen-warmth app is inherently visual — good design gets reshared); (4) Circadian / sleep / light-health science communicators; (5) Open-source / FOSS advocacy accounts. Engage genuinely for weeks (reply, add value) BEFORE asking anyone to look at your launch.",
+        "NAMED ACCOUNTS / TARGETS (engage authentically, do not spam): Sindre Sorhus (@sindresorhus) — prolific FOSS Mac dev and curator of the awesome lists; a natural fit given he ships free menu-bar Mac apps. Jordi Bruin (@jordibruin) — indie Mac/AI app maker, active build-in-public. Federico Viticci / MacStories (@viticci, @macstories on Mastodon at viticci.macstories.net) — Apple app coverage. Sebastiaan de With and Christian Selig — well-known indie Apple devs worth following for craft/launch tactics. For science credibility/inspiration (cite, don't tag-spam): Andrew Huberman (@hubermanlab) and Dr. Samer Hattar (NIH light & circadian researcher) — reference their public, science-backed messaging on morning light / evening dimming to frame your tool credibly.",
+        "COMMUNITIES / HASHTAGS: #buildinpublic, #indiedev, #madeonmac / #macOS, #opensource, #FOSS; the Indie Dev Monday newsletter/community (indiedevmonday.com) actively spotlights indie devs and is a low-friction way to get featured. On Mastodon, the Apple-dev and FOSS instances; on Bluesky, the Apple-dev starter packs.",
+        "TONE: Lead with utility + the free/open-source angle, show the product in motion, and never make medical claims. Let science communicators' framing (light timing affects sleep) do the persuasion; you provide the tool."
+      ],
+      "hackerNews": "SHOW HN APPROACH\n\nFIT: A free, open-source macOS app is an ideal Show HN — HN's official rule is 'things people can run on their computers or hold in their hands,' and open-source tools convert exceptionally well there (~1.4 GitHub stars per upvote cited for FOSS). Show HN is for things people can TRY, not blog/signup/landing pages.\n\nOFFICIAL RULES (news.ycombinator.com/showhn.html): (1) Title must start with 'Show HN:'. (2) On topic = runnable/holdable; off topic = reading material, signup pages, newsletters. (3) Must be non-trivial and personally made — not a quickly-generated one-off. (4) Make it easy to try: NO signup/email gate (a downloadable Mac app or a GitHub release is perfect — ideally provide a direct .dmg/release link AND the repo). (5) Do NOT ask friends to upvote or comment (this is the fastest way to get penalized). (6) Minor version bumps don't qualify; only the initial launch or a major overhaul.\n\nTITLE: Clear, neutral, no hype. Pattern: 'Show HN: <AppName> – free, open-source screen warmth/circadian app for macOS'. Avoid superlatives and exclamation marks.\n\nTIMING: Post Tue-Thu, roughly 9am-12pm ET for max US-tech visibility (niche projects can also do well Sunday evening ET). The first 30-60 minutes are decisive — you typically need ~30-50 upvotes in the first hour to have a front-page shot, driven organically (NOT by solicitation).\n\nFIRST COMMENT + ENGAGEMENT: Immediately post a top comment as the author: what it is, why you built it (circadian/light angle), how it differs from f.lux/Night Shift/Redshift, the tech stack, the license, and that it's free. Then BE PRESENT — reply thoughtfully to every question and especially to critiques within the first hour. HN rewards transparent, non-defensive engagement; expect (and welcome) hard technical and skeptical-of-health-claims questions. Do not overstate health benefits — HN will fact-check you. Realistic upside: a front-page Show HN can drive 5k-50k+ visitors in 48h and a large burst of GitHub stars.\n\nSources: news.ycombinator.com/showhn.html, business.daily.dev/resources/hacker-news-marketing-developer-tools-show-hn-launch-day-sustained-coverage, syften.com/blog/hacker-news-marketing",
+      "newslettersAndCurators": [
+        "MacStories (macstories.net) — Federico Viticci + team; in-depth Apple app reviews. No public 'submit' form, so reach out personally/respectfully via Viticci on Mastodon (viticci.macstories.net) or the team, with a tight pitch, a free download, and the open-source angle (which is differentiating). Their AppStories podcast covers notable new apps. Lead time matters — pitch a few days before or at launch, not after.",
+        "Sindre Sorhus's awesome lists (github.com/sindresorhus/awesome) — the meta-list and the macOS sub-lists are huge discovery channels for FOSS Mac apps. Submit a clean PR to the relevant awesome-mac / awesome-macos list once you have a polished README and some traction. Follow the awesome-* contribution rules (see GitHub Distribution field).",
+        "Indie Dev Monday (indiedevmonday.com) — a bite-sized weekly newsletter that spotlights indie devs and their creations; low-friction to pitch and a good fit for a solo open-source maker. They have featured Sindre Sorhus and similar makers.",
+        "iOS Dev Weekly (iosdevweekly.com, Dave Verwer) — primarily iOS/Apple-dev focused; relevant if you write a technical post about HOW you built the warmth engine (Core Graphics gamma/color ramps, etc.) rather than a pure product pitch.",
+        "Mac/Apple blogs and aggregators: 9to5Mac, MacRumors (community + news), AppleInsider, and Apple-app roundup sites. Pitch with screenshots, a GIF, the free/open-source hook, and the circadian-health story. AlternativeTo (alternativeto.net) — list your app as an f.lux/Night Shift alternative; it ranks well in search for 'f.lux alternative Mac' and drives steady evergreen traffic.",
+        "Sleep/health creators (for credibility, not a direct ask): reference the science framing used by Andrew Huberman / Huberman Lab and circadian-light researchers like Dr. Samer Hattar. Partnering or being mentioned by smaller sleep/biohacking newsletters is plausible IF you stay rigorously non-medical and cite peer-reviewed circadian-light research.",
+        "Open-source / dev newsletters: Console.dev and similar FOSS-tool newsletters occasionally feature polished open-source apps — worth a submission once the repo is strong."
+      ],
+      "communities": [
+        "FOSS communities: r/opensource and r/freesoftware (lead with the license + repo), the broader GitHub/awesome-list ecosystem, and Console.dev/FOSS newsletters. Open-source status is your strongest trust signal — emphasize it everywhere.",
+        "Circadian / sleep-health communities: r/sleep, r/Biohackers, r/HubermanLab, r/QuantifiedSelf, and sleep-focused forums. CREDIBILITY PLAYS: (1) Cite peer-reviewed sources — e.g., NCBI/StatPearls 'Physiology, Circadian Rhythm' (ncbi.nlm.nih.gov/books/NBK519507) and Frontiers in Neuroscience 'Sleep and Circadian Rhythms' — to back the light-timing rationale; (2) Mirror the public, science-based framing of light researchers (Samer Hattar at NIMH; Huberman Lab on morning light + evening dimming); (3) Be scrupulously non-medical (see regulatory note); (4) Make the app's mechanism transparent (it shifts display color temperature on a schedule), which biohackers respect.",
+        "REGULATORY / CREDIBILITY GUARDRAIL: Frame the app as a 'general wellness' tool, not a medical device. On 2026-01-06 the FDA issued 'General Wellness: Policy for Low Risk Devices' guidance signaling it won't enforce medical-device rules on low-risk wellness apps — but the FTC still requires 'competent and reliable scientific evidence' (i.e., substantiation) for any objective health claim. AVOID 'clinically proven,' 'medically validated,' 'treats insomnia,' 'cures eye strain' — these trigger FTC scrutiny and community backlash. SAY: 'supports healthy evening light habits,' 'reduces blue-light exposure at night,' and link the research rather than asserting outcomes. Sources: ftc.gov/business-guidance/resources/health-products-compliance-guidance, fda.gov general wellness guidance, troutman.com wellness-trackers analysis.",
+        "Mac power-user communities: r/macapps (primary), r/macOS, MacRumors forums, and Apple-app Discords/Slacks. The 'free f.lux/Night Shift alternative that's open source' positioning resonates strongly here.",
+        "Indie-maker communities: Indie Hackers, the build-in-public crowd on X/Mastodon/Bluesky, and Indie Dev Monday. Share the journey + revenue/cost transparency (even for a free app, the 'I built this for free, here's why' story performs)."
+      ],
+      "githubDistribution": [
+        "README (the conversion engine): First 2 lines must answer 'What is this?' and 'Why care?' — a clear one-liner + the free/open-source hook. Above the fold: a logo/social-preview banner, a demo GIF of the screen warming, badges (license, latest release, platform=macOS, stars), and a one-click Download/Releases link. Then: feature table (tables are scannable; bullet lists less so), a short 'Why' section with the circadian-light rationale + links to peer-reviewed research, install/usage with screenshots, comparison vs Night Shift/f.lux/Redshift, build-from-source instructions, and contribution/license sections. Source: dev.to GitHub README best practices 2026.",
+        "Social preview image: Set a custom Open Graph card in Settings > General > Social preview (PNG/JPG/GIF under 1MB; recommend 1280x640px). Without it, GitHub auto-generates a generic card. This image is what renders when the repo is shared on X, Mastodon, Bluesky, Slack, Discord — make it show the app + tagline. Sources: docs.github.com customizing-your-repositorys-social-media-preview; dev.to repo visibility on social networks.",
+        "Topics (up to 20): Add high-intent, discoverable topics — e.g., macos, swift, blue-light, night-shift, f-lux, flux, circadian-rhythm, eye-strain, screen-dimmer, color-temperature, menu-bar, sleep, health, open-source, productivity. Topic tags are among the most under-optimized levers for ranking on GitHub, Google, and LLM search. Source: nakora.ai/blog/github-seo, dev.to GitHub SEO guide.",
+        "awesome-* list PRs: Submit clean PRs to the relevant lists (jaywcjlove/awesome-mac, and macOS app lists). Follow their CONTRIBUTING rules exactly: search for duplicates first; one PR per suggestion; AP title-case format `[Name](link)`; alphabetical order within the correct category; one-sentence description; correct icons/markers (these lists mark free/open-source entries with specific icons — match the existing style); fix spelling/whitespace; useful PR title. awesome-mac (jaywcjlove) syncs entries across README.md/-zh/-ja/-ko and now even documents an AI-assisted maintainer skill — keep your entry consistent across locales if you edit them. Source: github.com/jaywcjlove/awesome-mac/blob/master/docs/CONTRIBUTING.md.",
+        "Releases & install: Ship signed/notarized .dmg releases (Mac users distrust unsigned apps) attached to GitHub Releases with clear changelogs; offer a Homebrew cask (brew install --cask <app>) — discoverability + trust + frictionless install for the dev-leaning audience. Pin the repo, enable Discussions for support, and add a clear LICENSE (MIT/GPL) — the license IS marketing for this audience.",
+        "Star-conversion strategy (2026): make the project legible in seconds (README + GIF + preview image), SEQUENCE launches (PH, then Show HN, then awesome PRs, then newsletters) instead of one noisy push, and convert spikes into evergreen discovery via topics + SEO + AlternativeTo listing. ~3 of 4 developers weigh star count when deciding to use/contribute. Source: dev.to 'GitHub Star Growth: 9 Levers That Compound in 2026'."
+      ],
+      "landingPageBestPractices": [
+        "URL/SEO structure: Use the subdirectory matthewball.me/<appname> (subdirectories inherit the parent domain's authority better than subdomains for SEO). Add a descriptive <title> and meta description targeting 'free open source screen warmth / blue light / f.lux alternative for Mac,' a single H1 matching the value prop, and clean semantic HTML. Note 2026 trend: optimize for AI/LLM visibility too (clear, factual, well-structured copy that LLMs can quote). Source: smartclick.agency SaaS landing page best practices 2026.",
+        "Hero (above the fold): Outcome-driven headline (transformation, not feature list) — e.g., 'Protect your sleep. Your Mac's screen warms automatically as night falls.' Subhead: 'Free, open source, runs entirely on your Mac.' ONE primary CTA: Download for macOS (with version + 'free forever / no account'). 2026 data: outcome/transformation messaging beats feature-listing; use exactly one primary CTA per page. Source: lovable.dev SaaS website best practices; genesysgrowth.com B2B landing pages 2026.",
+        "Live demo / video: This is the highest-leverage element for a visual app. Embed an autoplay-muted looping video or GIF showing the screen visibly warming over a simulated day, plus the menu-bar UI and schedule scenes. A short interactive slider (cool <-> warm) lets visitors 'feel' it without downloading. Show the 'aha moment' immediately.",
+        "Social proof: GitHub star count + badge, Product Hunt badge ('#X Product of the Day'), Show HN/HN points if it performs, download count, short user quotes/testimonials, and 'as seen in' logos (MacStories, etc.) once earned. 2026 emphasis: stronger, specific social proof and trust signals near the CTA. Source: smartclick.agency; fibr.ai SaaS landing pages.",
+        "Mobile-first: ~79% of landing-page visits are mobile even when desktop converts — so even though the product is a Mac download, the PAGE must look perfect on phones (people discover via X/Reddit on mobile, then download later on their Mac). Put the CTA within thumb reach; offer 'email me the link' or a QR for mobile visitors. Source: fibr.ai.",
+        "Download CTA + funnel: Primary button = direct .dmg/Releases download (notarized). Secondary, lower-weight links: GitHub repo, Homebrew command, source code. Repeat the CTA after the demo and at page bottom. Avoid competing CTAs above the fold.",
+        "Open Graph / social cards: Set og:title, og:description, og:image (1200x630 showing the app + tagline), og:url, and Twitter card tags (summary_large_image) so links shared on X/Mastodon/Bluesky/Slack/Discord/PH render a rich preview. This directly affects click-through on every share during launch. Pair with the matching GitHub social-preview image for consistency.",
+        "Trust/credibility section: A brief, non-medical 'The science' block citing peer-reviewed circadian-light research (link out), an explicit 'general wellness, not medical advice' line, a privacy statement ('no tracking, no account, runs locally, open source — audit the code'), and the license. Privacy + open-source auditability is a major trust lever for this audience.",
+        "Performance: Fast-loading, lightweight page (compress the demo video, lazy-load). PH/HN traffic spikes punish slow pages; the playbook explicitly calls for a 'fast-loading landing page with one clear CTA.'"
+      ],
+      "launchTimeline": [
+        "WEEKS -6 to -4 (Foundation): Finalize the app, notarize the .dmg, write the open-source README (one-liner, GIF, badges, comparison table, science section with citations), set GitHub topics, upload a custom social-preview image, add LICENSE + Homebrew cask, ship v1.0 release. Build the matthewball.me/<appname> landing page (hero, demo video, OG tags, download CTA). Stand up an email/newsletter capture for a warm list. Reserve the name everywhere (X/Mastodon/Bluesky/PH).",
+        "WEEKS -4 to -2 (Audience warm-up / build in public): Start posting progress + demo clips on X/Mastodon/Bluesky (#buildinpublic, #indiedev, #macOS). Genuinely engage with indie-Mac-dev, design, and circadian-health accounts (Sindre Sorhus, Jordi Bruin, MacStories, science communicators) — give value, don't pitch. Build account history in r/macapps and adjacent subs by commenting helpfully. Create a PH 'coming soon' / maker profile and engage with other launches. Draft all PH assets (thumbnail, gallery, video, tagline, first maker comment) and the Show HN title + first comment. Segment a supporter list by timezone.",
+        "WEEK -1 (Pre-launch): Pitch MacStories / Indie Dev Monday / relevant blogs privately with embargoed access (launch-day or just-before). Line up the supporter list (ask for honest feedback, never 'please upvote'). Finalize and rehearse the Product Hunt page and the Show HN post. Pre-write Reddit posts tailored to each sub's rules. Double-check the landing page load speed and all OG/social cards render correctly. List on AlternativeTo as an f.lux/Night Shift alternative.",
+        "LAUNCH DAY (T-0, a Tue/Wed/Thu): 12:01am PT — go live on Product Hunt; post the first maker comment within 5 minutes; notify supporters in 4-5 staggered timezone waves; reply to every PH comment within 15 min. ~9am-12pm ET — post Show HN ('Show HN: <App> – free, open-source screen-warmth/circadian app for macOS'), immediately add the author top-comment, and stay in the thread answering questions/critiques for the first hour. Post to r/macapps (and other subs per their rules) with screenshots/GIF, full free + open-source disclosure. Announce across X/Mastodon/Bluesky with the demo GIF + links. Add a PH badge to the README and landing page once ranked. Monitor and engage everywhere — responsiveness IS the strategy in 2026.",
+        "POST-LAUNCH (Days +1 to +14): Keep replying to every comment across PH/HN/Reddit/social for several days (momentum compounds). Submit awesome-* list PRs now that you have traction/stars. Publish a 'how I built it' technical post (Core Graphics gamma ramps / circadian engine) for iOS Dev Weekly / dev newsletters / HN follow-up. Thank supporters; turn PH/HN spikes into evergreen discovery via SEO content + AlternativeTo + topics. Capture testimonials and star count for social proof on the landing page.",
+        "POST-LAUNCH (Weeks +2 to +8): Sequence — not blast — additional channels: more subreddits, sleep/biohacking communities (rigorously non-medical), Mac-app roundup sites, and pitch larger outlets (9to5Mac/MacRumors/AppleInsider). Ship a visible update or two (changelog drives re-engagement). Maintain build-in-public cadence. Optimize the README/landing page for the search terms that are now converting (e.g., 'free f.lux alternative Mac open source'). Convert short spikes into compounding GitHub stars and steady downloads."
+      ],
+      "sources": [
+        "https://blog.innmind.com/how-to-launch-on-product-hunt-in-2026/",
+        "https://www.tooljunction.io/guides/product-hunt-launch-checklist-2026",
+        "https://smollaunch.com/guides/launching-on-product-hunt",
+        "https://dev.to/iris1031/product-hunt-launch-playbook-the-definitive-guide-30x-1-winner-1pbh",
+        "https://news.ycombinator.com/showhn.html",
+        "https://business.daily.dev/resources/hacker-news-marketing-developer-tools-show-hn-launch-day-sustained-coverage/",
+        "https://syften.com/blog/hacker-news-marketing/",
+        "https://dev.to/dfarrell/how-to-crush-your-hacker-news-launch-10jk",
+        "https://dev.to/sh20raj/reddit-self-promotion-framework-how-to-post-smart-and-stay-unbanned-1kfg",
+        "https://www.conbersa.ai/learn/reddit-self-promotion-rules",
+        "https://forums.macrumors.com/threads/whats-a-good-way-to-promote-mac-app-store-apps.1970075/",
+        "https://github.com/jaywcjlove/awesome-mac/blob/master/docs/CONTRIBUTING.md",
+        "https://github.com/sindresorhus/awesome",
+        "https://sindresorhus.com/apps",
+        "https://indiedevmonday.com/",
+        "https://iosdevweekly.com/",
+        "https://www.macstories.net/about/",
+        "https://bsky.app/profile/viticci.macstories.net",
+        "https://x.com/hubermanlab",
+        "https://www.hubermanlab.com/episode/essentials-timing-light-for-better-sleep-energy-and-mood-dr-samer-hattar",
+        "https://alternativeto.net/software/f-lux/?platform=mac",
+        "https://circadianshield.com/compare/best-blue-light-filter-mac-2026",
+        "https://trysundown.com/blog/best-blue-light-app-mac-2026",
+        "https://dev.to/iris1031/github-readme-best-practices-how-to-write-a-readme-that-gets-stars-2gb2",
+        "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview",
+        "https://nakora.ai/blog/github-seo",
+        "https://dev.to/iris1031/github-star-growth-9-levers-that-compound-in-2026-15d",
+        "https://smartclick.agency/blog/saas-landing-page-best-practices/",
+        "https://lovable.dev/guides/saas-website-best-practices",
+        "https://fibr.ai/landing-page/saas-landing-pages",
+        "https://genesysgrowth.com/blog/designing-b2b-saas-landing-pages",
+        "https://www.ftc.gov/business-guidance/resources/health-products-compliance-guidance",
+        "https://www.troutman.com/insights/wellness-trackers-medical-status-and-cybersecurity-how-fda-ftc-and-state-laws-interlock/",
+        "https://www.ncbi.nlm.nih.gov/books/NBK519507/",
+        "https://www.frontiersin.org/journals/neuroscience/sections/sleep-and-circadian-rhythms",
+        "https://www.macrumors.com/2026/01/15/setapp-mobile-eu-app-store-closing-next-month/",
+        "https://techcrunch.com/2026/03/11/alternative-app-store-altstore-pal-joins-the-fediverse/",
+        "https://indiecatalog.app/developer/328077650"
+      ]
+    },
+    "science": {
+      "keyFindings": [
+        {
+          "claim": "The human circadian system is remarkably sensitive to evening/nighttime light: roughly half-maximal melatonin suppression occurs at only ~100 lux, and dim room light (~106 lux) produced ~88% of the melatonin suppression seen under bright light (~9000 lux), following a logistic (non-linear) dose-response curve. This means even modest indoor and device light can affect melatonin.",
+          "evidenceStrength": "strong",
+          "citation": "Zeitzer JM, Dijk DJ, Kronauer RE, Brown EN, Czeisler CA (2000), J Physiol 526:695-702, https://pmc.ncbi.nlm.nih.gov/articles/PMC2270041/"
+        },
+        {
+          "claim": "Individual sensitivity to evening light varies enormously (>50-fold): the light level needed to suppress melatonin by 50% ranged from ~6 lux to ~350 lux across healthy adults (group ED50 ~24.6 lux). The most sensitive people showed >50% suppression in dim reading light, while the least sensitive needed bright office light. So no single 'safe' brightness applies to everyone.",
+          "evidenceStrength": "strong",
+          "citation": "Phillips AJK, Vidafar P, Burns AC, McGlashan EM, et al. (2019), PNAS 116(24):12019-12024, https://www.pnas.org/doi/10.1073/pnas.1901824116"
+        },
+        {
+          "claim": "Evening use of light-emitting screens before bed can lengthen time to fall asleep, suppress melatonin, delay the circadian clock, reduce/delay REM sleep, and impair next-morning alertness, compared with reading a printed book under dim light (a controlled 5-day in-lab crossover study).",
+          "evidenceStrength": "strong",
+          "citation": "Chang A-M, Aeschbach D, Duffy JF, Czeisler CA (2015), PNAS 112(4):1232-1237, https://www.pnas.org/doi/10.1073/pnas.1418490112"
+        },
+        {
+          "claim": "What drives circadian/melatonin effects from displays is the melanopic content (short-wavelength light stimulating melanopsin in ipRGCs), not overall brightness/luminance per se. In a controlled study, melatonin suppression and sleep-onset delay scaled dose-dependently with melanopic irradiance, while plain illuminance (lux) did NOT predict the effects. Reducing melanopic content lowered the impact without much visible change to the display.",
+          "evidenceStrength": "strong",
+          "citation": "Schoellhorn I, Stefani O, Lucas RJ, Spitschan M, et al. (2023), Communications Biology 6:228, https://pmc.ncbi.nlm.nih.gov/articles/PMC9974389/"
+        },
+        {
+          "claim": "An expert scientific consensus recommends, to support circadian health: at least 250 lux melanopic EDI during daytime, no more than 10 lux melanopic EDI in the 3 hours before bed, and no more than 1 lux melanopic EDI during sleep. These are population-level targets for healthy adults aged 18-55 and explicitly account for >10-fold individual variability.",
+          "evidenceStrength": "strong",
+          "citation": "Brown TM, Brainard GC, Cajochen C, Czeisler CA, et al. (2022), PLoS Biology 20(3):e3001571, https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3001571"
+        },
+        {
+          "claim": "Blue-enriched / higher-color-temperature light (e.g., 6500K vs warmer) in the evening increases subjective and objective alertness and speeds reaction time on sustained-attention tasks, but also produces greater melatonin suppression. Alerting and circadian-disrupting effects tend to go together, which is why blue-enriched light is great for daytime but counterproductive close to bedtime.",
+          "evidenceStrength": "moderate",
+          "citation": "Chellappa SL, Steiner R, Blattner P, Oelhafen P, Goetz T, Cajochen C (2011), PLoS ONE 6(1):e16429, https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0016429"
+        },
+        {
+          "claim": "The popular framing of screen 'blue light' as uniquely sleep-destroying is overstated. Warming a screen's color temperature WITHOUT dimming it (as some night modes do) had little to no effect on melatonin or sleep outcomes in some trials, because intensity (melanopic dose) was the real lever. Real-world effects on actual sleep quality are often small or inconsistent, and physiological melatonin changes do not always translate into worse measured sleep.",
+          "evidenceStrength": "contested",
+          "citation": "Cajochen C et al. summary in Schoellhorn et al. (2023) Commun Biol; and Hoehn et al. (2024) Brain Communications 6(3):fcae173, https://academic.oup.com/braincomms/article/6/3/fcae173/7675955"
+        },
+        {
+          "claim": "There is no good scientific evidence that blue light from screens damages the eyes or causes macular degeneration. Digital eye strain (tired, dry, irritated eyes after screen time) is caused mainly by reduced blinking, focusing effort, and overuse, not by blue light. It causes no lasting damage and is preventable.",
+          "evidenceStrength": "strong",
+          "citation": "American Academy of Ophthalmology, 'Should You Be Worried About Blue Light?' (reviewed 2024), https://www.aao.org/eye-health/tips-prevention/should-you-be-worried-about-blue-light"
+        },
+        {
+          "claim": "Blue-light-filtering ('blue blocker') spectacle lenses probably make little or no difference to digital eye strain, and evidence for sleep or macular-protection benefit is lacking; the underlying trials are short-term and low quality. The AAO does not recommend blue-blocking glasses for eye health.",
+          "evidenceStrength": "strong",
+          "citation": "Singh S, Downie LE, Anderson AJ, et al. (2023) Cochrane Database Syst Rev, CD013244, https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD013244.pub2/full"
+        },
+        {
+          "claim": "The 20-20-20 rule (every 20 minutes, look at something at least 20 feet away for at least 20 seconds) plus blinking, breaks, and proper screen distance/brightness are the evidence-aligned ways to reduce digital eye strain, independent of blue light.",
+          "evidenceStrength": "moderate",
+          "citation": "American Academy of Ophthalmology, 'Computer Vision Syndrome / Digital Eye Strain' guidance (2024), https://www.aao.org/eye-health/tips-prevention/digital-devices-your-eyes"
+        },
+        {
+          "claim": "Amber/blue-blocking lenses worn for ~2-3 hours before bed have shown some benefit for sleep and mood in small RCTs (e.g., people with insomnia), but results are mixed and several trials found phase advances or subjective improvements WITHOUT measurable changes in salivary melatonin, indicating the mechanism is not solely melatonin suppression.",
+          "evidenceStrength": "contested",
+          "citation": "Shechter A, Kim EW, St-Onge M-P, Westwood AJ (2018), J Psychiatr Res 96:196-202, https://pubmed.ncbi.nlm.nih.gov/29101797/"
+        },
+        {
+          "claim": "Melatonin/circadian responses are mediated chiefly by melanopsin-containing intrinsically photosensitive retinal ganglion cells (ipRGCs) most sensitive around ~480 nm (blue), which is the biological basis for prioritizing short-wavelength (melanopic) light management rather than total brightness.",
+          "evidenceStrength": "strong",
+          "citation": "Lucas RJ, Peirson SN, Berson DM, Brown TM, et al. (2014) Trends Neurosci 37(1):1-9; foundational ipRGC review, https://pmc.ncbi.nlm.nih.gov/articles/PMC12361122/"
+        }
+      ],
+      "studyCitations": [
+        {
+          "title": "Sensitivity of the human circadian pacemaker to nocturnal light: melatonin phase resetting and suppression",
+          "authorsYear": "Zeitzer, Dijk, Kronauer, Brown & Czeisler, 2000",
+          "source": "The Journal of Physiology 526(3):695-702",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC2270041/",
+          "takeaway": "Landmark dose-response study showing humans are very sensitive to dim light at night; ~100 lux already produces most of the melatonin suppression of much brighter light, following a logistic curve."
+        },
+        {
+          "title": "High sensitivity and interindividual variability in the response of the human circadian system to evening light",
+          "authorsYear": "Phillips, Vidafar, Burns, McGlashan, et al., 2019",
+          "source": "PNAS 116(24):12019-12024",
+          "url": "https://www.pnas.org/doi/10.1073/pnas.1901824116",
+          "takeaway": "More than 50-fold individual differences in light sensitivity (ED50 ~6 to ~350 lux); the same evening light can be near-harmless for one person and strongly melatonin-suppressing for another."
+        },
+        {
+          "title": "Evening use of light-emitting eReaders negatively affects sleep, circadian timing, and next-morning alertness",
+          "authorsYear": "Chang, Aeschbach, Duffy & Czeisler, 2015",
+          "source": "PNAS 112(4):1232-1237",
+          "url": "https://www.pnas.org/doi/10.1073/pnas.1418490112",
+          "takeaway": "Controlled crossover: light-emitting eReader before bed vs printed book delayed melatonin, lengthened sleep onset, suppressed/delayed REM, and reduced morning alertness."
+        },
+        {
+          "title": "Melanopic irradiance defines the impact of evening display light on sleep latency, melatonin and alertness",
+          "authorsYear": "Schoellhorn, Stefani, Lucas, Spitschan, et al., 2023",
+          "source": "Communications Biology 6:228",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9974389/",
+          "takeaway": "Melanopic (short-wavelength) irradiance, not plain brightness/lux, drove melatonin suppression and sleep-onset delay; reducing melanopic content mitigates effects with little visible change - the strongest evidence for warming displays the right way."
+        },
+        {
+          "title": "Recommendations for daytime, evening, and nighttime indoor light exposure to best support physiology, sleep, and wakefulness in healthy adults",
+          "authorsYear": "Brown, Brainard, Cajochen, Czeisler, et al., 2022",
+          "source": "PLoS Biology 20(3):e3001571",
+          "url": "https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3001571",
+          "takeaway": "Expert consensus targets: >=250 lux melanopic EDI by day, <=10 lux melanopic EDI in the 3h before bed, <=1 lux during sleep; explicitly notes >10-fold individual variability."
+        },
+        {
+          "title": "Non-Visual Effects of Light on Melatonin, Alertness and Cognitive Performance: Can Blue-Enriched Light Keep Us Alert?",
+          "authorsYear": "Chellappa, Steiner, Blattner, Oelhafen, Goetz & Cajochen, 2011",
+          "source": "PLoS ONE 6(1):e16429",
+          "url": "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0016429",
+          "takeaway": "Evening 6500K blue-enriched light boosted alertness and reaction speed but also suppressed melatonin more - alerting and circadian-disruption travel together."
+        },
+        {
+          "title": "Blue-light filtering spectacle lenses for visual performance, sleep, and macular health in adults",
+          "authorsYear": "Singh, Downie, Anderson, et al., 2023",
+          "source": "Cochrane Database of Systematic Reviews, CD013244",
+          "url": "https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD013244.pub2/full",
+          "takeaway": "17-trial review: blue-blocking lenses probably do not reduce eye strain and lack evidence for sleep or macular benefit; underlying studies are short-term and low quality."
+        },
+        {
+          "title": "Should You Be Worried About Blue Light?",
+          "authorsYear": "American Academy of Ophthalmology, reviewed 2024",
+          "source": "American Academy of Ophthalmology (aao.org)",
+          "url": "https://www.aao.org/eye-health/tips-prevention/should-you-be-worried-about-blue-light",
+          "takeaway": "Authoritative clinical position: no evidence blue light from screens damages eyes; digital eye strain is from reduced blinking/overuse; use the 20-20-20 rule; blue-blocking glasses not recommended."
+        },
+        {
+          "title": "Effects of evening smartphone use on sleep and declarative memory consolidation in male adolescents and young adults",
+          "authorsYear": "Hoehn, et al., 2024",
+          "source": "Brain Communications 6(3):fcae173",
+          "url": "https://academic.oup.com/braincomms/article/6/3/fcae173/7675955",
+          "takeaway": "Smartphone reading without a blue filter suppressed melatonin, yet effects on overall sleep quality were minimal - a key example of the gap between physiology and real-world sleep outcomes."
+        },
+        {
+          "title": "Blocking nocturnal blue light for insomnia: A randomized controlled trial",
+          "authorsYear": "Shechter, Kim, St-Onge & Westwood, 2018",
+          "source": "Journal of Psychiatric Research 96:196-202",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/29101797/",
+          "takeaway": "Amber blue-blocking glasses before bed improved some insomnia outcomes, but evidence is mixed and benefits do not always track with measurable melatonin changes."
+        }
+      ],
+      "easterEggSnippets": [
+        "Your eyes have a third kind of light sensor. Beyond rods and cones, special cells (ipRGCs) tuned to blue light around 480 nm tell your brain whether it's day or night. (Lucas et al., Trends Neurosci 2014)",
+        "Your inner clock is more sensitive than you'd think: dim room light at night can suppress most of the melatonin that bright light would. Warmth helps. (Zeitzer et al., J Physiol 2000)",
+        "There's no one 'safe' screen brightness. People differ more than 50-fold in light sensitivity at night, so a gentle default plus your own tuning beats any universal number. (Phillips et al., PNAS 2019)",
+        "It's the blue, not just the bright. Studies find a screen's melanopic (blue) content predicts melatonin effects better than raw brightness, so warming the color is doing real work. (Schoellhorn et al., Commun Biol 2023)",
+        "Scientists' rule of thumb: bright by day, dim and warm at night, dark while you sleep. A simple three-act lighting story for your body clock. (Brown et al., PLoS Biology 2022)",
+        "Good news for your eyes: ophthalmologists say screen blue light does not damage your eyes. Tired eyes come from blinking less, so blink and take breaks. (American Academy of Ophthalmology, 2024)",
+        "Try 20-20-20: every 20 minutes, look 20 feet away for 20 seconds. The most evidence-backed trick for screen-tired eyes, and it's free. (American Academy of Ophthalmology, 2024)",
+        "Blue light is a great wake-up signal, which is exactly why it's a poor bedtime companion: the same light that sharpens daytime focus can hold off your melatonin at night. (Chellappa et al., PLoS ONE 2011)",
+        "Honest take: warming your screen is a small, sensible nudge, not a magic sleep button. The biggest wins are dimming the light and winding down before bed. (Hoehn et al., Brain Communications 2024)",
+        "Reading a glowing tablet before bed delayed melatonin and morning alertness versus a paper book in lab studies. Warm, dim screens aim to soften that gap. (Chang et al., PNAS 2015)"
+      ],
+      "accuracyCautions": [
+        "Do not claim blue light 'damages your eyes' or causes macular degeneration. The American Academy of Ophthalmology and the 2023 Cochrane review find no good evidence for this. Frame eye comfort as strain/dryness from reduced blinking and overuse, not damage.",
+        "Do not promise the app will 'fix your sleep' or 'boost melatonin.' Real-world effects of screen color/warmth on measured sleep quality are often small, inconsistent, or non-significant (e.g., Hoehn 2024). Use hedged language: 'may help,' 'a small nudge.'",
+        "Distinguish brightness from blueness. The strongest evidence (Schoellhorn 2023) shows melanopic/blue content matters more than raw luminance, but warming color WITHOUT also dimming can blunt the benefit. Encourage lowering brightness too; do not imply color shift alone is sufficient.",
+        "Avoid universal lux/brightness claims. Individual light sensitivity varies >50-fold (Phillips 2019), so never state a single number is 'safe for everyone.' Offer it as a starting default the user can personalize.",
+        "Do not overstate blue-blocking glasses. Cochrane (2023) found little/no eye-strain benefit and insufficient sleep evidence; trials are low quality. Don't position screen warming as equivalent to a proven medical intervention.",
+        "Cite the consensus thresholds (Brown 2022: 250 / 10 / 1 lux melanopic EDI) as expert recommendations for healthy adults 18-55, not as established outcomes - they explicitly exclude children, older adults, shift workers, and clinical groups, and are population-level.",
+        "Separate physiology from behavior. Melatonin suppression is measurable, but it does not reliably translate into worse subjective or objective sleep; several studies show melatonin/phase effects without sleep-quality changes. Avoid implying melatonin change = ruined sleep.",
+        "Note that alertness is a double-edged effect: blue-enriched light helps daytime focus (Chellappa 2011). Don't frame all blue light as bad; frame the app as timing/dose management, brighter+bluer by day, dimmer+warmer at night.",
+        "Keep it non-medical. Add a 'general wellness, not medical advice' note; advise users with insomnia, depression, eye disease, or circadian disorders to consult a clinician, since some blue-blocking trials reported adverse effects (e.g., low mood, headache) in subgroups.",
+        "Prefer primary sources and major reviews (PNAS, J Physiol, Cochrane, PLoS Biology, AAO) over press coverage for any 'learn more' links, and date-stamp claims since this is an active, evolving and partly contested field."
+      ]
+    },
+    "synthesis": {
+      "differentiationThesis": "This app wins because it is the only product that treats reliable warmth on EVERY display as a solved engineering problem rather than a side feature. Every incumbent forces a bad trade: the warmth-first apps (f.lux, Iris, Night Shift, Shifty) are dated, closed, or silently fail on external monitors and on the newest M5 Pro/Max Macs where Apple's gamma pipeline is broken in Tahoe; the reliable-external tools (BetterDisplay, Lunar, MonitorControl) are dense brightness Swiss-army knives where warmth is buried and never health-framed. We attack the exact 2026 gap: a DDC-first engine that applies true hardware color temperature where panels support it, transparently falls back through gamma to a universal Metal overlay (the only path that works on Studio Display, LG UltraFine, and M5 Tahoe), and tells the user which method each display is using instead of silently no-op'ing. On top of that engine sit three things no one else combines: a polished, animated hold-to-reveal-true-color hotkey for color-critical work across all displays; a credible, evidence-based circadian narrative that owns the health angle Iris discredited through bloat; and genuine, auditable open-source trust—signed, notarized, zero telemetry—that directly answers the NightOwl malware collapse. Free is the table stakes; the moat is being the warmth app that actually works on the newest Macs and every monitor, beautifully, while you can verify it isn't spying on you.",
+      "positioningStatement": "For Mac users and designers who want their screens to wind down with the evening—on the built-in display and every external monitor—Gloam is a free, open-source circadian warmth app that applies real, reliable warmth across all displays and reveals true color instantly when you need it, unlike f.lux and Night Shift, which are closed, dated, and quietly fail on external monitors and the newest Apple Silicon.",
+      "nameShortlist": [
+        {
+          "name": "Gloam",
+          "why": "Old-English word for warm twilight that maps exactly onto the product's purpose, sidesteps Apple's 'Night Shift', and web-checks clean of any macOS color-temperature app collision—strongest mark and cleanest field."
+        },
+        {
+          "name": "Cinder",
+          "why": "Warm smouldering-fire metaphor that cleanly avoids the heavily-trademarked 'Ember' mug brand; one premium syllable, no blue-light app uses it (only an unrelated C++ framework in a different category)."
+        },
+        {
+          "name": "Smolder",
+          "why": "Captures the always-on 'slow warm burn that never flares blue' perfectly, is verb-like and memorable, and came back completely clear of any software collision in research."
+        },
+        {
+          "name": "Vesper",
+          "why": "Latin for 'evening', the most design-award-coded option for a glassy native aesthetic and the designer true-color audience; the discontinued Vesper notes app is remembered in Apple circles but sits in a different category."
+        },
+        {
+          "name": "Glim",
+          "why": "Rare dialect word for a faint candle-light—tiny, distinctive, ownable, warmly evocative of low light, and free of any macOS warmth-app collision; excellent short-domain fallback."
+        },
+        {
+          "name": "Gloamy",
+          "why": "Friendly diminutive of gloaming with zero software collisions found, making the domain almost certainly available; keeps Gloam's twilight meaning with a warmer open-source-community feel as a safe fallback."
+        }
+      ],
+      "brandRecommendation": "Go with the Gloam direction: a twilight palette where warmth is the default state—deep indigo and dusk plum grounding a dark glassy UI, warming up through ember amber to soft candle cream, with pure white reserved exclusively for the 'reveal true color' moment so accuracy reads as a deliberate, momentary event. Pair a refined high-contrast serif (New York) for the wordmark and the hero Kelvin readout with SF Pro Text for all UI chrome—literary warmth over clinical sans, native Liquid Glass on Xcode 26. The tone is poetic but precise and never alarmist: it speaks like a thoughtful friend at dusk ('soften into the evening'), invites rather than warns about blue light, and stays scrupulously non-medical and evidence-honest to match the privacy-first, open-source audience.",
+      "openDecisionsForUser": [
+        {
+          "topic": "Final app name",
+          "why": "Drives the domain (matthewball.me/<appname>), the wordmark, GitHub repo, and every social handle—must be locked before assets, landing page, and reservations. The research flags several hard collisions to avoid (Ember/Hearth/Lumen/Sundown/Solace are taken or trademarked).",
+          "options": [
+            "Gloam (top recommendation: cleanest field, poetic, ownable)",
+            "Cinder (warm-fire metaphor, avoids Ember trademark)",
+            "Smolder (completely clear, 'slow warm burn' fit)",
+            "Vesper (most premium/design-coded, minor notes-app legacy)"
+          ]
+        },
+        {
+          "topic": "Primary positioning angle",
+          "why": "Determines the headline, who you target first, and which communities and reviewers you lead with. The same product can be sold as a health tool, a designer tool, or a 'finally works everywhere' utility—the emphasis shapes the entire narrative and risk profile (health framing carries FTC/medical-claim guardrails).",
+          "options": [
+            "Circadian-health-first ('protect your sleep')",
+            "Designer/color-pro-first (reveal-true-color hero)",
+            "Reliability-first ('the warmth app that works on every display and the newest Macs')",
+            "Open-source-trust-first ('auditable, no telemetry, anti-NightOwl')"
+          ]
+        },
+        {
+          "topic": "Open-source license",
+          "why": "The license is itself marketing for this audience and sets the contribution and forking terms. MonitorControl (MIT) is the trusted permissive precedent; GPL maximizes copyleft protection. This must be chosen before the repo and LICENSE file ship.",
+          "options": [
+            "MIT (permissive, matches MonitorControl precedent, max adoption)",
+            "GPLv3 (copyleft, matches Redshift/Shifty, prevents closed forks)",
+            "Apache-2.0 (permissive + explicit patent grant)"
+          ]
+        },
+        {
+          "topic": "Scope of the warmth engine for v1",
+          "why": "Defines core engineering effort and the central differentiation claim. Shipping all three layers (DDC + gamma + overlay) is the full moat but more work; overlay-only is fastest-to-ship and already beats incumbents on M5 Tahoe and Apple-blessed displays.",
+          "options": [
+            "Full layered engine: DDC-first, gamma fallback, Metal overlay universal fallback",
+            "Overlay-first + DDC (skip gamma entirely given the Tahoe breakage)",
+            "Metal overlay only for MVP, add DDC/gamma in v1"
+          ]
+        },
+        {
+          "topic": "Simple-vs-advanced UX model",
+          "why": "This is the product's core usability promise ('simple by default, advanced mode'). The interaction idiom determines how power features hide without cluttering the casual path and shapes the whole menu-bar design.",
+          "options": [
+            "Left-click simple popover, right-click advanced menu (status-item split)",
+            "Compact popover with a 'More'/disclosure region for advanced rows",
+            "Option-click reveals advanced menu items (NSMenuItem .isAlternate)",
+            "Minimal popover + dedicated tabbed Settings window for all advanced config"
+          ]
+        },
+        {
+          "topic": "Reveal-true-color hotkey behavior",
+          "why": "This is the signature designer feature; whether it is hold-to-reveal or toggle changes the muscle-memory, the animation design, and the watchdog/edge-case engineering (lost keyUp during Space switches).",
+          "options": [
+            "Hold-to-reveal (press-and-hold restores true color, release restores warmth)",
+            "Toggle (press once off, press again on)",
+            "Both, user-configurable per preference"
+          ]
+        },
+        {
+          "topic": "Scheduling source of truth",
+          "why": "Determines whether you piggyback on the user's existing Night Shift schedule (via CBBlueLightClient, zero astronomy) or compute your own solar schedule, and how much you depend on a private, version-fragile Apple API.",
+          "options": [
+            "Follow system Night Shift schedule (mirror the 'active' boolean, simplest)",
+            "Built-in solar scheduler from location (independent, no private API)",
+            "Offer all three: Follow system / Custom schedule / Always on"
+          ]
+        },
+        {
+          "topic": "Distribution and packaging",
+          "why": "Private frameworks (IOAVService, CoreBrightness) preclude the Mac App Store, so this is Developer-ID + notarized. Decide the install surfaces now since they affect the README, landing-page CTA, and auto-update setup.",
+          "options": [
+            "Notarized DMG + ZIP via GitHub Releases + Sparkle auto-update + Homebrew cask",
+            "DMG/ZIP + Sparkle, add Homebrew later",
+            "GitHub Releases only (no Sparkle) for MVP"
+          ]
+        },
+        {
+          "topic": "In-app analytics and consent",
+          "why": "A privacy-first health/OSS audience punishes opt-out telemetry (the Audacity revolt). Choosing the stack and consent model now keeps the privacy policy honest and the App Store/label story clean.",
+          "options": [
+            "No in-app analytics at all (download counts only, strongest trust)",
+            "TelemetryDeck, explicit opt-in, defaulted OFF (best Swift DX, EU-hosted)",
+            "Self-hosted Aptabase, opt-in (fully auditable, strongest OSS story)"
+          ]
+        },
+        {
+          "topic": "Launch sequencing",
+          "why": "The order of launch channels determines momentum and how spikes convert to durable GitHub stars and downloads. Research recommends sequencing, not one noisy blast.",
+          "options": [
+            "Product Hunt first, then Show HN, then awesome-* PRs and newsletters",
+            "Show HN first (lead with OSS/technical credibility), then Product Hunt",
+            "Quiet soft-launch to r/macapps + build-in-public, then coordinated PH+HN day"
+          ]
+        }
+      ],
+      "roadmapBuckets": {
+        "mvp": [
+          "Metal/CAMetalLayer per-screen warm overlay as the universal default layer—works on every display including Studio Display/LG UltraFine and on M5 Tahoe where gamma is dead",
+          "Apply warmth to ALL displays (built-in + externals), keyed by stable display identity (CGDisplayCreateUUIDFromDisplayID), persisted per display",
+          "SwiftUI MenuBarExtra menu-bar app (LSUIElement, no Dock icon) with a simple warmth strength/Kelvin control and on/off toggle",
+          "Hold-to-reveal-true-color global hotkey via sindresorhus/KeyboardShortcuts (onKeyDown suspend, onKeyUp resume) with watchdog auto-resume and a fast ~100-150ms ease",
+          "Three scheduling modes: Follow system Night Shift schedule / Custom schedule / Always on",
+          "Crash/quit safety: reset all displays to neutral on launch and exit; re-baseline on hotplug/wake via reconfiguration callback",
+          "Developer-ID signed + notarized; distributed as DMG + ZIP via GitHub Releases; zero telemetry; open-source repo with LICENSE",
+          "Reduce Transparency / Reduce Motion / VoiceOver-respecting UI and a template menu-bar icon that reads on Tahoe's transparent bar"
+        ],
+        "v1": [
+          "DDC/CI RGB-gain layer (VCP 0x16/0x18/0x1A over IOAVService) for true hardware warmth on DDC-capable externals, with capability probe before writing",
+          "Automatic best-available-wins layer selection with a runtime self-test that MEASURES gamma effect and auto-demotes to overlay on M5 Tahoe",
+          "Per-display transparency UI: show each monitor's true capability ('hardware warmth / gamma fallback / overlay only') and never silently no-op",
+          "Advanced mode: per-display independent warmth curves, per-app/website exclusions, fine Kelvin slider and sunset/sleep ramp control",
+          "Gamma transfer-table layer (CoreGraphics) gated behind the measured self-test for hardware/OS versions where it still works (M3/M4, non-Max M5)",
+          "Night Shift external-monitor fix: detect mis-identified 'TV' panels and offer one-click re-identification so externals actually warm",
+          "Coexistence detection: detect f.lux/Lunar/MonitorControl/Night Shift and prefer DDC to avoid the gamma-API tug-of-war and color glitches",
+          "Sparkle 2 auto-update (EdDSA + code signing) and a Homebrew cask",
+          "Tabbed Settings window (General / Shortcuts / Advanced / About), launch-at-login via SMAppService, branded custom DMG",
+          "Optional, opt-in, anonymous aggregate analytics (TelemetryDeck or self-hosted Aptabase), defaulted OFF, with a clear privacy panel"
+        ],
+        "future": [
+          "ColorSync ICC profile injection (ColorSyncDeviceSetCustomProfiles) as an alternate Layer 1.5 that may bypass the broken gamma pipeline on affected hardware",
+          "Per-channel multiply Metal shader so blacks stay black for a truer color-temperature look (vs flat alpha wash), with HDR/EDR highlight clamping",
+          "Melanopic-aware warmth: pair color shift with optional dimming guidance, surfacing the evidence-based 'bright by day, dim+warm at night' model",
+          "Scenes/presets (e.g. Reading, Movie, Color-Critical) and Shortcuts/Siri/Control Center integration",
+          "Auto-suspend-during-screenshot/screen-recording option and a screenshot-exempt mode for the overlay",
+          "Ambient-light-sensor adaptive warmth curves",
+          "Optional in-app 'the science' education with cited easter-egg snippets (non-medical, hedged) and a 20-20-20 nudge",
+          "Localization across multiple languages and broader panel capability database for DDC reliability"
+        ]
+      }
+    }
+  }
+}

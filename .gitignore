@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+*.swp
+
+# Xcode / Swift
+build/
+DerivedData/
+.build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.moved-aside
+Packages/
+.swiftpm/
+
+# Secrets / signing (NEVER commit)
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+.env
+.env.*
+secrets/
+*-private-key*
+sparkle_private*
+
+# Web / landing (Vercel)
+node_modules/
+.next/
+.vercel/
+dist/
+.turbo/
+
+# Notarization / release scratch
+*.dmg
+*.zip
+release-scratch/
+
+# Editor
+.idea/
+*.iml
