@@ -54,17 +54,20 @@ I'm resuming **Abendrot** — a free, open-source, native macOS menu-bar app tha
 - The generated `Abendrot.xcodeproj`, `build/`, `.build/`, `node_modules/`, `dist/` are git-ignored build artifacts.
 
 ## NEXT — continue the build (in priority order)
-1. **M2 DDC real-external-monitor pass with the founder** (the one thing headless can't prove). Plug in a DDC-capable external monitor, opt into Hardware DDC for it, and verify on real hardware: capability probe, the warm gain visibly applies, write-then-read verify, restore-to-native on toggle-off/quit, and crash/SIGKILL → relaunch restores native (the §21‑E14 `HW` variants in `docs/qa/failure-injection-suite.md`). Tune timing if stubborn panels need it; confirm the read-offset (we use MonitorControl's `0`). The protocol math is locked (`docs/engine/ddc-protocol-spec.md`); only the hardware's tolerance/targeting is unproven.
+0. **⭐ #1 — WARMING-MECHANISM OVERHAUL (do this first, fresh session). See plan §25 + `docs/engine/overlay-multiply-decision.md`.** Founder's first-run verdict: enabling warmth "just adds a white tint, doesn't truly warm like BetterDisplay Pro." Root cause is understood: the engine defaults to the **overlay**, which can only wash amber on top (source-over alpha) — it can't remove blue. **True warming = gamma LUT (built-in) / DDC gain (external).** First settle the pivotal unknown: gamma is hard-classified broken on Apple-Silicon+macOS26 *by assumption* and never tested on this Mac — bypass `GammaClassifier` and **visually test gamma on the founder's hardware**. Then research **how BetterDisplay/f.lux truly warm the built-in display on Tahoe** (study like m1ddc; likely CoreDisplay private APIs → kill-switchable), research the **blue-light/melanopic benefit** (value prop + §13/§14.1 content), and make `recommend()`/`LayerResolver` prefer **gamma/DDC** as the active warm path with overlay demoted to the floor.
+1. **M2 DDC real-external-monitor pass with the founder** (headless can't prove it; also part of #0's external-display warming). Opt into Hardware DDC on a real DDC monitor and verify: capability probe, warm gain visibly applies, write-then-read verify, restore-to-native on toggle-off/quit, crash/SIGKILL → relaunch restores native (the §21‑E14 `HW` variants). Protocol math is locked (`docs/engine/ddc-protocol-spec.md`); confirm read-offset `0` and tune timing if needed.
 2. **Re-publish the public repo** (icon + sunset palette + M7/NightShift/gamma + **M2 DDC + the night-shift launch-crash fix**) — re-scrub planning tells, then push. **Founder's gate.**
 3. Live failure-injection + the self-hosted hardware matrix runs (docs/qa) — the `UNIT+FAKE` halves now pass headlessly; the `HW` halves need the real-monitor pass.
-4. Full in-app motion/polish pass via `/design-motion-principles`; the true per-channel-multiply overlay shader (§18).
+4. Full in-app motion/polish pass via `/design-motion-principles`. (§18 overlay multiply is RESOLVED: not achievable permissionlessly — the overlay stays an alpha tint; multiply = gamma/DDC.)
 5. Cosmetic public-repo polish (social-preview image + website link) once assets exist.
-6. Landing deploy to abendrot.app (Vercel) — **founder's gate**.
+6. Landing deploy to abendrot.app (Vercel) — **founder's gate**. (Integrate the §14.1 SEO/AEO engine before 1.0.)
 
 ## Open tasks (the in-session task tracker does NOT survive /clear — these are the live ones)
+- **⭐ #1 — Warming-mechanism overhaul (plan §25): make warmth truly remove blue (gamma/DDC), not just an overlay tint. Founder's top issue. Fresh session.**
+- Engine: M2 DDC real-hardware verification with the founder (also feeds #1's external-display warming).
 - Lane G / QA (cross-cutting, never self-approve): the `HW` halves of failure-injection + the hardware matrix (need a real external DDC monitor).
-- Engine: M2 DDC real-hardware verification with the founder (the remaining gate); the §18 true-multiply overlay shader.
 - Re-publish the public repo (now also carries M2 + the night-shift crash fix); cosmetic repo polish; landing deploy — all founder-gated.
+- Future (tabled): the §14.1 SEO/AEO content & AI-visibility engine — integrate with the site before 1.0.
 
 ## Founder gates — ASK before doing any of these
 Re-publishing / pushing to the public repo; deploying the landing live to abendrot.app; posting anything externally (Product Hunt / HN / Reddit / social / awesome-list PRs).

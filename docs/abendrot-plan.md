@@ -485,4 +485,55 @@ Execution started in `Documents/abendrot` (branch `build`, local only — not pu
 
 ---
 
-*Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed; no open items. Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
+## 25. ⭐ TOP PRIORITY (next session) — Warming-mechanism overhaul: truly remove blue, don't just tint
+
+**Founder feedback after the first real app run (2026-06-17):** enabling "Warm my displays" currently
+"just adds a white tint — it doesn't really make the display warmer like BetterDisplay Pro does."
+This is **the headline value prop**, so it is the #1 next thing to fix. Tackle in a **fresh session**
+(founder's context is high). This section is the brief.
+
+### Root cause (now understood, not speculative)
+The engine defaults every display to the **overlay** layer. Per the §18 investigation
+(`docs/engine/overlay-multiply-decision.md`), a permissionless overlay can only do **source-over
+alpha** (`result = dst·(1−a) + tint·a`) — it **washes amber on top**, it can NOT remove blue from the
+signal or darken (multiply) anything. So it inherently reads as a "tint," not a warm. **True warming
+(white-point shift / blue removal, the BetterDisplay behaviour) only comes from the gamma LUT
+(built-in display) or DDC RGB gain (external).** The engine already has the Kelvin↔gain math and both
+backends — the problem is the **default policy** sends everything to the overlay.
+
+### The pivotal unknown to settle FIRST
+Gamma (`CGSetDisplayTransferByTable`) is currently **hard-classified `.unsupported(.gammaBrokenOnThisOS)`
+on Apple-Silicon + macOS 26** (`GammaClassifier`), based on a *research assumption* that Tahoe silently
+no-ops it. **This has never been tested on the founder's actual Mac** — and the classifier blocks even a
+manual override, so we've never seen if it works. **Step 1: bypass the classifier and visually test
+gamma on the founder's hardware.** If it warms → make gamma the built-in default (the fix is then mostly
+a policy change). If it truly no-ops → we need the path below.
+
+### Next-session agenda (dispatch research like the DDC/overlay passes)
+1. **Gamma reality check (founder, ~15 min):** a tiny probe that force-applies a strong warm gamma ramp
+   to the built-in display, bypassing `GammaClassifier`; founder eyeballs whether it warms or no-ops.
+   Settles the central assumption.
+2. **Research: how does BetterDisplay Pro (and f.lux) truly warm the BUILT-IN Apple display on macOS 26
+   Tahoe?** It demonstrably works and is NOT an overlay — so there is a method (CoreDisplay private APIs
+   e.g. `CoreDisplay_Display_SetUserColorMatrix` / gamma-table setters, a virtual-display/override, or
+   SkyLight). Study it the way we studied **m1ddc** for DDC (waydabber authors both — likely documented).
+   Output: an implementable, **kill-switchable** technique (private APIs → behind `privateAPIsEnabled`,
+   like DDC/NightShift).
+3. **Research: the blue-light / circadian benefit ("understand the benefit"):** melanopic EDI, the ipRGC
+   ~480 nm peak, how white-point shift + dimming map to melanopic suppression, and the right warming
+   curve + warmest-point default. Informs the engine (how much to warm) AND the value prop / §13 / §14.1
+   SEO content. Hedged, cited, non-medical (§13 guardrails binding).
+4. **Engine policy change:** make `recommend()` / `LayerResolver` prefer **gamma on the built-in**
+   (where proven) and **DDC on externals** (opt-in) as the *active* warm path; demote the overlay to the
+   genuine last-resort floor (displays where gamma is broken AND DDC is unavailable). Add an honest in-UI
+   note when a display can only be tinted, not truly warmed.
+5. **Overlay stays** as the fallback (already tuned: saturated amber + gated alpha, §18 resolved). It is
+   not the headline mechanism.
+
+**Bottom line for the next session:** the win is almost certainly "make gamma/DDC the real warming path"
+— either gamma works on this hardware (policy fix) or BetterDisplay's built-in technique is reproducible
+(new kill-switchable backend). The overlay was always meant to be the floor, not the product.
+
+---
+
+*Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **Open #1 priority: §25 warming-mechanism overhaul (next session).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*

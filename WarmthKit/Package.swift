@@ -121,7 +121,7 @@ let package = Package(
         // exercised through the engine's injectable test seams.
         .testTarget(
             name: "WarmthKitTests",
-            dependencies: ["WarmthKit", "HardwareDDC", "WarmthCore"]
+            dependencies: ["WarmthKit", "HardwareDDC", "OverlayRenderer", "WarmthCore"]
         ),
     ],
     swiftLanguageModes: [.v6]
