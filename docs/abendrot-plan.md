@@ -1,7 +1,7 @@
 ---
 name: abendrot
 title: "Abendrot — Master Plan (build → release → growth)"
-status: pending approval
+status: APPROVED for execution (2026-06-16) — staged-beta strategy confirmed
 owner: matthewrball (matthewball.me)
 created: 2026-06-16
 positioning: circadian-health-first (reliability as proof)
@@ -303,7 +303,7 @@ Per the founder's directive: **keep this main session on planning, design, brand
 
 ## 16. Decisions — CONFIRMED (2026-06-16)
 
-1. **Build scope:** ✅ **Fully-featured 1.0 in one push** — all three layers + advanced mode + Settings + analytics at public launch, internally milestoned (§7). **Audit refinement (§21.6, confirm):** keep the polished 1.0 as the public launch, but precede it with signed betas (0.1→0.9) for real-hardware validation. DDC ships **opt-in per display** until its restore/recovery tooling is proven (§21‑E3).
+1. **Build scope:** ✅ **Fully-featured 1.0 in one push** — all three layers + advanced mode + Settings + analytics at public launch, internally milestoned (§7). **Audit refinement (§21.6, ✅ CONFIRMED 2026-06-16):** keep the polished 1.0 as the public launch, but precede it with signed betas (0.1→0.9) for real-hardware validation. DDC ships **opt-in per display** until its restore/recovery tooling is proven (§21‑E3).
 2. **In-app analytics:** ✅ **Aptabase, opt-in, OFF by default** (open-source/self-hostable; strongest OSS-health trust). Downloads always tracked via GitHub/Homebrew.
 3. **Reveal-true-color:** ✅ **Ship both; default hold** (toggle option in Settings).
 4. **Schedule default:** ✅ **Follow system sunset** (Night Shift schedule, read-only) + Custom + Always-on.
@@ -407,11 +407,11 @@ These refine the sections above; where they conflict with earlier prose, **§21 
 - **Add a v0.9 designer beta ~2 weeks pre-PH** (X/Mastodon) to harvest real Liquid-Glass-UI screenshots for "social proof of beauty" in the PH gallery.
 
 ### 21.6 Decision change to confirm — staged betas before the polished 1.0
-Codex flags "fully-featured 1.0 in one push" as the riskiest launch choice (the hard parts fail only on real hardware/point releases). **Recommended refinement (preserves the 1.0 moment):** precede the branded 1.0 launch with signed public betas — `0.1` overlay+hotkey+schedule+DMG+notarization → `0.2` DDC opt-in + restore tooling → `0.3` Sparkle → **`1.0` branded launch after the hardware matrix passes.** This complements the GTM soft-pre-launch and the v0.9 designer beta. **→ Founder confirm before §16 item 1 is updated to final.**
+Codex flags "fully-featured 1.0 in one push" as the riskiest launch choice (the hard parts fail only on real hardware/point releases). **Refinement (preserves the 1.0 moment):** precede the branded 1.0 launch with signed public betas — `0.1` overlay+hotkey+schedule+DMG+notarization → `0.2` DDC opt-in + restore tooling → `0.3` Sparkle → **`1.0` branded launch after the hardware matrix passes.** This complements the GTM soft-pre-launch and the v0.9 designer beta. **✅ CONFIRMED by founder 2026-06-16 — staged-beta strategy adopted; DDC opt-in until restore tooling proven.**
 
 ### 21.7 Validated (no change needed)
 - "Show each display's warmth method (Hardware/Gamma/Overlay)" — already a core differentiator (§4.1); independently flagged by Gemini as a top trust lever. Keep.
 
 ---
 
-*Status: pending approval (now incl. §21 audit revisions; one open item: §21.6 staged-beta confirmation). On approval → `/team` execution across the lanes in §15, with heavy backend dispatched to Opus 4.8 `/goal` sessions and the hardest engine logic optionally retained in the planning session.*
+*Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed; no open items. Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*

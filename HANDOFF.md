@@ -3,7 +3,7 @@ project: abendrot
 project_path: /Users/ball/Documents/abendrot
 created: 2026-06-16
 origin_session: experiment (Documents/experiment) — planning/research session
-status: planning complete · brand/design refinement next · execution not started
+status: APPROVED for execution (2026-06-16) — open a session in this dir and paste RESUME-PROMPT.md
 ---
 
 # Handoff — Abendrot
@@ -24,7 +24,7 @@ A free, open-source, native macOS menu-bar app that warms screen color temperatu
 - **Pricing:** free forever, optional GitHub Sponsors, never a paywall.
 - **Design refs:** dopedrop.app (aesthetic + "tiny native app" boast), Wispr Flow (calm HUD/named-states/motion), Liquid Glass. Brand direction = twilight palette where warmth is default, pure white reserved for the true-color reveal; New York serif wordmark + SF Pro Text.
 - **Brand picks (provisional, 2026-06-16):** accent = **Ember amber** `#FFAB5C`; icon = **Sunset arc**. Tokens in `brand/brand-direction.md`. NOT final — a dedicated iterate-en-masse brand-refinement exercise comes next (plan §5.5).
-- **Open decision (CCG audit §21.6):** precede the polished 1.0 with signed public betas (0.1→0.9) for hardware validation? Recommended (preserves the 1.0 moment); DDC opt-in-per-display until restore tooling proven. **Awaiting founder confirm.** Full audit in `docs/research/plan-audit-ccg.md`; accepted improvements folded into plan **§21**.
+- **Open decision (CCG audit §21.6):** precede the polished 1.0 with signed public betas (0.1→0.9) for hardware validation? **✅ CONFIRMED 2026-06-16 — staged betas adopted** (0.1 overlay → 0.2 DDC opt-in → 0.3 Sparkle → 1.0 branded launch after the hardware matrix passes); DDC opt-in-per-display until restore tooling proven. Full audit in `docs/research/plan-audit-ccg.md`; accepted improvements folded into plan **§21**.
 
 ## Done
 - 3 background research sweeps (market/UX/naming/tech/analytics/marketing/science + stack-decision/exemplar-teardowns) → synthesized.
