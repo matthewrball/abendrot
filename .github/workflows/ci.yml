@@ -64,7 +64,7 @@ env:
   # macOS 26 "Tahoe" runner image + Xcode 26. `macos-latest` may lag; pin once
   # GitHub publishes a Tahoe image label. See plan §9 ("macOS 26 runner").
   MACOS_RUNNER: macos-26
-  DEVELOPER_DIR: /Applications/Xcode_26.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
 
 jobs:
   # ---------------------------------------------------------------------------

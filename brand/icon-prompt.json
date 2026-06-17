@@ -1,0 +1,47 @@
+{
+  "task": "Generate a single, premium macOS application icon (App-Store quality), 1024x1024, front-on.",
+  "app": {
+    "name": "Abendrot",
+    "meaning": "German for 'the red glow of sunset'.",
+    "what_it_is": "A calm macOS app that warms your screen's color temperature with the evening for healthier nights.",
+    "feeling": "calm, premium, warm dusk; quiet confidence; never neon, never clinical, never cool/blue"
+  },
+  "icon_subject": {
+    "concept": "A 'Sunset arc over a horizon' — a warm half-sun / glowing arc cresting a clean horizon line low in the frame, its ember light blooming softly upward into a deep twilight sky. One simple, instantly-readable sunset mark.",
+    "primary_form": "a smooth semicircular sun/arc, bottom-centered, rising just above a horizon line",
+    "glow": "a soft warm bloom radiating from the sun up into the twilight — the last light of dusk"
+  },
+  "render_style": {
+    "inspiration": "Match the RENDERING LANGUAGE of the reference image: a glossy, dimensional, softly-glowing 3D 'glass-pebble' app icon — smooth, premium, tactile, with a gentle internal light source. Adopt its FINISH, DEPTH, and SOFT GLOW. Do NOT adopt its blue color, and do NOT include any face, eyes, or character.",
+    "qualities": ["glossy 3D", "soft volumetric inner glow", "smooth buttery gradients", "subtle frosted-glass translucency", "gentle top specular sheen", "soft ambient occlusion", "Apple-grade polish"],
+    "dimensionality": "the sun/arc reads as a slightly raised, light-emitting glass dome resting on the twilight ground; soft edges, not hard vector"
+  },
+  "shape": {
+    "container": "Apple squircle (continuous-curvature rounded rectangle), FULL-BLEED — the squircle itself is the artwork, no inner padding or border frame",
+    "ground": "the squircle is the deep twilight sky/ground",
+    "presentation_shadow": "a soft, diffuse ambient drop-shadow beneath the squircle on the studio backdrop (presentation only)"
+  },
+  "palette": {
+    "twilight_top": "#0C0A16",
+    "twilight_mid": "#171029",
+    "twilight_warm_low": "#1D1533",
+    "ember_core": "#FFAB5C",
+    "ember_highlight": "#FFD6A3",
+    "ember_deep": "#C2591F",
+    "warm_cream_brightest": "#F7ECD9",
+    "rules": "Warm amber light on a deep twilight near-black. Never pure black (#000), never cool or blue tones. Reserve pure white — use warm cream #F7ECD9 for the very hottest highlight, not #FFFFFF."
+  },
+  "composition": {
+    "layout": "centered and symmetrical; sun/arc bottom-center cresting the horizon around the lower third; the warm glow fills the twilight above",
+    "negative_space": "generous, calm twilight sky above the sun",
+    "small_size_legibility": "must remain an unmistakable sunset-arc silhouette at 32px and 16px — keep the core shape bold and simple"
+  },
+  "lighting": "the sun is the light source; warm light emanates from it and blooms upward; a faint cool-neutral specular sheen on the top edge of the glossy squircle reads as glass",
+  "mood": "the quiet, premium calm of dusk — the moment the day softens",
+  "technical": {
+    "resolution": "1024x1024",
+    "framing": "single icon, front-on, orthographic, no perspective, no scene, no device mockup",
+    "backdrop": "soft neutral off-white studio backdrop with the ambient shadow"
+  },
+  "negative_prompt": "no text, no letters, no words, no numbers, no faces, no eyes, no character, no mascot, no blue or cool colors, no teal, no pure black, no harsh neon, no lens-flare spikes, no realistic photographic sun, no clouds, no people, no UI chrome, no border/frame, no watermark, no clutter"
+}

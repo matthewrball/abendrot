@@ -23,36 +23,36 @@ enum Theme {
 
     enum Color {
         // Accent ramp
-        static let accent = SwiftUI.Color("AccentBase", bundle: .module)
-        static let accentHighlight = SwiftUI.Color("AccentHighlight", bundle: .module)
-        static let accentDeep = SwiftUI.Color("AccentDeep", bundle: .module)
-        static let accentHi = SwiftUI.Color("AccentHi", bundle: .module)
-        static let accentPress = SwiftUI.Color("AccentPress", bundle: .module)
+        static let accent = SwiftUI.Color("AccentBase", bundle: .main)
+        static let accentHighlight = SwiftUI.Color("AccentHighlight", bundle: .main)
+        static let accentDeep = SwiftUI.Color("AccentDeep", bundle: .main)
+        static let accentHi = SwiftUI.Color("AccentHi", bundle: .main)
+        static let accentPress = SwiftUI.Color("AccentPress", bundle: .main)
 
         // Twilight grounds (dark) / warm cream (light)
-        static let groundIndigo = SwiftUI.Color("GroundIndigo", bundle: .module)
-        static let groundPlum = SwiftUI.Color("GroundPlum", bundle: .module)
-        static let groundTwilight = SwiftUI.Color("GroundTwilight", bundle: .module)
-        static let groundTwilight2 = SwiftUI.Color("GroundTwilight2", bundle: .module)
+        static let groundIndigo = SwiftUI.Color("GroundIndigo", bundle: .main)
+        static let groundPlum = SwiftUI.Color("GroundPlum", bundle: .main)
+        static let groundTwilight = SwiftUI.Color("GroundTwilight", bundle: .main)
+        static let groundTwilight2 = SwiftUI.Color("GroundTwilight2", bundle: .main)
 
         // Text
-        static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .module)
-        static let textMuted = SwiftUI.Color("TextMuted", bundle: .module)
-        static let textFaint = SwiftUI.Color("TextFaint", bundle: .module)
-        static let textCream = SwiftUI.Color("TextCream", bundle: .module)
+        static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .main)
+        static let textMuted = SwiftUI.Color("TextMuted", bundle: .main)
+        static let textFaint = SwiftUI.Color("TextFaint", bundle: .main)
+        static let textCream = SwiftUI.Color("TextCream", bundle: .main)
 
         // Lines / dividers
-        static let line = SwiftUI.Color("LineBase", bundle: .module)
-        static let lineStrong = SwiftUI.Color("LineStrong", bundle: .module)
+        static let line = SwiftUI.Color("LineBase", bundle: .main)
+        static let lineStrong = SwiftUI.Color("LineStrong", bundle: .main)
 
         /// RESERVED: the only #FFFFFF in the system — Reveal-True-Color veil only.
-        static let revealTrueWhite = SwiftUI.Color("RevealTrueWhite", bundle: .module)
+        static let revealTrueWhite = SwiftUI.Color("RevealTrueWhite", bundle: .main)
 
         // Reduce-Transparency SOLID fallback (ember-tinted gradient endpoints).
-        static let solidTop = SwiftUI.Color("SolidTop", bundle: .module)
-        static let solidBottom = SwiftUI.Color("SolidBottom", bundle: .module)
-        static let frostTop = SwiftUI.Color("FrostTop", bundle: .module)
-        static let frostBottom = SwiftUI.Color("FrostBottom", bundle: .module)
+        static let solidTop = SwiftUI.Color("SolidTop", bundle: .main)
+        static let solidBottom = SwiftUI.Color("SolidBottom", bundle: .main)
+        static let frostTop = SwiftUI.Color("FrostTop", bundle: .main)
+        static let frostBottom = SwiftUI.Color("FrostBottom", bundle: .main)
     }
 
     // MARK: Radius (tokens.json → radius.*)

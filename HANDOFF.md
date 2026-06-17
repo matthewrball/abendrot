@@ -63,3 +63,21 @@ Things that live only in the dying session or in ephemeral `/tmp`, and how to re
 - **Local git identity** for this repo is set to personal: `Matthew Ball <matthew.robert.ball@gmail.com>` (GitHub `matthewrball`), NOT the OnrampBitcoin email. Public repo not yet created (held until push-ready).
 - **Build-critical reference detail** that was only in chat is now saved: `docs/research/reference-macos-app-skills.md` (NSPanel/Sparkle/Settings-glass/DMG patterns + gaps), `docs/research/name-clearance.md` (why Abendrot), `brand/brand-direction.md` (tokens + DopeDrop Liquid-Glass CSS recipe). Wispr Flow deep-dive + DopeDrop sit in `docs/research/research-sweep-stack-exemplars.json`.
 - **Plan audit (CCG, 2026-06-16):** the Codex+Gemini full-plan audit and the improvements applied from it are recorded in plan + `docs/research/plan-audit-ccg.md` (see that file for the raw advisor findings).
+
+## Session 2 — execution state (2026-06-16, RESUME HERE)
+Execution kicked off. Large verified body of work committed on branch **`build`** (commit `7a7fb7e`, **local only — NOT pushed**). The full `WarmthKit` package **builds + 41 unit tests pass on Xcode 26.5**.
+
+**Built (all on `build`):**
+- `WarmthKit/` — engine package: frozen contract (`docs/engine/warmthkit-api-contract.md`), real `WarmthCore` (Kelvin↔gain, schedule resolver, `LayerResolver`, schedule-degrade policy); overlay/DDC/gamma/NightShift backends **stubbed** (= the M0/M2 milestones — no real pixel warming yet).
+- `App/` — menu-bar app UI (`MenuBarExtra`, popover, advanced, programmatic Liquid Glass Settings, onboarding) against the contract; `project.yml` (XcodeGen → `xcodegen generate`).
+- `brand/` — Ember-amber tokens + Liquid Glass components + 3-3-1 icon explorations. **PROVISIONAL — founder selection still pending** (serve: `python3 -m http.server 8733 --directory brand`; recommendation: app icon **B3** + 18px menu-bar **A1** glyph + Ember amber).
+- `landing/` — cinematic Vite site (PREVIEW ONLY, never deployed). `../abendrot-site/` — minimal coming-soon placeholder (sibling dir, not deployed).
+- `scripts/` + `.github/` — two-mode release/CI; `docs/qa/`, `docs/marketing/`, `PRIVACY.md` — QA suite + content/GTM.
+
+**CCG review applied + verified:** engine coordination bugs (B1 can't-resume-warming, B2 default-never-warms→evening-fallback, kill-switch + DDC-opt-in enforcement, AsyncStream actor-isolation), release/CI integrity, app quit/login/Sparkle, landing a11y. Full task list persists in-session.
+
+**Session-2 decisions (plan §22):** signing **DEFERRED** (no $99 Apple account yet — build/test local unsigned; mode-A signed pipeline gated on later-supplied creds); binaries → **GitHub Releases**; landing on **abendrot.app**.
+
+**Xcode MCP:** native `xcrun mcpbridge` registered at **user scope**, Intelligence-pane toggle ON, **connected**. Tools load at session START → after a restart the new session can build/launch/diagnose the app live.
+
+**Next:** (1) founder brand selection; (2) **M0** — implement the real `OverlayRenderer` Metal veil (first actual pixel warming) + **M7** hotplug observer; then **M2** DDC. (3) Still founder-gated: create public repo, push to remote, live deploy, external posts.

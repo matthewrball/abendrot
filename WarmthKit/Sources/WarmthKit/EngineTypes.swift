@@ -1,5 +1,7 @@
 import Foundation
-import WarmthCore
+// Re-export WarmthCore so a single `import WarmthKit` brings the value types that
+// appear in the engine's public API (DisplayIdentity, Kelvin, WarmthLevel, etc.).
+@_exported import WarmthCore
 
 // MARK: - EngineConfiguration
 
