@@ -1,0 +1,235 @@
+import Testing
+import Foundation
+@testable import WarmthCore
+
+// MARK: - Helpers
+
+private func makeCaps(
+    hardware: Capability<DDCColorCaps> = .unsupported(reason: .buttonlessAppleDisplay),
+    gamma: Capability<Void> = .unsupported(reason: .gammaBrokenOnThisOS),
+    overlay: Capability<Void> = .supported(())
+) -> DisplayCapabilities {
+    DisplayCapabilities(
+        identity: DisplayIdentity(cgUUID: UUID()),
+        hardware: hardware,
+        gamma: gamma,
+        overlay: overlay,
+        recommendedMethod: .overlay
+    )
+}
+
+private let ddcSupported: Capability<DDCColorCaps> = .supported(DDCColorCaps(supportsRGBGain: true))
+
+// MARK: - LayerResolver (the DDC opt-in + kill-switch + override policy)
+
+@Suite("LayerResolver")
+struct LayerResolverTests {
+
+    @Test("automatic default is overlay when nothing is opted in")
+    func defaultsToOverlay() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(),
+            isHardwareDDCEnabled: false,
+            override: nil,
+            privateAPIsEnabled: true
+        )
+        #expect(layer == .overlay)
+    }
+
+    @Test("DDC opt-in + supported + private APIs → hardware")
+    func ddcOptInSelectsHardware() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(hardware: ddcSupported),
+            isHardwareDDCEnabled: true,
+            override: nil,
+            privateAPIsEnabled: true
+        )
+        #expect(layer == .hardware)
+    }
+
+    @Test("DDC opt-in but capability unsupported → overlay (opt-in alone never forces hardware)")
+    func ddcOptInUnsupportedFallsBack() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(hardware: .unsupported(reason: .buttonlessAppleDisplay)),
+            isHardwareDDCEnabled: true,
+            override: nil,
+            privateAPIsEnabled: true
+        )
+        #expect(layer == .overlay)
+    }
+
+    @Test("kill switch removes hardware even when opted-in and supported")
+    func killSwitchExcludesHardware() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(hardware: ddcSupported),
+            isHardwareDDCEnabled: true,
+            override: nil,
+            privateAPIsEnabled: false
+        )
+        #expect(layer == .overlay)
+    }
+
+    @Test("an override is honored only when usable")
+    func overrideMustBeUsable() {
+        // .hardware override but not opted-in → not usable → overlay.
+        #expect(
+            LayerResolver.resolveLayer(
+                capabilities: makeCaps(hardware: ddcSupported),
+                isHardwareDDCEnabled: false,
+                override: .hardware,
+                privateAPIsEnabled: true
+            ) == .overlay
+        )
+        // .gamma override with gamma supported → gamma.
+        #expect(
+            LayerResolver.resolveLayer(
+                capabilities: makeCaps(gamma: .supported(())),
+                isHardwareDDCEnabled: false,
+                override: .gamma,
+                privateAPIsEnabled: true
+            ) == .gamma
+        )
+        // .gamma override with gamma unsupported → overlay.
+        #expect(
+            LayerResolver.resolveLayer(
+                capabilities: makeCaps(gamma: .unsupported(reason: .gammaBrokenOnThisOS)),
+                isHardwareDDCEnabled: false,
+                override: .gamma,
+                privateAPIsEnabled: true
+            ) == .overlay
+        )
+        // .overlay override is always usable.
+        #expect(
+            LayerResolver.resolveLayer(
+                capabilities: makeCaps(),
+                isHardwareDDCEnabled: true,
+                override: .overlay,
+                privateAPIsEnabled: true
+            ) == .overlay
+        )
+    }
+
+    @Test("never returns .off (off is a warmth decision, not a layer)")
+    func neverReturnsOff() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(),
+            isHardwareDDCEnabled: false,
+            override: .off,
+            privateAPIsEnabled: true
+        )
+        #expect(layer != .off)
+        #expect(layer == .overlay)
+    }
+}
+
+// MARK: - Schedule degrade policy (the "default never warms" fix)
+
+@Suite("Schedule degrade policy")
+struct ScheduleDegradeTests {
+    private func date(hour: Int, minute: Int = 0) -> Date {
+        Calendar.current.date(from: DateComponents(year: 2026, month: 6, day: 16, hour: hour, minute: minute))!
+    }
+
+    private let fallback = ScheduleResolver.defaultEveningFallback   // 20:00 → 06:00
+
+    @Test("follow with available active state resolves normally")
+    func followAvailable() {
+        let on = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: date(hour: 22),
+            nightShift: true, privateAPIsEnabled: true, fallback: fallback
+        )
+        #expect(on.isActiveNow)
+        let off = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: date(hour: 22),
+            nightShift: false, privateAPIsEnabled: true, fallback: fallback
+        )
+        #expect(!off.isActiveNow)
+    }
+
+    @Test("follow with UNAVAILABLE follower degrades to the evening window — not off-forever")
+    func followUnavailableDegrades() {
+        // 22:00 is inside 20:00→06:00 → warmth active despite no follower.
+        let evening = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: date(hour: 22),
+            nightShift: nil, privateAPIsEnabled: true, fallback: fallback
+        )
+        #expect(evening.isActiveNow)
+        // 12:00 is outside the window → inactive.
+        let noon = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: date(hour: 12),
+            nightShift: nil, privateAPIsEnabled: true, fallback: fallback
+        )
+        #expect(!noon.isActiveNow)
+    }
+
+    @Test("kill switch forces the degrade even if a follow state is present")
+    func killSwitchDegrades() {
+        let evening = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: date(hour: 22),
+            nightShift: false, privateAPIsEnabled: false, fallback: fallback
+        )
+        #expect(evening.isActiveNow)   // follower ignored; fallback window says 22:00 is on
+    }
+
+    @Test("non-follow modes resolve unchanged")
+    func nonFollowUnchanged() {
+        let always = ScheduleResolver.resolveWithDegrade(
+            mode: .alwaysOn, at: date(hour: 3),
+            nightShift: nil, privateAPIsEnabled: false, fallback: fallback
+        )
+        #expect(always.isActiveNow)
+        let off = ScheduleResolver.resolveWithDegrade(
+            mode: .off, at: date(hour: 22),
+            nightShift: true, privateAPIsEnabled: true, fallback: fallback
+        )
+        #expect(!off.isActiveNow)
+    }
+}
+
+// MARK: - RGB gain golden anchors (numeric validation, not just ordering)
+
+@Suite("RGB gain golden anchors")
+struct GainGoldenTests {
+    // Warm light is red-peaked: after peak-normalization the red channel is exactly 1.0 for any
+    // target ≤ 6500K, and blue falls monotonically as the target warms. These are computed from
+    // the Tanner-Helland fit in ColorTemperature.swift, so they pin the math, not just its shape.
+
+    @Test("red is the peak (≈1.0) at every warm anchor")
+    func redIsPeak() {
+        for k in [1900, 2700, 4000] {
+            #expect(abs(rgbGain(for: Kelvin(k)).red - 1.0) < 1e-9)
+        }
+    }
+
+    @Test("1900K: blue fully extinguished, green ~0.52")
+    func anchor1900() {
+        let g = rgbGain(for: Kelvin(1900))
+        #expect(abs(g.blue - 0.0) < 1e-9)
+        #expect(g.green > 0.48 && g.green < 0.56)
+    }
+
+    @Test("2700K: green ~0.66, blue ~0.35")
+    func anchor2700() {
+        let g = rgbGain(for: Kelvin(2700))
+        #expect(g.green > 0.62 && g.green < 0.69)
+        #expect(g.blue > 0.32 && g.blue < 0.38)
+    }
+
+    @Test("4000K: green ~0.81, blue ~0.66")
+    func anchor4000() {
+        let g = rgbGain(for: Kelvin(4000))
+        #expect(g.green > 0.77 && g.green < 0.85)
+        #expect(g.blue > 0.62 && g.blue < 0.71)
+    }
+
+    @Test("blue falls monotonically as the target warms")
+    func blueMonotonic() {
+        let b6500 = rgbGain(for: Kelvin(6500)).blue
+        let b4000 = rgbGain(for: Kelvin(4000)).blue
+        let b2700 = rgbGain(for: Kelvin(2700)).blue
+        let b1900 = rgbGain(for: Kelvin(1900)).blue
+        #expect(b6500 > b4000)
+        #expect(b4000 > b2700)
+        #expect(b2700 > b1900)
+    }
+}

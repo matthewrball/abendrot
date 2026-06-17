@@ -1,0 +1,118 @@
+import SwiftUI
+
+// MARK: - Theme
+//
+// The single Swift surface for Abendrot's provisional brand tokens (Ember amber +
+// twilight). Colours come from `Resources/Colors.xcassets` (generated from
+// `brand/tokens.json`); they are NEVER hardcoded as hex in views. Numeric tokens
+// (radius / motion / material params) mirror `tokens.json` and carry a pointer to
+// their source key so they can be re-synced from one place.
+//
+// PROVISIONAL: the final accent ramp + icon are not selected yet. Do not
+// hard-lock these values; treat the asset catalog + this file as the one place
+// to swap.
+//
+// Token discipline (baked into tokens.json):
+//   - Never pure #000 — grounds are warm-tinted near-blacks.
+//   - `Theme.Color.revealTrueWhite` (#FFFFFF) is RESERVED for the Reveal-True-Color
+//     veil only. Body text is `textPrimary` (#ECE8F4), never white.
+//   - Light + Reduce-Transparency surfaces are warm cream / twilight, never grey.
+enum Theme {
+
+    // MARK: Colours (semantic → asset-catalog colorset names)
+
+    enum Color {
+        // Accent ramp
+        static let accent = SwiftUI.Color("AccentBase", bundle: .module)
+        static let accentHighlight = SwiftUI.Color("AccentHighlight", bundle: .module)
+        static let accentDeep = SwiftUI.Color("AccentDeep", bundle: .module)
+        static let accentHi = SwiftUI.Color("AccentHi", bundle: .module)
+        static let accentPress = SwiftUI.Color("AccentPress", bundle: .module)
+
+        // Twilight grounds (dark) / warm cream (light)
+        static let groundIndigo = SwiftUI.Color("GroundIndigo", bundle: .module)
+        static let groundPlum = SwiftUI.Color("GroundPlum", bundle: .module)
+        static let groundTwilight = SwiftUI.Color("GroundTwilight", bundle: .module)
+        static let groundTwilight2 = SwiftUI.Color("GroundTwilight2", bundle: .module)
+
+        // Text
+        static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .module)
+        static let textMuted = SwiftUI.Color("TextMuted", bundle: .module)
+        static let textFaint = SwiftUI.Color("TextFaint", bundle: .module)
+        static let textCream = SwiftUI.Color("TextCream", bundle: .module)
+
+        // Lines / dividers
+        static let line = SwiftUI.Color("LineBase", bundle: .module)
+        static let lineStrong = SwiftUI.Color("LineStrong", bundle: .module)
+
+        /// RESERVED: the only #FFFFFF in the system — Reveal-True-Color veil only.
+        static let revealTrueWhite = SwiftUI.Color("RevealTrueWhite", bundle: .module)
+
+        // Reduce-Transparency SOLID fallback (ember-tinted gradient endpoints).
+        static let solidTop = SwiftUI.Color("SolidTop", bundle: .module)
+        static let solidBottom = SwiftUI.Color("SolidBottom", bundle: .module)
+        static let frostTop = SwiftUI.Color("FrostTop", bundle: .module)
+        static let frostBottom = SwiftUI.Color("FrostBottom", bundle: .module)
+    }
+
+    // MARK: Radius (tokens.json → radius.*)
+
+    enum Radius {
+        static let card: CGFloat = 22      // radius.card
+        static let control: CGFloat = 12   // radius.control
+        static let pill: CGFloat = 999     // radius.pill
+    }
+
+    // MARK: Motion (tokens.json → motion.*)
+    //
+    // "Emotional pacing, not spectacle": ~100–150ms eases. The single
+    // signature is the reveal spring (`.interactiveSpring`, see `revealSpring`).
+    enum Motion {
+        /// motion.ease-warm — the signature warmth ease (cubic-bezier 0.22,0.61,0.36,1).
+        static let durFast: TimeInterval = 0.110   // motion.dur-fast
+        static let durBase: TimeInterval = 0.140   // motion.dur-base
+        static let durReveal: TimeInterval = 0.220 // motion.dur-reveal
+
+        /// Approximation of the `ease-warm` cubic-bezier as a SwiftUI timing curve.
+        static let warm = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durBase)
+        static let warmFast = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durFast)
+
+        /// The one "big" moment — Reveal True Color "lift the veil".
+        /// Physical/elastic spring, not a fade.
+        static let revealSpring = Animation.interactiveSpring(
+            response: 0.34, dampingFraction: 0.72, blendDuration: 0.1
+        )
+
+        /// Resolve an animation honouring Reduce Motion (instant when reduced).
+        static func warm(reduceMotion: Bool) -> Animation? {
+            reduceMotion ? nil : warm
+        }
+    }
+
+    // MARK: Material params (tokens.json → material.*)
+    //
+    // The app uses native Liquid Glass (`.glassEffect` / NSGlassEffectView) for the
+    // real material; these values drive the Reduce-Transparency SOLID fallback and the
+    // landing/preview mirror so the recipe stays in one place.
+    enum Material {
+        // material.glass
+        static let glassBlur: CGFloat = 16
+        static let glassSaturate: CGFloat = 1.90
+        // material.frost
+        static let frostBlur: CGFloat = 30
+        static let frostSaturate: CGFloat = 1.60
+    }
+
+    // MARK: Type (tokens.json → type.*)
+
+    enum Typography {
+        /// type.serif — wordmark + hero Kelvin numerals (New York).
+        static func serif(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+            .system(size: size, weight: weight, design: .serif)
+        }
+        /// type.ui — all UI chrome (SF Pro Text / system).
+        static func ui(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+            .system(size: size, weight: weight, design: .default)
+        }
+    }
+}

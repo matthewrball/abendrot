@@ -1,0 +1,4 @@
+module CInterop {
+    umbrella header "CInterop.h"
+    export *
+}
