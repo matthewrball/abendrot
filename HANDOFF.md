@@ -23,6 +23,7 @@ A free, open-source, native macOS menu-bar app that warms screen color temperatu
 - **Launch:** soft pre-launch / build-in-public → coordinated Product Hunt + Show HN day → awesome-* PRs + newsletters.
 - **Pricing:** free forever, optional GitHub Sponsors, never a paywall.
 - **Design refs:** dopedrop.app (aesthetic + "tiny native app" boast), Wispr Flow (calm HUD/named-states/motion), Liquid Glass. Brand direction = twilight palette where warmth is default, pure white reserved for the true-color reveal; New York serif wordmark + SF Pro Text.
+- **Brand picks (provisional, 2026-06-16):** accent = **Ember amber** `#FFAB5C`; icon = **Sunset arc**. Tokens in `brand/brand-direction.md`. NOT final — a dedicated iterate-en-masse brand-refinement exercise comes next (plan §5.5).
 
 ## Done
 - 3 background research sweeps (market/UX/naming/tech/analytics/marketing/science + stack-decision/exemplar-teardowns) → synthesized.
@@ -30,9 +31,10 @@ A free, open-source, native macOS menu-bar app that warms screen color temperatu
 - Studied references: fayazara/macos-app-skills (build/Sparkle/DMG/overlay patterns — reimplement, README-only-MIT license caveat), dopedrop.app, wisprflow.ai.
 - Master plan written + all 8 open decisions confirmed.
 - This `Documents/abendrot` home created; artifacts preserved; local git initialized.
+- Brand exploration page built (`brand/explorations/index.html`); founder chose **Ember amber + Sunset arc** as the working direction (provisional). Working tokens captured in `brand/brand-direction.md`.
 
 ## Next steps (in order)
-1. **Brand/design refinement** (the immediate next task the founder requested): icon + wordmark concepts, palette/type tokens, Liquid Glass UI mockups (menu-bar popover, advanced mode, Settings), DMG window art, landing-page hero — produce a finished design system before code. Outputs go in `brand/`.
+1. **Brand-refinement exercise (iterate en masse — the immediate next task):** starting from the Ember amber + Sunset arc direction, generate many parallel variations of the icon (`.icns` ramp + 16/18px menu-bar template, light/dark) and the key screens, review side-by-side, founder-led selection; finalize tokens/type/motion; then Liquid Glass UI mockups (menu-bar popover, advanced mode, Settings, landing hero) and mirror to Figma. Brand is locked only on sign-off (plan §5.5). Outputs go in `brand/`.
 2. **Create the public GitHub repo** `matthewrball/abendrot` (MIT) when ready to push.
 3. **Execution kickoff** via OMC `/team` across the §15 lanes (engine / UI / brand / landing / release-CI / content), dispatching heavy backend to **Opus 4.8 `/goal`** sessions; keep planning/design + the hardest engine logic in the lead session.
 

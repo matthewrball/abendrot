@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Abendrot — Brand Exploration</title>
+<style>
+  :root{
+    /* twilight base */
+    --indigo:#0c0a16;
+    --plum:#171029;
+    --twilight:#1d1533;
+    --line:rgba(255,255,255,.10);
+    --cream:#f7ecd9;
+    --text:#ece8f4;
+    --muted:rgba(236,232,244,.58);
+    --true-white:#ffffff;
+    /* active accent (default = ember amber); toggled by JS */
+    --accent:#ffab5c;
+    --accent-2:#ffd6a3;
+    --accent-deep:#c2591f;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+    color:var(--text);
+    background:
+      radial-gradient(1100px 720px at 78% -8%, rgba(255,170,90,.14), transparent 60%),
+      radial-gradient(900px 700px at 12% 4%, rgba(120,90,200,.16), transparent 55%),
+      linear-gradient(168deg,#100b1d 0%, var(--plum) 48%, var(--indigo) 100%);
+    background-attachment:fixed;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    letter-spacing:-.01em;
+    padding:0 0 120px;
+  }
+  .serif{font-family:ui-serif,"New York","Iowan Old Style",Georgia,serif;}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px;}
+  header{padding:64px 0 8px;text-align:center;}
+  .word{
+    font-size:clamp(46px,7vw,86px);font-weight:600;letter-spacing:-.03em;line-height:1;
+    background:linear-gradient(180deg,#fff 0%, var(--accent-2) 64%, var(--accent) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 8px 30px rgba(255,160,90,.18));
+  }
+  .tag{margin-top:14px;color:var(--muted);font-size:clamp(15px,1.6vw,19px);text-wrap:balance;}
+  .kicker{margin-top:8px;color:var(--muted);font-size:13px;letter-spacing:.12em;text-transform:uppercase;}
+
+  /* hue toggle */
+  .toggle{display:flex;gap:10px;justify-content:center;margin:34px 0 6px;flex-wrap:wrap;}
+  .toggle button{
+    font:inherit;font-size:14px;color:var(--text);cursor:pointer;
+    padding:10px 16px 10px 12px;border-radius:999px;border:0;
+    display:flex;align-items:center;gap:9px;
+    background:linear-gradient(140deg,rgba(255,255,255,.12),rgba(255,255,255,.03));
+    box-shadow:inset 0 1px 1.2px rgba(255,255,255,.45),inset 0 0 0 .5px rgba(255,255,255,.16),0 8px 22px rgba(0,0,0,.4);
+    backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);
+    transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease;opacity:.72;
+  }
+  .toggle button .dot{width:14px;height:14px;border-radius:50%;box-shadow:0 0 10px 1px currentColor;}
+  .toggle button[aria-pressed="true"]{opacity:1;transform:translateY(-1px);
+    box-shadow:inset 0 1px 1.2px rgba(255,255,255,.6),inset 0 0 0 1px var(--accent),0 10px 26px rgba(0,0,0,.5),0 0 24px -6px var(--accent);}
+
+  section{margin-top:54px;}
+  .h2{display:flex;align-items:baseline;gap:14px;margin:0 0 6px;}
+  .h2 .n{font-family:ui-serif,Georgia,serif;font-size:14px;color:var(--accent);opacity:.9;}
+  .h2 h2{font-size:clamp(22px,2.6vw,30px);font-weight:600;margin:0;letter-spacing:-.02em;}
+  .sub{color:var(--muted);font-size:15px;margin:0 0 22px;max-width:62ch;}
+
+  .grid{display:grid;gap:20px;}
+  .grid-3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:860px){.grid-3{grid-template-columns:1fr;}}
+
+  /* liquid glass card */
+  .glass{
+    position:relative;border-radius:22px;padding:22px;
+    background:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+    box-shadow:inset 0 1px 1.5px rgba(255,255,255,.5),inset 0 0 0 .5px rgba(255,255,255,.16),0 16px 40px rgba(0,0,0,.45);
+    backdrop-filter:blur(18px) saturate(190%);-webkit-backdrop-filter:blur(18px) saturate(190%);
+    cursor:pointer;transition:transform .2s ease, box-shadow .2s ease;
+    isolation:isolate;
+  }
+  .glass:hover{transform:translateY(-3px);}
+  .glass.sel{box-shadow:inset 0 1px 1.5px rgba(255,255,255,.6),inset 0 0 0 1.5px var(--accent),0 18px 44px rgba(0,0,0,.5),0 0 36px -10px var(--accent);}
+  .pick{position:absolute;top:14px;right:14px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--indigo);background:var(--accent);padding:4px 9px;border-radius:999px;font-weight:700;opacity:0;transition:opacity .2s;}
+  .glass.sel .pick{opacity:1;}
+  .cardname{font-size:18px;font-weight:600;margin:4px 0 2px;}
+  .cardname .serif{font-size:19px;}
+  .cardmeta{color:var(--muted);font-size:13px;margin-bottom:16px;font-variant-numeric:tabular-nums;}
+
+  /* accent swatch */
+  .swatch{height:108px;border-radius:16px;margin-bottom:16px;position:relative;overflow:hidden;
+    box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14);}
+  .swatch .gloss{position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.35),transparent 42%);}
+  .chips{display:flex;gap:8px;}
+  .chip{height:22px;border-radius:6px;flex:1;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14);}
+
+  /* mini popover preview */
+  .mini{margin-top:18px;border-radius:16px;padding:14px;
+    background:linear-gradient(150deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
+    box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14);}
+  .mini .row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .mini .ttl{font-size:13px;font-weight:600;}
+  .pilltog{width:42px;height:24px;border-radius:999px;background:var(--accent);position:relative;box-shadow:0 0 16px -2px var(--accent),inset 0 0 0 .5px rgba(255,255,255,.3);}
+  .pilltog::after{content:"";position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .track{height:8px;border-radius:999px;background:linear-gradient(90deg,#3a3450,var(--accent-deep),var(--accent));position:relative;}
+  .track::after{content:"";position:absolute;top:-4px;right:24%;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.5),0 0 10px var(--accent);}
+  .mini .lbls{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:7px;}
+
+  /* icon cards */
+  .iconwrap{display:flex;flex-direction:column;align-items:center;gap:18px;margin:6px 0 14px;}
+  .appicon{width:148px;height:148px;border-radius:33px;position:relative;overflow:hidden;
+    background:linear-gradient(160deg,#221a38 0%,#120c20 56%,#0a0712 100%);
+    box-shadow:inset 0 1.5px 1px rgba(255,255,255,.22),inset 0 0 0 .5px rgba(255,255,255,.10),
+      0 22px 40px rgba(0,0,0,.55),0 0 60px -22px var(--accent);}
+  .appicon .innerglow{position:absolute;inset:0;background:radial-gradient(120px 120px at 50% 64%,color-mix(in srgb,var(--accent) 32%,transparent),transparent 70%);}
+  .appicon .topgloss{position:absolute;left:0;right:0;top:0;height:52%;background:linear-gradient(180deg,rgba(255,255,255,.16),transparent);}
+  .appicon svg{position:absolute;inset:0;width:100%;height:100%;}
+
+  /* menu bar preview */
+  .menubar{width:100%;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:flex-end;gap:13px;padding:0 12px;
+    background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.03));
+    box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12);backdrop-filter:blur(8px);}
+  .menubar .mi{opacity:.82;display:flex;align-items:center;}
+  .menubar .mi svg{width:16px;height:16px;}
+  .menubar .clock{font-size:12px;color:rgba(255,255,255,.8);font-variant-numeric:tabular-nums;}
+  .menubar .ours{filter:drop-shadow(0 0 6px var(--accent));}
+  .capt{color:var(--muted);font-size:12px;text-align:center;margin-top:2px;}
+
+  .foot{margin-top:60px;text-align:center;color:var(--muted);font-size:14px;}
+  .selsummary{margin:38px auto 0;max-width:560px;text-align:center;}
+  .selsummary .big{font-size:20px;}
+  .selsummary .big b{color:var(--accent);}
+  .hint{font-size:13px;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="word serif">Abendrot</div>
+    <div class="tag">A tiny, native macOS app that warms your displays for calmer nights.</div>
+    <div class="kicker">Brand Exploration · pick an accent + an icon</div>
+
+    <div class="toggle" id="toggle">
+      <button data-acc="amber" aria-pressed="true"><span class="dot" style="color:#ffab5c"></span>Ember amber</button>
+      <button data-acc="coral" aria-pressed="false"><span class="dot" style="color:#ff6b5a"></span>Sunset red-coral</button>
+      <button data-acc="gold" aria-pressed="false"><span class="dot" style="color:#f5c56b"></span>Candle gold</button>
+    </div>
+    <div class="capt">Toggle a hue — every icon &amp; UI element below re-tints live.</div>
+  </header>
+
+  <!-- ACCENTS -->
+  <section>
+    <div class="h2"><span class="n serif">01</span><h2>Accent hue</h2></div>
+    <p class="sub">One warm accent on the twilight base. Pure white is reserved exclusively for the “Reveal True Color” moment, so warmth is the default and accuracy reads as a deliberate event.</p>
+    <div class="grid grid-3" id="accents">
+      <div class="glass" data-acc="amber" onclick="setAcc('amber')">
+        <span class="pick">Selected</span>
+        <div class="swatch" style="background:linear-gradient(150deg,#ffd6a3,#ffab5c 52%,#c2591f);"><span class="gloss"></span></div>
+        <div class="cardname">Ember amber</div>
+        <div class="cardmeta">#FFAB5C · candlelight / hearth</div>
+        <div class="chips"><span class="chip" style="background:#ffd6a3"></span><span class="chip" style="background:#ffab5c"></span><span class="chip" style="background:#c2591f"></span></div>
+      </div>
+      <div class="glass" data-acc="coral" onclick="setAcc('coral')">
+        <span class="pick">Selected</span>
+        <div class="swatch" style="background:linear-gradient(150deg,#ffa98c,#ff6b5a 52%,#c73a2e);"><span class="gloss"></span></div>
+        <div class="cardname">Sunset red-coral</div>
+        <div class="cardmeta">#FF6B5A · literal “evening red”</div>
+        <div class="chips"><span class="chip" style="background:#ffa98c"></span><span class="chip" style="background:#ff6b5a"></span><span class="chip" style="background:#c73a2e"></span></div>
+      </div>
+      <div class="glass" data-acc="gold" onclick="setAcc('gold')">
+        <span class="pick">Selected</span>
+        <div class="swatch" style="background:linear-gradient(150deg,#fbe3a8,#f5c56b 52%,#c99a3a);"><span class="gloss"></span></div>
+        <div class="cardname">Candle gold</div>
+        <div class="cardmeta">#F5C56B · gentle / cozy / hygge</div>
+        <div class="chips"><span class="chip" style="background:#fbe3a8"></span><span class="chip" style="background:#f5c56b"></span><span class="chip" style="background:#c99a3a"></span></div>
+      </div>
+    </div>
+
+    <!-- in-context popover, uses active accent -->
+    <div class="grid" style="margin-top:20px;max-width:360px;">
+      <div class="glass" style="cursor:default;">
+        <div class="cardmeta" style="margin-bottom:10px;">In context — the menu-bar popover in the active hue</div>
+        <div class="mini">
+          <div class="row"><span class="ttl">Abendrot</span><span class="pilltog"></span></div>
+          <div class="track"></div>
+          <div class="lbls"><span>Softer</span><span>Warmer</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ICONS -->
+  <section>
+    <div class="h2"><span class="n serif">02</span><h2>Icon concept</h2></div>
+    <p class="sub">The icon is the logo and the menu-bar glyph. Each shows the full app icon (glossy squircle) and how its template version reads at menu-bar size, in the active hue.</p>
+    <div class="grid grid-3" id="icons">
+
+      <!-- 1: Sunset arc -->
+      <div class="glass" data-icon="arc" onclick="setIcon('arc')">
+        <span class="pick">Selected</span>
+        <div class="iconwrap">
+          <div class="appicon">
+            <div class="innerglow"></div>
+            <svg viewBox="0 0 100 100" aria-label="sunset arc icon">
+              <defs>
+                <linearGradient id="sun-arc" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="var(--accent-2)"/><stop offset="1" stop-color="var(--accent)"/>
+                </linearGradient>
+                <linearGradient id="sky-arc" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="rgba(255,255,255,0)"/><stop offset="1" stop-color="color-mix(in srgb,var(--accent) 22%,transparent)"/>
+                </linearGradient>
+              </defs>
+              <rect x="20" y="22" width="60" height="40" fill="url(#sky-arc)" rx="6"/>
+              <path d="M26 62 a24 24 0 0 1 48 0 Z" fill="url(#sun-arc)" filter="drop-shadow(0 3px 10px rgba(0,0,0,.4))"/>
+              <line x1="18" y1="62" x2="82" y2="62" stroke="var(--accent-2)" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>
+              <line x1="26" y1="70" x2="74" y2="70" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+              <line x1="34" y1="77" x2="66" y2="77" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" opacity=".28"/>
+            </svg>
+          </div>
+          <div class="menubar">
+            <span class="mi ours"><svg viewBox="0 0 24 24"><path d="M4 16 a8 8 0 0 1 16 0" fill="none" stroke="rgba(255,255,255,.92)" stroke-width="2" stroke-linecap="round"/><line x1="2" y1="16" x2="22" y2="16" stroke="rgba(255,255,255,.92)" stroke-width="2" stroke-linecap="round"/></svg></span>
+            <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2"><path d="M5 12.5l4 4 10-10"/></svg></span>
+            <span class="clock">9:41</span>
+          </div>
+          <div class="capt">Sun arc rising on a horizon</div>
+        </div>
+        <div class="cardname">Sunset arc <span class="serif">over horizon</span></div>
+        <div class="cardmeta">literal · reads instantly at 18px</div>
+      </div>
+
+      <!-- 2: Orb -->
+      <div class="glass" data-icon="orb" onclick="setIcon('orb')">
+        <span class="pick">Selected</span>
+        <div class="iconwrap">
+          <div class="appicon">
+            <div class="innerglow"></div>
+            <svg viewBox="0 0 100 100" aria-label="gradient orb icon">
+              <defs>
+                <radialGradient id="orb" cx="42%" cy="38%" r="70%">
+                  <stop offset="0" stop-color="var(--accent-2)"/>
+                  <stop offset="45%" stop-color="var(--accent)"/>
+                  <stop offset="100%" stop-color="#1a1030"/>
+                </radialGradient>
+              </defs>
+              <circle cx="50" cy="50" r="30" fill="url(#orb)" filter="drop-shadow(0 4px 16px rgba(0,0,0,.45))"/>
+              <ellipse cx="40" cy="38" rx="12" ry="7" fill="rgba(255,255,255,.42)" transform="rotate(-24 40 38)"/>
+            </svg>
+          </div>
+          <div class="menubar">
+            <span class="mi ours"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="rgba(255,255,255,.92)" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="rgba(255,255,255,.92)"/></svg></span>
+            <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2"><path d="M5 12.5l4 4 10-10"/></svg></span>
+            <span class="clock">9:41</span>
+          </div>
+          <div class="capt">Dusk-gradient orb with glass sheen</div>
+        </div>
+        <div class="cardname">Warm gradient orb</div>
+        <div class="cardmeta">abstract · modern · brandable</div>
+      </div>
+
+      <!-- 3: A monogram -->
+      <div class="glass" data-icon="mono" onclick="setIcon('mono')">
+        <span class="pick">Selected</span>
+        <div class="iconwrap">
+          <div class="appicon">
+            <div class="innerglow"></div>
+            <svg viewBox="0 0 100 100" aria-label="A monogram icon">
+              <defs>
+                <linearGradient id="mono" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="var(--accent-2)"/><stop offset="1" stop-color="var(--accent)"/>
+                </linearGradient>
+              </defs>
+              <text x="50" y="50" text-anchor="middle" dominant-baseline="central"
+                    font-family='ui-serif,"New York",Georgia,serif' font-size="74" font-weight="600"
+                    fill="url(#mono)" filter="drop-shadow(0 3px 12px rgba(0,0,0,.4))">A</text>
+            </svg>
+          </div>
+          <div class="menubar">
+            <span class="mi ours"><svg viewBox="0 0 24 24"><text x="12" y="13" text-anchor="middle" dominant-baseline="central" font-family='ui-serif,"New York",Georgia,serif' font-size="18" font-weight="600" fill="rgba(255,255,255,.92)">A</text></svg></span>
+            <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2"><path d="M5 12.5l4 4 10-10"/></svg></span>
+            <span class="clock">9:41</span>
+          </div>
+          <div class="capt">Serif “A” echoing the wordmark</div>
+        </div>
+        <div class="cardname"><span class="serif">A</span> monogram + dusk gradient</div>
+        <div class="cardmeta">typographic · ownable lettermark</div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="selsummary">
+    <div class="big">Your pick: <b id="selAcc">Ember amber</b> + <b id="selIcon">Sunset arc</b></div>
+    <div class="hint muted">Click a card to choose. Then tell me your accent + icon and I’ll lock the design system and build the UI mockups.</div>
+  </div>
+
+  <div class="foot serif">Abendrot — soften into the evening.</div>
+</div>
+
+<script>
+  const ACC = {
+    amber:{a:"#ffab5c",b:"#ffd6a3",d:"#c2591f",name:"Ember amber"},
+    coral:{a:"#ff6b5a",b:"#ffa98c",d:"#c73a2e",name:"Sunset red-coral"},
+    gold:{a:"#f5c56b",b:"#fbe3a8",d:"#c99a3a",name:"Candle gold"},
+  };
+  const ICON = {arc:"Sunset arc", orb:"Gradient orb", mono:"A monogram"};
+  let curAcc="amber", curIcon="arc";
+
+  function setAcc(k){
+    curAcc=k; const c=ACC[k];
+    document.documentElement.style.setProperty('--accent',c.a);
+    document.documentElement.style.setProperty('--accent-2',c.b);
+    document.documentElement.style.setProperty('--accent-deep',c.d);
+    document.querySelectorAll('#toggle button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.acc===k));
+    document.querySelectorAll('#accents .glass').forEach(g=>g.classList.toggle('sel', g.dataset.acc===k));
+    document.getElementById('selAcc').textContent=c.name;
+  }
+  function setIcon(k){
+    curIcon=k;
+    document.querySelectorAll('#icons .glass').forEach(g=>g.classList.toggle('sel', g.dataset.icon===k));
+    document.getElementById('selIcon').textContent=ICON[k];
+  }
+  document.querySelectorAll('#toggle button').forEach(b=>b.addEventListener('click',()=>setAcc(b.dataset.acc)));
+  setAcc('amber'); setIcon('arc');
+</script>
+</body>
+</html>

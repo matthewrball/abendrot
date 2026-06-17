@@ -77,6 +77,8 @@ Reliability-on-every-display is the *proof*; circadian health is the *story*.
 | **Reveal hotkey** | Ship both; default hold | Toggle option in Settings |
 | **Launch** | Soft pre-launch → PH + Show HN day | Then awesome-* PRs + newsletters → sustained |
 | **Pricing** | Free forever, optional Sponsors | Never a paywall |
+| **Accent (working)** | Ember amber `#FFAB5C` (highlight `#FFD6A3` / deep `#C2591F`) | Chosen 2026-06-16; exact hue/tokens finalized in the brand-refinement exercise (§5.5) |
+| **Icon (working)** | Sunset arc over horizon | Chosen concept; icon + full aesthetic iterated en masse before lock (§5.5) |
 
 Pre-decided product shape (confirmed from the brief): menu-bar app **with hide/remove-from-menu-bar option**; **hold-to-reveal-true-color** hotkey; **advanced mode** behind a right-click / modifier; schedule can **follow system Night Shift** or run manually; **Liquid Glass** aesthetic; **science as a tasteful easter egg**; **free + open source**.
 
@@ -123,8 +125,8 @@ Modeled on Lungo / Wispr Flow: **one click → done.** The default surface is a 
 
 ### 5.1 Identity
 - **Name/wordmark:** Abendrot. High-contrast serif (New York) for the wordmark + hero Kelvin readout; **SF Pro Text** for all UI chrome (literary warmth over clinical sans). Optional humanist sans (Figtree-style) for marketing surfaces.
-- **Icon = the logo** (invest here): a glossy dark squircle with a single warm **sunset-arc** glyph and a lit-gloss treatment; template version for the menu bar.
-- **Palette:** a twilight system where *warmth is the default state* — deep indigo / dusk plum grounding a dark, glassy UI, warming through ember amber to soft candle cream. **Pure white is reserved exclusively for the "Reveal True Color" moment**, so accuracy reads as a deliberate event. One warm accent (amber/sunset) on a warm-tinted near-black (never pure `#000` — a cold black would fight a warmth product).
+- **Icon = the logo** (invest here): **working concept = Sunset arc over horizon** — a half-sun/warm arc rising on a horizon line, gradient from accent to deep indigo on a glossy dark squircle, with a lit-gloss treatment; a simple arc template for the menu bar. To be refined en masse (§5.5).
+- **Palette:** a twilight system where *warmth is the default state* — deep indigo / dusk plum grounding a dark, glassy UI, warming through ember amber to soft candle cream. **Working accent (chosen): Ember amber** — `#FFAB5C` (highlight `#FFD6A3`, deep `#C2591F`) on a warm-tinted near-black (never pure `#000` — a cold black would fight a warmth product). **Pure white is reserved exclusively for the "Reveal True Color" moment**, so accuracy reads as a deliberate event. Exact tokens + dark/light variants finalized in §5.5.
 - **Voice:** poetic but precise, never alarmist; "soften into the evening." Invites rather than warns. Scrupulously non-medical, evidence-honest. No exclamation marks, no growth-hack CTAs.
 
 ### 5.2 Motion & material (audited via /design-motion-principles)
@@ -139,6 +141,13 @@ Modeled on Lungo / Wispr Flow: **one click → done.** The default surface is a 
 
 ### 5.4 Deliverables (design system)
 Brand guide (logo, icon set incl. `.icns`, palette tokens, type scale, motion specs), Figma library, app UI kit, landing-page kit, OG/social cards, GitHub social-preview, DMG background art, Product Hunt gallery assets.
+
+### 5.5 Brand Refinement — dedicated exercise (iterate to perfect)
+The visual identity is a first-class, **separate, iterate-en-masse workstream**, not a one-shot. The chosen working direction — **Ember amber accent + Sunset arc icon**, twilight palette, New York serif wordmark — is the *starting point*; the icon and full aesthetic get refined until the brand is perfect **before** it's locked into the app, landing page, and assets.
+- **Starting artifact:** `brand/explorations/index.html` — live Liquid-Glass exploration of hues + icon concepts (served locally; the basis for the next iterations).
+- **Scope:** refine the Sunset-arc icon (proportions, ray/horizon treatment, gloss, depth, full `.icns` size ramp incl. the 16/18px menu-bar template + light/dark); settle exact palette tokens + dark/light variants; finalize type scale + wordmark lockup; motion specs (warmth ease, reveal-true-color veil) audited via `/design-motion-principles`; component kit (popover, advanced menu, Settings, badges, onboarding, landing hero).
+- **Method:** generate many parallel variations of the icon + key screens, review side-by-side, designer-led selection; then mirror the locked system into Figma (§5.4). Runs as **Lane C** in execution (§15) as its own dedicated pass.
+- **Gate:** brand is "done" only when the icon + core screens read beautifully at every size and the founder signs off; the build inherits the finished system. Until then, treat current picks as provisional.
 
 ---
 
