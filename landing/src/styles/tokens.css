@@ -1,0 +1,154 @@
+/* ============================================================================
+   Abendrot — Design Tokens (landing page mirror)
+   ----------------------------------------------------------------------------
+   PROVENANCE: This file mirrors /brand/tokens.css (the single source of truth,
+   owned by Lane C). It is duplicated here ONLY so the landing site builds as a
+   self-contained static bundle. When brand-lock lands (§5.5), re-sync this file
+   from brand/tokens.css. Do NOT diverge the values by hand.
+
+   Status: PROVISIONAL working direction (Ember amber + twilight). Not locked.
+   ============================================================================ */
+
+:root {
+  /* ---- Accent ramp: Ember amber (candlelight / hearth) ------------------- */
+  --accent:            #FFAB5C;
+  --accent-2:          #FFD6A3;
+  --accent-deep:       #C2591F;
+  --accent-hi:         #FFE7CC;
+  --accent-press:      #E8924A;
+
+  --accent-rgb:        255 171 92;
+  --accent-2-rgb:      255 214 163;
+  --accent-deep-rgb:   194 89 31;
+
+  /* ---- Twilight grounds (dark = the DEFAULT appearance) ----------------- */
+  --indigo:            #0C0A16;
+  --plum:              #171029;
+  --twilight:          #1D1533;
+  --twilight-2:        #261B40;
+
+  /* ---- Text ------------------------------------------------------------- */
+  --text:              #ECE8F4;
+  --text-muted:        rgba(236, 232, 244, .60);
+  --text-faint:        rgba(236, 232, 244, .38);
+  --cream:             #F7ECD9;
+
+  /* ---- Reserved: Reveal True Color only --------------------------------- */
+  --reveal-true-white: #FFFFFF;
+
+  /* ---- Lines / dividers ------------------------------------------------- */
+  --line:              rgba(255, 255, 255, .10);
+  --line-strong:       rgba(255, 255, 255, .16);
+
+  /* ---- Liquid Glass material params (the real recipe) ------------------- */
+  --glass-blur:        16px;
+  --glass-saturate:    190%;
+  --glass-tint:        linear-gradient(140deg,
+                         rgba(255,255,255,.11) 0%,
+                         rgba(255,255,255,.035) 46%,
+                         rgba(255,255,255,.06) 100%);
+  --glass-inset-top:   inset 0 1px 1.5px rgba(255,255,255,.65);
+  --glass-inset-edge:  inset 0 0 0 .5px rgba(255,255,255,.30);
+  --glass-outer:       0 16px 40px rgba(0,0,0,.45);
+
+  --frost-tint:        linear-gradient(150deg,
+                         rgba(43,30,64,.86) 0%,
+                         rgba(28,20,46,.92) 100%);
+  --frost-blur:        30px;
+  --frost-saturate:    160%;
+
+  --glow-accent:       0 0 24px -6px rgb(var(--accent-rgb) / .9);
+  --glow-accent-soft:  0 0 36px -10px rgb(var(--accent-rgb) / .7);
+
+  /* ---- Radii ------------------------------------------------------------ */
+  --r-card:            22px;
+  --r-control:         12px;
+  --r-pill:            999px;
+
+  /* ---- Motion (emotional pacing, not spectacle) ------------------------- */
+  --ease-warm:         cubic-bezier(.22, .61, .36, 1);
+  --ease-standard:     cubic-bezier(.4, 0, .2, 1);
+  --dur-fast:          110ms;
+  --dur-base:          140ms;
+  --dur-reveal:        220ms;
+
+  /* ---- Type ------------------------------------------------------------- */
+  --font-serif:        ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --font-ui:           -apple-system, "SF Pro Text", BlinkMacSystemFont, system-ui, sans-serif;
+  --font-marketing:    "Figtree", var(--font-ui);
+  --font-mono:         ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
+}
+
+/* ===========================================================================
+   SOLID fallback — ember-tinted, NEVER neutral grey.
+   Triggers for BOTH Reduce Transparency AND prefers-contrast: more, so
+   high-contrast users also get the legible, opaque (yet still warm) surface.
+   =========================================================================== */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root {
+    --glass-blur:     0px;
+    --glass-saturate: 100%;
+    --glass-tint:     linear-gradient(150deg, #251A3C 0%, #1B1430 100%);
+    --frost-tint:     linear-gradient(150deg, #2A1E44 0%, #1F1638 100%);
+    --glass-inset-top:  inset 0 1px 0 rgba(255,255,255,.10);
+    --glass-inset-edge: inset 0 0 0 .5px rgba(255,255,255,.14);
+  }
+}
+/* Under high contrast specifically, firm up the hairline borders so glass
+   edges and dividers stay clearly visible. */
+@media (prefers-contrast: more) {
+  :root {
+    --line:        rgba(255, 255, 255, .28);
+    --line-strong: rgba(255, 255, 255, .42);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 1ms; --dur-base: 1ms; --dur-reveal: 1ms; }
+}
+
+/* ===========================================================================
+   Reusable material classes — mirror the recipe used in brand/explorations.
+   =========================================================================== */
+.glass {
+  position: relative;
+  background: var(--glass-tint);
+  box-shadow: var(--glass-inset-top), var(--glass-inset-edge), var(--glass-outer);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-radius: var(--r-card);
+  isolation: isolate;
+}
+/* variable-thickness blur ring — a tighter inset near the rim implies lens volume (§21.3) */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 14px 2px rgba(255, 255, 255, .05);
+  -webkit-mask: radial-gradient(120% 120% at 50% 0%, transparent 60%, #000 100%);
+          mask: radial-gradient(120% 120% at 50% 0%, transparent 60%, #000 100%);
+}
+/* specular highlight that tracks the pointer (set via JS custom props --mx/--my) */
+.glass > .spec {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity .25s ease;
+  background: radial-gradient(160px 160px at var(--mx, 50%) var(--my, 0%),
+              rgba(255, 255, 255, .20), transparent 60%);
+}
+.glass:hover > .spec { opacity: 1; }
+
+.frost {
+  position: relative;
+  background: var(--frost-tint);
+  box-shadow: var(--glass-inset-top), var(--glass-inset-edge), var(--glass-outer);
+  -webkit-backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate));
+  backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate));
+  border-radius: var(--r-card);
+}

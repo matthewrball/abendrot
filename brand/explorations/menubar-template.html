@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Abendrot — Menu-bar Template (18px)</title>
+<style>
+  :root{
+    --indigo:#0c0a16;--plum:#171029;--twilight:#1d1533;--line:rgba(255,255,255,.10);
+    --text:#ece8f4;--muted:rgba(236,232,244,.58);
+    --accent:#ffab5c;--accent-2:#ffd6a3;--accent-deep:#c2591f;
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;color:var(--text);
+    background:radial-gradient(1100px 720px at 78% -8%,rgba(255,170,90,.12),transparent 60%),
+      radial-gradient(900px 700px at 12% 4%,rgba(120,90,200,.14),transparent 55%),
+      linear-gradient(168deg,#100b1d 0%,var(--plum) 48%,var(--indigo) 100%);
+    background-attachment:fixed;min-height:100vh;-webkit-font-smoothing:antialiased;letter-spacing:-.01em;padding:0 0 120px;}
+  .serif{font-family:ui-serif,"New York",Georgia,serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px;}
+  header{padding:60px 0 6px;text-align:center;}
+  .word{font-family:ui-serif,"New York",Georgia,serif;font-size:clamp(38px,5.5vw,60px);font-weight:600;letter-spacing:-.03em;line-height:1;
+    background:linear-gradient(180deg,#fff 0%,var(--accent-2) 64%,var(--accent) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .kicker{margin-top:10px;color:var(--muted);font-size:13px;letter-spacing:.12em;text-transform:uppercase;}
+  .lead{max-width:66ch;margin:14px auto 0;color:var(--muted);font-size:15px;text-wrap:balance;}
+
+  section{margin-top:52px;}
+  .h2{display:flex;align-items:baseline;gap:14px;margin:0 0 4px;}
+  .h2 .n{font-family:ui-serif,Georgia,serif;font-size:14px;color:var(--accent);}
+  .h2 h2{font-size:clamp(19px,2.3vw,26px);font-weight:600;margin:0;letter-spacing:-.02em;}
+  .sub{color:var(--muted);font-size:14.5px;margin:0 0 22px;max-width:72ch;}
+
+  .panel{border-radius:20px;padding:24px;
+    background:linear-gradient(140deg,rgba(255,255,255,.09),rgba(255,255,255,.03) 46%,rgba(255,255,255,.05));
+    box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),inset 0 0 0 .5px rgba(255,255,255,.14),0 16px 40px rgba(0,0,0,.42);
+    backdrop-filter:blur(16px) saturate(190%);-webkit-backdrop-filter:blur(16px) saturate(190%);}
+
+  /* macOS menu bar mock */
+  .bar{height:30px;border-radius:9px;display:flex;align-items:center;justify-content:flex-end;gap:15px;padding:0 13px;position:relative;overflow:hidden;}
+  .bar.dark{background:linear-gradient(180deg,rgba(30,22,46,.72),rgba(18,12,30,.82));box-shadow:inset 0 0 0 .5px rgba(255,255,255,.10);}
+  .bar.light{background:linear-gradient(180deg,rgba(248,243,233,.86),rgba(236,228,214,.92));box-shadow:inset 0 0 0 .5px rgba(0,0,0,.10);}
+  .bar .clock{font-size:12px;font-variant-numeric:tabular-nums;}
+  .bar.dark .clock{color:rgba(255,255,255,.82);}
+  .bar.light .clock{color:rgba(30,24,40,.78);}
+  .bar .sysicon{opacity:.7;display:flex;}
+  .bar .sysicon svg{width:15px;height:15px;}
+  .bar.dark .sysicon svg path,.bar.dark .sysicon svg circle{stroke:rgba(255,255,255,.8);}
+  .bar.light .sysicon svg path,.bar.light .sysicon svg circle{stroke:rgba(30,24,40,.7);}
+
+  /* OUR 18px template icon host */
+  .ours{width:18px;height:18px;display:flex;align-items:center;justify-content:center;position:relative;}
+  .ours svg{width:18px;height:18px;display:block;}
+  /* template stroke color = adapts to bar (NSImage template behavior) */
+  .tpl-dark{--tpl:rgba(255,255,255,.92);}
+  .tpl-light{--tpl:rgba(28,22,38,.88);}
+  /* ACTIVE: amber glow + amber-tinted fill */
+  .active .tplstroke{stroke:var(--accent-2);}
+  .active{filter:drop-shadow(0 0 4px rgba(255,171,92,.85)) drop-shadow(0 0 2px rgba(255,171,92,.6));}
+  .active .tplfill{fill:var(--accent);}
+  /* INACTIVE: monochrome template, faint 0.5pt safety stroke kept */
+  .inactive .tplstroke{stroke:var(--tpl);}
+  .inactive .tplfill{fill:var(--tpl);}
+
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media(max-width:760px){.twocol{grid-template-columns:1fr;}}
+  .caplabel{font-size:12px;color:var(--muted);margin:10px 0 2px;letter-spacing:.02em;}
+  .statepair{display:flex;gap:10px;align-items:center;margin-top:6px;}
+  .statepair .tag{font-size:11px;color:var(--muted);}
+
+  /* wallpaper swatches */
+  .wallgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  @media(max-width:760px){.wallgrid{grid-template-columns:1fr;}}
+  .wall{border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14),0 10px 26px rgba(0,0,0,.4);}
+  .wall .scene{height:88px;position:relative;}
+  .wall .wbar{height:26px;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 11px;
+    background:rgba(255,255,255,.04);backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%);
+    box-shadow:inset 0 .5px 0 rgba(255,255,255,.18);}
+  .wall .wbar .clock{font-size:11px;color:rgba(255,255,255,.9);font-variant-numeric:tabular-nums;text-shadow:0 1px 2px rgba(0,0,0,.5);}
+  .wall .wname{font-size:11px;color:var(--muted);padding:8px 11px 10px;}
+  /* warm/busy wallpapers that try to swallow a warm icon */
+  .w1{background:linear-gradient(160deg,#ff9a56,#ff6a3d 50%,#c23a1f);}
+  .w2{background:linear-gradient(160deg,#ffd27a,#ff9e5e 55%,#e07a3a);}
+  .w3{background:
+      radial-gradient(60px 60px at 30% 40%,rgba(255,255,255,.5),transparent 60%),
+      linear-gradient(150deg,#f7b267,#f4845f 45%,#c75146 80%,#7a2d3a);}
+  .w4{background:
+      repeating-linear-gradient(58deg,#e8a04a 0 16px,#d98438 16px 32px),
+      linear-gradient(150deg,#ffcf8a,#e07a3a);}
+
+  .note{margin-top:18px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;line-height:1.6;}
+  .note b{color:var(--accent-2);font-weight:600;}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:rgba(255,255,255,.07);padding:1px 6px;border-radius:5px;}
+  pre{background:rgba(0,0,0,.34);border:.5px solid var(--line);border-radius:12px;padding:16px 18px;overflow:auto;font-size:12.5px;line-height:1.55;
+    font-family:ui-monospace,Menlo,monospace;color:#e6dcf2;}
+  .foot{margin-top:64px;text-align:center;color:var(--muted);font-size:14px;}
+  .foot .serif{font-size:18px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="word">Abendrot</div>
+    <div class="kicker">Menu-bar "vibrant template" · 18px · §21.4</div>
+    <p class="lead">The single most-seen surface. A monochrome <b>NSImage template</b> (adapts to light/dark bars) that subtly <b>glows amber when warming is active</b>, and carries a faint outer glow / 0.5pt safety stroke so it <b>never disappears on warm, busy wallpapers</b> (desktop-tinting).</p>
+  </header>
+
+  <!-- 1. on standard bars -->
+  <section>
+    <div class="h2"><span class="n serif">01</span><h2>On both system bars — active vs inactive</h2></div>
+    <p class="sub">Inactive = pure template (inherits bar color like every native icon). Active = amber fill + soft outer glow so a glance tells you warming is ON without opening the popover.</p>
+    <div class="twocol">
+
+      <div class="panel">
+        <div class="caplabel">Dark menu bar</div>
+        <div class="bar dark">
+          <span class="ours active tpl-dark">
+            <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="sysicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5l4 4 10-10" stroke-linecap="round"/></svg></span>
+          <span class="clock">9:41 PM</span>
+        </div>
+        <div class="statepair"><span class="tag">↑ ACTIVE (amber glow)</span></div>
+        <div class="caplabel" style="margin-top:18px;">Dark bar — inactive</div>
+        <div class="bar dark">
+          <span class="ours inactive tpl-dark">
+            <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="sysicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5l4 4 10-10" stroke-linecap="round"/></svg></span>
+          <span class="clock">9:41 PM</span>
+        </div>
+        <div class="statepair"><span class="tag">↑ INACTIVE (monochrome template)</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="caplabel">Light menu bar</div>
+        <div class="bar light">
+          <span class="ours active tpl-light">
+            <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="sysicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5l4 4 10-10" stroke-linecap="round"/></svg></span>
+          <span class="clock">9:41 PM</span>
+        </div>
+        <div class="statepair"><span class="tag">↑ ACTIVE (amber glow)</span></div>
+        <div class="caplabel" style="margin-top:18px;">Light bar — inactive</div>
+        <div class="bar light">
+          <span class="ours inactive tpl-light">
+            <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="sysicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12.5l4 4 10-10" stroke-linecap="round"/></svg></span>
+          <span class="clock">9:41 PM</span>
+        </div>
+        <div class="statepair"><span class="tag">↑ INACTIVE (monochrome template)</span></div>
+      </div>
+    </div>
+    <div class="note"><b>Active treatment:</b> the amber fill is for the ACTIVE state only. On a light bar, the glow is tightened and the fill leans to <code>--accent-deep</code> so it stays legible against bright menu bars — never washed out.</div>
+  </section>
+
+  <!-- 2. survives wallpaper tinting -->
+  <section>
+    <div class="h2"><span class="n serif">02</span><h2>Survives desktop-tinting — warm &amp; busy wallpapers</h2></div>
+    <p class="sub">macOS tints the translucent menu bar with the wallpaper behind it. A warm icon on a warm wallpaper is the failure case. The faint <b>outer glow (active)</b> and the <b>0.5pt dark safety stroke (always)</b> keep the mark separated from the background.</p>
+    <div class="wallgrid">
+
+      <div class="wall">
+        <div class="scene w1">
+          <div class="wbar">
+            <span class="ours active tpl-dark" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(0,0,0,.5));">
+              <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z" stroke="rgba(0,0,0,.45)" stroke-width=".7"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="clock">9:41</span>
+          </div>
+        </div>
+        <div class="wname">"Sonoma sunset" — hot orange. Active glow + dark stroke hold the edge.</div>
+      </div>
+
+      <div class="wall">
+        <div class="scene w2">
+          <div class="wbar">
+            <span class="ours active tpl-dark" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(0,0,0,.5));">
+              <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z" stroke="rgba(0,0,0,.45)" stroke-width=".7"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="clock">9:41</span>
+          </div>
+        </div>
+        <div class="wname">Golden-hour gradient — closest to the icon's own hue; glow does the separating.</div>
+      </div>
+
+      <div class="wall">
+        <div class="scene w3">
+          <div class="wbar">
+            <span class="ours active tpl-dark" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(0,0,0,.5));">
+              <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z" stroke="rgba(0,0,0,.45)" stroke-width=".7"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="clock">9:41</span>
+          </div>
+        </div>
+        <div class="wname">Busy photo (bright highlight) — the dark stroke prevents wash-out over the light patch.</div>
+      </div>
+
+      <div class="wall">
+        <div class="scene w4">
+          <div class="wbar">
+            <span class="ours active tpl-dark" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(0,0,0,.5));">
+              <svg viewBox="0 0 24 24" fill="none"><path class="tplfill" d="M7 15 a5 5 0 0 1 10 0 Z" stroke="rgba(0,0,0,.45)" stroke-width=".7"/><line class="tplstroke" x1="4" y1="15" x2="20" y2="15" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="clock">9:41</span>
+          </div>
+        </div>
+        <div class="wname">High-frequency striped wallpaper — stroke + glow survive visual noise.</div>
+      </div>
+    </div>
+    <div class="note"><b>Why this works:</b> a pure-amber fill alone would vanish on these. The <b>0.5pt semi-opaque dark stroke</b> on the disc + a <b>2px white/dark dual outer glow</b> create a constant local contrast halo, so the mark reads on hot-orange, golden, photographic, and high-frequency backgrounds alike.</div>
+  </section>
+
+  <!-- 3. master SVG -->
+  <section>
+    <div class="h2"><span class="n serif">03</span><h2>The template master</h2></div>
+    <p class="sub">The 18×18 template glyph (the A1 half-sun + horizon — the convergence target from <code>icons-round-1.html</code>, degraded to its menu-bar form). Ship as a PDF/SVG template image; macOS recolors it per appearance. Glow + active fill are applied in code, not baked into the template.</p>
+    <div class="panel">
+      <div style="display:flex;gap:30px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+          <div style="width:72px;height:72px;border-radius:14px;background:linear-gradient(160deg,#241b3c,#0a0712);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1);">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none"><path d="M7 15 a5 5 0 0 1 10 0 Z" fill="rgba(255,255,255,.92)"/><line x1="4" y1="15" x2="20" y2="15" stroke="rgba(255,255,255,.92)" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="caplabel">template @ rest</div>
+        </div>
+        <pre>&lt;!-- abendrot-menubar-template.svg  (18×18 @1x; export @2x/@3x) --&gt;
+&lt;svg width="18" height="18" viewBox="0 0 24 24"
+     xmlns="http://www.w3.org/2000/svg" fill="none"&gt;
+  &lt;!-- half-sun (filled) --&gt;
+  &lt;path d="M7 15 a5 5 0 0 1 10 0 Z" fill="#000"/&gt;
+  &lt;!-- horizon --&gt;
+  &lt;line x1="4" y1="15" x2="20" y2="15"
+        stroke="#000" stroke-width="2" stroke-linecap="round"/&gt;
+&lt;/svg&gt;
+
+// AppKit — INACTIVE: mark it a template; macOS handles light/dark monochrome:
+let img = NSImage(named: "abendrot-menubar-template")!
+img.isTemplate = true            // inactive: system recolors it per appearance
+statusItem.button?.image = img
+statusItem.button?.contentTintColor = nil   // let the template mask own the color
+
+// The two states are EXPLICIT and mutually exclusive:
+//   INACTIVE -> img.isTemplate = TRUE  (system monochrome mask, no ember, no glow)
+//   ACTIVE   -> img.isTemplate = FALSE (REQUIRED: a template image is force-
+//               monochromed by AppKit, so contentTintColor/glow would be ignored
+//               while isTemplate stays true). With isTemplate = false you then set:
+//                 button.contentTintColor = NSColor(ember)   // amber fill
+//                 + a CALayer shadow/glow (radius ~3, ember @ 0.85) on the button
+//                 + the baked 0.5pt dark safety stroke variant (wallpaper-tinting).
+//
+// e.g. on activation:
+//   img.isTemplate = false
+//   statusItem.button?.image = img
+//   statusItem.button?.contentTintColor = NSColor(ember)
+//   // add/animate the glow layer here
+// on deactivation, flip back: img.isTemplate = true; contentTintColor = nil; drop glow.</pre>
+      </div>
+      <div class="note"><b>Note:</b> keep the glyph on a 24-unit grid but ship the rendered template at native 18px (+@2x/@3x). Stroke width 2 on a 24 grid ≈ 1.5px at 18px — heavy enough to read after wallpaper tinting. Active glow is a layer shadow so Reduce-Transparency/Reduce-Motion users can have it suppressed to a simple fill swap.</div>
+    </div>
+  </section>
+
+  <div class="foot"><span class="serif">Abendrot</span> — the glow tells you it's working. · provisional, founder selects.</div>
+</div>
+</body>
+</html>

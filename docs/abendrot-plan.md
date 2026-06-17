@@ -414,4 +414,17 @@ Codex flags "fully-featured 1.0 in one push" as the riskiest launch choice (the 
 
 ---
 
+## 22. Execution Log — Session 2 (2026-06-16, build kickoff)
+
+Execution started in `Documents/abendrot` (branch `build`, local only — not pushed). Lead session coordinates; heavy lanes run as parallel Opus subagents (not tmux). Amendments from this session:
+
+- **Signing DEFERRED (cost decision).** Founder is not purchasing the $99/yr Apple Developer Program yet. Build + the full hardware test matrix run **unsigned/local** (no account needed for development); notarization is a **launch-time** decision. Lane E therefore ships a **two-mode** pipeline: mode A (Developer-ID signed + notarized + stapled, gated behind later-supplied credentials) and mode B (unsigned/local + plain `hdiutil` DMG — the current default). Trust copy must not hard-claim "notarized" during the unsigned phase; the load-bearing trust claims are "open source, auditable, no telemetry by default." (Amends §3, §9.)
+- **Binaries + Sparkle appcast host = GitHub Releases** (free CDN + `download_count`); landing stays on **abendrot.app**. (Confirms §10/§11.)
+- **Coming-soon placeholder** built at `../abendrot-site/` (sibling, outside the repo) — minimal aesthetic holding page; **not deployed** (founder's gate). Distinct from the full Lane D landing site (`landing/`).
+- **Orchestration:** Wave-1 (A engine contract, C brand, E release, F content) done; C/E/F adversarially verified **pass-with-nits** then remediated. **Wave-2 lanes (B app UI, D landing, G QA) started early** against the **frozen engine contract** + **provisional brand tokens** — only final brand polish + real screenshots are gated on founder brand-selection.
+- **Engine contract FROZEN:** `docs/engine/warmthkit-api-contract.md` + `WarmthKit/Package.swift` (6-module split: WarmthCore/DisplayServices/HardwareDDC/OverlayRenderer/NightShiftBridge/WarmthKit + CInterop). Xcode-26 compile gate owned by Lane G.
+- **Pending founder input:** brand icon + screen selection (galleries served locally) — the only Wave-2 blocker for final polish. External gates unchanged (public repo, remote push, live deploy, external posts).
+
+---
+
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed; no open items. Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*

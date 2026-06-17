@@ -1,0 +1,52 @@
+# Homebrew cask SKELETON for Abendrot.
+#
+# This is a TEMPLATE (.rb.template) so it is never accidentally treated as a live
+# cask. Publish the real cask only AFTER the Sparkle appcast + DMG are coherent
+# and at least one release is notarized+stapled (plan §21.2 "Homebrew cask
+# contract: publish only after appcast+DMG coherent").
+#
+# Distribution plan (§9): own tap first (homebrew-abendrot) -> later submit to
+# homebrew-cask central. Binaries are hosted on GitHub Releases (Wave-1 decision),
+# so the `url` uses versioned GitHub-release download URLs.
+#
+# Contract requirements (§21.2): livecheck, auto_updates true, zap, SHA256,
+# versioned URLs. The :no_check sha256 is a PLACEHOLDER — replace with the real
+# DMG SHA256 (plain-dmg.sh / pretty-dmg.sh print it) at publish time, or compute
+# per-version. `auto_updates true` is correct because Sparkle self-updates the app.
+#
+cask "abendrot" do
+  version "0.1.0"                       # PLACEHOLDER — sync to the GitHub release tag (vX.Y.Z)
+  sha256 :no_check                      # PLACEHOLDER — set real DMG SHA256 before publishing
+
+  url "https://github.com/matthewrball/abendrot/releases/download/v#{version}/Abendrot-#{version}.dmg",
+      verified: "github.com/matthewrball/abendrot/"
+  name "Abendrot"
+  desc "Free, open-source circadian screen-warmth app for macOS (every display)"
+  homepage "https://abendrot.app/"
+
+  # Sparkle drives in-app updates; declare so brew defers to the app.
+  auto_updates true
+
+  # macOS 26 "Tahoe" floor (plan §3 deployment target).
+  depends_on macos: ">= :tahoe"
+
+  # Read the latest version straight from the Sparkle appcast (single source of truth).
+  livecheck do
+    url "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
+    strategy :sparkle
+  end
+
+  app "Abendrot.app"
+
+  # Clean uninstall: remove app + all support/state Abendrot writes.
+  # PLACEHOLDER bundle id — confirm with Lane A (e.g. app.abendrot.Abendrot).
+  uninstall quit: "app.abendrot.Abendrot"
+
+  zap trash: [
+    "~/Library/Application Support/Abendrot",
+    "~/Library/Caches/app.abendrot.Abendrot",
+    "~/Library/HTTPStorages/app.abendrot.Abendrot",
+    "~/Library/Preferences/app.abendrot.Abendrot.plist",
+    "~/Library/Saved Application State/app.abendrot.Abendrot.savedState",
+  ]
+end

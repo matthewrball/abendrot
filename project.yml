@@ -1,0 +1,90 @@
+# Abendrot — XcodeGen project spec (Lane B, app UI).
+#
+# Generates `Abendrot.xcodeproj` (scheme `Abendrot`, matching .github/workflows/ci.yml
+# env ABENDROT_APP_SCHEME) wiring the SwiftUI/AppKit menu-bar app to the local
+# WarmthKit Swift package. Regenerate after editing this file or adding sources:
+#
+#     xcodegen generate
+#
+# The generated .xcodeproj is a BUILD ARTIFACT — it is git-ignored. project.yml is the
+# source of truth (App/README.md documents the workflow).
+#
+# Targets macOS 26 "Tahoe"; Swift 6 strict concurrency; LSUIElement agent app (no Dock
+# icon). Builds UNSIGNED/local — no Apple Developer account needed for development.
+
+name: Abendrot
+
+options:
+  bundleIdPrefix: app.abendrot
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  defaultConfig: Debug
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    # Unsigned/local development builds — no Apple account required.
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    PRODUCT_BUNDLE_IDENTIFIER: app.abendrot.Abendrot
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: YES
+    COMBINE_HIDPI_IMAGES: YES
+
+# Local WarmthKit package (the FROZEN engine contract surface the app links).
+packages:
+  WarmthKit:
+    path: WarmthKit
+
+targets:
+  Abendrot:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+    dependencies:
+      # Link only the umbrella product — the app talks to WarmthEngine, never backends.
+      - package: WarmthKit
+        product: WarmthKit
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        # LSUIElement = agent app: no Dock icon, no Cmd-Tab (plan §4.3).
+        LSUIElement: true
+        CFBundleName: Abendrot
+        CFBundleDisplayName: Abendrot
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSMinimumSystemVersion: "26.0"
+        NSHumanReadableCopyright: "Abendrot. Soften into the evening."
+        # No camera/mic/location/accessibility usage strings — core function needs no
+        # permissions (contract §0.4). A notification usage prompt is requested at
+        # runtime during onboarding, not declared as an always-on permission.
+        #
+        # Sparkle auto-update wiring (docs/release/RELEASE.md §4 — single signing
+        # authority). The appcast lives at the raw GitHub URL; Sparkle reads it to
+        # discover updates.
+        SUFeedURL: "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
+        # PLACEHOLDER — the REAL EdDSA public key is injected at release time from the
+        # keypair whose PRIVATE half lives ONLY in the founder's login keychain
+        # (RELEASE.md §4). `generate_keys` prints the public key; never commit a
+        # private key. Until then this placeholder keeps the bundle key present so the
+        # plist schema is stable.
+        SUPublicEDKey: "INJECTED_AT_RELEASE_PUBLIC_ED_KEY_PLACEHOLDER"
+        # Required so Sparkle's installer can run its privileged launcher service when
+        # applying an update (Sparkle 2.x with the XPC installer services).
+        SUEnableInstallerLauncherService: true
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentBase
+        # The app has no Dock/launcher icon (LSUIElement); the menu-bar glyph is drawn
+        # programmatically (MenuBarGlyph). App-icon asset is deferred to brand-lock.
+    scheme:
+      testTargets: []
+      gatherCoverageData: false

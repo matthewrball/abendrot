@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ExportOptions for `xcodebuild -exportArchive` (Developer ID / outside MAS).
+  Plan §3 (Developer ID, notarized, outside the Mac App Store) + §9 (Hardened
+  Runtime; no App Sandbox). Used ONLY in Mode A (signing job). Contains NO
+  secrets — the signing identity is resolved from the temp keychain at export.
+
+  PLACEHOLDER: replace TEAMID_PLACEHOLDER with the founder's 10-char Team ID once
+  the $99 Apple Developer Program is active. Until then this file is inert (the
+  sign-notarize job is skipped in Mode B).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>developer-id</string>
+
+  <key>teamID</key>
+  <string>TEAMID_PLACEHOLDER</string>
+
+  <!-- Manual signing: the Developer ID Application identity comes from the
+       temporary keychain imported in CI (or login keychain locally). -->
+  <key>signingStyle</key>
+  <string>manual</string>
+
+  <!-- Notarization is performed separately by scripts/release/notarize.sh,
+       NOT by xcodebuild, so we can parse the notarytool log + staple ourselves. -->
+  <key>destination</key>
+  <string>export</string>
+
+  <!-- Hardened Runtime is enabled in the target's build settings (ENABLE_HARDENED_RUNTIME=YES);
+       no App Sandbox (would block private-framework dlopen + IOAVService per §9). -->
+</dict>
+</plist>

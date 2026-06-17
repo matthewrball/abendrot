@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Abendrot — Liquid Glass Components</title>
+<style>
+  :root{
+    --indigo:#0c0a16;--plum:#171029;--twilight:#1d1533;--twilight-2:#261b40;
+    --line:rgba(255,255,255,.10);--line-strong:rgba(255,255,255,.16);
+    --cream:#f7ecd9;--text:#ece8f4;--muted:rgba(236,232,244,.60);--faint:rgba(236,232,244,.38);
+    --accent:#ffab5c;--accent-2:#ffd6a3;--accent-deep:#c2591f;--accent-hi:#ffe7cc;
+    --reveal:#ffffff;
+    --ease-warm:cubic-bezier(.22,.61,.36,1);
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+
+  /* ===== A11y: high-visibility keyboard focus rings (mockup parity) =====
+     The shipping app draws a warm focus ring on every control; these mockups
+     mirror it so the component kit is evaluated with focus states visible. */
+  :focus-visible{outline:3px solid var(--accent-2);outline-offset:3px;border-radius:7px;}
+  .toggle:focus-visible,.seg button:focus-visible,
+  button:focus-visible,[tabindex]:focus-visible{
+    outline:3px solid var(--accent-2);outline-offset:3px;
+    box-shadow:0 0 0 6px rgba(255,171,92,.30);
+  }
+  @media (prefers-contrast: more){
+    :focus-visible{outline-width:4px;outline-color:var(--accent-hi);box-shadow:none;}
+  }
+  body{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;color:var(--text);
+    background:
+      radial-gradient(1100px 720px at 80% -10%,rgba(255,170,90,.14),transparent 60%),
+      radial-gradient(950px 720px at 10% 6%,rgba(120,90,200,.16),transparent 55%),
+      linear-gradient(168deg,#100b1d 0%,var(--plum) 48%,var(--indigo) 100%);
+    background-attachment:fixed;min-height:100vh;-webkit-font-smoothing:antialiased;letter-spacing:-.01em;padding:0 0 130px;}
+  .serif{font-family:ui-serif,"New York",Georgia,serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+  header{padding:60px 0 6px;text-align:center;}
+  /* Wordmark gradient tops out at --accent-hi (warm near-white), NOT #fff: pure white = Reveal veil only. */
+  .word{font-family:ui-serif,"New York",Georgia,serif;font-size:clamp(38px,5.5vw,60px);font-weight:600;letter-spacing:-.03em;line-height:1;
+    background:linear-gradient(180deg,var(--accent-hi) 0%,var(--accent-2) 64%,var(--accent) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .kicker{margin-top:10px;color:var(--muted);font-size:13px;letter-spacing:.12em;text-transform:uppercase;}
+  .lead{max-width:70ch;margin:14px auto 0;color:var(--muted);font-size:15px;text-wrap:balance;}
+
+  section{margin-top:60px;}
+  .h2{display:flex;align-items:baseline;gap:14px;margin:0 0 4px;}
+  .h2 .n{font-family:ui-serif,Georgia,serif;font-size:14px;color:var(--accent);}
+  .h2 h2{font-size:clamp(20px,2.4vw,27px);font-weight:600;margin:0;letter-spacing:-.02em;}
+  .sub{color:var(--muted);font-size:14.5px;margin:0 0 24px;max-width:74ch;line-height:1.55;}
+  .stage{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start;}
+
+  /* ===== The real Liquid Glass recipe ===== */
+  .glass{position:relative;border-radius:22px;
+    background:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+    box-shadow:inset 0 1px 1.5px rgba(255,255,255,.65),inset 0 0 0 .5px rgba(255,255,255,.30),0 16px 40px rgba(0,0,0,.45);
+    backdrop-filter:blur(16px) saturate(190%);-webkit-backdrop-filter:blur(16px) saturate(190%);
+    isolation:isolate;overflow:hidden;}
+  /* variable-thickness blur: a second, tighter inset ring near the rim implies lens volume */
+  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    box-shadow:inset 0 0 14px 2px rgba(255,255,255,.05);
+    -webkit-mask:radial-gradient(120% 120% at 50% 0%,transparent 60%,#000 100%);
+            mask:radial-gradient(120% 120% at 50% 0%,transparent 60%,#000 100%);}
+  /* specular highlight that tracks the pointer (set via JS custom props --mx/--my) */
+  .glass .spec{position:absolute;inset:0;border-radius:inherit;pointer-events:none;mix-blend-mode:screen;opacity:.0;transition:opacity .25s ease;
+    background:radial-gradient(120px 120px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.22),transparent 60%);}
+  .glass:hover .spec{opacity:1;}
+
+  /* frosted ember (Settings) */
+  .frost{position:relative;border-radius:20px;overflow:hidden;
+    background:linear-gradient(150deg,rgba(43,30,64,.86) 0%,rgba(28,20,46,.92) 100%);
+    box-shadow:inset 0 1px 1.5px rgba(255,255,255,.5),inset 0 0 0 .5px rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.5);
+    backdrop-filter:blur(30px) saturate(160%);-webkit-backdrop-filter:blur(30px) saturate(160%);}
+
+  /* ===== SOLID fallback parity =====
+     Section 05 shows the Reduce-Transparency SOLID surface (ember-tinted, never
+     grey). High-contrast users deserve the same: under prefers-contrast: more,
+     drop the blur and paint the glass/frost as the SAME warm twilight solid. */
+  @media (prefers-contrast: more){
+    .glass,.frost{
+      backdrop-filter:none;-webkit-backdrop-filter:none;
+      background:linear-gradient(150deg,#251A3C 0%,#1B1430 100%);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.10),inset 0 0 0 .5px rgba(255,255,255,.16),0 16px 40px rgba(0,0,0,.5);
+    }
+    .frost{background:linear-gradient(150deg,#2A1E44 0%,#1F1638 100%);}
+    .glass .spec{display:none;}
+    :root{--line:rgba(255,255,255,.28);--line-strong:rgba(255,255,255,.42);}
+  }
+
+  /* controls */
+  .pill{font-size:13px;font-weight:600;}
+  .toggle{width:46px;height:27px;border-radius:999px;position:relative;cursor:pointer;flex:0 0 auto;
+    background:linear-gradient(180deg,var(--accent),var(--accent-deep));
+    box-shadow:0 0 18px -2px var(--accent),inset 0 0 0 .5px rgba(255,255,255,.35);transition:background .14s var(--ease-warm);}
+  /* Knob is off-white --cream (#F7ECD9), NOT #fff: pure white is reserved for the Reveal veil. */
+  .toggle::after{content:"";position:absolute;top:3px;right:3px;width:21px;height:21px;border-radius:50%;background:var(--cream);
+    box-shadow:0 1px 3px rgba(0,0,0,.45);transition:right .16s var(--ease-warm);}
+  .toggle.off{background:linear-gradient(180deg,#3a3450,#2a2640);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.16);}
+  .toggle.off::after{right:22px;}
+
+  .slider{margin:6px 0 4px;}
+  .track{height:9px;border-radius:999px;position:relative;
+    background:linear-gradient(90deg,#34304a 0%,var(--accent-deep) 46%,var(--accent) 78%,var(--accent-2) 100%);
+    box-shadow:inset 0 0 0 .5px rgba(255,255,255,.16);}
+  /* Slider knob is off-white --cream (#F7ECD9), NOT #fff (white = Reveal veil only). */
+  .knob{position:absolute;top:-5px;width:19px;height:19px;border-radius:50%;background:var(--cream);
+    box-shadow:0 2px 7px rgba(0,0,0,.5),0 0 12px var(--accent);}
+  .lbls{display:flex;justify-content:space-between;color:var(--muted);font-size:11.5px;margin-top:9px;}
+  .kelvin{font-family:ui-serif,"New York",Georgia,serif;font-size:13px;color:var(--accent-2);font-variant-numeric:tabular-nums;}
+
+  .seg{display:flex;gap:3px;padding:3px;border-radius:11px;background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12);}
+  .seg button{flex:1;font:inherit;font-size:12px;font-weight:600;color:var(--muted);background:transparent;border:0;border-radius:8px;padding:7px 0;cursor:pointer;transition:.14s var(--ease-warm);}
+  .seg button.on{color:var(--indigo);background:linear-gradient(180deg,var(--accent-2),var(--accent));box-shadow:0 2px 8px -2px var(--accent),inset 0 .5px 0 rgba(255,255,255,.5);}
+
+  .badges{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+  .disp{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;border-radius:11px;
+    background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.10);}
+  .disp .nm{font-size:12.5px;}
+  .disp .nm .sub2{display:block;font-size:10.5px;color:var(--faint);margin-top:1px;}
+  .badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:999px;white-space:nowrap;}
+  .b-hw{color:#0c2a14;background:linear-gradient(180deg,#a8e6a0,#6cc66c);}        /* hardware = best */
+  .b-gamma{color:#2a1c00;background:linear-gradient(180deg,var(--accent-2),var(--accent));}
+  .b-overlay{color:#1a1230;background:linear-gradient(180deg,#cdbbf2,#a98fe6);}     /* overlay = safe default */
+
+  .pop-title{display:flex;align-items:center;gap:10px;}
+  .pop-title .ic{width:22px;height:22px;flex:0 0 auto;filter:drop-shadow(0 0 6px rgba(255,171,92,.7));}
+  .pop-title .nm{font-size:15px;font-weight:600;}
+  .pop-title .st{font-size:11.5px;color:var(--accent-2);margin-left:auto;font-variant-numeric:tabular-nums;}
+  .divider{height:.5px;background:var(--line-strong);margin:15px 0;}
+
+  .caption{font-size:12px;color:var(--muted);margin-top:12px;text-align:center;}
+  .note{margin-top:20px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:13px;line-height:1.6;max-width:80ch;}
+  .note b{color:var(--accent-2);font-weight:600;}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:rgba(255,255,255,.07);padding:1px 6px;border-radius:5px;}
+
+  .foot{margin-top:70px;text-align:center;color:var(--muted);font-size:14px;}
+  .foot .serif{font-size:18px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="word">Abendrot</div>
+    <div class="kicker">Liquid Glass Component Kit · §5.2 / §21.3 · provisional</div>
+    <p class="lead">Real-recipe mockups: <code>blur(16px) saturate(190%)</code> + double inset highlight + soft outer shadow. Hover any glass surface to see <b>specular tracking</b>; rims use a <b>variable-thickness blur</b> ring for lens volume. White is reserved for the reveal veil; warmth is the default.</p>
+  </header>
+
+  <!-- 1. SIMPLE POPOVER -->
+  <section>
+    <div class="h2"><span class="n serif">01</span><h2>Simple popover — the everyday surface</h2></div>
+    <p class="sub">On/off, warmth slider with live Kelvin, mode segmented control, and per-display engine badges (Hardware = best / Gamma / Overlay = safe default). Clear transient Liquid Glass; everything applies instantly, no spinners.</p>
+    <div class="stage">
+      <div class="glass js-spec" style="width:330px;padding:20px;">
+        <div class="spec"></div>
+        <div class="pop-title">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 15 a5 5 0 0 1 10 0 Z" fill="var(--accent)"/><line x1="4" y1="15" x2="20" y2="15" stroke="var(--accent-2)" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span class="nm serif">Abendrot</span>
+          <span class="st">Warming · 2700K</span>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span class="pill" id="lbl-warm-toggle">Warm my displays</span>
+          <span class="toggle" role="switch" tabindex="0" aria-checked="true" aria-labelledby="lbl-warm-toggle"></span>
+        </div>
+        <div class="slider">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;">
+            <span class="pill" style="font-weight:500;color:var(--muted);" id="lbl-warmth">Warmth</span>
+            <span class="kelvin">2700 K</span>
+          </div>
+          <div class="track" role="slider" tabindex="0" aria-labelledby="lbl-warmth" aria-valuemin="1900" aria-valuemax="4500" aria-valuenow="2700" aria-valuetext="2700 Kelvin"><span class="knob" style="left:62%;"></span></div>
+          <div class="lbls"><span>Softer · 4500K</span><span>Warmer · 1900K</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="seg" style="margin-bottom:4px;">
+          <button class="on">Auto</button><button>Sunset→Sunrise</button><button>Manual</button>
+        </div>
+        <div class="badges">
+          <div class="disp"><span class="nm">Built-in Liquid Retina XDR<span class="sub2">MacBook Pro 16″</span></span><span class="badge b-overlay">Overlay</span></div>
+          <div class="disp"><span class="nm">Studio Display<span class="sub2">via DDC/CI</span></span><span class="badge b-hw">Hardware</span></div>
+          <div class="disp"><span class="nm">DELL U2723QE<span class="sub2">gamma table</span></span><span class="badge b-gamma">Gamma</span></div>
+        </div>
+      </div>
+      <div style="max-width:30ch;">
+        <div class="caption" style="text-align:left;">Badges are the trust proof — they show <i>how</i> each display is warmed. Overlay is the always-safe default; Hardware (DDC) is "best-available-wins" when present.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. LIQUID EXPANSION -->
+  <section>
+    <div class="h2"><span class="n serif">02</span><h2>Advanced — "liquid expansion" of the popover</h2></div>
+    <p class="sub">Per §21.3: the same glass <b>grows</b> to hold power rows rather than opening a new window — an inline expansion using the warmth ease. Per-display warmth overrides, engine selection, and the schedule live here.</p>
+    <div class="stage">
+      <div class="glass js-spec" style="width:380px;padding:20px;">
+        <div class="spec"></div>
+        <div class="pop-title">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 15 a5 5 0 0 1 10 0 Z" fill="var(--accent)"/><line x1="4" y1="15" x2="20" y2="15" stroke="var(--accent-2)" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span class="nm serif">Abendrot</span>
+          <span class="st">Advanced</span>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span class="pill">Warm my displays</span><span class="toggle"></span>
+        </div>
+        <div class="slider" style="margin-bottom:14px;">
+          <div class="track"><span class="knob" style="left:62%;"></span></div>
+          <div class="lbls"><span>4500K</span><span class="kelvin" style="font-size:11.5px;">2700K master</span><span>1900K</span></div>
+        </div>
+        <div style="font-size:11px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase;margin:6px 0 10px;">Per-display override &amp; engine</div>
+        <div class="badges" style="margin-top:0;">
+          <div class="disp" style="flex-direction:column;align-items:stretch;gap:9px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;"><span class="nm">Built-in XDR</span><span class="badge b-overlay">Overlay</span></div>
+            <div class="track" style="height:7px;"><span class="knob" style="left:58%;width:15px;height:15px;top:-4px;"></span></div>
+          </div>
+          <div class="disp" style="flex-direction:column;align-items:stretch;gap:9px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;"><span class="nm">Studio Display</span><span class="badge b-hw">Hardware ▾</span></div>
+            <div class="track" style="height:7px;"><span class="knob" style="left:70%;width:15px;height:15px;top:-4px;"></span></div>
+          </div>
+          <div class="disp" style="flex-direction:column;align-items:stretch;gap:9px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;"><span class="nm">DELL U2723QE</span><span class="badge b-gamma">Gamma ▾</span></div>
+            <div class="track" style="height:7px;"><span class="knob" style="left:64%;width:15px;height:15px;top:-4px;"></span></div>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--muted);">
+          <span>Schedule · Sunset → Sunrise</span><span class="kelvin">7:14 PM → 5:48 AM</span>
+        </div>
+      </div>
+      <div style="max-width:30ch;">
+        <div class="caption" style="text-align:left;">The expansion animates with the <code>--ease-warm</code> curve (~140ms): the popover's height grows and the new rows fade up. No modal, no new window — power without leaving the menu bar.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. SETTINGS (FROSTED EMBER) -->
+  <section>
+    <div class="h2"><span class="n serif">03</span><h2>Settings — the "frosted ember" material</h2></div>
+    <p class="sub">Per §21.3: the persistent, data-heavy Settings window uses a <b>more-opaque</b> frosted-ember material so text stays legible over busy desktops — distinct from the transient popover glass, but still unmistakably warm.</p>
+    <div class="frost" style="max-width:680px;padding:0;overflow:hidden;">
+      <div style="display:flex;min-height:300px;">
+        <!-- sidebar -->
+        <div style="width:172px;padding:18px 12px;background:rgba(0,0,0,.18);box-shadow:inset -.5px 0 0 rgba(255,255,255,.1);">
+          <div class="pop-title" style="margin-bottom:18px;">
+            <span class="ic" style="width:18px;height:18px;"><svg viewBox="0 0 24 24" fill="none"><path d="M7 15 a5 5 0 0 1 10 0 Z" fill="var(--accent)"/><line x1="4" y1="15" x2="20" y2="15" stroke="var(--accent-2)" stroke-width="2" stroke-linecap="round"/></svg></span>
+            <span class="nm serif" style="font-size:14px;">Settings</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;font-size:13px;">
+            <div style="padding:8px 10px;border-radius:9px;background:linear-gradient(180deg,rgba(255,171,92,.22),rgba(255,171,92,.10));box-shadow:inset 0 0 0 .5px rgba(255,171,92,.4);color:var(--accent-2);font-weight:600;">General</div>
+            <div style="padding:8px 10px;color:var(--muted);">Displays</div>
+            <div style="padding:8px 10px;color:var(--muted);">Schedule</div>
+            <div style="padding:8px 10px;color:var(--muted);">Shortcuts</div>
+            <div style="padding:8px 10px;color:var(--muted);">Advanced</div>
+            <div style="padding:8px 10px;color:var(--muted);">About</div>
+          </div>
+        </div>
+        <!-- body -->
+        <div style="flex:1;padding:22px 24px;">
+          <div style="font-size:16px;font-weight:600;margin-bottom:4px;">General</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:20px;">How Abendrot behaves day to day.</div>
+          <div style="display:flex;flex-direction:column;gap:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:13.5px;">Launch at login</span><span class="toggle"></span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:13.5px;">Show icon in menu bar</span><span class="toggle"></span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:13.5px;">Soft confirmation tone</span><span class="toggle off"></span></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+              <div><div style="font-size:13.5px;">Default warmth</div><div style="font-size:11.5px;color:var(--faint);margin-top:2px;">applied when Auto starts</div></div>
+              <span class="kelvin" style="font-size:14px;">2700 K</span>
+            </div>
+            <div class="track" style="height:8px;"><span class="knob" style="left:62%;"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>Material hierarchy:</b> popover = clear transient glass (<code>blur 16 / sat 190</code>); Settings = frosted ember (<code>blur 30 / sat 160</code>, ~88% opaque warm tint). Same family, different legibility budget.</div>
+  </section>
+
+  <!-- 4. ONBOARDING -->
+  <section>
+    <div class="h2"><span class="n serif">04</span><h2>Onboarding — "3 clicks to warmth"</h2></div>
+    <p class="sub">Per §21.3: permit notifications → set max warmth → confirm schedule. Three calm steps on glass; the rest lives in Settings. No account, no wall of permissions.</p>
+    <div class="stage">
+
+      <div class="glass js-spec" style="width:280px;padding:24px 22px;text-align:center;">
+        <div class="spec"></div>
+        <div style="font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px;">Step 1 of 3</div>
+        <div style="width:54px;height:54px;margin:0 auto 16px;border-radius:14px;background:linear-gradient(160deg,#241b3c,#0a0712);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px -12px var(--accent);">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--accent-2)" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" stroke-linecap="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke-linecap="round"/></svg>
+        </div>
+        <div class="serif" style="font-size:19px;margin-bottom:6px;">Stay gently informed</div>
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:20px;">A quiet nudge at sunset, nothing more. You can turn this off anytime.</div>
+        <button style="font:inherit;font-size:13px;font-weight:600;color:var(--indigo);background:linear-gradient(180deg,var(--accent-2),var(--accent));border:0;border-radius:11px;padding:11px 20px;width:100%;cursor:pointer;box-shadow:0 6px 18px -4px var(--accent),inset 0 .5px 0 rgba(255,255,255,.5);">Allow notifications</button>
+        <div style="font-size:12px;color:var(--muted);margin-top:12px;cursor:pointer;">Skip</div>
+      </div>
+
+      <div class="glass js-spec" style="width:280px;padding:24px 22px;text-align:center;">
+        <div class="spec"></div>
+        <div style="font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px;">Step 2 of 3</div>
+        <div class="serif" style="font-size:19px;margin-bottom:6px;">Set your warmest</div>
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:18px;">Drag until your screen feels like candlelight. This is your night maximum.</div>
+        <div class="kelvin" style="font-size:30px;margin-bottom:12px;">2400 K</div>
+        <div class="track" style="height:10px;margin-bottom:8px;"><span class="knob" style="left:70%;width:22px;height:22px;top:-6px;"></span></div>
+        <div class="lbls" style="margin-bottom:20px;"><span>Softer</span><span>Warmer</span></div>
+        <button style="font:inherit;font-size:13px;font-weight:600;color:var(--indigo);background:linear-gradient(180deg,var(--accent-2),var(--accent));border:0;border-radius:11px;padding:11px 20px;width:100%;cursor:pointer;box-shadow:0 6px 18px -4px var(--accent),inset 0 .5px 0 rgba(255,255,255,.5);">Looks right</button>
+      </div>
+
+      <div class="glass js-spec" style="width:280px;padding:24px 22px;text-align:center;">
+        <div class="spec"></div>
+        <div style="font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px;">Step 3 of 3</div>
+        <div class="serif" style="font-size:19px;margin-bottom:6px;">When should it warm?</div>
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:18px;">We follow your local sunset and sunrise. Change it anytime in Settings.</div>
+        <div class="seg" style="margin-bottom:18px;"><button class="on">Sunset→Sunrise</button><button>Custom</button></div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-bottom:22px;"><span>Begins</span><span class="kelvin">7:14 PM</span></div>
+        <button style="font:inherit;font-size:13px;font-weight:600;color:var(--indigo);background:linear-gradient(180deg,var(--accent-2),var(--accent));border:0;border-radius:11px;padding:11px 20px;width:100%;cursor:pointer;box-shadow:0 6px 18px -4px var(--accent),inset 0 .5px 0 rgba(255,255,255,.5);">Soften into the evening</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. REDUCE-TRANSPARENCY FALLBACK -->
+  <section>
+    <div class="h2"><span class="n serif">05</span><h2>Reduce-Transparency fallback — ember-tinted SOLID</h2></div>
+    <p class="sub">Per §21.3 (critical a11y + brand fix): when the user enables Reduce Transparency, the glass becomes a <b>SOLID ember-tinted</b> surface — <b>never neutral grey</b>. The warm identity survives opacity. Same layout, no blur, accent glow swapped for a flat fill.</p>
+    <div class="stage">
+      <!-- solid popover -->
+      <div style="width:330px;padding:20px;border-radius:22px;position:relative;
+        background:linear-gradient(150deg,#251a3c 0%,#1b1430 100%);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.10),inset 0 0 0 .5px rgba(255,255,255,.14),0 16px 40px rgba(0,0,0,.5);">
+        <div class="pop-title">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 15 a5 5 0 0 1 10 0 Z" fill="var(--accent)"/><line x1="4" y1="15" x2="20" y2="15" stroke="var(--accent-2)" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span class="nm serif">Abendrot</span><span class="st">Warming · 2700K</span>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span class="pill">Warm my displays</span>
+          <span class="toggle" style="box-shadow:inset 0 0 0 .5px rgba(255,255,255,.35);"></span>
+        </div>
+        <div class="track"><span class="knob" style="left:62%;box-shadow:0 2px 7px rgba(0,0,0,.5);"></span></div>
+        <div class="lbls"><span>Softer</span><span>Warmer</span></div>
+        <div class="divider"></div>
+        <div class="badges" style="margin-top:0;">
+          <div class="disp" style="background:rgba(255,255,255,.05);"><span class="nm">Built-in XDR</span><span class="badge b-overlay">Overlay</span></div>
+          <div class="disp" style="background:rgba(255,255,255,.05);"><span class="nm">Studio Display</span><span class="badge b-hw">Hardware</span></div>
+        </div>
+      </div>
+      <!-- contrast: what NOT to do -->
+      <div style="max-width:30ch;">
+        <div style="width:100%;padding:14px 16px;border-radius:14px;background:linear-gradient(150deg,#3a3a3e,#2c2c30);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14);margin-bottom:12px;">
+          <div style="font-size:12px;color:#bbb;text-decoration:line-through;">Neutral grey — wrong</div>
+          <div style="font-size:11px;color:#888;margin-top:4px;">Cold + off-brand. A warmth product must never go grey.</div>
+        </div>
+        <div class="caption" style="text-align:left;">The solid uses <code>#251A3C → #1B1430</code> (warm twilight), accent controls keep their amber. In light mode the solid is warm cream (<code>#FBF3E7</code>), never white.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. THE RESERVED WHITE / REVEAL -->
+  <section>
+    <div class="h2"><span class="n serif">06</span><h2>Reveal True Color — the one place white appears</h2></div>
+    <p class="sub">The signature. Hold the hotkey and a <b>pure-white</b> veil lifts (a spring, not a fade — <code>.interactiveSpring</code> in-app, §21.3). It is the only #FFFFFF in the entire system, so accuracy reads as a deliberate, physical event.</p>
+    <div style="position:relative;max-width:680px;height:200px;border-radius:20px;overflow:hidden;
+      background:linear-gradient(120deg,#1d1533,#100b1d);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14),0 16px 40px rgba(0,0,0,.5);">
+      <div style="position:absolute;inset:0;background:linear-gradient(120deg,rgba(255,171,92,.34),rgba(255,214,163,.16) 60%,transparent);"></div>
+      <div style="position:absolute;top:0;bottom:0;right:0;width:42%;background:#ffffff;
+        box-shadow:-30px 0 60px rgba(255,255,255,.5);
+        display:flex;align-items:center;justify-content:center;">
+        <span style="color:#1a1230;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">True color</span>
+      </div>
+      <div style="position:absolute;left:24px;top:50%;transform:translateY(-50%);max-width:30ch;">
+        <div class="serif" style="font-size:22px;margin-bottom:6px;">Hold to see true color</div>
+        <div style="font-size:12.5px;color:var(--muted);">The veil lifts from the right — pure white, spring-eased — then settles back to warm on release.</div>
+      </div>
+    </div>
+    <div class="note"><b>Token discipline:</b> <code>--reveal-true-white</code> (<code>#FFFFFF</code>) is the only place pure white is permitted. Body text is <code>#ECE8F4</code>; control chrome that would normally be white — the toggle knob and slider knob — uses off-white <b><code>--cream #F7ECD9</code></b> instead; the wordmark gradient tops out at warm <code>--accent-hi</code>. Nothing but the reveal veil is pure white, so accuracy reads as a genuine, deliberate event.</div>
+    <div class="note"><b>Contrast (WCAG AA):</b> the ember accent <code>--accent #FFAB5C</code> is a <b>fill / large-element</b> color only — on cream it scores ~1.5:1, well under AA's 4.5:1 for normal text. Even <code>--accent-deep</code> only clears AA-<i>large</i> (3:1) on the deeper creams. For ember-colored <b>small text on cream</b> (captions, links, labels) use the dedicated <b><code>--accent-ink-on-cream #9C4310</code></b>, which clears AA-normal (≥4.5:1) on every cream surface in the light ramp. Twilight (dark) grounds are unaffected — body text <code>#ECE8F4</code> on <code>--indigo</code> already passes comfortably.</div>
+  </section>
+
+  <!-- specular / variable-blur engineering note -->
+  <section>
+    <div class="h2"><span class="n serif">07</span><h2>Making the glass feel "wet" (engineering notes)</h2></div>
+    <p class="sub">Per §21.3, the gap between "looks like Tahoe" and "is Tahoe" is specular tracking + variable-thickness blur. The web mockups above approximate both; the app uses native APIs.</p>
+    <div class="frost" style="max-width:860px;padding:22px 24px;">
+      <div style="font-size:13.5px;line-height:1.7;color:var(--text);">
+        <p style="margin:0 0 12px;"><b style="color:var(--accent-2);">Specular tracking (web):</b> each <code>.glass</code> hosts a <code>.spec</code> layer; JS sets <code>--mx/--my</code> to the pointer position so a soft <code>screen</code>-blend highlight follows the cursor. Hover any surface above to see it. <b style="color:var(--accent-2);">In-app:</b> a thin gradient overlay on the <code>NSGlassEffectView</code> whose center binds to <code>NSEvent.mouseLocation</code>, clamped + eased.</p>
+        <p style="margin:0 0 12px;"><b style="color:var(--accent-2);">Variable-thickness blur (web):</b> the <code>.glass::before</code> ring masks a tighter inset shadow toward the rim, implying the glass is thicker at the edge (a lens). <b style="color:var(--accent-2);">In-app:</b> layer a second, higher-radius backdrop near the bezel, or use the system's lensing parameters on the glass material.</p>
+        <p style="margin:0;"><b style="color:var(--accent-2);">Respect the user:</b> all of this is suppressed under Reduce Motion (no specular animation, instant state) and Reduce Transparency (solid ember, §05). Motion budget stays ~100–150ms; the only "big" moment is the reveal spring.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot"><span class="serif">Abendrot</span> — calm, premium, never clinical. · provisional component kit, founder selects.</div>
+</div>
+
+<script>
+  // specular tracking: move the highlight with the pointer
+  document.querySelectorAll('.js-spec').forEach(el=>{
+    el.addEventListener('pointermove',e=>{
+      const r=el.getBoundingClientRect();
+      el.style.setProperty('--mx',((e.clientX-r.left)/r.width*100)+'%');
+      el.style.setProperty('--my',((e.clientY-r.top)/r.height*100)+'%');
+    });
+  });
+</script>
+</body>
+</html>

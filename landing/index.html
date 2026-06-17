@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0C0A16" />
+
+  <!-- ===================== SEO ===================== -->
+  <title>Abendrot — Free, open-source screen warmth for Mac, on every display</title>
+  <meta name="description" content="Abendrot is a free, open-source, native macOS menu-bar app that warms your screen's color temperature on every display — built-in and external — for calmer nights. A modern f.lux / Night Shift alternative that works on the newest Apple Silicon Macs. Read every line of it." />
+  <meta name="keywords" content="free open source screen warmth Mac, f.lux alternative Mac, Night Shift external monitor, blue light filter Mac, circadian, color temperature, menu bar app, open source macOS" />
+  <link rel="canonical" href="https://abendrot.app/" />
+  <meta name="robots" content="index, follow" />
+
+  <!-- ===================== Open Graph ===================== -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Abendrot" />
+  <meta property="og:title" content="Abendrot — your Mac's screen warms with the evening, on every display" />
+  <meta property="og:description" content="A free, open-source, native macOS app for circadian screen warmth across every display. Works on the newest Apple Silicon Macs where f.lux and Night Shift quietly fail. Read every line of it." />
+  <meta property="og:url" content="https://abendrot.app/" />
+  <meta property="og:image" content="https://abendrot.app/og-image.png" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="640" />
+  <meta property="og:image:alt" content="Abendrot — a warm sunset arc over a twilight horizon, with the tagline 'your Mac's screen warms with the evening.'" />
+
+  <!-- ===================== Twitter ===================== -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Abendrot — screen warmth for Mac, on every display" />
+  <meta name="twitter:description" content="Free, open-source, native macOS app for circadian screen warmth across every display. The modern, auditable f.lux / Night Shift alternative." />
+  <meta name="twitter:image" content="https://abendrot.app/og-image.png" />
+  <meta name="twitter:image:alt" content="Abendrot — a warm sunset arc over a twilight horizon." />
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- Marketing humanist sans (Figtree) — graceful fallback to SF Pro / system -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" />
+
+  <link rel="stylesheet" href="/src/styles/tokens.css" />
+  <link rel="stylesheet" href="/src/styles/main.css" />
+
+  <!-- ===================== Structured data ===================== -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Abendrot",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "macOS 26 (Tahoe) or later, Apple Silicon",
+    "description": "Free, open-source, native macOS menu-bar app that warms your screen's color temperature across every display for calmer evenings.",
+    "url": "https://abendrot.app/",
+    "license": "https://opensource.org/licenses/MIT",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="warmfield" aria-hidden="true"></div>
+
+  <!-- ===================== NAV ===================== -->
+  <nav class="nav" aria-label="Primary">
+    <a class="brand" href="#top" aria-label="Abendrot, home">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" role="img" aria-hidden="true">
+          <defs>
+            <linearGradient id="navArc" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#FFD6A3" /><stop offset="1" stop-color="#FFAB5C" />
+            </linearGradient>
+          </defs>
+          <path d="M5 16 a7 7 0 0 1 14 0 Z" fill="url(#navArc)" />
+          <line x1="3" y1="16" x2="21" y2="16" stroke="#FFD6A3" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </span>
+      <span class="name serif">Abendrot</span>
+    </a>
+    <div class="nav-links">
+      <a href="#demo">See it warm</a>
+      <a href="#proof">Tiny &amp; native</a>
+      <a href="#audit">Audit the engine</a>
+      <a href="#roadmap">Roadmap</a>
+    </div>
+    <a class="nav-cta" href="https://github.com/matthewrball/abendrot" rel="noopener">GitHub →</a>
+  </nav>
+
+  <main id="main">
+    <span id="top"></span>
+
+    <!-- ===================== HERO ===================== -->
+    <header class="hero">
+      <div class="hero-inner">
+        <span class="eyebrow">A tiny, native macOS app · free &amp; open source</span>
+        <h1>
+          <span class="line line-1">Your Mac's screen <span class="warm-word">warms</span> with the evening.</span>
+          <span class="line line-2">On every display.</span>
+        </h1>
+        <p class="subhead">
+          A tiny, native, open-source app for <strong>calmer nights and sharper mornings</strong> —
+          warmth that actually lands on built-in <em>and</em> external displays, even on the newest
+          Apple Silicon Macs. Free, runs entirely on your Mac.
+        </p>
+        <div class="hero-cta-row">
+          <a class="cta-primary" href="https://github.com/matthewrball/abendrot" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.36 9.36 0 0 1 5 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+            <span>Star &amp; Watch on GitHub</span>
+          </a>
+          <a class="cta-secondary" href="#roadmap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            <span>See the v1.0 roadmap</span>
+          </a>
+        </div>
+        <p class="cta-note">Star to follow along · no account, no email · MIT-licensed · pre-release</p>
+      </div>
+      <div class="scroll-hint" aria-hidden="true">
+        <span>Scroll — watch it warm</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </header>
+
+    <!-- ===================== INTERACTIVE DEMO ===================== -->
+    <section id="demo">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">See it warm</span>
+          <h2>Drag the line. Watch the screen wind down.</h2>
+          <p>The left side is warmed the way Abendrot warms it; the right is true color. Drag across — then hold <strong>Reveal True Color</strong> to lift the warmth instantly, the way designers do for color-critical work.</p>
+        </div>
+
+        <div class="demo-stage glass reveal">
+          <div
+            class="demo-window"
+            role="slider"
+            tabindex="0"
+            aria-label="Warmth comparison slider. Drag, or use arrow keys, to move the line between true color and Abendrot's warmth."
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="62"
+            aria-valuetext="62% warmed — about 3,944 Kelvin"
+          >
+            <div class="demo-screen" aria-hidden="true">
+              <div class="demo-content">
+                <div class="demo-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="grow"></span></div>
+                <div class="demo-cards">
+                  <div class="demo-card">
+                    <span class="ln m"></span><span class="ln s"></span><span class="ln m"></span>
+                    <div class="swatch-row"><span class="sw a"></span><span class="sw b"></span><span class="sw c"></span><span class="sw d"></span></div>
+                  </div>
+                  <div class="demo-photo"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="demo-warm" aria-hidden="true"></div>
+            <div class="demo-warm-glow" aria-hidden="true"></div>
+            <div class="demo-reveal-veil" aria-hidden="true"></div>
+
+            <span class="demo-label cool" aria-hidden="true">True color</span>
+            <span class="demo-label warm" aria-hidden="true">Warmed</span>
+
+            <!-- the menu-bar popover, in the warm hue -->
+            <div class="demo-popover glass" aria-hidden="true">
+              <div class="pop-head">
+                <span class="pop-mark">
+                  <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 16 a6 6 0 0 1 12 0 Z" fill="#FFAB5C"/><line x1="4" y1="16" x2="20" y2="16" stroke="#FFD6A3" stroke-width="2" stroke-linecap="round"/></svg>
+                </span>
+                <span class="pop-name">Abendrot</span>
+                <span class="pop-state pop-head-k"><span class="demo-state-k">3,944K</span></span>
+              </div>
+              <div class="pop-track"><span class="pop-knob"></span></div>
+              <div class="pop-lbls"><span>Softer</span><span>Warmer</span></div>
+              <div class="pop-disp">
+                <div class="pop-row"><span>Built-in Display</span><span class="pop-badge ov">Overlay</span></div>
+                <div class="pop-row"><span>LG UltraFine</span><span class="pop-badge hw">Hardware</span></div>
+              </div>
+            </div>
+
+            <div class="demo-divider" aria-hidden="true"></div>
+            <div class="demo-handle" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"/><polyline points="9 6 15 12 9 18" transform="translate(0)"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-controls reveal">
+          <button class="demo-reveal-btn" type="button" aria-pressed="false">
+            <span>Hold to Reveal True Color</span>
+            <kbd>⌥⌘T</kbd>
+          </button>
+          <span class="demo-hint">Press and hold — warmth lifts, then eases back on release.</span>
+        </div>
+
+        <!-- Screen-reader-only running commentary for the demo's warming state -->
+        <p class="sr-only" id="demo-live" role="status" aria-live="polite" aria-atomic="true">
+          The demonstration starts mostly warmed — about 3,944 Kelvin. Move the slider to compare true color with Abendrot's warmth.
+        </p>
+        <p class="placeholder-note reveal">
+          Crafted mock for preview. Real captures of the app warming across physical displays slot in
+          here once the build lands (Lane&nbsp;B). Per-display method badges (Hardware / Gamma / Overlay)
+          are exactly how the shipping app reports each screen.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== TINY-NATIVE PROOF BADGES ===================== -->
+    <section id="proof">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Proof by demonstration</span>
+          <h2>A Mac-assed Mac app. And you can read every line.</h2>
+          <p>No Electron, no second runtime, no telemetry. Just native Swift in your menu bar — and, unlike the incumbents, source you can audit.</p>
+        </div>
+
+        <div class="badge-grid">
+          <div class="proof-badge glass hero-proof reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <div>
+              <div class="pb-title">Open source — read every line</div>
+              <div class="pb-sub">MIT-licensed and public on GitHub. The anti-NightOwl: no hidden behavior, nothing to take on faith.</div>
+            </div>
+          </div>
+
+          <div class="proof-badge glass reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+            <div class="pb-title">Native Swift</div>
+            <div class="pb-sub">SwiftUI + AppKit. Built for macOS 26 "Tahoe".</div>
+          </div>
+
+          <div class="proof-badge glass reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="3" rx="1.5"/><path d="M8 7v3M16 7v3"/></svg>
+            <div class="pb-title">Menu-bar only</div>
+            <div class="pb-sub">No Dock icon. Hide it from the bar entirely if you like.</div>
+          </div>
+
+          <div class="proof-badge glass reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+            <div class="pb-title">No Electron</div>
+            <div class="pb-sub">No bundled browser, no second runtime tax.</div>
+          </div>
+
+          <div class="proof-badge glass reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+            <div class="pb-title">Apple Silicon</div>
+            <div class="pb-sub">Built and tested for M-series Macs.</div>
+          </div>
+
+          <div class="proof-badge glass reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
+            <div class="pb-title"><span class="metric"><span class="val">&lt; 5 MB</span><span class="tbd" title="Provisional target — not yet measured">Target</span></span></div>
+            <div class="pb-sub">Tiny bundle target. Real size baked in from a release build.</div>
+          </div>
+
+          <div class="proof-badge glass reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            <div class="pb-title"><span class="metric"><span class="val">~20 MB</span><span class="tbd" title="Preliminary range — not yet measured">Preliminary</span></span> RAM</div>
+            <div class="pb-sub">Lightweight in memory. Measured number replaces this.</div>
+          </div>
+
+          <div class="proof-badge glass reveal">
+            <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div class="pb-title"><span class="metric"><span class="val">~0%</span><span class="tbd" title="Preliminary range — not yet measured">Preliminary</span></span> idle CPU</div>
+            <div class="pb-sub">The overlay draws on change only. Verified before launch.</div>
+          </div>
+        </div>
+
+        <p class="placeholder-note reveal">
+          The bundle size, RAM and idle-CPU figures above are <strong>provisional — labeled
+          "Target" or "Preliminary"</strong> and not yet measured. Real numbers from a release build
+          replace them before anything ships or is published.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== AUDIT THE ENGINE ===================== -->
+    <section id="audit">
+      <div class="wrap">
+        <div class="audit-grid">
+          <div class="audit-copy reveal">
+            <span class="eyebrow">Audit the engine</span>
+            <h2>Don't take our word for it. Read the warmth engine.</h2>
+            <p>
+              After the NightOwl incident, "just trust the menu-bar app" stopped being enough. So the
+              whole engine is public. Here's the actual shape of the API the app drives — the same
+              <code>WarmthEngine</code> that decides, per display, whether to warm via real hardware
+              (DDC), the system gamma path, or a universal overlay — and reports which.
+            </p>
+            <ul class="audit-points">
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Overlay is always the safe default — the engine never silently no-ops.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Every display reports its method: <code>Hardware</code> / <code>Gamma</code> / <code>Overlay</code>.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>No Accessibility, no Screen Recording, no account. Core function needs no permission.</span></li>
+            </ul>
+          </div>
+
+          <div class="code-card glass reveal" style="--reveal-delay:90ms">
+            <div class="code-head">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="fname">WarmthEngine.swift</span>
+              <span class="src">WarmthKit · v0 contract</span>
+            </div>
+<pre aria-label="Swift code excerpt from the WarmthKit engine API"><code><span class="tok-com">// The public actor the app drives. Overlay is the safe default;</span>
+<span class="tok-com">// DDC is opt-in per display; the engine reports the method per screen.</span>
+<span class="tok-key">public actor</span> <span class="tok-type">WarmthEngine</span> {
+    <span class="tok-key">public func</span> <span class="tok-fn">setWarmth</span>(_ level: <span class="tok-type">WarmthLevel</span>) <span class="tok-key">async</span>
+    <span class="tok-key">public func</span> <span class="tok-fn">setScheduleMode</span>(_ mode: <span class="tok-type">ScheduleMode</span>) <span class="tok-key">async</span>
+
+    <span class="tok-com">// Reveal True Color — suspend warmth across ALL displays, then ease back.</span>
+    <span class="tok-key">public func</span> <span class="tok-fn">beginReveal</span>() <span class="tok-key">async</span>
+    <span class="tok-key">public func</span> <span class="tok-fn">endReveal</span>() <span class="tok-key">async</span>
+
+    <span class="tok-com">// Per-display: opt in to real hardware warmth, or force a layer.</span>
+    <span class="tok-key">public func</span> <span class="tok-fn">setHardwareDDCEnabled</span>(_ on: <span class="tok-type">Bool</span>, <span class="tok-key">for</span> id: <span class="tok-type">DisplayIdentity</span>) <span class="tok-key">async</span>
+
+    <span class="tok-com">// Emergency restore — always available. Displays are always recoverable.</span>
+    <span class="tok-key">public func</span> <span class="tok-fn">restoreAllDisplays</span>() <span class="tok-key">async</span>
+}
+
+<span class="tok-com">// Which layer is warming a display right now — drives the on-screen badge.</span>
+<span class="tok-key">public enum</span> <span class="tok-type">DisplayMethod</span>: <span class="tok-type">String</span> {
+    <span class="tok-key">case</span> hardware   <span class="tok-com">// DDC RGB-gain — real hardware warmth</span>
+    <span class="tok-key">case</span> gamma      <span class="tok-com">// classified, not measured by default</span>
+    <span class="tok-key">case</span> overlay    <span class="tok-com">// universal Metal veil — the safe default</span>
+}</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SCIENCE / TRUST ===================== -->
+    <section id="science">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">The science, hedged</span>
+          <h2>A small, sensible nudge — not a magic sleep button.</h2>
+        </div>
+
+        <p class="wellness-line reveal">
+          Warmer, dimmer light in the evening means less of the short-wavelength light that tells your
+          brain it's daytime. We link the research rather than asserting outcomes.
+          <span class="nonmed">Abendrot is a general-wellness tool, not a medical device, and makes no medical claims.</span>
+        </p>
+
+        <div class="science-grid">
+          <article class="science-card glass reveal">
+            <h3>Your eyes have a third light sensor</h3>
+            <p>Beyond rods and cones, a non-visual sensor (melanopsin, in ipRGCs) is most sensitive to blue light around ~480&nbsp;nm — it helps tell your brain whether it's day or night.</p>
+            <a class="cite" href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12361122/" target="_blank" rel="noopener">Lucas et al., 2014 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+          </article>
+
+          <article class="science-card glass reveal">
+            <h3>It's the blue content, not just brightness</h3>
+            <p>What drives the circadian effect of a display is its melanopic (short-wavelength) content more than overall brightness — which is also why warming without dimming blunts the benefit.</p>
+            <a class="cite" href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9974389/" target="_blank" rel="noopener">Schoellhorn et al., 2023 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+          </article>
+
+          <article class="science-card glass reveal">
+            <h3>There's no one "right" setting</h3>
+            <p>Sensitivity to evening light varies more than 50-fold between healthy adults — so we offer a default to personalize, and never imply a single number is "safe for everyone."</p>
+            <a class="cite" href="https://www.pnas.org/doi/10.1073/pnas.1901824116" target="_blank" rel="noopener">Phillips et al., 2019 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+          </article>
+
+          <article class="science-card glass reveal">
+            <h3>Screen blue light won't damage your eyes</h3>
+            <p>Ophthalmologists find no good evidence that screen blue light damages your eyes. Tired eyes come mainly from reduced blinking — blink, take breaks, try the 20-20-20 habit.</p>
+            <a class="cite" href="https://www.aao.org/eye-health/tips-prevention/should-you-be-worried-about-blue-light" target="_blank" rel="noopener">Am. Academy of Ophthalmology, 2024 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+          </article>
+        </div>
+
+        <div class="trust-strip reveal">
+          <span class="trust-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>No tracking</span>
+          <span class="trust-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4Z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>No account</span>
+          <span class="trust-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Runs locally</span>
+          <span class="trust-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18 22 12 16 6"/><path d="M8 6 2 12 8 18"/></svg>Open source · MIT</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== V1.0 ROADMAP ===================== -->
+    <section id="roadmap">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">The plan, in the open</span>
+          <h2>The road to v1.0.</h2>
+          <p>Abendrot is pre-release and built in public. Here's the honest state of each piece — what's in hand, what's being hardened, and what lands at 1.0. Watch the repo to get the build the moment it ships.</p>
+        </div>
+
+        <ol class="roadmap" role="list">
+          <li class="roadmap-item glass reveal">
+            <span class="rm-status done" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <div class="rm-body">
+              <div class="rm-head">
+                <h3>The warmth engine</h3>
+                <span class="rm-chip ship">In hand</span>
+              </div>
+              <p>The layered <code>WarmthKit</code> engine — DDC hardware, system gamma, and the universal Metal overlay, best-available-wins per display — is written and headless-tested. It's the public API you can read in <a href="#audit">Audit the engine</a>.</p>
+            </div>
+          </li>
+
+          <li class="roadmap-item glass reveal">
+            <span class="rm-status active" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </span>
+            <div class="rm-body">
+              <div class="rm-head">
+                <h3>Hardening across real displays</h3>
+                <span class="rm-chip wip">In progress</span>
+              </div>
+              <p>Verifying warming on physical built-in and external panels, confirming the per-display method badges (Hardware / Gamma / Overlay) report honestly, and proving the DDC restore tooling before it's enabled by default.</p>
+            </div>
+          </li>
+
+          <li class="roadmap-item glass reveal">
+            <span class="rm-status active" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </span>
+            <div class="rm-body">
+              <div class="rm-head">
+                <h3>Measured performance numbers</h3>
+                <span class="rm-chip wip">In progress</span>
+              </div>
+              <p>The bundle-size, RAM, and idle-CPU figures shown as <em>Target</em> / <em>Preliminary</em> get replaced with real measurements from a release build before anything is published as fact.</p>
+            </div>
+          </li>
+
+          <li class="roadmap-item glass reveal">
+            <span class="rm-status next" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+            <div class="rm-body">
+              <div class="rm-head">
+                <h3>Signed &amp; notarized 1.0 release</h3>
+                <span class="rm-chip soon">At 1.0</span>
+              </div>
+              <p>A signed, notarized <code>.dmg</code> for macOS&nbsp;26 "Tahoe" on Apple Silicon, with the first-run experience and the hold-to-<strong>Reveal True Color</strong> hotkey in place. No account, no paywall, free forever.</p>
+            </div>
+          </li>
+        </ol>
+
+        <p class="placeholder-note reveal">
+          This roadmap describes work in progress, not shipped features. There is no download yet —
+          the most useful thing you can do today is <a href="https://github.com/matthewrball/abendrot" rel="noopener">star and watch the repo</a>
+          so the 1.0 build reaches you the day it lands.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== CLOSING CTA ===================== -->
+    <section class="close-cta">
+      <div class="wrap">
+        <div class="reveal">
+          <h2>Soften into the <span class="warm-word">evening</span>.</h2>
+          <p>Abendrot is in active development. Star and watch the repo to follow along — and to be there when the first build lands.</p>
+          <div class="hero-cta-row" style="animation:none">
+            <a class="cta-primary" href="https://github.com/matthewrball/abendrot" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.36 9.36 0 0 1 5 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+              <span>Star &amp; Watch on GitHub</span>
+            </a>
+            <a class="cta-secondary" href="#roadmap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+              <span>See the v1.0 roadmap</span>
+            </a>
+          </div>
+          <p class="cta-note">Free forever · no account, no email · MIT · macOS 26 "Tahoe", Apple Silicon</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== FOOTER ===================== -->
+  <footer class="footer">
+    <div class="wrap">
+      <span class="f-brand">
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24"><path d="M5 16 a7 7 0 0 1 14 0 Z" fill="#FFAB5C"/><line x1="3" y1="16" x2="21" y2="16" stroke="#FFD6A3" stroke-width="2" stroke-linecap="round"/></svg>
+        </span>
+        <span class="name serif">Abendrot</span>
+      </span>
+      <p class="f-tag">Soften into the evening.</p>
+      <nav class="f-links" aria-label="Footer">
+        <a href="https://github.com/matthewrball/abendrot" rel="noopener">GitHub</a>
+        <a href="#audit">Audit the engine</a>
+        <a href="#science">The science</a>
+        <a href="https://github.com/matthewrball/abendrot/blob/main/PRIVACY.md" rel="noopener">Privacy</a>
+        <a href="https://opensource.org/licenses/MIT" rel="noopener">License (MIT)</a>
+      </nav>
+      <p class="f-fine">
+        <span class="preview-tag">Pre-release preview.</span>
+        Abendrot is in active development; metrics shown as "Target" or "Preliminary" are provisional,
+        not measured numbers, and product visuals are crafted mocks pending real screenshots. A general-wellness
+        tool, not a medical device — it makes no medical claims. &copy; <span data-year>2026</span> Abendrot · Free &amp; open source.
+      </p>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+# Abendrot — Continuous Integration
+#
+# Lane E (Release Engineering & CI). This workflow runs in TWO modes:
+#
+#   Mode B (DEFAULT, runs TODAY, no Apple account):
+#     lint -> WarmthKit headless tests -> SPM build -> plain (hdiutil) DMG.
+#     Works on forked PRs and on a repo with ZERO secrets configured.
+#
+#   Mode A (activates ONLY when signing secrets are present):
+#     adds: import Developer ID cert into a temp keychain -> archive/export
+#     (Developer ID) -> notarize -> staple -> verify. Every Mode-A step is
+#     guarded by a `secrets present` job output so credential-less and
+#     forked-PR runs still go green.
+#
+# A SEPARATE, self-hosted "display-matrix" job (PLANNED — NOT A GATE) documents
+# the physical-hardware test matrix from plan §8 / §21.2. It is manual-dispatch
+# ONLY, never runs on push/PR, never sees fork secrets, and is explicitly not a
+# passing check: a green CI never implies the hardware matrix ran. The acceptance
+# of physical-display behavior is tracked outside CI until real hardware runners
+# exist (docs/release/RELEASE.md §6). The ONLY hosted test gate is the WarmthCore
+# headless suite (`test-warmthcore`), which runs on every push/PR.
+#
+# Secret-handling rule (plan §9, §21.2): secrets are read ONLY inside jobs that
+# cannot be triggered by a fork. `pull_request` from a fork cannot read repo
+# secrets in GitHub Actions, so the signing job additionally self-checks and
+# no-ops when the secret bundle is empty — defense in depth.
+#
+# Placeholder note: Lane A (engine) has NOT finalized the Xcode/SPM scheme and
+# target names. This file references them through env vars at the top
+# (ABENDROT_APP_SCHEME, WARMTHKIT_PACKAGE_PATH, WARMTHKIT_TEST_TARGET). Update
+# those once Package.swift / Abendrot.xcodeproj land. Steps that depend on an
+# Xcode project (archive/export) are written but guarded with
+# `continue-on-error`-free existence checks so they fail loudly only once the
+# project actually exists.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_display_matrix:
+        description: "Run the self-hosted physical display matrix (requires a registered self-hosted runner)."
+        type: boolean
+        default: false
+
+# Least-privilege default. The release workflow (not this one) requests
+# `contents: write` to create releases.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # ---- PLACEHOLDERS: confirm with Lane A once Package.swift / xcodeproj land ----
+  ABENDROT_APP_SCHEME: Abendrot              # Xcode scheme for the .app (TBD)
+  WARMTHKIT_PACKAGE_PATH: WarmthKit          # SPM package dir (exists, Package.swift TBD)
+  WARMTHKIT_TEST_TARGET: WarmthCoreTests     # headless unit test target (TBD)
+  # -----------------------------------------------------------------------------
+  # macOS 26 "Tahoe" runner image + Xcode 26. `macos-latest` may lag; pin once
+  # GitHub publishes a Tahoe image label. See plan §9 ("macOS 26 runner").
+  MACOS_RUNNER: macos-26
+  DEVELOPER_DIR: /Applications/Xcode_26.app/Contents/Developer
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 0. Detect whether signing/notarization secrets are configured.
+  #    Output drives every Mode-A step. Fork PRs receive empty secrets, so this
+  #    naturally reports `false` for them.
+  # ---------------------------------------------------------------------------
+  detect-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      signing: ${{ steps.check.outputs.signing }}
+    steps:
+      - id: check
+        env:
+          CERT: ${{ secrets.DEVELOPER_ID_APP_CERT_P12_BASE64 }}
+          ASC_KEY: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+        run: |
+          if [ -n "$CERT" ] && [ -n "$ASC_KEY" ]; then
+            echo "signing=true" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets present -> Mode A available."
+          else
+            echo "signing=false" >> "$GITHUB_OUTPUT"
+            echo "No signing secrets -> Mode B only (unsigned, plain DMG)."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 1. Lint (always; hosted; no secrets). swift-format --lint + SwiftLint.
+  # ---------------------------------------------------------------------------
+  lint:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install lint tools
+        run: |
+          # swift-format ships with the Swift 6 toolchain (Xcode 26). SwiftLint
+          # via Homebrew (preinstalled on GitHub macOS images).
+          brew list swiftlint >/dev/null 2>&1 || brew install swiftlint
+          swift-format --version || true
+          swiftlint version || true
+
+      - name: swift-format --lint
+        run: |
+          # Lint the SPM package + app sources. `--recursive` walks the tree.
+          # Config: .swift-format at repo root (create with Lane A; defaults used
+          # if absent). Non-zero exit fails the job.
+          if [ -f .swift-format ]; then
+            CFG="--configuration .swift-format"
+          else
+            CFG=""
+            echo "::notice::No .swift-format config found; using toolchain defaults."
+          fi
+          # Lint each Swift source root that exists.
+          set -e
+          for dir in "${WARMTHKIT_PACKAGE_PATH}/Sources" "${WARMTHKIT_PACKAGE_PATH}/Tests" App Abendrot; do
+            if [ -d "$dir" ]; then
+              echo "swift-format lint: $dir"
+              swift-format lint --strict --recursive $CFG "$dir"
+            fi
+          done
+
+      - name: SwiftLint
+        run: |
+          if [ -f .swiftlint.yml ]; then
+            swiftlint lint --strict
+          else
+            echo "::notice::No .swiftlint.yml; running with defaults (non-strict)."
+            swiftlint lint
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2. WarmthCore headless unit tests — THE REAL REQUIRED GATE (always; hosted;
+  #    no secrets). These are the pure WarmthCore tests (Kelvin<->gain math,
+  #    schedule parsing, state machine, identity keying, watchdog) per plan §8.
+  #    NO real displays, NO DDC/gamma — that hardware work is the manual-dispatch
+  #    PLANNED job below, which is explicitly NOT a gate.
+  #
+  #    This job runs on EVERY push/PR (including forks) and FAILS hard if the
+  #    package or the WarmthCore tests are missing or failing. It does not
+  #    skip-pass: a green CI here means the headless suite actually ran and passed.
+  # ---------------------------------------------------------------------------
+  test-warmthcore:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version || true
+          swift --version || true
+
+      - name: Build + test WarmthCore (SPM, headless)
+        working-directory: ${{ env.WARMTHKIT_PACKAGE_PATH }}
+        run: |
+          set -euo pipefail
+          if [ ! -f Package.swift ]; then
+            echo "::error::${WARMTHKIT_PACKAGE_PATH}/Package.swift is missing — the"
+            echo "::error::required WarmthCore headless test gate cannot run. Failing."
+            exit 1
+          fi
+          # Pure-Swift package: `swift test` is headless and needs no GUI/displays.
+          # WarmthCore must remain free of AppKit/IOKit so this stays hosted-safe
+          # (plan §21.1 module split: WarmthCore is "pure, no AppKit/IOKit").
+          swift build
+          # Scope to the WarmthCore test target so this gate is exactly the pure,
+          # headless suite (plan §8) and never silently depends on display targets.
+          swift test --parallel --filter "${WARMTHKIT_TEST_TARGET}"
+
+  # ---------------------------------------------------------------------------
+  # 3. App build (Mode B unsigned compile) — REQUIRED gate, always, no secrets.
+  #    The .xcodeproj is a git-ignored build artifact; project.yml is the source
+  #    of truth. This job GENERATES the project from project.yml with XcodeGen and
+  #    builds the app scheme UNSIGNED. generate OR build failure FAILS the job —
+  #    "no project file" can no longer silently pass (the previous bug).
+  # ---------------------------------------------------------------------------
+  build-app-unsigned:
+    runs-on: macos-26
+    needs: [lint, test-warmthcore]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          set -euo pipefail
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Abendrot.xcodeproj from project.yml
+        run: |
+          set -euo pipefail
+          if [ ! -f project.yml ]; then
+            echo "::error::project.yml missing — cannot generate the Xcode project."
+            exit 1
+          fi
+          # XcodeGen reads project.yml (scheme ${ABENDROT_APP_SCHEME}) and emits the
+          # git-ignored .xcodeproj. A spec error MUST fail the job, not be skipped.
+          xcodegen generate --spec project.yml
+
+      - name: Build Abendrot.app (unsigned, Mode B)
+        run: |
+          set -euo pipefail
+          # The app target links the local WarmthKit package. We build the app
+          # scheme unsigned (CODE_SIGNING_ALLOWED=NO) so no Apple account is
+          # needed. If the real engine cannot link headlessly with the full
+          # toolchain, that surfaces HERE as a build failure — which is the point:
+          # a broken app build now fails CI instead of passing on a missing project.
+          xcodebuild \
+            -project "${ABENDROT_APP_SCHEME}.xcodeproj" \
+            -scheme "$ABENDROT_APP_SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Build plain DMG (Mode B default)
+        run: |
+          set -euo pipefail
+          # The unsigned build above placed the app under the derived-data Release
+          # products dir. Package it to smoke-test the DMG layout on every push
+          # (NOT a release — releases come from scripts/release/). A missing app
+          # here means the build step above did not produce it: fail loudly.
+          APP_PATH="build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::Expected built app at $APP_PATH but it is absent."
+            exit 1
+          fi
+          mkdir -p build
+          ./scripts/dmg/plain-dmg.sh \
+            --app "$APP_PATH" \
+            --out "build/${ABENDROT_APP_SCHEME}-ci.dmg" \
+            --volname "Abendrot"
+
+      - name: Upload unsigned DMG artifact
+        if: ${{ hashFiles('build/*.dmg') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: abendrot-unsigned-dmg
+          path: build/*.dmg
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 4. Sign + notarize + staple (MODE A ONLY).
+  #    Entire job is skipped unless detect-secrets says signing=true. On forked
+  #    PRs this is `false`, so no secret is ever requested in a fork context.
+  #    Defense-in-depth: every step also tolerates empty inputs.
+  # ---------------------------------------------------------------------------
+  sign-notarize:
+    runs-on: macos-26
+    needs: [detect-secrets, build-app-unsigned]
+    if: >-
+      needs.detect-secrets.outputs.signing == 'true' &&
+      github.event_name != 'pull_request'
+    # ^ also refuse to run on ANY pull_request (fork or not) as a hard guard:
+    #   signing/notarization is reserved for push to main + manual dispatch.
+    environment: release-signing   # GitHub "environment" -> optional required reviewers
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import Developer ID cert into a temporary keychain
+        env:
+          CERT_P12_BASE64: ${{ secrets.DEVELOPER_ID_APP_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APP_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CERT_P12_BASE64:-}" ]; then
+            echo "No cert payload; Mode A cannot proceed. Exiting cleanly."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/abendrot-signing.keychain-db"
+          KEYCHAIN_PW=$(uuidgen)
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -k "$KEYCHAIN" -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          # Allow codesign to use the key without an interactive prompt.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      - name: Archive + export (Developer ID)
+        env:
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP_IDENTITY }}  # e.g. "Developer ID Application: Name (TEAMID)"
+        run: |
+          set -euo pipefail
+          # The .xcodeproj is git-ignored; generate it from project.yml (same
+          # source of truth as the Mode-B build job). A missing spec or generate
+          # failure FAILS the signed build — it must not skip-pass.
+          if [ ! -f project.yml ]; then
+            echo "::error::project.yml missing — cannot generate the Xcode project for a signed release."
+            exit 1
+          fi
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodegen generate --spec project.yml
+          ARCHIVE="$RUNNER_TEMP/Abendrot.xcarchive"
+          xcodebuild \
+            -project "${ABENDROT_APP_SCHEME}.xcodeproj" \
+            -scheme "$ABENDROT_APP_SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$ARCHIVE" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$DEVELOPER_ID_APP" \
+            OTHER_CODE_SIGN_FLAGS="--options runtime --timestamp" \
+            archive
+          # ExportOptions.plist must live in scripts/release/ (committed; no secrets).
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist scripts/release/ExportOptions-DeveloperID.plist
+          echo "EXPORTED_APP=$RUNNER_TEMP/export/${ABENDROT_APP_SCHEME}.app" >> "$GITHUB_ENV"
+
+      - name: Notarize + staple + verify
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EXPORTED_APP:-}" ] || [ ! -d "${EXPORTED_APP:-/nonexistent}" ]; then
+            echo "::warning::No exported app to notarize (Lane A TBD). Skipping."
+            exit 0
+          fi
+          # Build a plain DMG to notarize (scripted, headless-safe fallback).
+          ./scripts/dmg/plain-dmg.sh \
+            --app "$EXPORTED_APP" \
+            --out "$RUNNER_TEMP/Abendrot.dmg" \
+            --volname "Abendrot"
+          # notarize.sh reads ASC_* from env; no-ops with a clear message if unset.
+          ./scripts/release/notarize.sh "$RUNNER_TEMP/Abendrot.dmg"
+
+      - name: Upload notarized DMG
+        if: ${{ hashFiles('build/*.dmg', '../*.dmg') != '' || env.EXPORTED_APP != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: abendrot-notarized-dmg
+          path: ${{ runner.temp }}/Abendrot.dmg
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Tear down temporary keychain
+        if: always()
+        run: |
+          if [ -n "${SIGNING_KEYCHAIN:-}" ] && [ -f "${SIGNING_KEYCHAIN}" ]; then
+            security delete-keychain "$SIGNING_KEYCHAIN" || true
+          fi
+
+  # ===========================================================================
+  # SELF-HOSTED PHYSICAL DISPLAY MATRIX — PLANNED, NOT A GATE (UNIMPLEMENTED).
+  #
+  # This job documents and reserves the structure for the real-hardware tests
+  # from plan §8 / §21.2:
+  #   - M5 (Tahoe, gamma-broken)  - M3/M4 (gamma works)
+  #   - Apple display (Studio Display / built-in, buttonless)
+  #   - generic DDC monitor       - HDMI-on-Apple-Silicon / dock edge case
+  #
+  # It runs ONLY on manual dispatch with an explicit opt-in input, and ONLY on
+  # a runner the founder labels `self-hosted, macOS, abendrot-display-matrix`.
+  # It NEVER runs on push/PR, so it never sees fork secrets and never blocks CI.
+  #
+  # ANTI-GREEN-THEATRE: this job is UNIMPLEMENTED and therefore intentionally
+  # FAILS (exit 1) when dispatched. A passing run must NEVER be possible until
+  # real integration is wired, so a green check cannot imply hardware validation
+  # that did not happen. Replace the failing stub with real integration scripts
+  # (DDC probe, gamma self-test/demotion, overlay coverage incl. fullscreen
+  # Spaces, hotplug/sleep-wake re-baseline) before removing the `exit 1`.
+  # ===========================================================================
+  display-matrix-planned-not-a-gate:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.run_display_matrix == 'true'
+    runs-on: [self-hosted, macOS, abendrot-display-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        rig:
+          - { name: "m5-tahoe-gamma-broken", note: "gamma writes no-op; must route to overlay" }
+          - { name: "m3-m4-gamma-works",     note: "gamma path should pass self-test" }
+          - { name: "apple-display",          note: "buttonless panel; DDC may be absent -> overlay" }
+          - { name: "generic-ddc-monitor",    note: "hardware warmth via IOAVService DDC" }
+          - { name: "hdmi-dock-edgecase",     note: "HDMI on Apple Silicon / dock transport" }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Describe planned matrix rig (UNIMPLEMENTED — fails on purpose)
+        run: |
+          echo "=== PLANNED self-hosted display-matrix rig: ${{ matrix.rig.name }} ==="
+          echo "Intent: ${{ matrix.rig.note }}"
+          echo "::warning::This job is PLANNED and UNIMPLEMENTED. It is NOT a passing"
+          echo "::warning::gate. Wire real integration here once a physical"
+          echo "::warning::self-hosted runner is registered. Planned checks:"
+          cat <<'EOF'
+            1. swift test integration suite against real displays (DisplayServices/HardwareDDC).
+            2. DDC capability probe + write/verify; emergency Restore Displays exercised (§21.1 E3).
+            3. Gamma measured self-test -> auto-demote on gamma-broken rigs (§21.1 E1/E5).
+            4. Overlay coverage incl. native fullscreen Spaces + Mission Control (§21.1 E2).
+            5. Hotplug / sleep-wake re-baseline; duplicate-identical-monitor identity (§21.1 E4/E14).
+          EOF
+          echo "::error::display matrix is not implemented — refusing to report success."
+          # Hard-fail so this can never be misread as a passed validation. Replace
+          # this line with the real integration suite (and let IT decide pass/fail).
+          exit 1
