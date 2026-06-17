@@ -12,14 +12,16 @@ I'm resuming **Abendrot** — a free, open-source, native macOS menu-bar app tha
 
 ## STATUS — what's built and verified (as of 2026-06-17)
 
-**Engine — `WarmthKit/` (SPM package, Swift 6 strict concurrency, builds on Xcode 26.5; `swift test` → 53 tests in 12 suites pass):**
+**Engine — `WarmthKit/` (SPM package, Swift 6 strict concurrency, builds on Xcode 26.5; `swift test` → 81 tests in 20 suites pass):**
 - Frozen public API contract; module split `WarmthCore` (pure) / `DisplayServices` / `HardwareDDC` / `OverlayRenderer` / `NightShiftBridge` / `CInterop` / `WarmthKit` umbrella.
 - **Real (implemented + tested):** `WarmthCore` value types, Kelvin↔RGB-gain blackbody math (golden-anchor tested), schedule resolver (custom/solar/follow), `DisplayIdentity` keying, `LayerResolver` (overlay-default / DDC-opt-in / kill-switch enforcement), schedule-degrade policy (follow→evening fallback so the default actually warms), the `WarmthEngine` actor (coordination + `AsyncStream` state, correct actor isolation).
 - **M0 OverlayRenderer (real):** per-`NSScreen` borderless click-through veil from `rgbGain`. NOTE: uses an **alpha-blended warm tint**; a true per-channel multiply (blacks-stay-black, needs a Metal layer reading the framebuffer) is the plan §18 follow-up. On-screen visual confirmation still pending (run the app).
 - **M7 (real):** `DisplayReconfigurationObserver` (CG reconfiguration) + `SystemWakeObserver` (NSWorkspace) → debounced re-baseline in `WarmthEngine.start()`.
 - **Night Shift follower (real):** read-only `CBBlueLightClient` via runtime symbol resolution (CInterop ABI fixed); degrades cleanly when unavailable / kill-switch engaged.
 - **Gamma (classification + real apply/reset):** `.unsupported(.gammaBrokenOnThisOS)` on Apple-Silicon+macOS26; real `CGSetDisplayTransferByTable`/restore reachable only via explicit override.
-- **STILL STUBBED → next:** `HardwareDDC` / `DDCBackend` (M2 — the IOAVService hardware path: EDID snapshot, capability probe, write-then-read verify, restore, emergency "Restore Displays"). This is the last engine layer and the headline differentiator.
+- **M2 DDC (real — the last engine layer):** `HardwareDDC` is no longer a stub. Real dlsym-resolved IOAVService DDC/CI write path: `DDCProtocol` (pure VCP packet/checksum/reply layer, golden-vector tested), `IOAVServiceBus`/`Provider` (IORegistry→`DCPAVServiceProxy` resolution, `Location=="External"` + `transport != .builtIn` gates so built-in panels are NEVER DDC'd), `IOAVServiceDDCTransport` actor (serialized per-service transactions, native-gain snapshot, relative warming `native×gain`, write-then-read verify + retry/backoff, restore with aggregate verify), `DDCSnapshotStore` (file + in-memory). Engine: launch-time stale-state recovery (reset-to-native before any apply), write-ahead dirty flag, honest DDC→overlay fallback (no false Hardware badge), settings retained across hotplug. Opt-in per display; overlay stays the floor. **The wire protocol is reconciled byte-for-byte from m1ddc + MonitorControl (see `docs/engine/ddc-protocol-spec.md`) and is certain; but DDC CANNOT be verified headlessly → a founder real-external-monitor pass is the one remaining gate before claiming it works.** Adversarially reviewed (separate lane): protocol clean, fixed a critical actor-reentrancy bug + a medium restore-verify bug.
+- **NightShiftBridge crash fixed (critical, surfaced by M2 tests):** the `setStatusNotificationBlock:` block was non-escaping but CoreBrightness retains it → the app would have **crashed at launch** the first time `start()` ran with a live `CBBlueLightClient`. Now `@escaping`. (The app was built but never run, so it was latent.)
+- **No engine layer is stubbed anymore.** Remaining engine follow-ups: the true per-channel-multiply overlay shader (§18) and the live real-hardware DDC pass.
 
 **App — `App/` (SwiftUI + AppKit menu-bar agent, LSUIElement; builds via `xcodegen generate && xcodebuild`):**
 - `MenuBarExtra`, simple popover, advanced "liquid expansion", programmatic Liquid Glass Settings, "3 clicks to warmth" onboarding, hide-from-bar, reveal wiring, `.terminateLater` quit reset, `SMAppService` login, Sparkle Info.plist keys.
@@ -52,17 +54,17 @@ I'm resuming **Abendrot** — a free, open-source, native macOS menu-bar app tha
 - The generated `Abendrot.xcodeproj`, `build/`, `.build/`, `node_modules/`, `dist/` are git-ignored build artifacts.
 
 ## NEXT — continue the build (in priority order)
-1. **M2 — DDC hardware path** (the next dispatched milestone; the last engine layer). Implement `DDCBackend` (IOAVService write path + EDID native-state snapshot + capability probe + write-then-read verify + restore + emergency "Restore Displays"), opt-in per display. Build-verify, then a **real external-monitor hardware pass with the founder** (DDC can't be verified headlessly).
-2. **Re-publish the public repo** (icon + sunset palette + M7/NightShift/gamma) — re-scrub planning tells, then push. **Founder's gate.**
-3. Live failure-injection + the self-hosted hardware matrix runs (docs/qa) once backends are real.
-4. Full in-app motion/polish pass via `/design-motion-principles`; the true-multiply overlay shader (§18).
+1. **M2 DDC real-external-monitor pass with the founder** (the one thing headless can't prove). Plug in a DDC-capable external monitor, opt into Hardware DDC for it, and verify on real hardware: capability probe, the warm gain visibly applies, write-then-read verify, restore-to-native on toggle-off/quit, and crash/SIGKILL → relaunch restores native (the §21‑E14 `HW` variants in `docs/qa/failure-injection-suite.md`). Tune timing if stubborn panels need it; confirm the read-offset (we use MonitorControl's `0`). The protocol math is locked (`docs/engine/ddc-protocol-spec.md`); only the hardware's tolerance/targeting is unproven.
+2. **Re-publish the public repo** (icon + sunset palette + M7/NightShift/gamma + **M2 DDC + the night-shift launch-crash fix**) — re-scrub planning tells, then push. **Founder's gate.**
+3. Live failure-injection + the self-hosted hardware matrix runs (docs/qa) — the `UNIT+FAKE` halves now pass headlessly; the `HW` halves need the real-monitor pass.
+4. Full in-app motion/polish pass via `/design-motion-principles`; the true per-channel-multiply overlay shader (§18).
 5. Cosmetic public-repo polish (social-preview image + website link) once assets exist.
 6. Landing deploy to abendrot.app (Vercel) — **founder's gate**.
 
 ## Open tasks (the in-session task tracker does NOT survive /clear — these are the live ones)
-- Lane G / QA (cross-cutting, never self-approve): live failure-injection + hardware matrix.
-- Engine: M2 DDC + real-hardware verification (the big next piece).
-- Re-publish the public repo; cosmetic repo polish; landing deploy — all founder-gated.
+- Lane G / QA (cross-cutting, never self-approve): the `HW` halves of failure-injection + the hardware matrix (need a real external DDC monitor).
+- Engine: M2 DDC real-hardware verification with the founder (the remaining gate); the §18 true-multiply overlay shader.
+- Re-publish the public repo (now also carries M2 + the night-shift crash fix); cosmetic repo polish; landing deploy — all founder-gated.
 
 ## Founder gates — ASK before doing any of these
 Re-publishing / pushing to the public repo; deploying the landing live to abendrot.app; posting anything externally (Product Hunt / HN / Reddit / social / awesome-list PRs).
@@ -75,4 +77,4 @@ Re-publishing / pushing to the public repo; deploying the landing live to abendr
 - Private-API paths (IOAVService, CBBlueLightClient) can't be runtime-verified headlessly — they degrade cleanly; verify on real hardware.
 
 ## First action in the new session
-Read `HANDOFF.md` + `docs/abendrot-plan.md` (§22) + the engine contract, confirm the build is green (`cd WarmthKit && swift test` → 53; then `xcodegen generate && xcodebuild ... build` → BUILD SUCCEEDED), then **continue with M2 (the DDC hardware path)**. Keep design taste + hardest engine logic in the lead session; dispatch heavy/parallel work to Opus subagents; verify in a separate lane (never self-approve); commit per protocol (private repo only — public pushes are founder-gated).
+Read `HANDOFF.md` + `docs/abendrot-plan.md` (§24 is the latest log) + the engine contract + `docs/engine/ddc-protocol-spec.md`, confirm the build is green (`cd WarmthKit && swift test` → 81 in 20 suites; then `xcodegen generate && xcodebuild ... build` → BUILD SUCCEEDED). **All five engine layers are now real (overlay/gamma/Night Shift/M7/M2 DDC).** The next big step needs the founder + a real external DDC monitor (the M2 hardware pass — DDC can't be verified headlessly). Otherwise: the §18 true-multiply overlay shader, then the founder-gated re-publish/deploy. Keep design taste + hardest engine logic in the lead session; dispatch heavy/parallel work to Opus subagents; verify in a separate lane (never self-approve); commit per protocol (private repo only — public pushes are founder-gated).

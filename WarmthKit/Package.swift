@@ -114,6 +114,15 @@ let package = Package(
             name: "WarmthCoreTests",
             dependencies: ["WarmthCore"]
         ),
+
+        // Engine + DDC (M2): golden-vector wire-protocol tests, the verify/retry transport state
+        // machine driven by a fake I²C bus, snapshot-store round-trips, and the §21‑E14
+        // failure-injection recovery scenarios (S1 crash-mid-write, S2 SIGKILL, S3 wake-service-gone)
+        // exercised through the engine's injectable test seams.
+        .testTarget(
+            name: "WarmthKitTests",
+            dependencies: ["WarmthKit", "HardwareDDC", "WarmthCore"]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

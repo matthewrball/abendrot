@@ -1,74 +1,56 @@
 import Foundation
 import WarmthCore
-import CInterop
 import Logging
 
 // MARK: - DDCTransport (swappable protocol)
 
-/// The low-level DDC/CI transaction surface, behind a protocol so the real IOAVService
-/// implementation and a test double are interchangeable.
+/// The DDC/CI transaction surface, behind a protocol so the real IOAVService transport and a test
+/// double are interchangeable. All methods are async because the real implementation serializes
+/// transactions on an actor and sleeps between them (DDC is slow by design, §6 of the spec).
 public protocol DDCTransport: Sendable {
-    /// Write VCP RGB-gain values for a display. Throws on failure.
+    /// Apply per-channel RGB gain by scaling the display's snapshotted NATIVE gain by `gain`
+    /// (red≈1, blue<green<1 for warmer), then verifying by read-back. Throws on failure so the
+    /// engine can fall back to overlay and surface a non-fatal error.
     func writeRGBGain(_ gain: RGBGain, to identity: DisplayIdentity) async throws
-    /// Restore the display's snapshotted native gain.
+    /// Restore the display's snapshotted native gain (and native preset). Best-effort: a missing
+    /// snapshot or absent service is a clean no-op, never a throw.
     func restoreNativeGain(for identity: DisplayIdentity) async throws
-    /// Probe whether this display exposes the RGB-gain VCP codes.
+    /// Probe whether this display exposes the RGB-gain VCP codes (read VCP 0x16). Returns a typed
+    /// capability — `.unknown(.privateSymbolUnavailable)` when the private symbols are missing,
+    /// `.unsupported(.buttonlessAppleDisplay)` when there is no external AV service.
     func probeRGBGainSupport(for identity: DisplayIdentity) async -> Capability<DDCColorCaps>
 }
 
 // MARK: - DDCError
 
-public enum DDCError: Error, Sendable {
-    case notYetImplemented
+public enum DDCError: Error, Sendable, Equatable {
+    /// The private IOAVService symbols could not be resolved on this OS build (kill-switch path).
     case privateSymbolUnavailable
-    case probeFailed
-    case verifyMismatch
-}
-
-// MARK: - IOAVServiceDDCTransport (stub)
-
-/// The real transport will resolve IOAVServiceWriteI2C / IOAVServiceReadI2C at runtime via
-/// dlsym (declared in CInterop) and run write-then-read verification. Stubbed for now.
-public struct IOAVServiceDDCTransport: DDCTransport {
-    private let logger = Logger(label: "com.abendrot.WarmthKit.DDCTransport")
-
-    public init() {}
-
-    public func writeRGBGain(_ gain: RGBGain, to identity: DisplayIdentity) async throws {
-        // TODO(milestone): resolve IOAVServiceWriteI2C via dlsym (CInterop), build the VCP
-        // 0x16/0x18/0x1A gain transactions, write-then-read verify, rate-limit/backoff.
-        throw DDCError.notYetImplemented
-    }
-
-    public func restoreNativeGain(for identity: DisplayIdentity) async throws {
-        // TODO(milestone): restore from the persisted EDID native-state snapshot.
-        throw DDCError.notYetImplemented
-    }
-
-    public func probeRGBGainSupport(for identity: DisplayIdentity) async -> Capability<DDCColorCaps> {
-        // TODO(milestone): VCP 0x16 read to detect RGB-gain capability.
-        .unknown(reason: .notYetProbed)
-    }
+    /// No external AV service for this display (built-in panel, HDMI-no-service, or unplugged).
+    case busUnavailable
+    /// Could not read the display's native gain — refuse to warm without a restore baseline.
+    case nativeReadFailed
+    /// A set-VCP write did not verify by read-back after all retries.
+    case verifyMismatch(code: UInt8, wrote: UInt16)
 }
 
 // MARK: - DDCBackend
 
-/// The hardware DDC layer (`IOAVServiceWriteI2C` VCP gain). Opt-in PER display; not a default
-/// in v1.0. Requires EDID snapshot, per-display transaction queue, write-then-read verify, and
-/// launch-time stale-state recovery before it may even be offered (§21‑E3).
+/// The hardware DDC layer (`IOAVServiceWriteI2C` VCP gain). Opt-in PER display; not a default in
+/// v1.0. All the dangerous machinery — native-state snapshot, write-then-read verify,
+/// rate-limit/backoff, serialized transactions, restore, and launch-time stale-state recovery —
+/// lives in the `DDCTransport` (§21‑E3). The backend is the thin `WarmthBackend` adapter the
+/// engine drives behind `LayerResolver`.
 public struct DDCBackend: WarmthBackend {
     public let method: DisplayMethod = .hardware
 
     private let transport: any DDCTransport
-    private let warmestPoint: Kelvin
 
-    public init(transport: any DDCTransport = IOAVServiceDDCTransport(), warmestPoint: Kelvin = Kelvin(2700)) {
+    public init(transport: any DDCTransport) {
         self.transport = transport
-        self.warmestPoint = warmestPoint
     }
 
     public func classify(_ identity: DisplayIdentity) async -> Capability<Void> {
-        // Surface the typed "not yet probed" state rather than a silent nil.
         switch await transport.probeRGBGainSupport(for: identity) {
         case .supported:                 return .supported(())
         case let .unsupported(reason):   return .unsupported(reason: reason)
@@ -77,8 +59,10 @@ public struct DDCBackend: WarmthBackend {
     }
 
     public func apply(_ kelvin: Kelvin, to identity: DisplayIdentity) async throws {
-        let gain = rgbGain(for: kelvin)
-        try await transport.writeRGBGain(gain, to: identity)
+        // The Kelvin→RGB gain (red anchored ≈1.0, cooler channels attenuated) becomes the
+        // per-channel multiplier the transport applies relative to the panel's NATIVE gain, so a
+        // 6500K (identity) target restores native and warmer targets pull blue/green down.
+        try await transport.writeRGBGain(rgbGain(for: kelvin), to: identity)
     }
 
     public func reset(_ identity: DisplayIdentity) async throws {

@@ -34,8 +34,13 @@ enum NightShiftPrivateAPI {
     ) -> ObjCBool
 
     /// `- (void)setStatusNotificationBlock:(void(^)(void))block`.
+    ///
+    /// The block parameter MUST be `@escaping`: CoreBrightness retains the block past the call
+    /// (it fires it on later Night Shift changes). Without `@escaping` the Swift runtime treats it
+    /// as non-escaping and traps ("closure argument passed as @noescape to Objective-C has
+    /// escaped") the moment CoreBrightness stores it — i.e. on the engine's very first `start()`.
     private typealias SetNotificationIMP = @convention(c) (
-        AnyObject, Selector, @convention(block) () -> Void
+        AnyObject, Selector, @escaping @convention(block) () -> Void
     ) -> Void
 
     // MARK: OS-build gate
