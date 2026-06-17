@@ -81,3 +81,12 @@ Execution kicked off. Large verified body of work committed on branch **`build`*
 **Xcode MCP:** native `xcrun mcpbridge` registered at **user scope**, Intelligence-pane toggle ON, **connected**. Tools load at session START → after a restart the new session can build/launch/diagnose the app live.
 
 **Next:** (1) founder brand selection; (2) **M0** — implement the real `OverlayRenderer` Metal veil (first actual pixel warming) + **M7** hotplug observer; then **M2** DDC. (3) Still founder-gated: create public repo, push to remote, live deploy, external posts.
+
+## Session 3 — state (2026-06-17): icon, brand pivot, engine system layers, public repo
+**→ See `RESUME-PROMPT.md` for the full, paste-able handoff.** Deltas since Session 2:
+- **Public repo is LIVE:** github.com/matthewrball/abendrot (PUBLIC, MIT, **clean single-commit history — all planning scrubbed/hidden**). CI is **GREEN**. It is **BEHIND** this private repo (no icon / sunset palette / M7 yet) → a **re-publish is needed** (founder push gate). Clean export dir: `../abendrot-public`.
+- **Engine system layers landed + verified — `swift test` = 53 tests pass:** M0 overlay (real; alpha-tint, true-multiply = §18 future), **M7** hotplug/wake re-baseline, **real Night Shift follower** (`CBBlueLightClient`), **gamma classification**. **DDC (`HardwareDDC`) is STILL the stub → M2 is the next milestone** (IOAVService + EDID snapshot/verify/restore + emergency restore; needs real external monitors to verify).
+- **App icon shipped + baked into the built `.app`:** founder art `assets/abendrot-iteration3.png` → masked `assets/abendrot.png` → iconset/`.icns`/`AppIcon.appiconset`. Reproducible: `python3 scripts/icon/build-icons.py`.
+- **Brand pivoted to the icon's SUNSET palette** (founder: "maybe temporary"): grounds `#160A12`/`#221019`/`#341320`, accent `#FD9228`/`#FFC061`/`#C2310A`, `--sunset-sky` gradient — applied + build-verified across `brand/tokens.{css,json}`, the app's `Colors.xcassets` (19 colorsets), the landing page, and the coming-soon site.
+- **Env:** full **Xcode 26.5** installed (license agreed) — `swift build`/`swift test`/`xcodebuild` all work; Xcode **MCP** registered (user scope) — loads after a session restart. Tools: xcodegen/Pillow/sips/iconutil.
+- **Next:** **M2 (DDC)** + a real-hardware pass; re-publish the public repo; then live QA/hardware-matrix runs, motion polish, landing deploy — all founder-gated.

@@ -29,6 +29,18 @@ public actor WarmthEngine {
     private let registry: DisplayRegistry
     private let nightShiftFollower: SystemNightShiftStateFollower
 
+    // MARK: System layers (hotplug / wake re-baseline)
+
+    /// Hotplug / mode-change observer (CoreGraphics reconfiguration callback).
+    private let reconfigurationObserver: DisplayReconfigurationObserver
+    /// System-wake observer (NSWorkspace) — main-actor, owned by the umbrella.
+    private let wakeObserver: SystemWakeObserver
+    /// The long-lived task that coalesces reconfiguration + wake bursts and re-baselines once
+    /// per quiet window. Cancelled in `shutdown()`.
+    private var rebaselineTask: Task<Void, Never>?
+    /// Debounce policy (the timing arithmetic is pure / unit-tested in `ReconfigurationDebounce`).
+    private let rebaselineDebounceWindow: Duration = .milliseconds(400)
+
     // MARK: Observation
 
     /// One continuation per active `stateUpdates()` subscriber.
@@ -45,6 +57,8 @@ public actor WarmthEngine {
         self.ddc = DDCBackend(warmestPoint: configuration.defaultWarmestPoint)
         self.registry = DisplayRegistry()
         self.nightShiftFollower = SystemNightShiftStateFollower()
+        self.reconfigurationObserver = DisplayReconfigurationObserver()
+        self.wakeObserver = SystemWakeObserver()
         self.box = WarmthStateBox(
             value: WarmthState(
                 isEnabled: false,
@@ -62,18 +76,44 @@ public actor WarmthEngine {
     public func start() async {
         // TODO(milestone): stale-state recovery from persisted EDID snapshots, baseline
         // capabilities per display, re-apply persisted per-display state.
+
+        // Start the read-only Night Shift follower. Its change hook re-applies the schedule so
+        // following the system state is live, not just sampled at launch. The follower degrades
+        // cleanly to `.unknown(.privateSymbolUnavailable)` when CBBlueLightClient is unavailable
+        // or the kill switch is engaged, and the engine falls back to the evening window.
+        nightShiftFollower.start { [weak self] in
+            // Runs on an arbitrary CoreBrightness queue → hop onto the actor.
+            Task { await self?.handleNightShiftChange() }
+        }
+
+        // Start the hotplug + wake observers and the coalescing re-baseline loop.
+        await startSystemObservers()
+
         await rebaselineDisplays()
         publish()
     }
 
     /// Neutral-reset every display via every active layer, then tear down. Called on quit.
     public func shutdown() async {
+        rebaselineTask?.cancel()
+        rebaselineTask = nil
+        reconfigurationObserver.stop()
+        await wakeObserver.stop()
+        nightShiftFollower.stop()
+
         for display in box.value.displays {
             try? await overlay.reset(display.id)
             try? await gamma.reset(display.id)
             try? await ddc.reset(display.id)
         }
         finishContinuations()
+    }
+
+    /// Re-resolve the schedule when the followed Night Shift state changes. (Re-apply only; the
+    /// display set is unchanged, so no re-baseline is needed.)
+    private func handleNightShiftChange() async {
+        await reapply()
+        publish()
     }
 
     // MARK: ── Global controls ──────────────────────────────────────────────────
@@ -199,6 +239,78 @@ public actor WarmthEngine {
 
     private func removeContinuation(_ id: UUID) {
         continuations[id] = nil
+    }
+
+    // MARK: ── System observers (hotplug / wake re-baseline) ─────────────────────
+
+    /// Start the reconfiguration + wake observers and the single coalescing loop that turns a
+    /// burst of either signal into exactly one debounced re-baseline. Debouncing/re-baseline
+    /// living in the engine is the contract (§21‑E4); the observers themselves are dumb emitters.
+    private func startSystemObservers() async {
+        reconfigurationObserver.start()
+        await wakeObserver.start()
+
+        // Snapshot the streams before entering the detached loop (the observers are immutable).
+        let reconfigEvents = reconfigurationObserver.events
+        let wakeEvents = wakeObserver.events
+        let window = rebaselineDebounceWindow
+
+        rebaselineTask = Task { [weak self] in
+            // A local debounce policy: coalesce events arriving within `window` of each other and
+            // re-baseline once after the burst goes quiet. The arithmetic is the pure,
+            // unit-tested `ReconfigurationDebounce`; here we only drive its timers.
+            await withTaskGroup(of: Void.self) { group in
+                // One child drains reconfiguration events, one drains wake events; both funnel
+                // into the same actor-side coalescer.
+                group.addTask { [weak self] in
+                    for await _ in reconfigEvents {
+                        await self?.coalesceRebaseline(window: window)
+                    }
+                }
+                group.addTask { [weak self] in
+                    for await _ in wakeEvents {
+                        await self?.coalesceRebaseline(window: window)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The pure debounce policy (timing arithmetic) for the in-flight burst. The actor below
+    /// drives its timers; the policy itself is unit-tested headlessly in `ReconfigurationDebounce`.
+    private lazy var rebaselineDebounce = ReconfigurationDebounce(window: rebaselineDebounceWindow)
+    /// The monotonic clock the debounce times against. Only differences are used.
+    private let rebaselineClock = ContinuousClock()
+    /// The fixed origin the monotonic seconds are measured from (so the policy sees a stable,
+    /// increasing seconds value across the run).
+    private let rebaselineEpoch = ContinuousClock().now
+
+    /// Seconds elapsed since the engine's clock epoch — the monotonic domain the debounce policy
+    /// records against.
+    private func nowSeconds() -> Double {
+        let d = rebaselineEpoch.duration(to: rebaselineClock.now).components
+        return Double(d.seconds) + Double(d.attoseconds) / 1e18
+    }
+
+    /// Record a reconfiguration/wake event and ensure exactly one debounced re-baseline fires for
+    /// the burst. Re-entrant-safe on the actor: overlapping events extend the burst's quiet window
+    /// (via `ReconfigurationDebounce`) rather than scheduling a second re-baseline.
+    private func coalesceRebaseline(window: Duration) async {
+        // `record` returns true only when this event STARTS a new burst; subsequent events while a
+        // fire is pending merely push the deadline out and return false, so only one waiter runs.
+        guard rebaselineDebounce.record(at: nowSeconds()) else { return }
+
+        // Drain the burst: sleep for the remaining quiet window, re-checking after each nap since
+        // late events extend it.
+        while let remaining = rebaselineDebounce.remainingDelay(at: nowSeconds()), remaining > 0 {
+            try? await rebaselineClock.sleep(for: .seconds(remaining))
+            if Task.isCancelled { rebaselineDebounce.consumeFire(); return }
+        }
+
+        rebaselineDebounce.consumeFire()
+        guard !Task.isCancelled else { return }
+        await rebaselineDisplays()
+        publish()
     }
 
     // MARK: ── Internals ─────────────────────────────────────────────────────────

@@ -1,57 +1,57 @@
 /* ============================================================================
    Abendrot — Design Tokens (single source of truth)
-   Ember amber accent + twilight palette. Warmth is the DEFAULT state.
+   Sunset palette derived from the app icon. Warmth is the DEFAULT state.
    ----------------------------------------------------------------------------
-   Status: PROVISIONAL working direction (2026-06-16). Refine per §5.5; the
-   founder selects the final accent ramp + icon before lock. Do NOT hard-lock.
+   Status: WORKING direction (2026-06-17), pulled from assets/abendrot.png — a
+   richer, more saturated sunset than the prior amber/indigo set: warm near-black
+   sky -> oxblood -> vivid orange -> golden sun. Treated as the current working
+   direction (may change); keep these as tokens, do not hard-code values.
 
-   Consumed by: Lane B (app — mirror into Swift Color/asset catalog) and
-                Lane D (landing page — abendrot.app).
+   Consumed by: the app (mirror into Swift Color / asset catalog) and the web
+   surfaces (coming-soon site + landing).
 
    RULES baked into these tokens:
    - Never pure #000 (a cold black fights a warmth product). Grounds are
-     warm-tinted near-blacks.
+     warm-tinted near-blacks pulled from the icon's sky.
    - Pure #FFFFFF (--reveal-true-white) is RESERVED exclusively for the
      Reveal-True-Color moment. Do not use it for body text, chrome, or icons.
      Control chrome that would normally be white — e.g. toggle/slider knobs —
-     uses off-white --cream (#F7ECD9) instead, so pure white stays unique to the
-     reveal veil. (See brand/explorations/components.html knobs + README §5.)
+     uses off-white --cream (#F7ECD9) instead.
    - Light variant exists for system Light Appearance + Reduce-Transparency
      SOLID fallback (ember-tinted, never neutral grey).
    ============================================================================ */
 
 :root {
-  /* ---- Accent ramp: Ember amber (candlelight / hearth) ------------------- */
-  --accent:            #FFAB5C; /* primary ember amber */
-  --accent-2:          #FFD6A3; /* highlight / gradient top */
-  --accent-deep:       #C2591F; /* deep ember / gradient base */
-  --accent-hi:         #FFE7CC; /* faintest warm tint, near-cream rim light */
-  --accent-press:      #E8924A; /* pressed/active accent (darker than base) */
+  /* ---- Accent ramp: sunset orange -> golden sun (from the icon) ---------- */
+  --accent:            #FD9228; /* primary — the golden sun core */
+  --accent-2:          #FFC061; /* highlight / gradient top (lighter gold) */
+  --accent-deep:       #C2310A; /* deep ember-orange / gradient base */
+  --accent-hi:         #FFE0B8; /* faintest warm tint, near-cream rim light */
+  --accent-press:      #E2740F; /* pressed/active accent (darker than base) */
 
   /* Accent as channels (for rgba()/color-mix in app + web) */
-  --accent-rgb:        255 171 92;
-  --accent-2-rgb:      255 214 163;
-  --accent-deep-rgb:   194 89 31;
+  --accent-rgb:        253 146 40;
+  --accent-2-rgb:      255 192 97;
+  --accent-deep-rgb:   194 49 10;
 
   /* ---- Ember text on cream (WCAG AA small-text safe) --------------------
-     IMPORTANT: --accent (#FFAB5C) is a FILL / large-element color only. On any
-     cream ground it scores ~1.5:1 — far below WCAG AA (4.5:1 for normal text).
-     Even --accent-deep (#C2591F / light #B14E18) only clears AA-large (3:1),
-     not AA-normal, on the deeper creams. For ember-colored SMALL text on cream
-     (captions, links, labels) use --accent-ink-on-cream, which clears AA-normal
-     (>=4.5:1) on every cream surface in the light ramp. Verified 2026-06-16. */
-  --accent-ink-on-cream: #9C4310; /* ember, AA-normal on cream (>=5.1:1) */
+     IMPORTANT: --accent (#FD9228) is a FILL / large-element color only. On any
+     cream ground it scores far below WCAG AA (4.5:1 for normal text). For
+     ember-colored SMALL text on cream (captions, links, labels) use
+     --accent-ink-on-cream, which clears AA-normal (>=4.5:1) on every cream
+     surface in the light ramp. */
+  --accent-ink-on-cream: #9C4310; /* ember, AA-normal on cream (>=5:1) */
 
-  /* ---- Twilight grounds (dark, the DEFAULT appearance) ------------------- */
-  --indigo:            #0C0A16; /* deepest twilight ground (never #000) */
-  --plum:              #171029; /* mid twilight */
-  --twilight:          #1D1533; /* raised surfaces */
-  --twilight-2:        #261B40; /* hover / elevated surface */
+  /* ---- Sunset grounds (dark, the DEFAULT appearance) — from the icon sky -- */
+  --indigo:            #160A12; /* deepest warm near-black sky (never #000) */
+  --plum:              #221019; /* deep oxblood-brown */
+  --twilight:          #341320; /* raised oxblood surface */
+  --twilight-2:        #45192A; /* hover / elevated surface */
 
-  /* ---- Text (dark appearance) ------------------------------------------- */
-  --text:              #ECE8F4; /* primary text (warm off-white, NOT #fff) */
-  --text-muted:        rgba(236, 232, 244, .60);
-  --text-faint:        rgba(236, 232, 244, .38);
+  /* ---- Text (dark appearance) — warm off-white ------------------------- */
+  --text:              #F3EADF; /* primary text (warm off-white, NOT #fff) */
+  --text-muted:        rgba(243, 234, 223, .60);
+  --text-faint:        rgba(243, 234, 223, .38);
   --cream:             #F7ECD9; /* warm light accent text / hero numerals / control knobs (off-white, never #fff) */
 
   /* ---- Reserved: Reveal True Color only --------------------------------- */
@@ -59,8 +59,8 @@
                                    Knobs/chrome use --cream; wordmark tops at --accent-hi. */
 
   /* ---- Lines / dividers -------------------------------------------------- */
-  --line:              rgba(255, 255, 255, .10);
-  --line-strong:       rgba(255, 255, 255, .16);
+  --line:              rgba(255, 240, 230, .10);
+  --line-strong:       rgba(255, 240, 230, .16);
 
   /* ---- Liquid Glass material params (the real recipe) ------------------- */
   --glass-blur:        16px;
@@ -75,8 +75,8 @@
   --glass-outer:       0 16px 40px rgba(0,0,0,.45);
   /* "frosted ember" — more-opaque material for Settings / data-heavy chrome */
   --frost-tint:        linear-gradient(150deg,
-                         rgba(43,30,64,.86) 0%,
-                         rgba(28,20,46,.92) 100%);
+                         rgba(58,21,33,.86) 0%,
+                         rgba(36,16,25,.92) 100%);
   --frost-blur:        30px;
   --frost-saturate:    160%;
   /* warm glow used for active state on accent surfaces */
@@ -100,6 +100,15 @@
   --font-serif:        ui-serif, "New York", "Iowan Old Style", Georgia, serif;
   --font-ui:           -apple-system, "SF Pro Text", BlinkMacSystemFont, system-ui, sans-serif;
   --font-marketing:    "Figtree", var(--font-ui);
+
+  /* ---- Signature sunset gradient (the icon's vertical ramp) -------------- */
+  --sunset-sky:        linear-gradient(180deg,
+                         #160A12 0%,
+                         #2A0F16 34%,
+                         #6A100F 60%,
+                         #C2310A 80%,
+                         #FB7C0E 92%,
+                         #FD9228 100%);
 }
 
 /* ===========================================================================
@@ -108,19 +117,19 @@
    =========================================================================== */
 :root[data-appearance="light"],
 .is-light {
-  --indigo:        #EFE4D2; /* warm cream-sand deepest (the "ground") */
-  --plum:          #F4EADB; /* mid warm surface */
-  --twilight:      #FAF2E6; /* raised surface */
-  --twilight-2:    #FFF8EE; /* hover / elevated */
+  --indigo:        #F0E2D0; /* warm cream-sand deepest (the "ground") */
+  --plum:          #F5E9D8; /* mid warm surface */
+  --twilight:      #FBF1E4; /* raised surface */
+  --twilight-2:    #FFF7EC; /* hover / elevated */
 
-  --text:          #2A2036; /* deep plum-ink, NOT pure black */
-  --text-muted:    rgba(42, 32, 54, .62);
-  --text-faint:    rgba(42, 32, 54, .40);
+  --text:          #2E1A1A; /* deep ember-ink, NOT pure black */
+  --text-muted:    rgba(46, 26, 26, .62);
+  --text-faint:    rgba(46, 26, 26, .40);
 
-  --accent-deep:   #B14E18; /* slightly deeper for AA contrast on cream */
+  --accent-deep:   #B0430F; /* slightly deeper for AA contrast on cream */
 
-  --line:          rgba(42, 32, 54, .12);
-  --line-strong:   rgba(42, 32, 54, .20);
+  --line:          rgba(46, 26, 26, .12);
+  --line-strong:   rgba(46, 26, 26, .20);
 
   --glass-tint:    linear-gradient(140deg,
                      rgba(255,255,255,.55) 0%,
@@ -128,10 +137,10 @@
                      rgba(255,255,255,.42) 100%);
   --glass-inset-top:  inset 0 1px 1.5px rgba(255,255,255,.85);
   --glass-inset-edge: inset 0 0 0 .5px rgba(255,255,255,.55);
-  --glass-outer:      0 14px 34px rgba(120, 80, 30, .18);
+  --glass-outer:      0 14px 34px rgba(150, 70, 20, .18);
   --frost-tint:    linear-gradient(150deg,
-                     rgba(250,242,230,.90) 0%,
-                     rgba(244,234,219,.94) 100%);
+                     rgba(251,241,228,.90) 0%,
+                     rgba(245,233,216,.94) 100%);
 }
 
 /* ===========================================================================
@@ -142,38 +151,36 @@
 .is-solid {
   --glass-blur:     0px;
   --glass-saturate: 100%;
-  --glass-tint:     linear-gradient(150deg, #251A3C 0%, #1B1430 100%); /* solid warm twilight */
-  --frost-tint:     linear-gradient(150deg, #2A1E44 0%, #1F1638 100%);
+  --glass-tint:     linear-gradient(150deg, #2B1019 0%, #1E0B12 100%); /* solid warm oxblood */
+  --frost-tint:     linear-gradient(150deg, #321320 0%, #240E18 100%);
   --glass-inset-top:  inset 0 1px 0 rgba(255,255,255,.10);
   --glass-inset-edge: inset 0 0 0 .5px rgba(255,255,255,.14);
 }
 :root[data-transparency="reduce"][data-appearance="light"],
 .is-light.is-solid {
-  --glass-tint: linear-gradient(150deg, #FBF3E7 0%, #F4EADB 100%);
-  --frost-tint: linear-gradient(150deg, #FAF2E6 0%, #F1E5D2 100%);
+  --glass-tint: linear-gradient(150deg, #FBF1E4 0%, #F4E8D7 100%);
+  --frost-tint: linear-gradient(150deg, #FAF1E3 0%, #F1E2CE 100%);
 }
 
 /* High-contrast users get the SAME ember-tinted SOLID surface as Reduce
-   Transparency (never neutral grey), plus firmer hairlines for legible edges.
-   This complements the class/attr fallbacks above for environments that
-   express the preference via the OS media query instead. */
+   Transparency (never neutral grey), plus firmer hairlines for legible edges. */
 @media (prefers-contrast: more) {
   :root {
     --glass-blur:     0px;
     --glass-saturate: 100%;
-    --glass-tint:     linear-gradient(150deg, #251A3C 0%, #1B1430 100%);
-    --frost-tint:     linear-gradient(150deg, #2A1E44 0%, #1F1638 100%);
+    --glass-tint:     linear-gradient(150deg, #2B1019 0%, #1E0B12 100%);
+    --frost-tint:     linear-gradient(150deg, #321320 0%, #240E18 100%);
     --glass-inset-top:  inset 0 1px 0 rgba(255,255,255,.10);
     --glass-inset-edge: inset 0 0 0 .5px rgba(255,255,255,.16);
-    --line:        rgba(255, 255, 255, .28);
-    --line-strong: rgba(255, 255, 255, .42);
+    --line:        rgba(255, 240, 230, .28);
+    --line-strong: rgba(255, 240, 230, .42);
   }
   :root[data-appearance="light"],
   .is-light {
-    --glass-tint: linear-gradient(150deg, #FBF3E7 0%, #F4EADB 100%);
-    --frost-tint: linear-gradient(150deg, #FAF2E6 0%, #F1E5D2 100%);
-    --line:        rgba(42, 32, 54, .34);
-    --line-strong: rgba(42, 32, 54, .50);
+    --glass-tint: linear-gradient(150deg, #FBF1E4 0%, #F4E8D7 100%);
+    --frost-tint: linear-gradient(150deg, #FAF1E3 0%, #F1E2CE 100%);
+    --line:        rgba(46, 26, 26, .34);
+    --line-strong: rgba(46, 26, 26, .50);
   }
 }
 

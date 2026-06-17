@@ -31,16 +31,20 @@ body {
   pointer-events: none;
   --warm: 0;
   background:
-    radial-gradient(1200px 820px at 80% calc(-12% + var(--warm) * 18%),
-      rgb(var(--accent-rgb) / calc(.10 + var(--warm) * .26)), transparent 60%),
+    /* upper-right ember that swells as you descend (dusk deepening) */
+    radial-gradient(1200px 820px at 80% calc(-10% + var(--warm) * 22%),
+      rgb(var(--accent-rgb) / calc(.08 + var(--warm) * .34)), transparent 60%),
+    /* the residual cool of evening, burned off as warmth rises */
     radial-gradient(1000px 760px at 12% 4%,
-      rgba(120, 90, 200, calc(.16 - var(--warm) * .10)), transparent 55%),
-    radial-gradient(900px 700px at 50% 116%,
-      rgb(var(--accent-deep-rgb) / calc(var(--warm) * .22)), transparent 62%),
+      rgba(120, 90, 200, calc(.14 - var(--warm) * .11)), transparent 55%),
+    /* a low ember glow rising from the page foot — the sun beneath the horizon */
+    radial-gradient(1100px 760px at 50% 114%,
+      rgb(var(--accent-deep-rgb) / calc(.06 + var(--warm) * .34)), transparent 64%),
+    /* the ground itself warms from twilight toward ember as --warm climbs */
     linear-gradient(168deg,
-      color-mix(in oklab, #100b1d, var(--accent-deep) calc(var(--warm) * 14%)) 0%,
-      color-mix(in oklab, var(--plum), var(--accent-deep) calc(var(--warm) * 9%)) 48%,
-      var(--indigo) 100%);
+      color-mix(in oklab, var(--indigo), var(--accent-deep) calc(var(--warm) * 22%)) 0%,
+      color-mix(in oklab, var(--plum), var(--accent-deep) calc(var(--warm) * 15%)) 46%,
+      color-mix(in oklab, var(--indigo), var(--twilight) calc(var(--warm) * 30%)) 100%);
   transition: background .45s linear;
   will-change: background;
 }
@@ -150,7 +154,7 @@ section { position: relative; padding: clamp(72px, 11vh, 132px) 0; }
   border-bottom: 1px solid transparent;
 }
 .nav.scrolled {
-  background: rgba(12, 10, 22, .55);
+  background: rgba(22, 10, 18, .55);
   -webkit-backdrop-filter: blur(14px) saturate(180%);
   backdrop-filter: blur(14px) saturate(180%);
   border-bottom-color: var(--line);
@@ -172,20 +176,174 @@ section { position: relative; padding: clamp(72px, 11vh, 132px) 0; }
 @media (min-width: 760px) { .nav-links { display: flex; } }
 
 /* =========================================================================
-   HERO — locked viewport, cinematic
+   HERO — a cinematic sunset (mirrors the app icon's vertical ramp)
    ========================================================================= */
 .hero {
   min-height: 100svh;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 96px 24px 48px; position: relative;
+  text-align: center; padding: 120px 24px 64px; position: relative;
+  overflow: hidden;
+  isolation: isolate;
 }
-.hero-inner { max-width: 920px; }
+
+/* --- The sunset sky: the signature vertical ramp from the icon -----------
+   Deep warm near-black sky at top -> oxblood -> vivid orange band low.
+   This is the single biggest move — the hero IS the sunset, not a dark page
+   with accents. The ramp is anchored to the bottom so the bright orange sits
+   on the horizon and text rides the dark upper sky. ----------------------- */
+.hero-sky {
+  position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: var(--sunset-sky);
+  /* push the bright end down so the dark sky dominates the upper ~62% */
+  background-size: 100% 162%;
+  background-position: 0 0;
+}
+/* faint film grain over the sky so the big ramp never bands */
+.hero-sky::after {
+  content: ""; position: absolute; inset: 0; opacity: .045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* --- The golden sun cresting the horizon, low in the hero ---------------
+   A radial accent bloom centered on the horizon line — the icon's sun. It
+   reads as a glowing sun core fading up into the orange sky. ------------- */
+.hero-sun {
+  position: absolute; left: 50%; bottom: 13%;
+  width: min(130vw, 1180px); aspect-ratio: 1;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(closest-side,
+      var(--accent-hi) 0%,
+      rgb(var(--accent-2-rgb) / .95) 12%,
+      rgb(var(--accent-rgb) / .72) 26%,
+      rgb(var(--accent-rgb) / .30) 44%,
+      rgb(var(--accent-deep-rgb) / .12) 64%,
+      transparent 78%);
+  filter: blur(2px);
+  animation: sun-rise 1.6s var(--ease-warm) both;
+}
+/* a tighter, hotter sun-core sitting right on the horizon */
+.hero-sun::before {
+  content: ""; position: absolute; left: 50%; bottom: 0;
+  width: 46%; aspect-ratio: 2 / 1; transform: translateX(-50%);
+  border-radius: 999px 999px 0 0;
+  background: radial-gradient(120% 200% at 50% 100%,
+    #fff 0%, var(--accent-hi) 18%, var(--accent-2) 40%, var(--accent) 70%, transparent 90%);
+  filter: blur(6px);
+}
+
+/* --- The horizon line — where sky meets the warm-dark ground ------------- */
+.hero-horizon {
+  position: absolute; left: 0; right: 0; bottom: 12.5%; height: 2px;
+  background: linear-gradient(90deg,
+    transparent, rgb(var(--accent-2-rgb) / .55) 30%, var(--accent-hi) 50%,
+    rgb(var(--accent-2-rgb) / .55) 70%, transparent);
+  filter: blur(.4px);
+  box-shadow: 0 0 22px 2px rgb(var(--accent-rgb) / .5);
+  animation: rise 1.2s .3s var(--ease-warm) both;
+}
+
+/* --- The water reflection below the horizon — the icon's shimmer ---------
+   A short band of warm light streaking downward with subtle horizontal ripple
+   lines, fading into the deep ground at the very bottom of the hero. ----- */
+.hero-reflection {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 13%;
+  background:
+    /* ripple lines */
+    repeating-linear-gradient(180deg,
+      transparent 0, transparent 5px,
+      rgba(255, 236, 217, .05) 5px, rgba(255, 236, 217, .05) 6px),
+    /* the vertical sun-streak on the water, brightest at the horizon */
+    radial-gradient(60% 130% at 50% 0%,
+      rgb(var(--accent-rgb) / .55) 0%,
+      rgb(var(--accent-deep-rgb) / .22) 36%,
+      transparent 72%),
+    /* settle into the deep ground at the bottom edge */
+    linear-gradient(180deg, transparent 0%, var(--indigo) 94%);
+  -webkit-mask: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
+          mask: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
+  animation: rise 1.3s .4s var(--ease-warm) both;
+}
+
+/* --- Legibility scrim: darkens the upper sky behind the headline so text
+   keeps WCAG-AA contrast even as the sky glows below. Vertical only — it
+   never touches the bright sun/horizon band. ----------------------------- */
+.hero-scrim {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(15, 8, 14, .62) 0%,
+    rgba(15, 8, 14, .40) 26%,
+    rgba(15, 8, 14, .12) 48%,
+    transparent 64%);
+}
+
+/* On tall, narrow screens the centered text would collide with the rising sun.
+   Anchor the content higher in the dark sky and keep the sun a horizon glow
+   at the foot of the hero — the same composition, recomposed for portrait. */
+@media (max-width: 640px) {
+  .hero { justify-content: flex-start; padding: clamp(104px, 20vh, 190px) 18px 56px; }
+  /* push the bright ramp further down so the upper sky stays deep behind text */
+  .hero-sky { background-size: 100% 188%; }
+  .hero-sun { width: min(150vw, 440px); bottom: 8%; }
+  .hero-horizon { bottom: 8%; }
+  .hero-reflection { height: 10%; }
+  .hero-inner { padding-left: 4px; padding-right: 4px; }
+  /* lengthen the upper scrim so the headline zone stays dark and legible */
+  .hero-scrim {
+    background: linear-gradient(180deg,
+      rgba(15, 8, 14, .68) 0%,
+      rgba(15, 8, 14, .54) 34%,
+      rgba(15, 8, 14, .26) 58%,
+      rgba(15, 8, 14, .06) 76%,
+      transparent 88%);
+  }
+}
+
+.hero-inner {
+  width: 100%; max-width: 920px; position: relative; isolation: isolate;
+  padding: clamp(20px, 4vw, 44px) clamp(12px, 3vw, 32px);
+}
+/* a soft, content-shaped warm-dark wash hugging the text column — just enough
+   to hold AA contrast over the brightening sky without flattening the sunset.
+   Faded edges keep the sun, horizon and reflection reading at the hero edges. */
+.hero-inner::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(115% 78% at 50% 40%,
+    rgba(13, 6, 11, .40) 0%,
+    rgba(13, 6, 11, .24) 46%,
+    rgba(13, 6, 11, .08) 70%,
+    transparent 88%);
+}
+
+/* the app-icon glyph, floating above the headline — ties the page to the icon */
+.hero-glyph {
+  display: inline-block; margin-bottom: 26px;
+  animation: glyph-in 1s var(--ease-warm) both;
+}
+.hero-glyph img {
+  width: clamp(64px, 9vw, 88px); height: auto; display: block;
+  border-radius: 22px;
+  box-shadow:
+    0 0 0 .5px rgba(255, 255, 255, .14),
+    0 10px 34px -8px rgb(var(--accent-deep-rgb) / .7),
+    0 0 46px -6px rgb(var(--accent-rgb) / .55);
+}
+@media (max-width: 559px) { .hero-glyph { margin-bottom: 18px; } }
+
 .hero .eyebrow { margin-bottom: 22px; animation: rise .8s var(--ease-warm) both; }
 .hero h1 {
   font-family: var(--font-serif);
   font-weight: 600; letter-spacing: -.03em; line-height: 1.02;
-  font-size: clamp(38px, 8.2vw, 88px);
-  margin: 0 0 26px; text-wrap: balance;
+  font-size: clamp(31px, 7.4vw, 88px);
+  margin: 0 0 26px; text-wrap: pretty; overflow-wrap: break-word;
+  /* a soft, warm-dark halo keeps the off-white headline AA-legible even where
+     the sunset sky brightens behind the lower lines */
+  text-shadow: 0 2px 28px rgba(13, 6, 11, .62), 0 2px 6px rgba(13, 6, 11, .5);
+}
+/* the eyebrow string is long; let it wrap on very narrow phones rather than clip */
+@media (max-width: 430px) {
+  .hero .eyebrow { display: inline-block; max-width: 22ch; line-height: 1.5; }
 }
 .hero h1 .warm-word {
   background: linear-gradient(180deg, #fff 0%, var(--accent-2) 56%, var(--accent) 100%);
@@ -196,9 +354,10 @@ section { position: relative; padding: clamp(72px, 11vh, 132px) 0; }
 .hero h1 .line-1 { animation: rise .9s .06s var(--ease-warm) both; }
 .hero h1 .line-2 { animation: rise .9s .16s var(--ease-warm) both; }
 .hero .subhead {
-  font-size: clamp(16px, 2.3vw, 21px); color: var(--text-muted);
+  font-size: clamp(16px, 2.3vw, 21px); color: var(--cream);
   max-width: 56ch; margin: 0 auto 38px; text-wrap: balance;
   animation: rise .9s .28s var(--ease-warm) both;
+  text-shadow: 0 1px 18px rgba(13, 6, 11, .5);
 }
 .hero .subhead strong { color: var(--text); font-weight: 600; }
 .hero-cta-row {
@@ -308,7 +467,7 @@ section { position: relative; padding: clamp(72px, 11vh, 132px) 0; }
   transform: translate(-50%, -50%);
   width: 46px; height: 46px; border-radius: 50%;
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  box-shadow: 0 0 0 4px rgba(12,10,22,.35), var(--glow-accent), inset 0 1px 0 rgba(255,255,255,.5);
+  box-shadow: 0 0 0 4px rgba(22,10,18,.35), var(--glow-accent), inset 0 1px 0 rgba(255,255,255,.5);
   display: flex; align-items: center; justify-content: center; color: var(--indigo);
   pointer-events: none;
 }
@@ -360,7 +519,7 @@ section { position: relative; padding: clamp(72px, 11vh, 132px) 0; }
   font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; border-radius: 5px;
   background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16);
 }
-.demo-reveal-btn.revealing kbd { background: rgba(12,10,22,.12); box-shadow: inset 0 0 0 .5px rgba(12,10,22,.2); }
+.demo-reveal-btn.revealing kbd { background: rgba(22,10,18,.12); box-shadow: inset 0 0 0 .5px rgba(22,10,18,.2); }
 .demo-hint { font-size: 13px; color: var(--text-faint); }
 
 /* reveal overlay: a true-white veil that lifts when "Reveal True Color" is held */
@@ -439,7 +598,7 @@ section { position: relative; padding: clamp(72px, 11vh, 132px) 0; }
 .tok-type { color: var(--accent-2); }
 .tok-fn { color: #9ecbff; }
 .tok-str { color: #a8e6a0; }
-.tok-num { color: #ffd6a3; }
+.tok-num { color: var(--accent-2); }
 .tok-com { color: var(--text-faint); font-style: italic; }
 .tok-attr { color: #c9b6ff; }
 
@@ -558,8 +717,18 @@ section { position: relative; padding: clamp(72px, 11vh, 132px) 0; }
    ========================================================================= */
 @keyframes rise { from { opacity: 0; transform: translateY(20px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
+/* the sun blooms up onto the horizon on load (gated for reduced-motion) */
+@keyframes sun-rise {
+  from { opacity: 0; transform: translateX(-50%) translateY(7%) scale(.94); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+@keyframes glyph-in {
+  from { opacity: 0; transform: translateY(14px) scale(.92); filter: blur(5px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .hero .eyebrow, .hero h1 .line-1, .hero h1 .line-2, .hero .subhead, .hero-cta-row, .scroll-hint {
+  .hero .eyebrow, .hero h1 .line-1, .hero h1 .line-2, .hero .subhead, .hero-cta-row, .scroll-hint,
+  .hero-glyph, .hero-sun, .hero-horizon, .hero-reflection {
     animation: none !important;
   }
 }

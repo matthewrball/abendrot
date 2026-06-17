@@ -83,8 +83,11 @@ targets:
     settings:
       base:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentBase
-        # The app has no Dock/launcher icon (LSUIElement); the menu-bar glyph is drawn
-        # programmatically (MenuBarGlyph). App-icon asset is deferred to brand-lock.
+        # App (Finder / DMG / About-box) icon — the sunset-glass AppIcon in
+        # Colors.xcassets, generated from assets/abendrot.png via
+        # scripts/icon/build-icons.py. (The menu-bar glyph is separate, drawn
+        # programmatically as MenuBarGlyph.)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       testTargets: []
       gatherCoverageData: false

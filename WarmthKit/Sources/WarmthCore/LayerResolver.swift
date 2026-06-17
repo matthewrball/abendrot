@@ -62,7 +62,9 @@ public enum LayerResolver {
         case .hardware:
             return privateAPIsEnabled && isHardwareDDCEnabled && isSupported(capabilities.hardware)
         case .gamma:
-            return isSupported(capabilities.gamma)
+            // Gamma is a best-effort path; the kill switch denylists it alongside the private
+            // APIs so an engaged kill switch drops the whole machine to the overlay-only floor.
+            return privateAPIsEnabled && isSupported(capabilities.gamma)
         case .overlay:
             return true                 // the always-available safe floor
         case .off:

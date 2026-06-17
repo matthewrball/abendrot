@@ -427,4 +427,16 @@ Execution started in `Documents/abendrot` (branch `build`, local only — not pu
 
 ---
 
+## 23. Execution Log — Session 3 (2026-06-17)
+
+- **Public repo PUBLISHED:** github.com/matthewrball/abendrot (public, MIT, **clean single-commit history — all planning scrubbed/hidden**; clean export at `../abendrot-public`). CI green. It is BEHIND the private build repo (icon / sunset palette / M7 not yet public) → a **re-publish is needed** (founder push gate). Two-repo model: this dir = private (full planning, never pushed); the public repo carries no planning history.
+- **Engine system layers landed (real, `swift test` = 53 tests pass):** M0 OverlayRenderer (alpha-tint veil; true per-channel multiply = §18 future), M7 hotplug/wake re-baseline observer, real Night Shift follower (`CBBlueLightClient` via runtime resolution), gamma capability classification. **DDC (`HardwareDDC`) remains the stub → M2 is next** (IOAVService + EDID snapshot / capability probe / write-then-read verify / restore / emergency "Restore Displays"; needs real external-monitor verification).
+- **App icon shipped:** founder art → `assets/abendrot.png` (masked, transparent corners) → full iconset / `.icns` / `AppIcon.appiconset`, **baked into the built `.app`**; reproducible via `scripts/icon/build-icons.py`.
+- **Brand direction pivoted to an icon-derived SUNSET palette** (founder: "maybe temporary"): grounds #160A12/#221019/#341320, accent #FD9228/#FFC061/#C2310A, signature `--sunset-sky` gradient — applied + build-verified across `brand/tokens.{css,json}`, the app's `Colors.xcassets` (19 colorsets, dark+light), the landing page, and the coming-soon site.
+- **CCG review (Codex+Gemini) applied + verified** (engine coordination, release/CI integrity, app quit/login/Sparkle, landing a11y); both reskin lanes + the engine milestone adversarially reviewed.
+- **Env:** full Xcode 26.5 (license agreed) — `swift build`/`swift test`/`xcodebuild` work; Xcode MCP registered (user scope), loads after a session restart. Tools: xcodegen / Pillow / sips / iconutil.
+- **Next:** M2 (DDC) + real-hardware pass; re-publish public repo; live failure-injection + hardware-matrix runs; in-app motion polish (`/design-motion-principles`); landing deploy — externally-facing ones founder-gated. Full handoff: `RESUME-PROMPT.md`.
+
+---
+
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed; no open items. Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
