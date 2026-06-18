@@ -63,6 +63,9 @@ struct WarmSlider: View {
     @Binding var strength: Double
     var compact: Bool = false
 
+    private var trackHeight: CGFloat { compact ? 5 : 7 }
+    private var thumbSize: CGFloat { compact ? 15 : 20 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 9) {
             if !compact {
@@ -73,9 +76,7 @@ struct WarmSlider: View {
                     .foregroundStyle(Theme.Color.textMuted)
             }
 
-            Slider(value: $strength, in: 0...1)
-                .controlSize(compact ? .small : .regular)
-                .tint(Theme.Color.accent)
+            gradientSlider
 
             HStack {
                 Text("Softer")
@@ -86,6 +87,72 @@ struct WarmSlider: View {
             .foregroundStyle(Theme.Color.textMuted)
         }
     }
+
+    // MARK: Custom gradient slider
+    //
+    // The system `Slider` can't wear a gradient, so the track is custom: the brand sunset ramp —
+    // gold at "Softer", deep ember toward "Warmer" — under a glassy thumb. Tap-anywhere to set, and
+    // ←/→ + VoiceOver (adjustable) keep keyboard/a11y parity with the control it replaces.
+    private var gradientSlider: some View {
+        GeometryReader { geo in
+            let usable = max(geo.size.width - thumbSize, 1)
+            let thumbX = CGFloat(strength.clamped01) * usable
+
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)                       // unfilled groove
+                    .fill(Theme.Color.line.opacity(0.55))
+                    .frame(height: trackHeight)
+
+                Capsule(style: .continuous)                       // full gradient, masked to the fill
+                    .fill(Theme.Gradient.sunsetHorizontal)
+                    .frame(height: trackHeight)
+                    .mask(alignment: .leading) {
+                        Capsule(style: .continuous)
+                            .frame(width: thumbX + thumbSize / 2, height: trackHeight)
+                    }
+
+                glassThumb
+                    .frame(width: thumbSize, height: thumbSize)
+                    .offset(x: thumbX)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0).onChanged { value in
+                    strength = Double((value.location.x - thumbSize / 2) / usable).clamped01
+                }
+            )
+        }
+        .frame(height: max(thumbSize, 22))
+        .focusable()
+        .onKeyPress(.leftArrow) { nudge(-0.05); return .handled }
+        .onKeyPress(.rightArrow) { nudge(0.05); return .handled }
+        .accessibilityElement()
+        .accessibilityLabel("Warmth")
+        .accessibilityValue("\(Int((strength * 100).rounded())) percent")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: nudge(0.05)
+            case .decrement: nudge(-0.05)
+            default: break
+            }
+        }
+    }
+
+    private func nudge(_ delta: Double) { strength = (strength + delta).clamped01 }
+
+    /// A glassy thumb: a bright warm-white core, a hairline rim, and a soft ember glow.
+    private var glassThumb: some View {
+        Circle()
+            .fill(LinearGradient(colors: [.white, Theme.Color.accentHi], startPoint: .top, endPoint: .bottom))
+            .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
+            .shadow(color: Theme.Color.accentDeep.opacity(0.35), radius: 5)
+    }
+}
+
+private extension Double {
+    var clamped01: Double { Swift.min(1, Swift.max(0, self)) }
 }
 
 // MARK: - DisplayRow (simple popover)

@@ -55,6 +55,17 @@ enum Theme {
         static let frostBottom = SwiftUI.Color("FrostBottom", bundle: .main)
     }
 
+    // MARK: Gradients (the icon's sunset glow → on-brand control fills)
+
+    enum Gradient {
+        /// The brand sunset ramp: gold → orange → deep ember (mirrors the app-icon glow).
+        static let sunsetColors: [SwiftUI.Color] = [Color.accentHighlight, Color.accent, Color.accentPress]
+        /// Vertical sunset — buttons / segmented pills (light at the top, like a lit surface).
+        static let sunset = LinearGradient(colors: sunsetColors, startPoint: .top, endPoint: .bottom)
+        /// Horizontal sunset — the warmth track (Softer → Warmer deepens toward ember).
+        static let sunsetHorizontal = LinearGradient(colors: sunsetColors, startPoint: .leading, endPoint: .trailing)
+    }
+
     // MARK: Radius (tokens.json → radius.*)
 
     enum Radius {

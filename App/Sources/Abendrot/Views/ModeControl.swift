@@ -56,22 +56,81 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
 
 // MARK: - ModeControl
 
-/// The ember-styled segmented control for schedule mode (plan §4.1).
+/// The ember-styled segmented control for schedule mode (plan §4.1). A custom segmented control
+/// (not the system `Picker`) so the selected segment can wear the sunset gradient under a liquid-
+/// glass sheen, and the selection slides between segments with the brand's warm ease.
 struct ModeControl: View {
     @Binding var selection: ScheduleModeOption
     var onChange: (ScheduleModeOption) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var pillNamespace
+
     var body: some View {
-        Picker("Mode", selection: $selection) {
+        HStack(spacing: 2) {
             ForEach(ScheduleModeOption.allCases) { option in
-                Text(option.label).tag(option)
+                segment(option)
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .tint(Theme.Color.accent)
-        .onChange(of: selection) { _, newValue in
-            onChange(newValue)
-        }
+        .padding(3)
+        .background(track)
+        .clipShape(Capsule(style: .continuous))
+    }
+
+    // MARK: Segments
+
+    private func segment(_ option: ScheduleModeOption) -> some View {
+        let isSelected = option == selection
+        return Text(option.label)
+            .font(Theme.Typography.ui(12, weight: isSelected ? .semibold : .medium))
+            .foregroundStyle(isSelected ? Theme.Color.textCream : Theme.Color.textMuted)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity)
+            .background {
+                if isSelected {
+                    selectedPill.matchedGeometryEffect(id: "selectedPill", in: pillNamespace)
+                }
+            }
+            .contentShape(Capsule(style: .continuous))
+            .onTapGesture { select(option) }
+            .accessibilityElement()
+            .accessibilityLabel(option.label)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func select(_ option: ScheduleModeOption) {
+        guard option != selection else { return }
+        withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) { selection = option }
+        onChange(option)
+    }
+
+    // MARK: Brand surfaces
+
+    /// The selected segment: the sunset gradient with a top sheen + soft warm glow → liquid glass.
+    private var selectedPill: some View {
+        Capsule(style: .continuous)
+            .fill(Theme.Gradient.sunset)
+            .overlay(
+                // Specular top sheen so the fill reads as wet glass, not flat paint.
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.32), .white.opacity(0.04), .clear],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
+                    .blendMode(.softLight)
+            )
+            .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
+            .shadow(color: Theme.Color.accentDeep.opacity(0.45), radius: 5, y: 1.5)
+    }
+
+    /// The recessed track the segments sit in — a subtle dark glass capsule.
+    private var track: some View {
+        Capsule(style: .continuous)
+            .fill(Theme.Color.line.opacity(0.5))
+            .overlay(Capsule(style: .continuous).strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5))
     }
 }
