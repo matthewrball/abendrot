@@ -1,8 +1,8 @@
 <!--
-  DRAFT — conversion README for founder review (Lane F / §12).
-  Do NOT replace the live /README.md with this until v1.0 ships and the
-  flagged claims below are confirmed. Placeholders in {{ }} need real
-  assets / numbers before publishing. Flags marked [FLAG] need founder eyes.
+  SUPERSEDED (2026-06-18). The live public README is now maintained directly in the
+  public mirror (abendrot-public/README.md → github.com/matthewrball/abendrot) and is
+  the source of truth. This draft is kept for reference only; its {{placeholders}} and
+  [FLAG] notes are NOT current. Do not publish from this file.
 -->
 
 <p align="center">
