@@ -775,4 +775,49 @@ critic; 86 agents, 71 findings, **66 verified / 5 rejected**, 24-paper library).
 
 ---
 
+## 26. Execution Log — Session 7 (2026-06-18): settings persistence + popover UX redesign
+
+Founder-dogfooding session: one long iterative pass over the live app (23 build-repo commits,
+`be62c78`→`d8c9ffa`). All steps verified **91/21 WarmthKit tests green + app BUILD SUCCEEDED**; the
+persistence/naming/animation batches passed a separate-lane adversarial code-review (0 Critical/High).
+The per-display redesign was designed via `/ask` (Codex gpt-5.5; Gemini CLI is dead — Google killed the
+free tier). **Nothing pushed** — public repo is held on the founder gate until the look is signed off.
+
+**Engine / WarmthKit:**
+- **§25.B persistence COMPLETE** — `isEnabled` / `globalWarmth` / `scheduleMode` now persist to
+  `UserDefaults` alongside `warmestPoint`, restored in `AppModel.start()` after `engine.start()` by
+  replaying the setters. `object(forKey:)` guard preserves the 0.7 out-of-box default; `scheduleMode`
+  is Codable JSON and self-heals a corrupt blob.
+- **Per-display "Override" model (replaces the max-boost)** — new **`DisplayState.warmthOverridden`**.
+  `reapply` applies a display's own `warmth` ONLY when overridden, else the global/schedule target → a
+  TRUE override (softer *or* warmer). `setWarmth(_:for:)` implies override; new
+  `setWarmthOverride(_:for:)` seeds the slider to the current global on enable. Carried across reconnect
+  via `rememberedSettings`. Removed the now-unused `maxWarmth`. **Additive contract change — update
+  `docs/engine/warmthkit-api-contract.md`.**
+- **Reveal disabled when off** — `engine.beginReveal()` guards on `isEnabled`, so the ⌥⌘T hotkey is a
+  no-op until warming is on.
+- **Hotkey actually binds now** — `HotkeyService.installRevealHotkey()` was registering handlers but
+  never assigning a shortcut (nothing fired). Sets **⌥⌘T** default on first launch (Carbon, no
+  Accessibility permission). New public `RevealShortcutRecorder` (SwiftUI) for the Settings rebind.
+- **OS-localized display names** — new `DisplayServices/DisplayNaming` maps `CGDirectDisplayID →
+  NSScreen.localizedName` (main-actor hop, real-display path only via `injectedDisplays == nil`), so
+  rows read "Built-in Display" / "LG UltraFine" instead of a generic "Display".
+
+**App UI (the menu-bar popover, fully restyled):** real app icon + gear top-right in the header (status
+text removed); the single **Kelvin readout moved inline onto the Warmth row** with an ⓘ tooltip; on-brand
+**liquid-glass `WarmSlider`** (sunset-gradient track, springy glass thumb) + custom segmented
+**`ModeControl`** (`Theme.Gradient.sunset`, dark-ink for contrast, sliding selection); **Mode moved to
+the Advanced disclosure** ("Off" removed, "Follow sunset"→"Sunset"); the whole warmth block hides/reveals
+with a `.smooth` no-blur animation when the master toggle flips; footer = `escape` quit (left) + reveal
+hint (centre, hidden when off) + chevron advanced-disclosure (right). **Per-display control consolidated
+to an "Override" toggle on the display rows** (slider hidden until on); the old "PER-DISPLAY OVERRIDE &
+ENGINE" advanced section and ALL gamma/method jargon were removed from the popover. Tint-only honesty is
+now plain-language ("Can only add a colour tint on this display").
+
+**Still open (next session):** founder visual sign-off; de-jargon / relocate the gear **Settings** window
+(still shows method badges + DDC/layer controls — move to a "Displays → Advanced" compatibility section);
+contract-doc touch-up; §25.J app-level banner; §25.K hardware matrix; then the gated public push.
+
+---
+
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
