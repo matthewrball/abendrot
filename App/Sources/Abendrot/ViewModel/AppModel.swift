@@ -203,8 +203,21 @@ final class AppModel {
         let level = WarmthLevel(strength: strength)
         if let i = state.displays.firstIndex(where: { $0.id == id }) {
             state.displays[i].warmth = level
+            state.displays[i].warmthOverridden = true   // setting a per-display value IS the override
         }
         Task { await engine?.setWarmth(level, for: id) }
+    }
+
+    /// Enable/disable a display's "Custom warmth" override. Off → the display follows the global
+    /// warmth; on → it keeps its own value (seeded to the current global by the engine).
+    func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity) {
+        if let i = state.displays.firstIndex(where: { $0.id == id }) {
+            state.displays[i].warmthOverridden = enabled
+            if enabled {
+                state.displays[i].warmth = state.globalWarmth
+            }
+        }
+        Task { await engine?.setWarmthOverride(enabled, for: id) }
     }
 
     func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) {

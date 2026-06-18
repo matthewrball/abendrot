@@ -122,7 +122,7 @@ struct PopoverView: View {
         if model.state.displays.count > 1 {
             VStack(spacing: 8) {
                 ForEach(model.state.displays) { display in
-                    DisplayRow(display: display, tintOnly: isTintOnly(display))
+                    DisplayRow(model: model, display: display, tintOnly: isTintOnly(display))
                 }
             }
         }

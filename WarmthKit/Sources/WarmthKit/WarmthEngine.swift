@@ -51,6 +51,7 @@ public actor WarmthEngine {
 
     private struct RememberedDisplaySettings {
         var warmth: WarmthLevel
+        var warmthOverridden: Bool
         var isHardwareDDCEnabled: Bool
         var preferredMethod: DisplayMethod?
     }
@@ -267,6 +268,21 @@ public actor WarmthEngine {
     public func setWarmth(_ level: WarmthLevel, for id: DisplayIdentity) async {
         guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }
         box.value.displays[index].warmth = level
+        box.value.displays[index].warmthOverridden = true   // setting a per-display value IS the override
+        rememberSettings(box.value.displays[index])
+        await reapply()
+        publish()
+    }
+
+    /// Enable/disable a display's "Custom warmth" override. Enabling seeds the per-display warmth to
+    /// the current global so the slider starts where the display already is; disabling makes the
+    /// display follow the global warmth/schedule again.
+    public func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity) async {
+        guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }
+        box.value.displays[index].warmthOverridden = enabled
+        if enabled {
+            box.value.displays[index].warmth = box.value.globalWarmth
+        }
         rememberSettings(box.value.displays[index])
         await reapply()
         publish()
@@ -297,6 +313,7 @@ public actor WarmthEngine {
     private func rememberSettings(_ display: DisplayState) {
         rememberedSettings[display.id.persistentKey] = RememberedDisplaySettings(
             warmth: display.warmth,
+            warmthOverridden: display.warmthOverridden,
             isHardwareDDCEnabled: display.isHardwareDDCEnabled,
             preferredMethod: display.preferredMethod
         )
@@ -478,6 +495,7 @@ public actor WarmthEngine {
                     appliedMethod: previous?.appliedMethod ?? caps.recommendedMethod,
                     capabilities: caps,
                     warmth: previous?.warmth ?? remembered?.warmth ?? .off,
+                    warmthOverridden: previous?.warmthOverridden ?? remembered?.warmthOverridden ?? false,
                     isHardwareDDCEnabled: previous?.isHardwareDDCEnabled ?? remembered?.isHardwareDDCEnabled ?? false,
                     preferredMethod: previous?.preferredMethod ?? remembered?.preferredMethod,
                     lastError: previous?.lastError
@@ -573,7 +591,9 @@ public actor WarmthEngine {
                 override: display.preferredMethod,
                 privateAPIsEnabled: privateOn
             )
-            let effective = engineOn ? maxWarmth(display.warmth, decision.target) : .off
+            // A display uses its OWN warmth only when overridden ("Custom warmth"); otherwise it
+            // follows the global/schedule target. (Replaces the old max-boost model.)
+            let effective = engineOn ? (display.warmthOverridden ? display.warmth : decision.target) : .off
 
             // Clean up a layer we are LEAVING this pass (user disabled DDC, capability changed) so a
             // display can't stay warm on two layers at once.
@@ -691,10 +711,6 @@ public actor WarmthEngine {
         case let .unsupported(reason):   return .unsupported(reason: reason)
         case let .unknown(reason):       return .unknown(reason: reason)
         }
-    }
-
-    private func maxWarmth(_ a: WarmthLevel, _ b: WarmthLevel) -> WarmthLevel {
-        a.strength >= b.strength ? a : b
     }
 
     // MARK: Publishing

@@ -219,47 +219,66 @@ private extension Double {
 
 /// A glanceable per-display row: name + method badge (plan §4.1).
 struct DisplayRow: View {
+    @Bindable var model: AppModel
     let display: DisplayState
-    /// True when this display can ONLY be tinted — no true-warm path is available to it (gamma
-    /// unsupported on this chip/OS AND not DDC-capable). Surfaced honestly so we never imply true
-    /// warming where the hardware/OS can't deliver it. (§25.J — DRAFT, iterating with founder.)
+    /// True when this display can ONLY be tinted — no true-warm path is available to it. Surfaced
+    /// honestly (plain language, no jargon) so we never imply true warming where the hardware/OS
+    /// can't deliver it. (§25.J)
     var tintOnly: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(display.name)
-                    .font(Theme.Typography.ui(12.5))
-                    .foregroundStyle(Theme.Color.textPrimary)
-                HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(display.name)
+                        .font(Theme.Typography.ui(12.5))
+                        .foregroundStyle(Theme.Color.textPrimary)
                     Text(subtitle)
                         .font(Theme.Typography.ui(10.5))
                         .foregroundStyle(tintOnly ? Theme.Color.accentHighlight : Theme.Color.textFaint)
-                    if tintOnly {
-                        Image(systemName: "exclamationmark.circle")
-                            .font(Theme.Typography.ui(10))
-                            .foregroundStyle(Theme.Color.accentHighlight)
-                            .help("Your Mac can’t truly warm this display on this macOS version (a known limitation on some Apple-silicon chips). Abendrot is tinting it instead. If it’s an external monitor with on-screen brightness controls, try Hardware DDC in the per-display engine controls.")
-                            .accessibilityLabel("Can only be tinted, not truly warmed")
-                    }
                 }
+                Spacer()
+                // "Custom warmth" override toggle — no engine/method jargon. Off = follows global.
+                Toggle("", isOn: overrideBinding)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .tint(Theme.Color.accent)
+                    .accessibilityLabel("Custom warmth for \(display.name)")
             }
-            Spacer()
-            MethodBadge(method: display.appliedMethod)
+
+            // The per-display slider exists only while the override is on, revealed calmly below.
+            if display.warmthOverridden {
+                WarmSlider(strength: warmthBinding, compact: true)
+                    .padding(.top, 10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+            }
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
         .background(Theme.Color.line.opacity(0.4), in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: display.warmthOverridden)
     }
 
     private var subtitle: String {
-        if tintOnly { return "Tint only — can’t truly warm" }
-        switch display.appliedMethod {
-        case .hardware: return "via DDC/CI"
-        case .gamma: return "gamma table"
-        case .overlay: return "Metal overlay"
-        case .off: return "not warmed"
-        }
+        if tintOnly { return "Can only add a colour tint on this display" }
+        return display.warmthOverridden ? "Custom warmth" : "Follows global warmth"
+    }
+
+    private var overrideBinding: Binding<Bool> {
+        Binding(
+            get: { display.warmthOverridden },
+            set: { model.setWarmthOverride($0, for: display.id) }
+        )
+    }
+
+    private var warmthBinding: Binding<Double> {
+        Binding(
+            get: { display.warmth.strength },
+            set: { model.setWarmth($0, for: display.id) }
+        )
     }
 }
 
