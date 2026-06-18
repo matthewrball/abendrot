@@ -6,17 +6,17 @@ import SwiftUI
 // twilight). Colours come from `Resources/Colors.xcassets` (generated from
 // `brand/tokens.json`); they are NEVER hardcoded as hex in views. Numeric tokens
 // (radius / motion / material params) mirror `tokens.json` and carry a pointer to
-// their source key so they can be re-synced from one place.
+// their source key so a brand-lock pass can re-sync from one place.
 //
-// PROVISIONAL: the final accent ramp + icon are not selected yet. Do not
-// hard-lock these values; treat the asset catalog + this file as the one place
-// to swap.
+// PROVISIONAL: the final accent ramp + icon are not yet locked
+// Do not hard-lock these values; treat the asset catalog + this file
+// as the one place to swap.
 //
 // Token discipline (baked into tokens.json):
-//   - Never pure #000 — grounds are warm-tinted near-blacks.
-//   - `Theme.Color.revealTrueWhite` (#FFFFFF) is RESERVED for the Reveal-True-Color
-//     veil only. Body text is `textPrimary` (#ECE8F4), never white.
-//   - Light + Reduce-Transparency surfaces are warm cream / twilight, never grey.
+// - Never pure #000 — grounds are warm-tinted near-blacks.
+// - `Theme.Color.revealTrueWhite` (#FFFFFF) is RESERVED for the Reveal-True-Color
+// veil only. Body text is `textPrimary` (#ECE8F4), never white.
+// - Light + Reduce-Transparency surfaces are warm cream / twilight, never grey.
 enum Theme {
 
     // MARK: Colours (semantic → asset-catalog colorset names)
@@ -66,7 +66,7 @@ enum Theme {
     // MARK: Motion (tokens.json → motion.*)
     //
     // "Emotional pacing, not spectacle": ~100–150ms eases. The single
-    // signature is the reveal spring (`.interactiveSpring`, see `revealSpring`).
+    // signature is the reveal spring.
     enum Motion {
         /// motion.ease-warm — the signature warmth ease (cubic-bezier 0.22,0.61,0.36,1).
         static let durFast: TimeInterval = 0.110   // motion.dur-fast

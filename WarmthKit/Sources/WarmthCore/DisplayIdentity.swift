@@ -47,6 +47,17 @@ public struct DisplayIdentity: Hashable, Sendable, Codable {
         hasher.combine(cgUUID)
         hasher.combine(edid)
     }
+
+    /// A stable string key for persisting per-display state across relaunch (the DDC native-gain
+    /// snapshot + dirty flag). Built from the identity-defining fields ONLY — `cgUUID` (the
+    /// EDID-derived display UUID) plus the EDID vendor/product/serial to disambiguate identical
+    /// twin monitors — never the transient `CGDirectDisplayID`, which is unstable across
+    /// hotplug/reconnect on Apple Silicon.
+    public var persistentKey: String {
+        guard let edid else { return cgUUID.uuidString }
+        let serial = edid.serial.map(String.init) ?? "x"
+        return "\(cgUUID.uuidString)|\(edid.vendorID)-\(edid.productID)-\(serial)"
+    }
 }
 
 // MARK: - EDIDFingerprint

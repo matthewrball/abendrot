@@ -6,9 +6,10 @@ import Foundation
 
 @Suite("Kelvin")
 struct KelvinTests {
-    @Test("clamps to 1000...6500")
+    @Test("clamps to 500...6500")
     func clamps() {
-        #expect(Kelvin(500).value == 1000)
+        #expect(Kelvin(100).value == 500)     // below the floor → clamped to 500
+        #expect(Kelvin(500).value == 500)
         #expect(Kelvin(1000).value == 1000)
         #expect(Kelvin(3000).value == 3000)
         #expect(Kelvin(6500).value == 6500)

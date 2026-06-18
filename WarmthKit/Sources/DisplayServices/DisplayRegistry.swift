@@ -73,7 +73,7 @@ public struct DisplayRegistry: Sendable {
 
     private func transport(for displayID: CGDirectDisplayID) -> DisplayTransport {
         if CGDisplayIsBuiltin(displayID) != 0 { return .builtIn }
-        // TODO: derive DisplayPort / HDMI / Thunderbolt / USB-C from the IORegistry
+        // TODO(milestone): derive DisplayPort / HDMI / Thunderbolt / USB-C from the IORegistry
         // transport node. CoreGraphics alone can't distinguish external transports.
         return .unknown
     }
@@ -81,7 +81,7 @@ public struct DisplayRegistry: Sendable {
     // MARK: EDID (stub)
 
     private func edidFingerprint(for displayID: CGDirectDisplayID) -> EDIDFingerprint? {
-        // TODO: parse EDID via CoreDisplay_DisplayCreateInfoDictionary (CInterop,
+        // TODO(milestone): parse EDID via CoreDisplay_DisplayCreateInfoDictionary (CInterop,
         // dlsym-resolved) or the IORegistry EDID blob to fill vendor/product/serial/name.
         // For now return CoreGraphics vendor/model so duplicate-monitor disambiguation has
         // *something* to key on, without the (redaction-sensitive) serial.
@@ -92,12 +92,12 @@ public struct DisplayRegistry: Sendable {
             vendorID: UInt16(truncatingIfNeeded: vendor),
             productID: UInt16(truncatingIfNeeded: model),
             serial: nil,        // deliberately not populated — see redaction policy
-            displayName: nil    // TODO: human label from EDID descriptor
+            displayName: nil    // TODO(milestone): human label from EDID descriptor
         )
     }
 
     private func ioRegistryPath(for displayID: CGDirectDisplayID) -> String? {
-        // TODO: resolve the AppleCLCD2 / DCPAVServiceProxy IORegistry path used by
+        // TODO(milestone): resolve the AppleCLCD2 / DCPAVServiceProxy IORegistry path used by
         // the DDC layer to bind an IOAVService to this display.
         nil
     }

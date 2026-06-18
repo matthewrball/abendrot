@@ -35,10 +35,10 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 // MARK: - SettingsView
 //
-// The Settings window body (tabs: General / Schedule / Displays / Shortcuts
+// The Settings window body (plan tabs: General / Schedule / Displays / Shortcuts
 // / Advanced / Privacy / About). Hosted by the programmatic `SettingsWindowController`
 // so the "frosted ember" glass chrome actually renders (a SwiftUI `Window` scene
-// resets `.fullSizeContentView`). Settings double as onboarding +
+// resets `.fullSizeContentView`; see reference doc). Settings double as onboarding +
 // trust-builder (CleanShot X pattern).
 //
 // This structural pass lays out the tab shell + representative controls per tab; the
@@ -209,7 +209,7 @@ private struct ScheduleTab: View {
             Text("Follow sunset mirrors your system Night Shift schedule when available, and falls back to a built-in solar calculation otherwise. Abendrot never writes to Night Shift.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
-            // TODO: custom from/to + warmth target editor for .custom schedules.
+            // TODO(settings): custom from/to + warmth target editor for.custom schedules.
             Text("Custom schedule editor — coming in a later milestone.")
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textFaint)
@@ -273,7 +273,7 @@ private struct ShortcutsTab: View {
                     .font(Theme.Typography.ui(13, weight: .medium))
                     .foregroundStyle(Theme.Color.accentHighlight)
             }
-            // TODO: embed KeyboardShortcuts.Recorder + a Hold/Toggle mode picker.
+            // TODO(settings): embed KeyboardShortcuts.Recorder + a Hold/Toggle mode picker.
             Text("Hold to reveal true colour; release to ease warmth back. Switch to Toggle, or rebind, here — recorder lands in a later milestone.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
@@ -288,6 +288,10 @@ private struct AdvancedTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "Advanced", subtitle: "Power controls and the private-API kill switch.")
+
+            MaximumWarmthControl(model: model)
+            DividerLine()
+
             Toggle("Enable private-API paths (DDC + Night Shift follow)", isOn: Binding(
                 get: { model.state.privateAPIsEnabled },
                 set: { model.setPrivateAPIsEnabled($0) }
@@ -297,11 +301,86 @@ private struct AdvancedTab: View {
             Text("Off = overlay-only. Abendrot drops the hardware-DDC and Night-Shift-follow paths and warms every display via the universal Metal overlay.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
-            // TODO: per-app exclusion picker → AppModel.setExcludedApps.
+            // TODO(settings): per-app exclusion picker → AppModel.setExcludedApps.
             Text("Per-app exclusions — picker coming in a later milestone.")
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textFaint)
         }
+    }
+}
+
+// MARK: - Maximum warmth (warmest-point ceiling + opt-in expanded range)
+
+/// Sets the slider's *warmest end* (the engine `warmestPoint`). The everyday maximum is 1900K —
+/// the point where blue is fully removed (so "minimize blue light" is already 100% achieved). The
+/// opt-in "Expanded range" unlocks deeper warmth toward pure red (~500K): a real but minimal
+/// additional circadian reduction with a real legibility cost — see
+/// the circadian research (Brown et al. 2022; CIE S 026:2018). The slider
+/// reads "right = warmer", matching the main warmth slider.
+private struct MaximumWarmthControl: View {
+    @Bindable var model: AppModel
+    // Derived (not separately persisted) from the actual warmest point on appear, so the toggle can
+    // never disagree with the value. The warmest point itself is what persists (via AppModel).
+    @State private var expanded = false
+
+    private var coolBound: Int { Kelvin.ceilingCoolBound.value }   // least-warm end of this control
+    private var warmBound: Int { expanded ? Kelvin.warmestSupported.value : Kelvin.everydayWarmest.value }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Maximum warmth")
+                    .font(Theme.Typography.ui(13.5))
+                Spacer()
+                Text("\(model.state.warmestPoint.value) K")
+                    .font(Theme.Typography.serif(14))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Color.accentHighlight)
+            }
+            Text("The warmest your slider can reach. 1900 K already removes blue light entirely.")
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textMuted)
+
+            WarmSlider(strength: warmestBinding, kelvin: nil)
+
+            Toggle("Expanded range — reach candle & ember (below 1900 K)", isOn: $expanded)
+                .toggleStyle(.switch)
+                .tint(Theme.Color.accent)
+                .onChange(of: expanded) { _, on in
+                    // Leaving expanded range: pull a deeper-than-everyday pick back up to the 1900K cap.
+                    if !on, model.state.warmestPoint.value < Kelvin.everydayWarmest.value {
+                        model.setWarmestPoint(Kelvin.everydayWarmest)
+                    }
+                }
+
+            if expanded {
+                Text("Below ~1900 K, blue light is already fully removed — going warmer mainly removes green: deeper and more candle-like, but harder to read, with little additional circadian benefit. (See Brown et al. 2022; CIE S 026.)")
+                    .font(Theme.Typography.ui(11))
+                    .foregroundStyle(Theme.Color.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onAppear {
+            // Single source of truth: a sub-1900K ceiling means the expanded range is in use.
+            expanded = model.state.warmestPoint.value < Kelvin.everydayWarmest.value
+        }
+    }
+
+    /// Maps the WarmSlider's 0…1 strength onto [warmBound … coolBound] Kelvin (1 = warmest).
+    private var warmestBinding: Binding<Double> {
+        Binding(
+            get: {
+                let span = Double(coolBound - warmBound)
+                guard span > 0 else { return 0 }
+                let s = (Double(coolBound) - Double(model.state.warmestPoint.value)) / span
+                return min(1, max(0, s))
+            },
+            set: { s in
+                let span = Double(coolBound - warmBound)
+                let k = Int((Double(coolBound) - s * span).rounded())
+                model.setWarmestPoint(Kelvin(k))
+            }
+        )
     }
 }
 
@@ -349,7 +428,7 @@ private struct AboutTab: View {
                 }
             }
             DividerLine()
-            // TODO: "The Science" easter-egg panel — cited,
+            // TODO(settings): "The Science" easter-egg panel — cited,
             // general-wellness framing only.
             Text("The Science — a tasteful, cited panel about evening light — lands in a later milestone.")
                 .font(Theme.Typography.ui(11.5))

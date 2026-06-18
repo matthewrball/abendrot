@@ -2,10 +2,9 @@
 #
 # pretty-dmg.sh — branded "unboxing" DMG (Abendrot, UI-runner only).
 #
-# The branded DMG is an "unboxing": a split-screen cold->warm background so
-# dragging the app from the "cold/blue" side to the "warm" Applications side
-# demos the product. There are two DMG modes — this branded one and the plain
-# fallback (plain-dmg.sh).
+# Plan refs: §9 ("branded DMG — explicit requirement"), §21.2 (two DMG modes),
+# §21.4 (DMG as unboxing: split-screen cold->warm background so dragging the app
+# from the "cold/blue" side to the "warm" Applications side demos the product).
 #
 # IMPORTANT — UI RUNNER ONLY. create-dmg art-directs the Finder window via
 # AppleScript, which requires a logged-in WindowServer session. It HANGS on
@@ -13,20 +12,20 @@
 #   - locally on the founder's Mac, OR
 #   - on the self-hosted UI runner with a logged-in user.
 # For headless/forked-PR/Mode-B builds, use plain-dmg.sh instead. Releases are
-# gated on >=1 notarized+stapled DMG when signing is enabled; the pretty
+# gated on >=1 notarized+stapled DMG when signing is enabled (§21.2); the pretty
 # DMG is preferred for public releases, with plain-dmg as the guaranteed fallback.
 #
-# Brand-art dependency (BLOCKING for final art, NON-blocking for function):
-#   The split-screen cold->warm background PNG (@1x + @2x) is a brand asset that
-#   is not finalized yet. Until it lands, this script falls back to NO background
-#   (still a functional drag-to-Applications DMG). Drop the art at:
+# Lane C dependency (BLOCKING for final art, NON-blocking for function):
+#   The split-screen cold->warm background PNG (@1x + @2x) is OWNED BY LANE C
+#   (brand). Until it lands, this script falls back to NO background (still a
+#   functional drag-to-Applications DMG). Drop the art at:
 #       scripts/dmg/assets/dmg-background.png      (1x, 660x400 pt -> 660x400 px)
 #       scripts/dmg/assets/dmg-background@2x.png   (2x, 1320x800 px)
 #   and (optional) a volume icon at:
 #       scripts/dmg/assets/volume.icns
 #   The window geometry + icon coordinates below are RESERVED to match that art
-#   (see GEOMETRY block). Design the background to these coordinates, or update
-#   the numbers here to match new art.
+#   (see GEOMETRY block). Lane C: design the background to these coordinates, or
+#   tell Lane E new numbers.
 #
 # Usage:
 #   scripts/dmg/pretty-dmg.sh --app <Abendrot.app> --out <out.dmg> \
@@ -42,7 +41,7 @@ ASSETS_DIR="$SCRIPT_DIR/assets"
 APP=""
 OUT=""
 VOLNAME="Abendrot"
-BACKGROUND="$ASSETS_DIR/dmg-background.png"   # brand art (placeholder until delivered)
+BACKGROUND="$ASSETS_DIR/dmg-background.png"   # Lane C art (placeholder until delivered)
 VOLICON="$ASSETS_DIR/volume.icns"            # optional brand volume icon
 
 usage() { grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed -n '1,40p'; }
@@ -89,11 +88,11 @@ OUT_DIR="$(dirname "$OUT")"; mkdir -p "$OUT_DIR"
 rm -f "$OUT"
 
 # ---------------------------------------------------------------------------
-# GEOMETRY (RESERVED for the split-screen cold->warm background).
+# GEOMETRY (RESERVED for Lane C's split-screen cold->warm background).
 # Window is 660x400 pt. The .app sits on the LEFT ("cold/blue") side; the
 # /Applications drop-link sits on the RIGHT ("warm") side, so the drag gesture
-# moves the icon across the cold->warm gradient — the unboxing demo.
-# Paint the gradient + the connecting arrow to land under these points.
+# moves the icon across the cold->warm gradient — the unboxing demo (§21.4).
+# Lane C: paint the gradient + the connecting arrow to land under these points.
 WINDOW_X=200          # window top-left X on screen
 WINDOW_Y=120          # window top-left Y on screen
 WINDOW_W=660          # window width  (pt)
@@ -116,12 +115,12 @@ ARGS=(
   --no-internet-enable
 )
 
-# Background art is OPTIONAL: include only if the brand art has been delivered.
+# Background art is OPTIONAL: include only if Lane C has delivered it.
 if [ -f "$BACKGROUND" ]; then
   echo "pretty-dmg: using brand background -> $BACKGROUND"
   ARGS+=( --background "$BACKGROUND" )
 else
-  echo "pretty-dmg: NOTE — brand background not found at '$BACKGROUND'." >&2
+  echo "pretty-dmg: NOTE — Lane C background not found at '$BACKGROUND'." >&2
   echo "            Building a functional (un-arted) branded DMG. Geometry is" >&2
   echo "            still applied so the art can be dropped in later unchanged." >&2
 fi

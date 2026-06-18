@@ -3,9 +3,9 @@ import SwiftUI
 // MARK: - GlassKind
 //
 // Abendrot's material hierarchy:
-//   - `.popover` : clear transient Liquid Glass for the everyday popover.
-//   - `.frost`   : more-opaque "frosted ember" for the persistent, data-heavy
-//                  Settings window so text stays legible over busy desktops.
+// - `.popover`: clear transient Liquid Glass for the everyday popover.
+// - `.frost`: more-opaque "frosted ember" for the persistent, data-heavy
+// Settings window so text stays legible over busy desktops.
 enum GlassKind {
     case popover
     case frost
@@ -17,8 +17,9 @@ enum GlassKind {
 // an ember-tinted SOLID surface under Reduce Transparency — NEVER neutral
 // grey. The warm identity survives opacity.
 //
-// TODO: cursor-aware specular tracking + variable-thickness/lens blur to "make
-// the glass feel wet". The hook is left here intentionally rather than faked.
+// TODO(brand-lock): cursor-aware specular tracking + variable-thickness/lens blur
+// Deferred to the /design-motion-principles pass;
+// hook left here intentionally rather than faked.
 struct GlassSurface<Content: View>: View {
     var kind: GlassKind = .popover
     var cornerRadius: CGFloat = Theme.Radius.card

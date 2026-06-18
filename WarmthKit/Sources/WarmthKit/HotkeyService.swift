@@ -11,7 +11,7 @@ public enum RevealMode: String, Sendable, Codable { case hold, toggle }
 /// Hold-to-reveal hotkey wrapper.
 ///
 /// Wraps `KeyboardShortcuts` (Carbon `RegisterEventHotKey`): no Accessibility permission,
-/// keyDown → `beginReveal()`, keyUp → `endReveal()`. The Carbon callback hops to the main
+/// keyDown → `beginReveal`, keyUp → `endReveal`. The Carbon callback hops to the main
 /// actor. A watchdog guarantees warmth is never stuck-suspended if a key-up is lost (e.g. a
 /// Space switch eats it): warmth auto-resumes after `watchdogTimeout`.
 @MainActor
@@ -38,7 +38,7 @@ public final class HotkeyService {
         KeyboardShortcuts.onKeyUp(for: .revealTrueColor) { [weak self] in
             self?.handleKeyUp()
         }
-        // TODO: expose binding configuration UI; set the ⌥⌘T default shortcut on
+        // TODO(milestone): expose binding configuration UI; set the ⌥⌘T default shortcut on
         // first launch if the user hasn't customised it.
     }
 

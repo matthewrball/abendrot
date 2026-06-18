@@ -6,10 +6,32 @@ import AppKit
 import QuartzCore
 #endif
 
+// MARK: - OverlayVeil (tunable alpha-tint parameters)
+
+/// The alpha-over warm-tint parameters. Both are **visual-QA knobs**: the black-lift math is
+/// certain (a black pixel lifts to `tint·alpha`), but how warm/legible it looks on real content is
+/// an on-screen judgement. See the overlay-compositing notes.
+enum OverlayVeil {
+    /// A **saturated, low-luminance** amber (sRGB). Source-over lifts blacks to `tint·alpha`, so a
+    /// low-luma amber keeps blacks darker — and reads as *amber* rather than a desaturated warm
+    /// "white" wash — for the same hue shift. Intensity is carried by `alpha`, NOT by this hue.
+    static let tint = (red: 1.0, green: 0.45, blue: 0.0)
+    /// Cap on veil opacity so even the warmest setting stays a legible tint, never an opaque wash.
+    static let maxAlpha = 0.5
+}
+
+/// The veil's opacity for a target gain (pure, testable). **0 at neutral** so the veil fully
+/// vanishes when warmth is off (a non-zero alpha at 6500K would tint an "off" screen); rises with
+/// warmth — the red-minus-blue attenuation — and is capped so it stays a legible tint.
+package func veilAlpha(for gain: RGBGain) -> Double {
+    let warmth = max(0, gain.red - gain.blue)
+    return min(OverlayVeil.maxAlpha, warmth)
+}
+
 // MARK: - OverlayBackend
 
 /// The universal default layer: one borderless, click-through `NSPanel` hosting a `CALayer`
-/// warm-tint veil per active `NSScreen`, sitting at `CGShieldingWindowLevel()`. Works on
+/// warm-tint veil per active `NSScreen`, sitting at `CGShieldingWindowLevel`. Works on
 /// buttonless Apple panels and on M5 Tahoe where gamma silently no-ops, so it is `.supported`
 /// everywhere — it is the reliable floor under DDC (opt-in) and gamma (classified).
 ///
@@ -17,18 +39,24 @@ import QuartzCore
 /// (a single `backgroundColor`/`opacity` assignment, no continuous animation), so idle GPU
 /// cost is ~0%.
 ///
-/// ## Compositing model — alpha tint today, true multiply is a follow-up
-/// Warming is currently achieved by an **alpha-blended warm tint**: a low-alpha amber layer
-/// composited *over* the screen by the window server (standard source-over). We do NOT use a
-/// CALayer `compositingFilter` multiply here: `compositingFilter` only blends a layer against
-/// other content **inside the same window's layer tree**, and this overlay window is a
-/// standalone transparent panel floating above arbitrary other apps — there is no in-tree
-/// content behind the veil for it to multiply against. A *true* per-channel window-level
-/// multiply (so blacks stay black instead of being tinted) requires either a Metal layer
-/// reading the framebuffer or a private screen-blend mode; that is the "ColorSync ICC
-/// injection / true multiply" follow-up. The alpha tint is the correct, shippable
-/// floor: it warms the image without washing it to grey, at the cost of slightly lifting true
-/// blacks.
+/// ## Compositing model — alpha-over warm tint (a true multiply is impossible here)
+/// Warming is an **alpha-blended warm tint**: a saturated low-luminance amber layer composited
+/// *over* the screen by the window server (standard source-over), opacity scaled by warmth. We do
+/// NOT use a CALayer `compositingFilter` multiply: it blends a layer only against other content
+/// **inside the same window's layer tree**, and the window server then composites this standalone
+/// transparent panel over the apps/desktop behind it using the **resulting alpha only** — so a
+/// multiply filter has nothing behind-window to act on (Apple DTS, forums 133177).
+///
+/// A *true* per-channel
+/// multiply (blacks-stay-black, blue actually removed from the signal) is **not achievable via a
+/// permissionless public overlay**. The only true-multiply paths are framebuffer capture (needs
+/// Screen Recording — rejected: breaks the no-permission promise) or the LUT — so **true warming
+/// lives in the DDC (`HardwareDDC`) and gamma (`GammaBackend`) layers**, and the overlay is
+/// deliberately an alpha tint. Source-over can only *lift* a black pixel toward the tint
+/// (`dst·(1−a) + tint·a`), never `dst·k` — so the overlay washes amber over the image rather than
+/// removing blue from it. The tint is tuned (`OverlayVeil`: saturated amber + gated alpha) to get
+/// the most warmth per unit of black-lift, but it is the universal *fallback floor*, not the way
+/// the product truly warms.
 ///
 /// ## Documented limits — the badge says `Overlay`, never "hardware"
 /// A standalone shielding-level panel may NOT cover, and warmth may be absent on:
@@ -117,8 +145,8 @@ public final class OverlayBackend: WarmthBackend {
 /// child `CALayer` whose colour/opacity encode the warmth gain.
 ///
 /// The window recipe follows the reference `macos-app-skills` overlay playbook exactly:
-/// `[.borderless, .nonactivatingPanel]`, transparent, shadowless, click-through, joins all
-/// Spaces, and floats at `CGShieldingWindowLevel()`.
+/// `[.borderless,.nonactivatingPanel]`, transparent, shadowless, click-through, joins all
+/// Spaces, and floats at `CGShieldingWindowLevel`.
 @MainActor
 final class OverlayPanel {
     let identity: DisplayIdentity
@@ -147,7 +175,7 @@ final class OverlayPanel {
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
 
-        // `sharingType` hook (TODO): defaults to `.readOnly` so the veil is VISIBLE in
+        // `sharingType` hook: defaults to `.readOnly` so the veil is VISIBLE in
         // screen captures (warmth shows in screenshots/recordings). The future
         // screenshot-exempt "reveal during captures" toggle flips this to `.none`.
         // (`.readOnly` is the non-deprecated successor to `.readWrite` for capture-visible.)
@@ -204,29 +232,17 @@ final class OverlayPanel {
         panel.orderOut(nil)
     }
 
-    /// Translate a per-channel RGB gain (0...1, identity = 1,1,1) into the alpha-tint veil:
-    /// the tint colour is the *warm light* implied by the gain, and the alpha is the amount of
-    /// cool-channel attenuation we are simulating. This warms the image (cool channels darkened)
-    /// without washing it to grey.
-    ///
-    /// Note: this is the alpha-tint fallback (see `OverlayBackend` header). A true per-channel
-    /// multiply (blacks-stay-black) is a follow-up.
+    /// Translate a per-channel RGB gain into the alpha-tint veil: a fixed saturated amber (the
+    /// hue), with opacity from `veilAlpha(for:)` (the warmth). This is the alpha-tint FALLBACK
+    /// (see the `OverlayBackend` header / the overlay-compositing notes): it washes
+    /// amber over the screen rather than removing blue from the signal — a true warm comes from
+    /// the DDC / gamma layers, not the overlay.
     private static func veil(for gain: RGBGain) -> (CGColor, Double) {
-        // How far the coolest channel has been pulled below the (always-≈1.0) red anchor is a
-        // good proxy for "how warm" the target is: 0 at neutral, ~0.6+ at the warmest point.
-        let attenuation = max(0, gain.red - gain.blue)
-
-        // Cap the veil's strength so even the warmest setting stays a tint, not an opaque wash.
-        // (~0.55 alpha at the warmest end keeps the screen legible.)
-        let alpha = min(0.55, attenuation)
-
-        // The tint colour is the warm light itself (the gain), so the residue the tint adds is
-        // amber rather than grey. Drawn at full per-channel intensity; the `alpha` above governs
-        // how strongly it is laid over the screen.
+        let alpha = veilAlpha(for: gain)
         let color = CGColor(
-            srgbRed: gain.red,
-            green: gain.green,
-            blue: gain.blue,
+            srgbRed: OverlayVeil.tint.red,
+            green: OverlayVeil.tint.green,
+            blue: OverlayVeil.tint.blue,
             alpha: 1.0
         )
         return (color, alpha)

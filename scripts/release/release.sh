@@ -14,20 +14,20 @@
 #   3. Build the DMG (pretty on a UI runner, else plain) — Mode-B safe.
 #   4. (Mode A) notarize + staple + verify via notarize.sh.
 #   5. Sparkle-sign the DMG with `sign_update` (EdDSA) — the SINGLE release
-#      authority's key (local machine, key in login keychain).
+#      authority's key (see RELEASE.md: local machine, key in login keychain).
 #   6. Update appcast.xml PRESERVING existing <item> entries (prepend the new one).
 #   7. `gh release create` the tag, upload the DMG, attach notes.
 #
-# DESIGN RULE: release is GATED on >=1 notarized+stapled DMG WHEN
+# DESIGN RULE (plan §21.2): release is GATED on >=1 notarized+stapled DMG WHEN
 # signing is enabled. In Mode B (no Apple account) the gate is relaxed and the
 # script clearly stamps the output as an UNSIGNED pre-release.
 #
 # This file is a working SKELETON: the Sparkle + appcast + gh steps are real
 # command lines, guarded so the script runs end-to-end TODAY in Mode B and
-# tells you exactly what each later step will do. Placeholders for the
-# scheme/app name are env vars at the top.
+# tells you exactly what each later step will do. Placeholders that depend on
+# Lane A (scheme/app name) are env vars at the top.
 #
-# SIGNING RULE: an appcast <item> that carries a
+# SIGNING RULE (plan §21.2): an appcast <item> that carries a
 # `sparkle:edSignature` attribute is a PROMISE that the enclosure is EdDSA-signed
 # by the single release authority. Therefore:
 #   * SIGNED path (default for a real release): a missing/empty EdDSA signature is
@@ -49,7 +49,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# ---- PLACEHOLDERS (confirm before release) ----
+# ---- PLACEHOLDERS (confirm with Lane A) ----
 APP_DISPLAY_NAME="Abendrot"
 GH_REPO="matthewrball/abendrot"
 APPCAST_PATH="$REPO_ROOT/appcast.xml"            # hosted via GitHub (raw) per Wave-1
@@ -133,10 +133,10 @@ if "$REPO_ROOT/scripts/release/notarize.sh" "$DMG_OUT"; then
   fi
 fi
 
-# Release gate: block a SIGNED release that failed to notarize/staple.
+# Release gate (§21.2): block a SIGNED release that failed to notarize/staple.
 if [ -n "${ASC_API_KEY_ID:-}" ] && [ "$NOTARIZED" != "true" ]; then
   echo "release: ABORT — signing is configured but the DMG is not notarized+stapled." >&2
-  echo "         Releases are gated on >=1 notarized+stapled DMG." >&2
+  echo "         Per plan §21.2, releases are gated on >=1 notarized+stapled DMG." >&2
   exit 4
 fi
 if [ "$NOTARIZED" != "true" ]; then
@@ -151,7 +151,7 @@ fi
 #
 # SIGNED is true unless the operator explicitly passed --unsigned. A SIGNED build
 # MUST end up with a non-empty EdDSA signature or the script aborts before writing
-# the appcast (no item that claims to be signed but isn't).
+# the appcast (no item that claims to be signed but isn't — plan §21.2).
 SIGNED="true"
 [ "$UNSIGNED" = "true" ] && SIGNED="false"
 
@@ -183,7 +183,7 @@ else
     echo "release: ABORT — signed release requires a Sparkle EdDSA signature, but" >&2
     echo "         sign_update produced none (tool missing, key absent, or signing" >&2
     echo "         failed). Refusing to write an appcast item that claims to be" >&2
-    echo "         signed but isn't." >&2
+    echo "         signed but isn't (plan §21.2)." >&2
     echo "         Fix: ensure Sparkle's sign_update is on PATH (or set" >&2
     echo "         SPARKLE_SIGN_UPDATE) and the EdDSA key is in the login keychain;" >&2
     echo "         or re-run with --unsigned for a dev/dogfood build." >&2

@@ -4,8 +4,8 @@ import WarmthKit
 // MARK: - ScheduleModeOption
 //
 // A UI-facing projection of the contract's `ScheduleMode` (which carries associated
-// values that don't fit a segmented control). Maps the four product modes:
-// Follow sunset · Schedule · Always on · Off.
+// values that don't fit a segmented control). Maps the four product modes from
+// plan: Follow sunset · Schedule · Always on · Off.
 enum ScheduleModeOption: String, CaseIterable, Identifiable {
     case followSunset
     case schedule
@@ -37,7 +37,7 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
     ///
     /// `.schedule` needs a concrete `CustomSchedule`; until the Settings → Schedule
     /// tab wires a real editor, we hand the engine a sensible provisional evening
-    /// ramp. TODO: replace with the user-configured custom schedule.
+    /// ramp. TODO(settings): replace with the user-configured custom schedule.
     func toScheduleMode(currentCustom: CustomSchedule? = nil) -> ScheduleMode {
         switch self {
         case .followSunset: return .followSystemNightShift

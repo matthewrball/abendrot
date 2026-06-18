@@ -7,10 +7,11 @@
   <language>), preserving all prior entries (Sparkle clients dedupe by the
   <sparkle:version> element build number).
 
-  HOSTING: the appcast + binaries live on GitHub. Sparkle's SUFeedURL in
-  Info.plist points at the RAW GitHub URL of this file on the default branch, e.g.:
+  HOSTING (Wave-1 decision): the appcast + binaries live on GitHub. Sparkle's
+  SUFeedURL in Info.plist points at the RAW GitHub URL of this file on the default
+  branch, e.g.:
     https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml
-  The app's Info.plist must set SUFeedURL + SUPublicEDKey accordingly.
+  Lane A must set SUFeedURL + SUPublicEDKey in the app's Info.plist accordingly.
 
   Each SIGNED <item>'s sparkle:edSignature is produced by Sparkle's `sign_update`
   using the SINGLE release authority's EdDSA private key (login keychain only —

@@ -23,14 +23,14 @@ public enum ScheduleResolver {
     /// Resolve a schedule at a given instant.
     ///
     /// - Parameters:
-    ///   - mode: the configured schedule mode.
-    ///   - date: the instant to evaluate.
-    ///   - calendar: calendar used to read local hour/minute for `.custom` (default `.current`).
-    ///   - configuredWarmth: the global warmth level to use when a mode is simply "on"
-    ///     (`.alwaysOn`, `.solar` night, `.followSystemNightShift` active). Defaults to full.
-    ///   - nightShiftActive: injected Night Shift follow state, used only by
-    ///     `.followSystemNightShift`. When the private follow is unavailable the engine passes
-    ///     the already-degraded decision through a `.solar` resolution instead.
+    /// - mode: the configured schedule mode.
+    /// - date: the instant to evaluate.
+    /// - calendar: calendar used to read local hour/minute for `.custom` (default `.current`).
+    /// - configuredWarmth: the global warmth level to use when a mode is simply "on"
+    /// (`.alwaysOn`, `.solar` night, `.followSystemNightShift` active). Defaults to full.
+    /// - nightShiftActive: injected Night Shift follow state, used only by
+    /// `.followSystemNightShift`. When the private follow is unavailable the engine passes
+    /// the already-degraded decision through a `.solar` resolution instead.
     public static func resolve(
         _ mode: ScheduleMode,
         at date: Date,

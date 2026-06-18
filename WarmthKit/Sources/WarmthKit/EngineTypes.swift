@@ -16,7 +16,9 @@ public struct EngineConfiguration: Sendable {
     public init(
         startWithPrivateAPIsEnabled: Bool = true,
         defaultScheduleMode: ScheduleMode = .followSystemNightShift,
-        defaultWarmestPoint: Kelvin = Kelvin(2700),
+        // Everyday slider max = 1900K (blue fully removed). Pure-red (~500K) is reachable only via
+        // the opt-in expanded-range control.
+        defaultWarmestPoint: Kelvin = Kelvin.everydayWarmest,
         fallbackSchedule: CustomSchedule = ScheduleResolver.defaultEveningFallback
     ) {
         self.startWithPrivateAPIsEnabled = startWithPrivateAPIsEnabled
@@ -61,7 +63,7 @@ public struct WarmthState: Sendable, Equatable {
         isScheduleActiveNow: Bool = false,
         isRevealing: Bool = false,
         globalWarmth: WarmthLevel = .off,
-        warmestPoint: Kelvin = Kelvin(2700),
+        warmestPoint: Kelvin = Kelvin.everydayWarmest,
         privateAPIsEnabled: Bool = true,
         displays: [DisplayState] = []
     ) {

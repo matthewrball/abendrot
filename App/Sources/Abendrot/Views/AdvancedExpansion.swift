@@ -4,14 +4,14 @@ import WarmthKit
 // MARK: - AdvancedExpansion
 //
 // The "liquid expansion" power rows. Surfaces, per display:
-//   - an independent warmth override          → AppModel.setWarmth(_:for:)
-//   - a layer override (Overlay/Gamma/Hardware) → AppModel.setPreferredMethod(_:for:)
-//   - a DDC opt-in toggle (where capable)      → AppModel.setHardwareDDCEnabled(_:for:)
+// - an independent warmth override → AppModel.setWarmth(_:for:)
+// - a layer override (Overlay/Gamma/Hardware) → AppModel.setPreferredMethod(_:for:)
+// - a DDC opt-in toggle (where capable) → AppModel.setHardwareDDCEnabled(_:for:)
 // plus per-app exclusions + screenshot-exempt entry points (engine-backed).
 //
 // Layer override is only offered where the engine reports the capability as
-// `.supported`; "we don't know" stays a first-class, rendered state in the
-// capability types rather than a silent enable.
+// `.supported`; "we don't know" stays a first-class, rendered state (capability
+// types) rather than a silent enable.
 struct AdvancedExpansion: View {
     @Bindable var model: AppModel
 
@@ -44,9 +44,9 @@ struct AdvancedExpansion: View {
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textMuted)
                 Spacer()
-                // Manual reveal-during-captures (auto-suspend is OUT of scope for
-                // v1.0). This toggle is a placeholder hook; wiring lands in
-                // Settings → Privacy. TODO.
+                // Manual reveal-during-captures (auto-suspend is OUT of scope for v1.0,
+                // contract). This toggle is a placeholder hook; wiring lands in
+                // Settings → Privacy. TODO(settings).
                 Text("Manual")
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textFaint)

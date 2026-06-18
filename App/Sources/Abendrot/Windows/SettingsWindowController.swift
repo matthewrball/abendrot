@@ -10,7 +10,7 @@ import SwiftUI
 // style mask from the start.
 //
 // A singleton so re-opening Settings re-focuses the existing window. Uses
-// `AppActivationPolicy.enter()/leave()` so this `.accessory` agent app foregrounds
+// `AppActivationPolicy.enter/leave` so this `.accessory` agent app foregrounds
 // the window correctly and flips back to menu-bar-only when it closes.
 @MainActor
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {

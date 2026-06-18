@@ -1,6 +1,6 @@
 # Abendrot — Continuous Integration
 #
-# This workflow runs in TWO modes:
+# Lane E (Release Engineering & CI). This workflow runs in TWO modes:
 #
 #   Mode B (DEFAULT, runs TODAY, no Apple account):
 #     lint -> WarmthKit headless tests -> SPM build -> plain (hdiutil) DMG.
@@ -12,21 +12,21 @@
 #     guarded by a `secrets present` job output so credential-less and
 #     forked-PR runs still go green.
 #
-# A SEPARATE, self-hosted "display-matrix" job (planned — NOT A GATE) documents
-# the physical-hardware test matrix. It is manual-dispatch
+# A SEPARATE, self-hosted "display-matrix" job (PLANNED — NOT A GATE) documents
+# the physical-hardware test matrix from plan §8 / §21.2. It is manual-dispatch
 # ONLY, never runs on push/PR, never sees fork secrets, and is explicitly not a
 # passing check: a green CI never implies the hardware matrix ran. The acceptance
 # of physical-display behavior is tracked outside CI until real hardware runners
-# exist. The ONLY hosted test gate is the WarmthCore
+# exist (docs/release/RELEASE.md §6). The ONLY hosted test gate is the WarmthCore
 # headless suite (`test-warmthcore`), which runs on every push/PR.
 #
-# Secret-handling rule: secrets are read ONLY inside jobs that
+# Secret-handling rule (plan §9, §21.2): secrets are read ONLY inside jobs that
 # cannot be triggered by a fork. `pull_request` from a fork cannot read repo
 # secrets in GitHub Actions, so the signing job additionally self-checks and
 # no-ops when the secret bundle is empty — defense in depth.
 #
-# Placeholder note: the Xcode/SPM scheme and target names are not yet finalized.
-# This file references them through env vars at the top
+# Placeholder note: Lane A (engine) has NOT finalized the Xcode/SPM scheme and
+# target names. This file references them through env vars at the top
 # (ABENDROT_APP_SCHEME, WARMTHKIT_PACKAGE_PATH, WARMTHKIT_TEST_TARGET). Update
 # those once Package.swift / Abendrot.xcodeproj land. Steps that depend on an
 # Xcode project (archive/export) are written but guarded with
@@ -56,17 +56,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # ---- PLACEHOLDERS: confirm once Package.swift / xcodeproj land ----
+  # ---- PLACEHOLDERS: confirm with Lane A once Package.swift / xcodeproj land ----
   ABENDROT_APP_SCHEME: Abendrot              # Xcode scheme for the .app (TBD)
   WARMTHKIT_PACKAGE_PATH: WarmthKit          # SPM package dir (exists, Package.swift TBD)
   WARMTHKIT_TEST_TARGET: WarmthCoreTests     # headless unit test target (TBD)
   # -----------------------------------------------------------------------------
   # macOS 26 "Tahoe" runner image + Xcode 26. `macos-latest` may lag; pin once
-  # GitHub publishes a Tahoe image label.
+  # GitHub publishes a Tahoe image label. See plan §9 ("macOS 26 runner").
   MACOS_RUNNER: macos-26
-  # Use the runner's default Xcode (the macos-26 image defaults to Xcode 26).
-  # Do NOT hardcode a versioned path like Xcode_26.app — the image names it with
-  # a minor version (e.g. Xcode_26.0.app), so a fixed path makes xcrun fail.
   DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
 
 jobs:
@@ -103,19 +100,17 @@ jobs:
 
       - name: Install lint tools
         run: |
-          # Install both via Homebrew — the standalone `swift-format` binary is not
-          # guaranteed on the runner PATH otherwise.
-          brew list swift-format >/dev/null 2>&1 || brew install swift-format
+          # swift-format ships with the Swift 6 toolchain (Xcode 26). SwiftLint
+          # via Homebrew (preinstalled on GitHub macOS images).
           brew list swiftlint >/dev/null 2>&1 || brew install swiftlint
           swift-format --version || true
           swiftlint version || true
 
       - name: swift-format --lint
-        continue-on-error: true   # advisory: report style issues without failing the run
         run: |
           # Lint the SPM package + app sources. `--recursive` walks the tree.
-          # Config: .swift-format at repo root (defaults used if absent).
-          # Non-zero exit fails the job.
+          # Config: .swift-format at repo root (create with Lane A; defaults used
+          # if absent). Non-zero exit fails the job.
           if [ -f .swift-format ]; then
             CFG="--configuration .swift-format"
           else
@@ -132,7 +127,6 @@ jobs:
           done
 
       - name: SwiftLint
-        continue-on-error: true   # advisory: report lint issues without failing the run
         run: |
           if [ -f .swiftlint.yml ]; then
             swiftlint lint --strict
@@ -144,7 +138,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # 2. WarmthCore headless unit tests — THE REAL REQUIRED GATE (always; hosted;
   #    no secrets). These are the pure WarmthCore tests (Kelvin<->gain math,
-  #    schedule parsing, state machine, identity keying, watchdog).
+  #    schedule parsing, state machine, identity keying, watchdog) per plan §8.
   #    NO real displays, NO DDC/gamma — that hardware work is the manual-dispatch
   #    PLANNED job below, which is explicitly NOT a gate.
   #
@@ -173,10 +167,10 @@ jobs:
           fi
           # Pure-Swift package: `swift test` is headless and needs no GUI/displays.
           # WarmthCore must remain free of AppKit/IOKit so this stays hosted-safe
-          # (module split: WarmthCore is "pure, no AppKit/IOKit").
+          # (plan §21.1 module split: WarmthCore is "pure, no AppKit/IOKit").
           swift build
           # Scope to the WarmthCore test target so this gate is exactly the pure,
-          # headless suite and never silently depends on display targets.
+          # headless suite (plan §8) and never silently depends on display targets.
           swift test --parallel --filter "${WARMTHKIT_TEST_TARGET}"
 
   # ---------------------------------------------------------------------------
@@ -337,7 +331,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${EXPORTED_APP:-}" ] || [ ! -d "${EXPORTED_APP:-/nonexistent}" ]; then
-            echo "::warning::No exported app to notarize (scheme TBD). Skipping."
+            echo "::warning::No exported app to notarize (Lane A TBD). Skipping."
             exit 0
           fi
           # Build a plain DMG to notarize (scripted, headless-safe fallback).
@@ -367,7 +361,8 @@ jobs:
   # ===========================================================================
   # SELF-HOSTED PHYSICAL DISPLAY MATRIX — PLANNED, NOT A GATE (UNIMPLEMENTED).
   #
-  # This job documents and reserves the structure for the real-hardware tests:
+  # This job documents and reserves the structure for the real-hardware tests
+  # from plan §8 / §21.2:
   #   - M5 (Tahoe, gamma-broken)  - M3/M4 (gamma works)
   #   - Apple display (Studio Display / built-in, buttonless)
   #   - generic DDC monitor       - HDMI-on-Apple-Silicon / dock edge case
@@ -408,10 +403,10 @@ jobs:
           echo "::warning::self-hosted runner is registered. Planned checks:"
           cat <<'EOF'
             1. swift test integration suite against real displays (DisplayServices/HardwareDDC).
-            2. DDC capability probe + write/verify; emergency Restore Displays exercised.
-            3. Gamma measured self-test -> auto-demote on gamma-broken rigs.
-            4. Overlay coverage incl. native fullscreen Spaces + Mission Control.
-            5. Hotplug / sleep-wake re-baseline; duplicate-identical-monitor identity.
+            2. DDC capability probe + write/verify; emergency Restore Displays exercised (§21.1 E3).
+            3. Gamma measured self-test -> auto-demote on gamma-broken rigs (§21.1 E1/E5).
+            4. Overlay coverage incl. native fullscreen Spaces + Mission Control (§21.1 E2).
+            5. Hotplug / sleep-wake re-baseline; duplicate-identical-monitor identity (§21.1 E4/E14).
           EOF
           echo "::error::display matrix is not implemented — refusing to report success."
           # Hard-fail so this can never be misread as a passed validation. Replace

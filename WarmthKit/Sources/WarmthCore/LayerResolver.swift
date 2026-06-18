@@ -5,9 +5,15 @@ import Foundation
 /// Pure, testable resolution of which warmth *layer* a display should be driven with.
 ///
 /// This encodes the engine's safety policy in one place so it can be unit-tested headlessly:
-/// - **Overlay is the guaranteed default** (the universal fallback).
-/// - **DDC / hardware requires per-display opt-in AND a supported capability AND private APIs
-///   enabled** — the kill switch (`privateAPIsEnabled == false`) removes hardware entirely.
+/// - **External, opted-in DDC** is the highest-quality automatic path (real hardware RGB gain),
+/// requiring per-display opt-in AND a supported capability AND private APIs enabled.
+/// - **Gamma is the universal true-warm default** for ANY display where the transfer table is
+/// supported — a real per-channel multiply (not a tint). It is OS-level and display-agnostic, so
+/// it warms built-in AND external panels (incl. buttonless Apple displays that expose no DDC).
+/// DDC, when opted in, ranks above it as a hardware upgrade.
+/// - **Overlay is the guaranteed floor** (the universal fallback): built-in panels where gamma is
+/// broken, and externals without a DDC opt-in.
+/// - The kill switch (`privateAPIsEnabled == false`) removes DDC *and* gamma, dropping to overlay.
 /// - A user **override** (`setPreferredMethod`) is honored only when it is actually *usable*.
 ///
 /// Crucially this never returns `.off`: "off" is a *warmth* decision (engine disabled, schedule
@@ -19,10 +25,10 @@ public enum LayerResolver {
     /// Resolve the layer for a display under the current policy.
     ///
     /// - Parameters:
-    ///   - capabilities: per-display, per-method classification.
-    ///   - isHardwareDDCEnabled: the user's per-display DDC opt-in.
-    ///   - override: an explicit user layer choice, or `nil` for automatic best-available.
-    ///   - privateAPIsEnabled: the global kill switch; when `false`, DDC is unavailable.
+    /// - capabilities: per-display, per-method classification.
+    /// - isHardwareDDCEnabled: the user's per-display DDC opt-in.
+    /// - override: an explicit user layer choice, or `nil` for automatic best-available.
+    /// - privateAPIsEnabled: the global kill switch; when `false`, DDC is unavailable.
     /// - Returns: the layer to drive this display with — never `.off`.
     public static func resolveLayer(
         capabilities: DisplayCapabilities,
@@ -41,13 +47,25 @@ public enum LayerResolver {
             return override
         }
 
-        // Automatic best-available: hardware only when opted-in, supported, and private APIs on.
+        // Automatic best-available, in order of warmth quality.
+        // External panels: real hardware warmth via DDC when opted-in, supported, private APIs on.
         if privateAPIsEnabled, isHardwareDDCEnabled, isSupported(capabilities.hardware) {
             return .hardware
         }
+        // Gamma is the universal TRUE white-point warm path — a real per-channel multiply that
+        // removes blue, not an overlay tint — for ANY display where the transfer table is supported
+        // (base M-series / Intel / pre-26; NOT the M5 Pro/Max no-op bracket). It is OS-level and
+        // display-agnostic, so it warms the built-in AND external panels identically and needs no
+        // per-monitor DDC support. Crucially it is the ONLY true-warm path for buttonless Apple
+        // displays (LG UltraFine / Studio Display / Pro Display XDR), which expose no DDC gain VCP —
+        // verified warming an LG UltraFine over Thunderbolt on a base M5. DDC (checked above) stays
+        // the opt-in hardware upgrade for monitors that support it; gamma is the default.
+        // (the "external gamma is unreliable" assumption was disproven on hardware.)
+        if privateAPIsEnabled, isSupported(capabilities.gamma) {
+            return .gamma
+        }
 
-        // Overlay is the guaranteed default. Gamma is best-effort and reached only via an
-        // explicit, usable override (it is default-off — e.g. broken on M5 Tahoe).
+        // Overlay is the guaranteed floor (built-in where gamma is unavailable, external w/o DDC).
         return .overlay
     }
 
@@ -62,7 +80,9 @@ public enum LayerResolver {
         case .hardware:
             return privateAPIsEnabled && isHardwareDDCEnabled && isSupported(capabilities.hardware)
         case .gamma:
-            return isSupported(capabilities.gamma)
+            // Gamma is a best-effort path; the kill switch denylists it alongside the private
+            // APIs so an engaged kill switch drops the whole machine to the overlay-only floor.
+            return privateAPIsEnabled && isSupported(capabilities.gamma)
         case .overlay:
             return true                 // the always-available safe floor
         case .off:

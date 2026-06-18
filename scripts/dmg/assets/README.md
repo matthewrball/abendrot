@@ -1,11 +1,10 @@
-# DMG brand assets
+# DMG brand assets — Lane C deliverable contract
 
-`pretty-dmg.sh` looks for these files. They are **brand assets** that are not
-finalized yet. Until they exist, `pretty-dmg.sh` builds a functional but un-arted
-DMG, and the Mode-B default `plain-dmg.sh` (no art at all) is used for
-credential-less builds.
+`pretty-dmg.sh` looks for these files. They are **owned by Lane C (brand)**.
+Until they exist, `pretty-dmg.sh` builds a functional but un-arted DMG, and the
+Mode-B default `plain-dmg.sh` (no art at all) is used for credential-less builds.
 
-## Required for the branded "unboxing" DMG
+## Required for the branded "unboxing" DMG (plan §21.4)
 
 | File | Size | Purpose |
 |---|---|---|
@@ -13,7 +12,7 @@ credential-less builds.
 | `dmg-background@2x.png` | 1320 × 800 px (2×) | Retina background |
 | `volume.icns` *(optional)* | standard `.icns` | mounted-volume icon |
 
-## Art direction (the demo-by-dragging idea)
+## Art direction (the demo-by-dragging idea, §21.4)
 
 The window is **660 × 400 pt**. The geometry in `pretty-dmg.sh` places:
 
@@ -26,8 +25,8 @@ right-warm-amber gradient with a connecting arrow between the two icon centers.
 Match the Ember-amber accent (`#FFAB5C`, provisional) on the warm side.
 
 If you change the gradient composition and need different icon coordinates,
-update the `GEOMETRY` block in `scripts/dmg/pretty-dmg.sh` to match the new
-numbers. Keep 1× and 2× perfectly aligned.
+update the `GEOMETRY` block in `scripts/dmg/pretty-dmg.sh` (or tell Lane E the
+new numbers). Keep 1× and 2× perfectly aligned.
 
-> Reduce-Transparency / a11y note: the warm side should remain an
+> Reduce-Transparency / a11y note (§21.3): the warm side should remain an
 > ember tint even at full opacity — never neutral grey.

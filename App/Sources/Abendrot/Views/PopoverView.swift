@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import WarmthKit
 
 // MARK: - PopoverView
@@ -18,6 +19,12 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             DividerLine().padding(.vertical, 14)
+
+            // Upfront honesty: if the whole Mac can't truly warm anything, say so.
+            if allDisplaysTintOnly {
+                incompatibilityBanner
+                    .padding(.bottom, 16)
+            }
 
             masterToggle
                 .padding(.bottom, 16)
@@ -90,9 +97,50 @@ struct PopoverView: View {
     private var displaySection: some View {
         VStack(spacing: 8) {
             ForEach(model.state.displays) { display in
-                DisplayRow(display: display)
+                DisplayRow(display: display, tintOnly: isTintOnly(display))
             }
         }
+    }
+
+    // MARK: Incompatibility ("can only be tinted") detection
+
+    /// A display can only be TINTED when no true-warm path is available to it: gamma is not
+    /// supported on this chip/OS (or private APIs are off) AND it is not DDC-capable. Capability-
+    /// based, so it reads honestly even before warming is enabled.
+    private func isTintOnly(_ display: DisplayState) -> Bool {
+        let priv = model.state.privateAPIsEnabled
+        let gammaPossible = priv && isSupported(display.capabilities.gamma)
+        let ddcPossible = priv && isSupported(display.capabilities.hardware)
+        return !(gammaPossible || ddcPossible)
+    }
+
+    private func isSupported<T>(_ cap: Capability<T>) -> Bool {
+        if case .supported = cap { return true }
+        return false
+    }
+
+    /// True when there is ≥1 display and EVERY connected display can only be tinted — the whole
+    /// Mac/OS can't truly warm anything, so we say so up front with a banner.
+    private var allDisplaysTintOnly: Bool {
+        let displays = model.state.displays
+        return !displays.isEmpty && displays.allSatisfy(isTintOnly)
+    }
+
+    private var incompatibilityBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(Theme.Typography.ui(12))
+                .foregroundStyle(Theme.Color.accentPress)
+            Text("True warming isn’t available on this Mac, so your displays are being tinted rather than truly warmed — a known limitation on some Apple-silicon chips and macOS versions.")
+                .font(Theme.Typography.ui(11))
+                // Dark ink on the light-amber fill (same contrast convention as the method badges),
+                // so the banner is legible.
+                .foregroundStyle(Theme.Color.groundIndigo)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.accentHi, in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
     }
 
     // MARK: Footer
@@ -108,9 +156,24 @@ struct PopoverView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
 
+            // Quit. Routes through NSApp.terminate → applicationShouldTerminate, which
+            // neutral-resets every display before exit. An LSUIElement agent
+            // has no app menu, so this is the user's Quit affordance; ⌘Q also works when the
+            // popover is focused.
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+                    .foregroundStyle(Theme.Color.textMuted)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("q", modifiers: .command)
+            .help("Quit Abendrot")
+            .accessibilityLabel("Quit Abendrot")
+
             Spacer()
 
-            // Subtle reveal hint in the footer.
+            // Subtle reveal hint.
             Text("Reveal True Color: ⌥⌘T (hold)")
                 .font(Theme.Typography.ui(10.5))
                 .foregroundStyle(Theme.Color.textFaint)

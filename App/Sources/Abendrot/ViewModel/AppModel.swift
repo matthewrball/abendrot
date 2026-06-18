@@ -6,11 +6,11 @@ import WarmthKit
 //
 // The `@Observable`, `@MainActor` view-model that sits between SwiftUI and the
 // FROZEN `WarmthEngine` actor. It:
-//   - owns the `WarmthEngine` and `HotkeyService`,
-//   - consumes `engine.stateUpdates()` and republishes the latest `WarmthState`
-//     for the views to render,
-//   - turns view intents (toggle, slider, mode, per-display overrides, reveal)
-//     into `await engine.…` calls.
+// - owns the `WarmthEngine` and `HotkeyService`,
+// - consumes `engine.stateUpdates` and republishes the latest `WarmthState`
+// for the views to render,
+// - turns view intents (toggle, slider, mode, per-display overrides, reveal)
+// into `await engine.…` calls.
 //
 // Integration is ONLY via the contract (`import WarmthKit`). No engine internals.
 //
@@ -44,7 +44,7 @@ final class AppModel {
 
     // MARK: Init
 
-    /// Live initializer — owns a real engine. Call `start()` from the App entry.
+    /// Live initializer — owns a real engine. Call `start` from the App entry.
     init(configuration: EngineConfiguration = EngineConfiguration()) {
         let engine = WarmthEngine(configuration: configuration)
         self.engine = engine
@@ -71,7 +71,20 @@ final class AppModel {
                 self?.state = snapshot
             }
         }
-        Task { await engine.start() }
+        // Start the engine, THEN re-apply the persisted warmest point (the hybrid expanded-range
+        // pick) in the same task so the restore is ordered strictly after start — avoiding a
+        // reentrancy race where the restore could land before the engine finishes booting.
+        Task { [weak self] in
+            await engine.start()
+            guard let self else { return }
+            // Only restore a sane, warm ceiling (500…3400K). `Kelvin.init` already floors at 500;
+            // the upper clamp guards against any future writer persisting a non-warm value that
+            // would neuter warming. The only writer today is the Maximum-warmth control.
+            if let saved = UserDefaults.standard.object(forKey: Self.warmestPointKey) as? Int,
+               saved <= Kelvin.ceilingCoolBound.value {
+                self.setWarmestPoint(Kelvin(saved))
+            }
+        }
     }
 
     /// Neutral-reset + tear down. Call on app quit.
@@ -100,8 +113,14 @@ final class AppModel {
         Task { await engine?.setScheduleMode(mode) }
     }
 
+    /// UserDefaults key for the persisted warmest point (the slider's warmest end). A focused
+    /// slice of persistence: the hybrid expanded-range pick must survive relaunch to be useful.
+    static let warmestPointKey = "warmestPointKelvin"
+
     func setWarmestPoint(_ kelvin: Kelvin) {
-        // Not part of the published WarmthState; forwarded straight to the engine.
+        // Optimistic UI so the Kelvin readout updates immediately, then persist + tell the engine.
+        state.warmestPoint = kelvin
+        UserDefaults.standard.set(kelvin.value, forKey: Self.warmestPointKey)
         Task { await engine?.setWarmestPoint(kelvin) }
     }
 
@@ -158,10 +177,11 @@ final class AppModel {
 
     // MARK: ── Derived display helpers ───────────────────────────────────────
 
-    /// The current global Kelvin readout, derived from strength + warmest point.
-    /// Uses the contract's default warmest point until Settings wires a custom one.
+    /// The current global Kelvin readout, derived from strength + the *actual* warmest point the
+    /// engine is using (published in `state`). Previously hardcoded 2700K, which made the readout
+    /// disagree with the applied warmth — fixed so the number never lies.
     var globalKelvin: Kelvin {
-        state.globalWarmth.kelvin(warmestPoint: Kelvin(2700))
+        state.globalWarmth.kelvin(warmestPoint: state.warmestPoint)
     }
 
     /// A short, glanceable status string for the popover title ("Warming · 2700K").

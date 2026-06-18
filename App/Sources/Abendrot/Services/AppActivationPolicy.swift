@@ -2,7 +2,8 @@ import AppKit
 
 // MARK: - AppActivationPolicy
 //
-// Reference-counted activation-policy helper.
+// Reference-counted activation-policy helper (reference: fayazara/macos-app-skills,
+// reimplemented — see platform reference).
 //
 // Abendrot is an `LSUIElement` agent app (`.accessory` policy: no Dock icon, no
 // Cmd-Tab). But when a real window appears — the Settings window or, later, a Sparkle
@@ -10,12 +11,12 @@ import AppKit
 // and front correctly, then flip back to `.accessory` when the LAST such window
 // closes. A bare set/reset breaks when two windows overlap; a counter fixes it.
 //
-// Usage: call `enter()` before showing a window, `leave()` when it closes.
+// Usage: call `enter` before showing a window, `leave` when it closes.
 @MainActor
 enum AppActivationPolicy {
     private static var count = 0
 
-    /// Foreground the app (`.regular`) for a window that needs focus. Balanced by `leave()`.
+    /// Foreground the app (`.regular`) for a window that needs focus. Balanced by `leave`.
     static func enter() {
         count += 1
         if count == 1 {

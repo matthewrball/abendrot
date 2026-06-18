@@ -2,9 +2,9 @@
 #
 # notarize.sh — submit a DMG (or .app/.zip) to Apple notarization, staple, verify.
 #
-# Submits with notarytool submit --wait, then stapler staple; the release gate is
-# spctl -a -vvv plus parsing the notarytool log. Signing is currently deferred, so
-# this MUST no-op gracefully with no Apple credentials (Mode B).
+# Plan refs: §9 (notarytool submit --wait + stapler staple), §8/§21.2 release
+# gates (spctl -a -vvv, parse notarytool log), Wave-1 founder decision (signing
+# DEFERRED -> this MUST no-op gracefully with no Apple credentials = Mode B).
 #
 # MODE B (default, TODAY, no Apple account): if no App Store Connect API key is
 # configured, this script prints a clear explanation and exits 0 (success) so the
@@ -14,7 +14,7 @@
 # vars below (or pass --key/--key-id/--issuer) and it performs a real notarize +
 # staple + Gatekeeper verify.
 #
-# Credentials needed for Mode A:
+# Credentials needed for Mode A (see docs/release/RELEASE.md "$99 checklist"):
 #   ASC_API_KEY_P8       path to the App Store Connect API key .p8     (or *_BASE64)
 #   ASC_API_KEY_ID       the key ID  (e.g. ABC123XYZ)
 #   ASC_API_ISSUER_ID    the issuer UUID
@@ -77,8 +77,7 @@ notarize: SKIPPED (Mode B — no Apple credentials configured).
 
   To enable notarization (Mode A), provide all three:
       ASC_API_KEY_P8 (or ASC_API_KEY_P8_BASE64), ASC_API_KEY_ID, ASC_API_ISSUER_ID
-  These come from an App Store Connect API key created under your Apple Developer
-  Program account.
+  See docs/release/RELEASE.md -> "$99 account -> what to supply".
 EOF
   echo "notarize: exiting 0 (clean skip)."
   exit 0
@@ -114,7 +113,7 @@ STATUS="$(/usr/libexec/PlistBuddy -c 'Print :status' "$SUBMIT_LOG" 2>/dev/null |
 REQ_ID="$(/usr/libexec/PlistBuddy -c 'Print :id' "$SUBMIT_LOG" 2>/dev/null || echo '')"
 echo "notarize: status='$STATUS' id='$REQ_ID'"
 
-# Always fetch + print the detailed log (the record trail; parse notarytool log).
+# Always fetch + print the detailed log (the audit trail; §21.2 "parse notarytool log").
 if [ -n "$REQ_ID" ]; then
   echo "notarize: fetching notarytool log for $REQ_ID ..."
   xcrun notarytool log "$REQ_ID" \
@@ -135,7 +134,7 @@ fi
 xcrun stapler validate "$TARGET" || { echo "notarize: stapler validate failed." >&2; exit 5; }
 
 # Gatekeeper assessment. For a DMG, assess the mounted app; for an .app assess
-# directly. spctl -a -vvv is the release gate.
+# directly. spctl -a -vvv is the §8 release gate.
 echo "notarize: Gatekeeper verify (spctl -a -vvv)..."
 case "$TARGET" in
   *.dmg)

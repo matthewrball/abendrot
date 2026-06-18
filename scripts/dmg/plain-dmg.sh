@@ -2,7 +2,7 @@
 #
 # plain-dmg.sh — scripted, headless DMG builder (Abendrot MODE B default).
 #
-# Why this exists: create-dmg's branded path runs AppleScript
+# Why this exists (plan §9, §21.2): create-dmg's branded path runs AppleScript
 # Finder automation that HANGS on headless CI (create-dmg issue #154). This
 # script uses only `hdiutil` + `ln -s`, so it works:
 #   - TODAY, with no Apple Developer account (the app can be unsigned/ad-hoc),
@@ -19,7 +19,7 @@
 # It produces a functional drag-to-Applications DMG WITHOUT custom background
 # art or window geometry. For the branded "unboxing" DMG, see pretty-dmg.sh
 # (UI runner only). Releases are gated on >=1 notarized+stapled DMG *when
-# signing is enabled*; this plain DMG is the always-available baseline.
+# signing is enabled* (§21.2); this plain DMG is the always-available baseline.
 #
 # Usage:
 #   scripts/dmg/plain-dmg.sh --app <path/to/Abendrot.app> --out <path/to/out.dmg> \
@@ -100,7 +100,7 @@ if ! hdiutil create \
   exit 4
 fi
 
-# Report SHA256 — the Homebrew cask + appcast both need it.
+# Report SHA256 — the Homebrew cask + appcast both need it (see RELEASE.md).
 if command -v shasum >/dev/null 2>&1; then
   SHA="$(shasum -a 256 "$OUT" | awk '{print $1}')"
   echo "plain-dmg: done."

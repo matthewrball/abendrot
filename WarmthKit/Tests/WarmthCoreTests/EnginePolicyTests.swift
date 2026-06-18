@@ -7,10 +7,11 @@ import Foundation
 private func makeCaps(
     hardware: Capability<DDCColorCaps> = .unsupported(reason: .buttonlessAppleDisplay),
     gamma: Capability<Void> = .unsupported(reason: .gammaBrokenOnThisOS),
-    overlay: Capability<Void> = .supported(())
+    overlay: Capability<Void> = .supported(()),
+    transport: DisplayTransport = .unknown
 ) -> DisplayCapabilities {
     DisplayCapabilities(
-        identity: DisplayIdentity(cgUUID: UUID()),
+        identity: DisplayIdentity(cgUUID: UUID(), transport: transport),
         hardware: hardware,
         gamma: gamma,
         overlay: overlay,
@@ -32,6 +33,63 @@ struct LayerResolverTests {
             isHardwareDDCEnabled: false,
             override: nil,
             privateAPIsEnabled: true
+        )
+        #expect(layer == .overlay)
+    }
+
+    @Test("built-in panel auto-selects gamma when supported")
+    func builtInPrefersGamma() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(gamma: .supported(()), transport: .builtIn),
+            isHardwareDDCEnabled: false,
+            override: nil,
+            privateAPIsEnabled: true
+        )
+        #expect(layer == .gamma)
+    }
+
+    @Test("external panels ALSO auto-select gamma when supported")
+    func externalAutoSelectsGamma() {
+        for transport in [DisplayTransport.hdmi, .displayPort, .thunderbolt, .usbC, .unknown] {
+            let layer = LayerResolver.resolveLayer(
+                capabilities: makeCaps(gamma: .supported(()), transport: transport),
+                isHardwareDDCEnabled: false,
+                override: nil,
+                privateAPIsEnabled: true
+            )
+            #expect(layer == .gamma)
+        }
+    }
+
+    @Test("external with DDC opted-in + supported → hardware wins over gamma (opt-in upgrade)")
+    func externalDDCOptInBeatsGamma() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(hardware: ddcSupported, gamma: .supported(()), transport: .displayPort),
+            isHardwareDDCEnabled: true,
+            override: nil,
+            privateAPIsEnabled: true
+        )
+        #expect(layer == .hardware)
+    }
+
+    @Test("built-in falls to overlay when gamma is unsupported (the M5 Pro/Max no-op bracket)")
+    func builtInGammaUnsupportedFallsToOverlay() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(gamma: .unsupported(reason: .gammaBrokenOnThisOS), transport: .builtIn),
+            isHardwareDDCEnabled: false,
+            override: nil,
+            privateAPIsEnabled: true
+        )
+        #expect(layer == .overlay)
+    }
+
+    @Test("kill switch drops the built-in from gamma to the overlay floor")
+    func killSwitchDropsGammaToOverlay() {
+        let layer = LayerResolver.resolveLayer(
+            capabilities: makeCaps(gamma: .supported(()), transport: .builtIn),
+            isHardwareDDCEnabled: false,
+            override: nil,
+            privateAPIsEnabled: false
         )
         #expect(layer == .overlay)
     }
@@ -71,7 +129,7 @@ struct LayerResolverTests {
 
     @Test("an override is honored only when usable")
     func overrideMustBeUsable() {
-        // .hardware override but not opted-in → not usable → overlay.
+        //.hardware override but not opted-in → not usable → overlay.
         #expect(
             LayerResolver.resolveLayer(
                 capabilities: makeCaps(hardware: ddcSupported),
@@ -80,7 +138,7 @@ struct LayerResolverTests {
                 privateAPIsEnabled: true
             ) == .overlay
         )
-        // .gamma override with gamma supported → gamma.
+        //.gamma override with gamma supported → gamma.
         #expect(
             LayerResolver.resolveLayer(
                 capabilities: makeCaps(gamma: .supported(())),
@@ -89,7 +147,7 @@ struct LayerResolverTests {
                 privateAPIsEnabled: true
             ) == .gamma
         )
-        // .gamma override with gamma unsupported → overlay.
+        //.gamma override with gamma unsupported → overlay.
         #expect(
             LayerResolver.resolveLayer(
                 capabilities: makeCaps(gamma: .unsupported(reason: .gammaBrokenOnThisOS)),
@@ -98,7 +156,7 @@ struct LayerResolverTests {
                 privateAPIsEnabled: true
             ) == .overlay
         )
-        // .overlay override is always usable.
+        //.overlay override is always usable.
         #expect(
             LayerResolver.resolveLayer(
                 capabilities: makeCaps(),
@@ -132,18 +190,44 @@ struct ScheduleDegradeTests {
 
     private let fallback = ScheduleResolver.defaultEveningFallback   // 20:00 → 06:00
 
-    @Test("follow with available active state resolves normally")
+    @Test("follow Night Shift when ON; when OFF, defer to the evening window")
     func followAvailable() {
+        let warmth = WarmthLevel(strength: 0.5)   // distinguishable from the fallback's strength-1
+        // Night Shift ON → follow it (active), carrying the user's configured warmth.
         let on = ScheduleResolver.resolveWithDegrade(
             mode: .followSystemNightShift, at: date(hour: 22),
-            nightShift: true, privateAPIsEnabled: true, fallback: fallback
+            configuredWarmth: warmth, nightShift: true, privateAPIsEnabled: true, fallback: fallback
         )
         #expect(on.isActiveNow)
-        let off = ScheduleResolver.resolveWithDegrade(
+        #expect(on.target == warmth)
+        // Night Shift OFF in the evening → STILL warms via the evening window, carrying the user's
+        // CONFIGURED warmth (NOT the fallback's strength-1, NOT off). The regression fix —
+        // a truthful NS-OFF must not zero out the default schedule.
+        let offEvening = ScheduleResolver.resolveWithDegrade(
             mode: .followSystemNightShift, at: date(hour: 22),
-            nightShift: false, privateAPIsEnabled: true, fallback: fallback
+            configuredWarmth: warmth, nightShift: false, privateAPIsEnabled: true, fallback: fallback
         )
-        #expect(!off.isActiveNow)
+        #expect(offEvening.isActiveNow)
+        #expect(offEvening.target == warmth)
+        // Night Shift OFF in the daytime → inactive (the evening window says so), target off.
+        let offDay = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: date(hour: 12),
+            configuredWarmth: warmth, nightShift: false, privateAPIsEnabled: true, fallback: fallback
+        )
+        #expect(!offDay.isActiveNow)
+        #expect(offDay.target == .off)
+    }
+
+    @Test("follow with Night Shift manually ON in daytime → active (faithfully mirrors the system)")
+    func followNightShiftOnDaytimeWarms() {
+        // A user who forces macOS Night Shift on at noon: "follow Night Shift" mirrors it → active.
+        // Intentional (it follows the system); pinned here so it stays a DECIDED behavior, not an
+        // accident, after the schedule change. (Code-review MEDIUM finding.)
+        let noon = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: date(hour: 12),
+            nightShift: true, privateAPIsEnabled: true, fallback: fallback
+        )
+        #expect(noon.isActiveNow)
     }
 
     @Test("follow with UNAVAILABLE follower degrades to the evening window — not off-forever")

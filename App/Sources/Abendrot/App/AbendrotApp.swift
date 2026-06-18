@@ -9,7 +9,7 @@ import WarmthKit
 // sunset-arc template glyph. Settings open as a programmatic glass window
 // (`SettingsWindowController`), NOT a SwiftUI `Window` scene (see that file's note).
 //
-// Lifecycle: `AppModel.start()` boots the engine + reveal hotkey; `shutdown()`
+// Lifecycle: `AppModel.start` boots the engine + reveal hotkey; `shutdown`
 // neutral-resets every display on quit.
 @main
 struct AbendrotApp: App {
@@ -26,12 +26,12 @@ struct AbendrotApp: App {
             PopoverView(model: model)
         } label: {
             // Provisional template glyph; the real icon + amber-active glow are
-            // not finalized yet. TODO: swap in the final icon + amber active state.
+            // deferred to brand-lock. TODO(brand-lock).
             Image(nsImage: MenuBarGlyph.image())
         }
         .menuBarExtraStyle(.window)
 
-        // A SwiftUI Settings scene only so ⌘, / `openSettings()` resolve; the real glass
+        // A SwiftUI Settings scene only so ⌘, / `openSettings` resolve; the real glass
         // window is the programmatic one. This scene routes to it.
         Settings {
             SettingsLauncher(model: model)
@@ -75,10 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // Neutral-reset every display before exit (quit guarantee).
+        // Neutral-reset every display before exit.
         // The reset runs on the main actor, so we can't block the main thread waiting
         // for it (a DispatchSemaphore.wait here would deadlock the very Task it awaits).
-        // Instead defer termination with .terminateLater, run the async shutdown, then
+        // Instead defer termination with.terminateLater, run the async shutdown, then
         // tell AppKit it's safe to exit. The displays are neutral-reset before the
         // process exits, without blocking the main thread.
         guard let model else { return .terminateNow }

@@ -8,7 +8,7 @@
 //
 // Builds and runs UNSIGNED locally — no Apple Developer account is required for
 // development or for the self-hosted hardware test matrix. Signing/notarization
-// is a launch-time concern (mode A vs mode B).
+// is a launch-time concern (see docs/release/RELEASE.md, mode A vs mode B).
 //
 // Verify against Xcode 26 / macOS 26 "Tahoe" SDK before relying on any API here.
 
@@ -113,6 +113,15 @@ let package = Package(
         .testTarget(
             name: "WarmthCoreTests",
             dependencies: ["WarmthCore"]
+        ),
+
+        // Engine + DDC (M2): golden-vector wire-protocol tests, the verify/retry transport state
+        // machine driven by a fake I²C bus, snapshot-store round-trips, and the §21‑E14
+        // failure-injection recovery scenarios (S1 crash-mid-write, S2 SIGKILL, S3 wake-service-gone)
+        // exercised through the engine's injectable test seams.
+        .testTarget(
+            name: "WarmthKitTests",
+            dependencies: ["WarmthKit", "HardwareDDC", "OverlayRenderer", "WarmthCore"]
         ),
     ],
     swiftLanguageModes: [.v6]

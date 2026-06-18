@@ -4,8 +4,9 @@ import AppKit
 // MARK: - SunsetArcGlyph
 //
 // PROVISIONAL placeholder glyph — a half-sun arc rising on a horizon line, mirroring
-// the SVG in brand/explorations/components.html. The real icon is not finalized yet;
-// this is a clear, non-faked stand-in so the structure reads.
+// the SVG in brand/explorations/components.html. The REAL icon is deferred to the
+// brand-lock pass; this is a clear,
+// non-faked stand-in so the structure reads.
 struct SunsetArcGlyph: View {
     var tint: Color = Theme.Color.accent
     var horizon: Color = Theme.Color.accentHighlight
@@ -41,10 +42,10 @@ struct SunsetArcGlyph: View {
 
 // MARK: - Menu-bar template image
 //
-// The status-item glyph. `isTemplate = true` is CRITICAL: without it the icon is
-// invisible in light menu bars. macOS tints template images to match the bar; the
-// "glows amber when active" treatment is not finalized yet —
-// TODO: swap a vibrant template + amber active state then.
+// The status-item glyph. `isTemplate = true` is CRITICAL:
+// without it the icon is invisible in light menu bars. macOS tints template images to
+// match the bar; the "glows amber when active" treatment is deferred to
+// brand-lock — TODO: swap a vibrant template + amber active state then.
 enum MenuBarGlyph {
     /// A small sunset-arc template image rendered programmatically (provisional).
     static func image(pointSize: CGFloat = 18) -> NSImage {
