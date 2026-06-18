@@ -27,9 +27,9 @@ struct PopoverView: View {
             }
 
             masterToggle
-                // Tighter gap when the warmth group is collapsed, so the condensed popover sits
-                // balanced rather than bottom-heavy.
-                .padding(.bottom, model.state.isEnabled ? 16 : 12)
+                // When collapsed, zero bottom padding so the lone toggle sits centered between the
+                // header and footer dividers (each contributes 14pt) instead of bottom-heavy.
+                .padding(.bottom, model.state.isEnabled ? 16 : 0)
 
             // The warmth slider + schedule mode control (and the divider between) are only meaningful
             // while warming is on — the master toggle owns on/off. The whole group hides and
@@ -80,6 +80,15 @@ struct PopoverView: View {
                 .font(Theme.Typography.serif(15))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
+            // Settings (top-right).
+            Button {
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .foregroundStyle(Theme.Color.textMuted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
     }
 
@@ -175,16 +184,6 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            // Settings (bottom-left).
-            Button {
-                openSettings()
-            } label: {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(Theme.Color.textMuted)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
-
             // Quit — an "exit" door icon, not a power symbol (which reads like an on/off switch and
             // gets confused with warming on/off). Routes through NSApp.terminate →
             // applicationShouldTerminate, which neutral-resets every display before exit (contract
