@@ -268,6 +268,31 @@ struct ScheduleDegradeTests {
         )
         #expect(!off.isActiveNow)
     }
+
+    @Test("degrade WITH a solar coordinate follows the real sunset, overriding the fixed clock window")
+    func degradeUsesSolarRamp() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func utc(_ h: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: 12, day: 21, hour: h))! }
+        let coord = TimeZoneCoordinates.Coordinate(latitude: 51.5, longitude: -0.13)   // London
+        let warmth = WarmthLevel(strength: 0.6)
+        // 17:00 UTC, London midwinter: the sun has already set (~15:53) so it is dark → warmth should
+        // be ON. But 17:00 is BEFORE the fixed 20:00→06:00 fallback window, so the clock alone would
+        // say "inactive". With a coordinate the real sunset wins — the whole point of the fix.
+        let withCoord = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: utc(17), calendar: cal,
+            configuredWarmth: warmth, nightShift: false, privateAPIsEnabled: true,
+            fallback: fallback, solarCoordinate: coord
+        )
+        #expect(withCoord.isActiveNow)
+        #expect(withCoord.target == warmth)            // past sunset → full configured warmth
+        let withoutCoord = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: utc(17), calendar: cal,
+            configuredWarmth: warmth, nightShift: false, privateAPIsEnabled: true,
+            fallback: fallback
+        )
+        #expect(!withoutCoord.isActiveNow)             // fixed window: 17:00 is outside 20:00→06:00
+    }
 }
 
 // MARK: - RGB gain golden anchors (numeric validation, not just ordering)

@@ -210,6 +210,52 @@ struct ScheduleResolverTests {
         #expect(noonElev > 0)
         #expect(midnightElev < 0)
     }
+
+    // MARK: Sunset ramp + timezone coordinates
+
+    @Test("rampFactor: 0 above ramp start, 1 below sunset, warmer toward sunset between")
+    func rampFactorEnvelope() {
+        let start = ScheduleResolver.rampStartElevation   // +6°
+        let full = ScheduleResolver.rampFullElevation     // −0.833°
+        #expect(ScheduleResolver.rampFactor(elevation: start + 5, rampStart: start, rampFull: full) == 0)
+        #expect(ScheduleResolver.rampFactor(elevation: start, rampStart: start, rampFull: full) == 0)
+        #expect(ScheduleResolver.rampFactor(elevation: full, rampStart: start, rampFull: full) == 1)
+        #expect(ScheduleResolver.rampFactor(elevation: full - 10, rampStart: start, rampFull: full) == 1)
+        let mid = ScheduleResolver.rampFactor(elevation: (start + full) / 2, rampStart: start, rampFull: full)
+        #expect(mid > 0 && mid < 1)
+        // Lower elevation = closer to/past sunset = warmer.
+        let lower = ScheduleResolver.rampFactor(elevation: 1, rampStart: start, rampFull: full)
+        let higher = ScheduleResolver.rampFactor(elevation: 4, rampStart: start, rampFull: full)
+        #expect(lower > higher)
+    }
+
+    @Test("solarRampDecision: off in daytime, full at night")
+    func solarRamp() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func utc(_ h: Int) -> Date {
+            cal.date(from: DateComponents(year: 2026, month: 6, day: 21, hour: h))!
+        }
+        let lat = 51.5, lon = -0.13   // London
+        let warmth = WarmthLevel(strength: 0.8)
+        let noon = ScheduleResolver.solarRampDecision(at: utc(12), latitude: lat, longitude: lon, configuredWarmth: warmth)
+        #expect(!noon.isActiveNow)
+        #expect(noon.target == .off)
+        let night = ScheduleResolver.solarRampDecision(at: utc(1), latitude: lat, longitude: lon, configuredWarmth: warmth)
+        #expect(night.isActiveNow)
+        #expect(night.target == warmth)               // deep night → full configured warmth (factor 1)
+    }
+
+    @Test("TimeZoneCoordinates: known identifier hits the table; unknown uses the UTC-offset longitude")
+    func timeZoneCoordinates() {
+        let ny = TimeZoneCoordinates.coordinate(forIdentifier: "America/New_York", secondsFromGMT: -5 * 3600)
+        #expect(abs(ny.latitude - 40.71) < 0.5)
+        #expect(abs(ny.longitude - (-74.01)) < 0.5)
+        // Unknown identifier → longitude from the offset (UTC+1 = 15°E), equator latitude.
+        let unknown = TimeZoneCoordinates.coordinate(forIdentifier: "Etc/Nowhere", secondsFromGMT: 3600)
+        #expect(unknown.latitude == 0)
+        #expect(abs(unknown.longitude - 15) < 0.001)
+    }
 }
 
 // MARK: - DisplayMethod & DisplayIdentity

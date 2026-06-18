@@ -205,13 +205,9 @@ private struct ScheduleTab: View {
                 ),
                 onChange: { _ in }
             )
-            Text("Follow sunset mirrors your system Night Shift schedule when available, and falls back to a built-in solar calculation otherwise. Abendrot never writes to Night Shift.")
+            Text("Sunset warms automatically around your local sunset — easing in beforehand and holding through the night — using your time zone to estimate sunrise and sunset. No location permission required. (When macOS Night Shift is on, Abendrot follows it instead; it never writes to Night Shift.) Always on keeps warmth on around the clock.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
-            // TODO(settings): custom from/to + warmth target editor for .custom schedules.
-            Text("Custom schedule editor — coming in a later milestone.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textFaint)
         }
     }
 }

@@ -55,14 +55,13 @@ public enum ScheduleResolver {
             return ScheduleDecision(isActiveNow: active, target: active ? schedule.warmest : .off)
 
         case let .solar(latitude, longitude):
-            let isDaytime = solarIsDaytime(
+            // Graded sunset-aware envelope: eases warmth in before sunset, full through the night,
+            // eases back out at sunrise — using the user's real solar position. (Sunset ramp.)
+            return solarRampDecision(
                 at: date,
                 latitude: latitude,
-                longitude: longitude
-            )
-            return ScheduleDecision(
-                isActiveNow: !isDaytime,
-                target: isDaytime ? .off : configuredWarmth
+                longitude: longitude,
+                configuredWarmth: configuredWarmth
             )
 
         case .followSystemNightShift:
@@ -101,16 +100,46 @@ public enum ScheduleResolver {
         ((comps.hour ?? 0) * 60 + (comps.minute ?? 0)) % (24 * 60)
     }
 
-    // MARK: Solar elevation
+    // MARK: Sunset-aware ramp envelope
 
-    /// Standard sunrise/sunset solar-position calc: is the sun above the horizon at `date`
-    /// for the given coordinates? Uses the NOAA-style solar-position approximation.
-    ///
-    /// "Daytime" is defined as solar elevation greater than the standard −0.833° refraction-
-    /// corrected horizon (the value used for official sunrise/sunset).
-    static func solarIsDaytime(at date: Date, latitude: Double, longitude: Double) -> Bool {
-        solarElevationDegrees(at: date, latitude: latitude, longitude: longitude) > -0.833
+    /// Solar elevation (°) at which the pre-sunset ramp BEGINS — warmth starts easing in. The sun is
+    /// still above the horizon here (~45–60 min before sunset, latitude/season dependent).
+    public static let rampStartElevation = 6.0
+
+    /// Solar elevation (°) at which warmth reaches FULL — the standard −0.833° refraction-corrected
+    /// sunset horizon. At and below this (sun has set → all night) warmth is the configured level.
+    public static let rampFullElevation = -0.833
+
+    /// A graded, sunset-aware decision driven by the sun's real position: warmth eases from 0 (sun
+    /// at `rampStart`) up to `configuredWarmth` (sun at/below `rampFull` = sunset → night), and back
+    /// down through the same band at sunrise. Makes Sunset mode "dim up to sunset, then full warm
+    /// once the sun sets" instead of a hard on/off at a fixed clock time.
+    public static func solarRampDecision(
+        at date: Date,
+        latitude: Double,
+        longitude: Double,
+        configuredWarmth: WarmthLevel,
+        rampStart: Double = rampStartElevation,
+        rampFull: Double = rampFullElevation
+    ) -> ScheduleDecision {
+        let elevation = solarElevationDegrees(at: date, latitude: latitude, longitude: longitude)
+        let factor = rampFactor(elevation: elevation, rampStart: rampStart, rampFull: rampFull)
+        guard factor > 0 else { return .inactive }
+        return ScheduleDecision(
+            isActiveNow: true,
+            target: WarmthLevel(strength: configuredWarmth.strength * factor)
+        )
     }
+
+    /// The 0…1 ramp factor for a solar elevation: 0 at/above `rampStart` (daytime), 1 at/below
+    /// `rampFull` (sunset → night), linear between. Robust to a degenerate/inverted window.
+    static func rampFactor(elevation: Double, rampStart: Double, rampFull: Double) -> Double {
+        guard rampStart > rampFull else { return elevation <= rampFull ? 1 : 0 }
+        let t = (rampStart - elevation) / (rampStart - rampFull)
+        return min(1, max(0, t))
+    }
+
+    // MARK: Solar elevation
 
     /// Solar elevation angle in degrees above the horizon at `date` (UTC-based), for the
     /// given coordinates. Reimplemented NOAA solar-position approximation.

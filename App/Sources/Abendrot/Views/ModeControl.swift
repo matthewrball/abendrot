@@ -8,7 +8,6 @@ import WarmthKit
 // plan §4.1: Follow sunset · Schedule · Always on · Off.
 enum ScheduleModeOption: String, CaseIterable, Identifiable {
     case followSunset
-    case schedule
     case alwaysOn
 
     var id: String { rawValue }
@@ -16,37 +15,26 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .followSunset: return "Sunset"
-        case .schedule: return "Schedule"
         case .alwaysOn: return "Always on"
         }
     }
 
     /// Classify a contract `ScheduleMode` into a UI option. There is no "Off" option — the master
-    /// "Warm my displays" toggle owns on/off — so a (now UI-less) engine `.off` maps to the
-    /// Follow-sunset default for display.
+    /// "Warm my displays" toggle owns on/off — so a (UI-less) engine `.off` maps to the Sunset
+    /// default. The manual "Schedule" (custom-time) option was removed; the engine's `.custom` case
+    /// is kept dormant for a future editor, so a persisted `.custom` also shows as Sunset.
     init(_ mode: ScheduleMode) {
         switch mode {
-        case .followSystemNightShift, .solar, .off: self = .followSunset
-        case .custom: self = .schedule
+        case .followSystemNightShift, .solar, .custom, .off: self = .followSunset
         case .alwaysOn: self = .alwaysOn
         }
     }
 
-    /// Produce a contract `ScheduleMode` for this option.
-    ///
-    /// `.schedule` needs a concrete `CustomSchedule`; until the Settings → Schedule
-    /// tab wires a real editor, we hand the engine a sensible provisional evening
-    /// ramp. TODO(settings): replace with the user-configured custom schedule.
-    func toScheduleMode(currentCustom: CustomSchedule? = nil) -> ScheduleMode {
+    /// Produce a contract `ScheduleMode` for this option. Only Sunset (real solar) and Always-on are
+    /// user-selectable; the engine's `.custom` schedule stays dormant for a future custom editor.
+    func toScheduleMode() -> ScheduleMode {
         switch self {
         case .followSunset: return .followSystemNightShift
-        case .schedule:
-            let provisional = CustomSchedule(
-                start: DateComponents(hour: 19, minute: 0),
-                end: DateComponents(hour: 6, minute: 0),
-                warmest: WarmthLevel(strength: 0.7)
-            )
-            return .custom(currentCustom ?? provisional)
         case .alwaysOn: return .alwaysOn
         }
     }

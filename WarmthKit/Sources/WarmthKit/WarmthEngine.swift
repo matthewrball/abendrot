@@ -65,6 +65,13 @@ public actor WarmthEngine {
     /// The long-lived task that coalesces reconfiguration + wake bursts and re-baselines once
     /// per quiet window. Cancelled in `shutdown()`.
     private var rebaselineTask: Task<Void, Never>?
+
+    /// Low-frequency timer that advances the Sunset-mode ramp. Night Shift change / wake / hotplug
+    /// all trigger `reapply`, but with Night Shift OFF (the common case for an app that replaces it)
+    /// there are no notifications, so the solar ramp needs its own tick. `reapply` writes to a
+    /// backend only when the resolved warmth actually changes, so an idle tick costs ~nothing.
+    private var rampTask: Task<Void, Never>?
+    private let rampTickInterval: Duration = .seconds(60)
     /// Debounce policy (the timing arithmetic is pure / unit-tested in `ReconfigurationDebounce`).
     private let rebaselineDebounceWindow: Duration = .milliseconds(400)
 
@@ -176,6 +183,9 @@ public actor WarmthEngine {
             }
             // Start the hotplug + wake observers and the coalescing re-baseline loop.
             await startSystemObservers()
+            // Advance the Sunset ramp over the evening even when Night Shift is off (no system
+            // notifications then). Live mode only; tests drive time/reapply explicitly.
+            startRampTicker()
         }
 
         // Launch-time stale-state recovery (§9, invariant 7). A prior run may have died (crash /
@@ -193,6 +203,8 @@ public actor WarmthEngine {
     public func shutdown() async {
         rebaselineTask?.cancel()
         rebaselineTask = nil
+        rampTask?.cancel()
+        rampTask = nil
         reconfigurationObserver.stop()
         await wakeObserver.stop()
         nightShiftFollower.stop()
@@ -546,6 +558,32 @@ public actor WarmthEngine {
         publish()
     }
 
+    // MARK: ── Sunset ramp ticker ───────────────────────────────────────────────
+
+    /// Spawn the low-frequency loop that re-evaluates the schedule so the Sunset ramp advances.
+    private func startRampTicker() {
+        let interval = rampTickInterval
+        rampTask = Task { [weak self] in
+            let clock = ContinuousClock()
+            while !Task.isCancelled {
+                try? await clock.sleep(for: interval)
+                if Task.isCancelled { return }
+                await self?.tickRamp()
+            }
+        }
+    }
+
+    /// One ramp tick: re-apply so the solar-ramped warmth moves, publishing only when the observable
+    /// state actually changed. The per-minute applied-warmth nudges aren't reflected in `WarmthState`
+    /// (so a mid-ramp tick is a silent backend update); activation edges flip `isScheduleActiveNow`
+    /// and do publish. Cheap: gated on `isEnabled`, and `reapply` is draw-on-change.
+    private func tickRamp() async {
+        guard box.value.isEnabled else { return }
+        let before = box.value
+        await reapply()
+        if box.value != before { publish() }
+    }
+
     /// Resolve the schedule + master enable + reveal and push the target to each display via
     /// its applied layer. Minimal for this scaffold — full layer selection is a later milestone.
     private func reapply() async {
@@ -561,13 +599,20 @@ public actor WarmthEngine {
             nightShift = nil
         }
 
+        // Real sunset from the system timezone — zero permission (founder-chosen default). Resolved
+        // fresh each pass so it tracks travel / DST. Live mode only: hermetic tests pass nil so the
+        // fixed-window degrade stays deterministic (the solar ramp is unit-tested in WarmthCore).
+        let solarCoordinate: TimeZoneCoordinates.Coordinate? =
+            injectedDisplays == nil ? TimeZoneCoordinates.current() : nil
+
         let decision = ScheduleResolver.resolveWithDegrade(
             mode: box.value.scheduleMode,
             at: Date(),
             configuredWarmth: box.value.globalWarmth,
             nightShift: nightShift,
             privateAPIsEnabled: privateOn,
-            fallback: configuration.fallbackSchedule
+            fallback: configuration.fallbackSchedule,
+            solarCoordinate: solarCoordinate
         )
         box.value.isScheduleActiveNow = decision.isActiveNow
 
