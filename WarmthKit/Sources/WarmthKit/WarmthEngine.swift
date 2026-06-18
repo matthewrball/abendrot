@@ -121,11 +121,12 @@ public actor WarmthEngine {
                 isEnabled: false,
                 scheduleMode: configuration.defaultScheduleMode,
                 // A sensible non-zero default so flipping the master toggle visibly warms even
-                // before the user touches the slider. With the warmest point now at the ~500K
-                // near-pure-red extreme, this lands around a comfortable ~2400K evening warmth, with
-                // the upper slider reserved for the deep extreme (blue is already 0 by ~1900K; the
-                // warmest end keeps removing green). (§25: founder wants the absolute-max extreme.)
-                globalWarmth: WarmthLevel(strength: 0.15),
+                // before the user touches the slider. With the everyday warmest point at 1900K
+                // (blue fully removed), strength 0.7 lands at ~2412K — a warm, clearly-warm-but-
+                // readable evening white (between incandescent and candle), and it matches the
+                // onboarding preview's default. The deep extreme toward pure red is opt-in only via
+                // the expanded-range control. (§25 max-warmth research → hybrid Option A.)
+                globalWarmth: WarmthLevel(strength: 0.7),
                 warmestPoint: configuration.defaultWarmestPoint,
                 privateAPIsEnabled: configuration.startWithPrivateAPIsEnabled
             )

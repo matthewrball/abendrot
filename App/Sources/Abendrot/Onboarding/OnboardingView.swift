@@ -16,9 +16,9 @@ private enum OnboardingStep: Int, CaseIterable {
 // confirm schedule. Three calm steps on glass; everything else lives in Settings.
 // No account, no wall of permissions.
 //
-// Structural pass: the notification-permission request and warmest-point persistence
-// are wired through `AppModel`; the actual `UNUserNotificationCenter` request is left
-// as a TODO hook (it needs the bundled app + entitlement, not previewable here).
+// Structural pass: the notification-permission request and the warmth selection are wired
+// through `AppModel`; the actual `UNUserNotificationCenter` request is left as a TODO hook
+// (it needs the bundled app + entitlement, not previewable here).
 struct OnboardingView: View {
     @Bindable var model: AppModel
     var onFinish: () -> Void
@@ -107,8 +107,12 @@ struct OnboardingView: View {
             WarmSlider(strength: $warmestStrength, kelvin: nil)
 
             PrimaryButton(title: "Looks right") {
-                // Persist the chosen warmest point as the engine's warmest mapping.
-                model.setWarmestPoint(Kelvin(previewKelvin))
+                // Set the user's chosen evening warmth STRENGTH (their nightly level), not the
+                // warmest-point ceiling. The ceiling stays at the research-backed everyday max
+                // (1900K); this slider picks how warm within that range, and `previewKelvin` is
+                // computed against exactly that 1900K range so the preview matches what's applied.
+                // (Power users can later push the ceiling below 1900K via Settings → Advanced.)
+                model.setGlobalWarmth(warmestStrength)
                 advance()
             }
         }

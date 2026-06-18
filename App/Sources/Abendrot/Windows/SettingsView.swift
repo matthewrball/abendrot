@@ -288,6 +288,10 @@ private struct AdvancedTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "Advanced", subtitle: "Power controls and the private-API kill switch.")
+
+            MaximumWarmthControl(model: model)
+            DividerLine()
+
             Toggle("Enable private-API paths (DDC + Night Shift follow)", isOn: Binding(
                 get: { model.state.privateAPIsEnabled },
                 set: { model.setPrivateAPIsEnabled($0) }
@@ -302,6 +306,81 @@ private struct AdvancedTab: View {
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textFaint)
         }
+    }
+}
+
+// MARK: - Maximum warmth (warmest-point ceiling + opt-in expanded range)
+
+/// Sets the slider's *warmest end* (the engine `warmestPoint`). The everyday maximum is 1900K —
+/// the point where blue is fully removed (so "minimize blue light" is already 100% achieved). The
+/// opt-in "Expanded range" unlocks deeper warmth toward pure red (~500K): a real but minimal
+/// additional circadian reduction with a real legibility cost — see
+/// docs/research/max-warmth-circadian-research.md (Brown et al. 2022; CIE S 026:2018). The slider
+/// reads "right = warmer", matching the main warmth slider.
+private struct MaximumWarmthControl: View {
+    @Bindable var model: AppModel
+    // Derived (not separately persisted) from the actual warmest point on appear, so the toggle can
+    // never disagree with the value. The warmest point itself is what persists (via AppModel).
+    @State private var expanded = false
+
+    private var coolBound: Int { Kelvin.ceilingCoolBound.value }   // least-warm end of this control
+    private var warmBound: Int { expanded ? Kelvin.warmestSupported.value : Kelvin.everydayWarmest.value }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Maximum warmth")
+                    .font(Theme.Typography.ui(13.5))
+                Spacer()
+                Text("\(model.state.warmestPoint.value) K")
+                    .font(Theme.Typography.serif(14))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Color.accentHighlight)
+            }
+            Text("The warmest your slider can reach. 1900 K already removes blue light entirely.")
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textMuted)
+
+            WarmSlider(strength: warmestBinding, kelvin: nil)
+
+            Toggle("Expanded range — reach candle & ember (below 1900 K)", isOn: $expanded)
+                .toggleStyle(.switch)
+                .tint(Theme.Color.accent)
+                .onChange(of: expanded) { _, on in
+                    // Leaving expanded range: pull a deeper-than-everyday pick back up to the 1900K cap.
+                    if !on, model.state.warmestPoint.value < Kelvin.everydayWarmest.value {
+                        model.setWarmestPoint(Kelvin.everydayWarmest)
+                    }
+                }
+
+            if expanded {
+                Text("Below ~1900 K, blue light is already fully removed — going warmer mainly removes green: deeper and more candle-like, but harder to read, with little additional circadian benefit. (See Brown et al. 2022; CIE S 026.)")
+                    .font(Theme.Typography.ui(11))
+                    .foregroundStyle(Theme.Color.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onAppear {
+            // Single source of truth: a sub-1900K ceiling means the expanded range is in use.
+            expanded = model.state.warmestPoint.value < Kelvin.everydayWarmest.value
+        }
+    }
+
+    /// Maps the WarmSlider's 0…1 strength onto [warmBound … coolBound] Kelvin (1 = warmest).
+    private var warmestBinding: Binding<Double> {
+        Binding(
+            get: {
+                let span = Double(coolBound - warmBound)
+                guard span > 0 else { return 0 }
+                let s = (Double(coolBound) - Double(model.state.warmestPoint.value)) / span
+                return min(1, max(0, s))
+            },
+            set: { s in
+                let span = Double(coolBound - warmBound)
+                let k = Int((Double(coolBound) - s * span).rounded())
+                model.setWarmestPoint(Kelvin(k))
+            }
+        )
     }
 }
 

@@ -725,6 +725,43 @@ Also shipped this session: a **Quit** control in the popover footer (the `LSUIEl
 Quit affordance) — `power` icon + ⌘Q, routed through `applicationShouldTerminate` so displays
 neutral-reset on exit.
 
+### Session-6 RESULTS (2026-06-17) — max-warmth ceiling decided (hybrid) + marketing evidence base
+
+**The #1 task is resolved.** Ran a publication-grade circadian-research Workflow (12 primary-literature
+finders → adversarial per-claim citation audit → synthesis → §13/FTC marketing compiler → skeptic
+critic; 86 agents, 71 findings, **66 verified / 5 rejected**, 24-paper library). Full artifact:
+`docs/research/max-warmth-circadian-research.md` (+ `.json`).
+
+- **Science answer (Q1):** removing GREEN below ~1900K is a real-but-**negligible** additional melanopic
+  reduction for sustained evening use — melanopsin/melatonin peak in the blue (Brainard 2001 464nm;
+  Thapan 2001 459nm; CIE S 026 melanopic peak 490nm); the green primary (~550nm) carries s_mel ≈ 0.22
+  and over a sustained evening the cone/green channel is only ~7% of suppression (St Hilaire 2022) and
+  transient (Gooley 2010). Pure red collapses legibility for ~no circadian gain. **(Q2)** Practical
+  maximally-protective target = deep amber **~1900K** (blue gain = 0), expressed properly as melanopic
+  EDI ≤10 lux evening (Brown 2022) — CCT is not a valid circadian proxy (Esposito & Houser 2022).
+- **Decision: HYBRID (Option A core + opt-in B).** Implemented & verified (91/21 tests, app BUILD
+  SUCCEEDED, adversarial code-review pass applied):
+  - `Kelvin.everydayWarmest = 1900` (new); `EngineConfiguration.defaultWarmestPoint` 500 → **1900K**
+    (everyday slider max = blue-free). `Kelvin.warmestSupported = 500` stays as the absolute floor.
+  - Default warmth strength **0.15 → 0.7** (out-of-box ~2412K; matches onboarding preview). Fixes the
+    range-compression *and* a latent "default resolves to ~691K near-pure-red" bug.
+  - **Opt-in "Expanded range"** control (Settings → Advanced): unlocks 1900K → 500K (pure red) for power
+    users, with a hedged cited note. Pure-red is no longer on the everyday slider.
+  - Fixed a **readout bug**: `AppModel.globalKelvin` hardcoded 2700K (disagreed with applied warmth) →
+    now uses `state.warmestPoint`. Onboarding now sets nightly *strength*, not the ceiling. Warmest-point
+    now **persists** across launches (focused slice of §25.B).
+- **Marketing evidence base created** (founder directive — grounds launch/site/social/SEO/AEO):
+  `docs/marketing/evidence-base.md` (verified claims + spectrum table + 24-paper citation library +
+  DO-NOT-CLAIM + 4 binding guardrails) and `docs/marketing/messaging-and-campaigns.md` (positioning,
+  taglines, web/social copy, SEO + AEO Q&A — §13/FTC-safe, all grounded in the evidence base).
+- **Launch tracker created:** `LAUNCH.md` — living checklist of everything left to ship (engine/app,
+  testing matrix, signing, public repo, site, marketing, SEO/AEO, social, launch day), founder-gates
+  flagged. Keep it updated as items complete.
+- **Critic's binding marketing guardrails:** couple "removes blue" with "lower brightness" (app doesn't
+  dim; dose is intensity-driven); red = circadian-**sparing**, never photobiomodulation (imagery too);
+  never juxtapose product claims with sleep-latency data; spectral/CCT numbers are illustrative, not
+  measured product output.
+
 ---
 
-*Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **Open #1 priority: §25 warming-mechanism overhaul (next session).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
+*Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
