@@ -99,9 +99,9 @@ enum Theme {
             reduceMotion ? nil : warm
         }
 
-        /// A gentle, lightly-springy reveal for controls appearing / disappearing (e.g. the schedule
-        /// mode control when "Warm my displays" toggles). Soft overshoot = "beautiful", not bouncy.
-        static let controlReveal = Animation.spring(response: 0.40, dampingFraction: 0.76)
+        /// The reveal for the warmth group (slider + display rows) dropping in/out when "Warm my
+        /// displays" toggles. `.smooth` is critically damped — no overshoot or jitter, eases cleanly.
+        static let controlReveal = Animation.smooth(duration: 0.38)
         static func controlReveal(reduceMotion: Bool) -> Animation? {
             reduceMotion ? nil : controlReveal
         }

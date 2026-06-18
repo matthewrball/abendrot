@@ -149,7 +149,11 @@ private struct AdvancedDisplayRow: View {
 
     private var warmthBinding: Binding<Double> {
         Binding(
-            get: { display.warmth.strength },
+            // Mirror the global warmth until this display is overridden. The engine applies
+            // max(per-display, global) (WarmthEngine `maxWarmth`), so the *effective* value is what
+            // the slider should show — it tracks the main Warmth slider until the user drags this one
+            // warmer (the override). Raw `display.warmth` (0 by default) would falsely read "Softer".
+            get: { max(display.warmth.strength, model.state.globalWarmth.strength) },
             set: { model.setWarmth($0, for: display.id) }
         )
     }

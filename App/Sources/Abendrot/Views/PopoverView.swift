@@ -245,21 +245,22 @@ private extension AnyTransition {
         )
     }
 
-    /// A soft, premium appear/disappear: blur + slight scale-from-top + fade. Used for the schedule
-    /// mode control revealing when warming is enabled.
+    /// A soft, premium appear/disappear: a gentle scale-from-top + fade, used for the warmth group
+    /// (slider + per-display rows) dropping in/out when warming toggles.
     static var softReveal: AnyTransition {
         .modifier(active: SoftRevealModifier(visible: false), identity: SoftRevealModifier(visible: true))
     }
 }
 
-/// The active/identity states `softReveal` interpolates between (blur out + scale down + fade).
+/// The active/identity states `softReveal` interpolates between: a small scale-from-top + fade.
+/// Deliberately NO blur — animating blur radius per frame over the slider + display rows is the main
+/// source of jank; opacity + a light transform is GPU-cheap and reads as a smooth drop-down.
 private struct SoftRevealModifier: ViewModifier {
     let visible: Bool
     func body(content: Content) -> some View {
         content
             .opacity(visible ? 1 : 0)
-            .blur(radius: visible ? 0 : 6)
-            .scaleEffect(visible ? 1 : 0.95, anchor: .top)
+            .scaleEffect(visible ? 1 : 0.98, anchor: .top)
     }
 }
 
