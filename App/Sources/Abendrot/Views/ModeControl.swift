@@ -4,8 +4,8 @@ import WarmthKit
 // MARK: - ScheduleModeOption
 //
 // A UI-facing projection of the contract's `ScheduleMode` (which carries associated
-// values that don't fit a segmented control). Maps the four product modes from
-// plan §4.1: Follow sunset · Schedule · Always on · Off.
+// values that don't fit a segmented control). Exposes the two user-selectable modes —
+// Sunset · Always on — while the engine's other ScheduleMode cases stay dormant.
 enum ScheduleModeOption: String, CaseIterable, Identifiable {
     case followSunset
     case alwaysOn

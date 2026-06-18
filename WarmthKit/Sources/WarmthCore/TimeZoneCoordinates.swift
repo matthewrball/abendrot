@@ -36,7 +36,11 @@ public enum TimeZoneCoordinates {
     /// Convenience for the live engine: the current system zone's coordinate. (Reads `TimeZone`
     /// only — no permission, no IO.)
     public static func current(_ timeZone: TimeZone = .current) -> Coordinate {
-        coordinate(forIdentifier: timeZone.identifier, secondsFromGMT: timeZone.secondsFromGMT())
+        // For the offset FALLBACK (unlisted zones) use the STANDARD-time meridian, not the current
+        // offset — otherwise a DST-observing zone's summer offset shifts the estimated longitude
+        // ~15°. Table hits ignore this value (they use fixed coords). (Review M2.)
+        let standardOffset = timeZone.secondsFromGMT() - Int(timeZone.daylightSavingTimeOffset())
+        return coordinate(forIdentifier: timeZone.identifier, secondsFromGMT: standardOffset)
     }
 
     /// Representative coordinates (≈city level) for common IANA zones, covering the large majority

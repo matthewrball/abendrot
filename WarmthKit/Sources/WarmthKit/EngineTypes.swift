@@ -83,7 +83,7 @@ public struct WarmthState: Sendable, Equatable {
 public struct DisplayState: Sendable, Equatable, Identifiable {
     public var id: DisplayIdentity
     public var name: String                       // human label for the row
-    public var appliedMethod: DisplayMethod       // → the Hardware/Gamma/Overlay badge
+    public var appliedMethod: DisplayMethod       // the layer currently warming this display
     public var capabilities: DisplayCapabilities
     public var warmth: WarmthLevel
     /// When true, this display uses its OWN `warmth` (a user "Custom warmth" override). When false

@@ -205,7 +205,7 @@ private struct ScheduleTab: View {
                 ),
                 onChange: { _ in }
             )
-            Text("Sunset warms automatically around your local sunset — easing in beforehand and holding through the night — using your time zone to estimate sunrise and sunset. No location permission required. (When macOS Night Shift is on, Abendrot follows it instead; it never writes to Night Shift.) Always on keeps warmth on around the clock.")
+            Text("Sunset warms automatically around your local sunset — easing in beforehand and holding through the night — using your time zone to estimate sunrise and sunset. No location permission required. Always on keeps warmth on around the clock.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
         }

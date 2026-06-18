@@ -292,6 +292,15 @@ struct ScheduleDegradeTests {
             fallback: fallback
         )
         #expect(!withoutCoord.isActiveNow)             // fixed window: 17:00 is outside 20:00→06:00
+
+        // M1: a coordinate overrides Night Shift even when NS is ON. At solar noon (daytime) the
+        // ramp says inactive; the old "follow NS when on" behavior would instead have been active.
+        let nsOnDaytime = ScheduleResolver.resolveWithDegrade(
+            mode: .followSystemNightShift, at: utc(12), calendar: cal,
+            configuredWarmth: warmth, nightShift: true, privateAPIsEnabled: true,
+            fallback: fallback, solarCoordinate: coord
+        )
+        #expect(!nsOnDaytime.isActiveNow)
     }
 }
 

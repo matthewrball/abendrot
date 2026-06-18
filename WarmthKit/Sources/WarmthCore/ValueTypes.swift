@@ -79,11 +79,17 @@ public enum DisplayMethod: String, Sendable, Codable, CaseIterable {
 
 // MARK: - ScheduleMode
 
-/// How warmth is scheduled. Default = follow the system Night Shift state *when available*.
+/// How warmth is scheduled. Default = "Sunset" (the user's real local sunset, computed from their
+/// system timezone — no location permission).
 public enum ScheduleMode: Sendable, Codable, Equatable {
-    case followSystemNightShift          // read-only follow; degrades to .solar if unavailable
-    case solar(latitude: Double, longitude: Double)   // built-in solar fallback (no private API)
-    case custom(CustomSchedule)          // explicit from/to + target
+    /// "Sunset": in production this resolves to the user's REAL sunset via a graded ramp (computed
+    /// from the system-timezone coordinate). It falls back to following Night Shift / a fixed
+    /// evening window only when no coordinate is available (hermetic tests, unresolvable zone).
+    case followSystemNightShift
+    /// Explicit-coordinate solar schedule (also ramps). Dormant in the app — Sunset routes through
+    /// `.followSystemNightShift` above so coordinates stay live; kept for tests / future use.
+    case solar(latitude: Double, longitude: Double)
+    case custom(CustomSchedule)          // explicit from/to + target (engine-only; no UI today)
     case alwaysOn
     case off
 }
