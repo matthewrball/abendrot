@@ -27,7 +27,9 @@ struct PopoverView: View {
             }
 
             masterToggle
-                .padding(.bottom, 16)
+                // Tighter gap when the warmth group is collapsed, so the condensed popover sits
+                // balanced rather than bottom-heavy.
+                .padding(.bottom, model.state.isEnabled ? 16 : 12)
 
             // The warmth slider + schedule mode control (and the divider between) are only meaningful
             // while warming is on — the master toggle owns on/off. The whole group hides and
@@ -54,6 +56,10 @@ struct PopoverView: View {
                     .padding(.top, 4)
                     .transition(.advancedExpansion)
             }
+
+            // Centered chevron "expand" handle — the advanced disclosure (replaces the old icon).
+            HStack { Spacer(); expandHandle; Spacer() }
+                .padding(.top, model.isAdvancedExpanded ? 10 : 0)
 
             DividerLine().padding(.vertical, 14)
             footer
@@ -195,19 +201,9 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
-            Button {
-                openSettings()
-            } label: {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(Theme.Color.textMuted)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
-
-            // Quit. Routes through NSApp.terminate → applicationShouldTerminate, which
-            // neutral-resets every display before exit (contract §9). An LSUIElement agent
-            // has no app menu, so this is the user's Quit affordance; ⌘Q also works when the
-            // popover is focused.
+            // Quit (left). Routes through NSApp.terminate → applicationShouldTerminate, which
+            // neutral-resets every display before exit (contract §9). An LSUIElement agent has no
+            // app menu, so this is the user's Quit affordance; ⌘Q also works when focused.
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
@@ -228,17 +224,38 @@ struct PopoverView: View {
 
             Spacer()
 
+            // Settings (right).
             Button {
-                withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
-                    model.isAdvancedExpanded.toggle()
-                }
+                openSettings()
             } label: {
-                Image(systemName: model.isAdvancedExpanded ? "chevron.up" : "slider.horizontal.3")
+                Image(systemName: "gearshape")
                     .foregroundStyle(Theme.Color.textMuted)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
+            .accessibilityLabel("Settings")
         }
+    }
+
+    /// A centered chevron "expand" handle — the advanced (per-display engine) disclosure. A glass
+    /// pill whose chevron rotates 180° when open; replaces the old slider-icon toggle.
+    private var expandHandle: some View {
+        Button {
+            withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
+                model.isAdvancedExpanded.toggle()
+            }
+        } label: {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.Color.textMuted)
+                .rotationEffect(.degrees(model.isAdvancedExpanded ? 180 : 0))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 5)
+                .background(Capsule(style: .continuous).fill(Theme.Color.line.opacity(0.5)))
+                .overlay(Capsule(style: .continuous).strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5))
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
     }
 
     // MARK: Bindings (view ↔ AppModel intents)
