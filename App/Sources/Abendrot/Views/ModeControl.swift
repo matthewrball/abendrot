@@ -10,7 +10,6 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
     case followSunset
     case schedule
     case alwaysOn
-    case off
 
     var id: String { rawValue }
 
@@ -19,17 +18,17 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
         case .followSunset: return "Follow sunset"
         case .schedule: return "Schedule"
         case .alwaysOn: return "Always on"
-        case .off: return "Off"
         }
     }
 
-    /// Classify a contract `ScheduleMode` into a UI option.
+    /// Classify a contract `ScheduleMode` into a UI option. There is no "Off" option — the master
+    /// "Warm my displays" toggle owns on/off — so a (now UI-less) engine `.off` maps to the
+    /// Follow-sunset default for display.
     init(_ mode: ScheduleMode) {
         switch mode {
-        case .followSystemNightShift, .solar: self = .followSunset
+        case .followSystemNightShift, .solar, .off: self = .followSunset
         case .custom: self = .schedule
         case .alwaysOn: self = .alwaysOn
-        case .off: self = .off
         }
     }
 
@@ -49,7 +48,6 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
             )
             return .custom(currentCustom ?? provisional)
         case .alwaysOn: return .alwaysOn
-        case .off: return .off
         }
     }
 }

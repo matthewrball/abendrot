@@ -63,6 +63,10 @@ struct WarmSlider: View {
     @Binding var strength: Double
     var compact: Bool = false
 
+    /// True while the thumb is being pressed/dragged — drives the Liquid-Glass "grab" feedback
+    /// (a springy scale-up + brighter glow), mirroring the master toggle's press effect.
+    @GestureState private var isPressing = false
+
     private var trackHeight: CGFloat { compact ? 5 : 7 }
     private var thumbSize: CGFloat { compact ? 15 : 20 }
 
@@ -111,16 +115,20 @@ struct WarmSlider: View {
                             .frame(width: thumbX + thumbSize / 2, height: trackHeight)
                     }
 
-                glassThumb
+                glassThumb(pressed: isPressing)
                     .frame(width: thumbSize, height: thumbSize)
+                    .scaleEffect(isPressing ? 1.14 : 1.0)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.62), value: isPressing)
                     .offset(x: thumbX)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 0).onChanged { value in
-                    strength = Double((value.location.x - thumbSize / 2) / usable).clamped01
-                }
+                DragGesture(minimumDistance: 0)
+                    .updating($isPressing) { _, state, _ in state = true }
+                    .onChanged { value in
+                        strength = Double((value.location.x - thumbSize / 2) / usable).clamped01
+                    }
             )
         }
         .frame(height: max(thumbSize, 22))
@@ -141,13 +149,14 @@ struct WarmSlider: View {
 
     private func nudge(_ delta: Double) { strength = (strength + delta).clamped01 }
 
-    /// A glassy thumb: a bright warm-white core, a hairline rim, and a soft ember glow.
-    private var glassThumb: some View {
+    /// A glassy thumb: a bright warm-white core, a hairline rim, and a soft ember glow. On press the
+    /// rim brightens and the ember glow blooms — the Liquid-Glass "grab" feedback.
+    private func glassThumb(pressed: Bool) -> some View {
         Circle()
             .fill(LinearGradient(colors: [.white, Theme.Color.accentHi], startPoint: .top, endPoint: .bottom))
-            .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+            .overlay(Circle().strokeBorder(.white.opacity(pressed ? 0.95 : 0.7), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
-            .shadow(color: Theme.Color.accentDeep.opacity(0.35), radius: 5)
+            .shadow(color: Theme.Color.accentDeep.opacity(pressed ? 0.5 : 0.35), radius: pressed ? 9 : 5)
     }
 }
 

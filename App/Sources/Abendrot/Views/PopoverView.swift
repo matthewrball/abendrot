@@ -34,10 +34,15 @@ struct PopoverView: View {
 
             DividerLine().padding(.bottom, 14)
 
-            ModeControl(selection: modeBinding) { option in
-                model.setScheduleMode(option.toScheduleMode())
+            // The schedule mode control is only meaningful while warming is on — the master toggle
+            // owns on/off — so it hides (and re-reveals) with a soft blur-scale-fade when toggled.
+            if model.state.isEnabled {
+                ModeControl(selection: modeBinding) { option in
+                    model.setScheduleMode(option.toScheduleMode())
+                }
+                .padding(.bottom, 16)
+                .transition(.softReveal)
             }
-            .padding(.bottom, 16)
 
             displaySection
 
@@ -237,7 +242,16 @@ struct PopoverView: View {
     // MARK: Bindings (view ↔ AppModel intents)
 
     private var enabledBinding: Binding<Bool> {
-        Binding(get: { model.state.isEnabled }, set: { model.setEnabled($0) })
+        Binding(
+            get: { model.state.isEnabled },
+            // Animate so the schedule mode control reveals/hides with the soft spring (the optimistic
+            // `state.isEnabled` flips synchronously inside this transaction → the transition plays).
+            set: { newValue in
+                withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
+                    model.setEnabled(newValue)
+                }
+            }
+        )
     }
 
     private var globalWarmthBinding: Binding<Double> {
@@ -261,6 +275,23 @@ private extension AnyTransition {
             insertion: .move(edge: .top).combined(with: .opacity),
             removal: .opacity
         )
+    }
+
+    /// A soft, premium appear/disappear: blur + slight scale-from-top + fade. Used for the schedule
+    /// mode control revealing when warming is enabled.
+    static var softReveal: AnyTransition {
+        .modifier(active: SoftRevealModifier(visible: false), identity: SoftRevealModifier(visible: true))
+    }
+}
+
+/// The active/identity states `softReveal` interpolates between (blur out + scale down + fade).
+private struct SoftRevealModifier: ViewModifier {
+    let visible: Bool
+    func body(content: Content) -> some View {
+        content
+            .opacity(visible ? 1 : 0)
+            .blur(radius: visible ? 0 : 6)
+            .scaleEffect(visible ? 1 : 0.95, anchor: .top)
     }
 }
 
