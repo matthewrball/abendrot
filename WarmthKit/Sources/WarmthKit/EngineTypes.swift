@@ -16,7 +16,7 @@ public struct EngineConfiguration: Sendable {
     public init(
         startWithPrivateAPIsEnabled: Bool = true,
         defaultScheduleMode: ScheduleMode = .followSystemNightShift,
-        defaultWarmestPoint: Kelvin = Kelvin(1500),
+        defaultWarmestPoint: Kelvin = Kelvin(1000),
         fallbackSchedule: CustomSchedule = ScheduleResolver.defaultEveningFallback
     ) {
         self.startWithPrivateAPIsEnabled = startWithPrivateAPIsEnabled
@@ -61,7 +61,7 @@ public struct WarmthState: Sendable, Equatable {
         isScheduleActiveNow: Bool = false,
         isRevealing: Bool = false,
         globalWarmth: WarmthLevel = .off,
-        warmestPoint: Kelvin = Kelvin(1500),
+        warmestPoint: Kelvin = Kelvin(1000),
         privateAPIsEnabled: Bool = true,
         displays: [DisplayState] = []
     ) {

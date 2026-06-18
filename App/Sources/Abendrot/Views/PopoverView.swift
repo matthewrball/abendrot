@@ -20,6 +20,12 @@ struct PopoverView: View {
             header
             DividerLine().padding(.vertical, 14)
 
+            // Upfront honesty: if the whole Mac can't truly warm anything, say so. (§25.J DRAFT)
+            if allDisplaysTintOnly {
+                incompatibilityBanner
+                    .padding(.bottom, 16)
+            }
+
             masterToggle
                 .padding(.bottom, 16)
 
@@ -91,9 +97,48 @@ struct PopoverView: View {
     private var displaySection: some View {
         VStack(spacing: 8) {
             ForEach(model.state.displays) { display in
-                DisplayRow(display: display)
+                DisplayRow(display: display, tintOnly: isTintOnly(display))
             }
         }
+    }
+
+    // MARK: Incompatibility ("can only be tinted") detection — §25.J (DRAFT)
+
+    /// A display can only be TINTED when no true-warm path is available to it: gamma is not
+    /// supported on this chip/OS (or private APIs are off) AND it is not DDC-capable. Capability-
+    /// based, so it reads honestly even before warming is enabled.
+    private func isTintOnly(_ display: DisplayState) -> Bool {
+        let priv = model.state.privateAPIsEnabled
+        let gammaPossible = priv && isSupported(display.capabilities.gamma)
+        let ddcPossible = priv && isSupported(display.capabilities.hardware)
+        return !(gammaPossible || ddcPossible)
+    }
+
+    private func isSupported<T>(_ cap: Capability<T>) -> Bool {
+        if case .supported = cap { return true }
+        return false
+    }
+
+    /// True when there is ≥1 display and EVERY connected display can only be tinted — the whole
+    /// Mac/OS can't truly warm anything, so we say so up front with a banner.
+    private var allDisplaysTintOnly: Bool {
+        let displays = model.state.displays
+        return !displays.isEmpty && displays.allSatisfy(isTintOnly)
+    }
+
+    private var incompatibilityBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(Theme.Typography.ui(12))
+                .foregroundStyle(Theme.Color.accentHighlight)
+            Text("True warming isn’t available on this Mac, so your displays are being tinted rather than truly warmed — a known limitation on some Apple-silicon chips and macOS versions.")
+                .font(Theme.Typography.ui(11))
+                .foregroundStyle(Theme.Color.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.accentHi, in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
     }
 
     // MARK: Footer

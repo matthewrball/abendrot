@@ -100,6 +100,10 @@ struct WarmSlider: View {
 /// A glanceable per-display row: name + method badge (plan §4.1).
 struct DisplayRow: View {
     let display: DisplayState
+    /// True when this display can ONLY be tinted — no true-warm path is available to it (gamma
+    /// unsupported on this chip/OS AND not DDC-capable). Surfaced honestly so we never imply true
+    /// warming where the hardware/OS can't deliver it. (§25.J — DRAFT, iterating with founder.)
+    var tintOnly: Bool = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -107,9 +111,18 @@ struct DisplayRow: View {
                 Text(display.name)
                     .font(Theme.Typography.ui(12.5))
                     .foregroundStyle(Theme.Color.textPrimary)
-                Text(subtitle)
-                    .font(Theme.Typography.ui(10.5))
-                    .foregroundStyle(Theme.Color.textFaint)
+                HStack(spacing: 4) {
+                    Text(subtitle)
+                        .font(Theme.Typography.ui(10.5))
+                        .foregroundStyle(tintOnly ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                    if tintOnly {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(Theme.Typography.ui(10))
+                            .foregroundStyle(Theme.Color.accentHighlight)
+                            .help("Your Mac can’t truly warm this display on this macOS version (a known limitation on some Apple-silicon chips). Abendrot is tinting it instead. If it’s an external monitor with on-screen brightness controls, try Hardware DDC in the per-display engine controls.")
+                            .accessibilityLabel("Can only be tinted, not truly warmed")
+                    }
+                }
             }
             Spacer()
             MethodBadge(method: display.appliedMethod)
@@ -120,6 +133,7 @@ struct DisplayRow: View {
     }
 
     private var subtitle: String {
+        if tintOnly { return "Tint only — can’t truly warm" }
         switch display.appliedMethod {
         case .hardware: return "via DDC/CI"
         case .gamma: return "gamma table"
