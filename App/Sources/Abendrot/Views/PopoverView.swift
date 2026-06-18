@@ -32,15 +32,18 @@ struct PopoverView: View {
             WarmSlider(strength: globalWarmthBinding)
                 .padding(.bottom, 14)
 
-            DividerLine().padding(.bottom, 14)
-
-            // The schedule mode control is only meaningful while warming is on — the master toggle
-            // owns on/off — so it hides (and re-reveals) with a soft blur-scale-fade when toggled.
+            // The schedule mode control AND its leading divider are only meaningful while warming is
+            // on — the master toggle owns on/off. The whole group hides (and re-reveals) with a soft
+            // blur-scale-fade, so the divider disappears with it instead of leaving two stacked
+            // dividers with a gap when off.
             if model.state.isEnabled {
-                ModeControl(selection: modeBinding) { option in
-                    model.setScheduleMode(option.toScheduleMode())
+                VStack(alignment: .leading, spacing: 0) {
+                    DividerLine().padding(.bottom, 14)
+                    ModeControl(selection: modeBinding) { option in
+                        model.setScheduleMode(option.toScheduleMode())
+                    }
+                    .padding(.bottom, 16)
                 }
-                .padding(.bottom, 16)
                 .transition(.softReveal)
             }
 
