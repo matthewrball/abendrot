@@ -654,9 +654,14 @@ tracker is now `LAUNCH.md` (workspace root).**
   pure-red 500 default). (§25.D/E + Session-6 RESULTS below)
 - 🟡 **P3 — hygiene — mostly done:** fresh rebuilds + 91/21 tests green; doc citation fixes done. A
   non-headless live-overlay smoke test is still open. (§25.G/H)
-- 🟡 **P0 — "enabling actually warms" — partially done:** schedule-gating fixed (follow the sunset
-  *window*); warmth-on-enable default set (strength 0.7 → ~2412K); **warmestPoint now persists**.
-  Remaining: persist `isEnabled` / `globalWarmth` / `scheduleMode`. (§25.B)
+- ✅ **P0 — "enabling actually warms" — DONE:** schedule-gating fixed (follow the sunset *window*);
+  warmth-on-enable default set (strength 0.7 → ~2412K); **all UI state now persists** — `warmestPoint`
+  (Session-6) + `isEnabled` / `globalWarmth` / `scheduleMode` (Session-7) via `UserDefaults`, restored in
+  `AppModel.start()` after `engine.start()` by replaying the setters. Fresh-install defaults preserved via
+  the `object(forKey:)` guard (an unset key keeps the engine's 0.7 out-of-box warmth rather than reading
+  0.0); `scheduleMode` is Codable JSON (carries `.solar`/`.custom` associated values) and self-heals a
+  corrupt blob; a persisted strength 0.0 is honored as a real "off" choice, distinct from unset.
+  Verified: 91/21 tests green, app BUILD SUCCEEDED, adversarial code-review APPROVE (0 Critical/High). (§25.B)
 
 Full verified output (all three streams + verdicts): the Session-5 workflow result file.
 

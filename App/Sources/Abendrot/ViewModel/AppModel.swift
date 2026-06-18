@@ -71,19 +71,57 @@ final class AppModel {
                 self?.state = snapshot
             }
         }
-        // Start the engine, THEN re-apply the persisted warmest point (the hybrid expanded-range
-        // pick) in the same task so the restore is ordered strictly after start() — avoiding a
-        // reentrancy race where the restore could land before the engine finishes booting.
+        // Start the engine, THEN replay persisted user state (§25.B) in the same task so the
+        // restore is ordered strictly after start() — avoiding a reentrancy race where it could
+        // land before the engine finishes booting.
         Task { [weak self] in
             await engine.start()
-            guard let self else { return }
-            // Only restore a sane, warm ceiling (500…3400K). `Kelvin.init` already floors at 500;
-            // the upper clamp guards against any future writer persisting a non-warm value that
-            // would neuter warming. The only writer today is the Maximum-warmth control.
-            if let saved = UserDefaults.standard.object(forKey: Self.warmestPointKey) as? Int,
-               saved <= Kelvin.ceilingCoolBound.value {
-                self.setWarmestPoint(Kelvin(saved))
+            self?.applyPersistedState()
+        }
+    }
+
+    /// Replay persisted user state through the normal setters so the engine and the published
+    /// `state` converge exactly as a live interaction would. Called once from `start()`, strictly
+    /// after `engine.start()`. Only keys explicitly written before are restored — a fresh install
+    /// keeps the engine's defaults. (§25.B persistence.)
+    private func applyPersistedState() {
+        let defaults = UserDefaults.standard
+
+        // Warmest point (the slider's warmest end / hybrid expanded-range pick). Clamp on read:
+        // only restore a sane, warm ceiling (500…3400K). `Kelvin.init` already floors at 500; the
+        // upper clamp guards against any future writer persisting a non-warm value that would
+        // neuter warming. The only writer today is the Maximum-warmth control.
+        if let saved = defaults.object(forKey: Self.warmestPointKey) as? Int,
+           saved <= Kelvin.ceilingCoolBound.value {
+            setWarmestPoint(Kelvin(saved))
+        }
+
+        // Schedule mode (Codable JSON — carries associated values). If the blob is ever malformed
+        // (schema drift, a renamed case, a partial write), drop the key so it re-derives cleanly
+        // rather than silently stranding the user on the default — the "it worked then broke" class
+        // §25.B exists to kill.
+        if let data = defaults.data(forKey: Self.scheduleModeKey) {
+            if let mode = try? JSONDecoder().decode(ScheduleMode.self, from: data) {
+                setScheduleMode(mode)
+            } else {
+                defaults.removeObject(forKey: Self.scheduleModeKey)
             }
+        }
+
+        // Nightly warmth strength. `object(forKey:)` (not `double`) so an *unset* key stays the
+        // engine's 0.7 out-of-box default instead of being clobbered to 0.0. A *persisted* 0.0 is a
+        // real user choice (slider dragged to off) and is intentionally honored — distinct from unset.
+        if let strength = defaults.object(forKey: Self.globalWarmthStrengthKey) as? Double {
+            setGlobalWarmth(strength)
+        }
+
+        // Master toggle last. The final converged engine state is order-independent — each setter
+        // sets one box field and the engine recomputes from the whole box — so this is a mild nicety,
+        // not a correctness requirement. (Any brief default-state flash at launch comes from the
+        // engine's initial state-stream snapshot landing before these restores publish; this ordering
+        // doesn't affect that — the published state converges once the engine applies the restores.)
+        if let enabled = defaults.object(forKey: Self.isEnabledKey) as? Bool {
+            setEnabled(enabled)
         }
     }
 
@@ -99,23 +137,46 @@ final class AppModel {
     func setEnabled(_ enabled: Bool) {
         // Optimistic UI (plan §5.2 — no spinners): reflect immediately, engine confirms.
         state.isEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.isEnabledKey)
         Task { await engine?.setEnabled(enabled) }
     }
 
     func setGlobalWarmth(_ strength: Double) {
         let level = WarmthLevel(strength: strength)
         state.globalWarmth = level
+        // Persist the clamped canonical value, not the raw arg (§25.B).
+        UserDefaults.standard.set(level.strength, forKey: Self.globalWarmthStrengthKey)
         Task { await engine?.setWarmth(level) }
     }
 
     func setScheduleMode(_ mode: ScheduleMode) {
         state.scheduleMode = mode
+        // ScheduleMode carries associated values (.solar/.custom) → encode as Codable JSON,
+        // not a bare string (§25.B).
+        if let data = try? JSONEncoder().encode(mode) {
+            UserDefaults.standard.set(data, forKey: Self.scheduleModeKey)
+        }
         Task { await engine?.setScheduleMode(mode) }
     }
 
-    /// UserDefaults key for the persisted warmest point (the slider's warmest end). A focused
-    /// slice of §25.B persistence: the hybrid expanded-range pick must survive relaunch to be useful.
+    // MARK: ── Persistence (§25.B) ───────────────────────────────────────────
+    //
+    // User-facing engine state that must survive relaunch. `warmestPoint` already
+    // persisted (the hybrid expanded-range pick); this extends the same pattern to the
+    // master toggle, the nightly warmth, and the schedule mode so the app reopens exactly
+    // as the user left it instead of resetting to disabled / off / follow-Night-Shift every
+    // launch (a major "it worked then broke" contributor — §25 Session-5 RESULTS).
+    //
+    // Each value is written in its setter and restored once in `start()` *after*
+    // `engine.start()` by replaying that same setter, so the engine and the published
+    // `state` converge through the path a live interaction would take. Reads use
+    // `object(forKey:)` (NOT `bool`/`double`, which collapse "never saved" into false/0.0)
+    // so a fresh install keeps the engine's defaults — notably the 0.7 out-of-box warmth,
+    // which a `double(forKey:)` miss would silently clobber to 0.0.
     static let warmestPointKey = "warmestPointKelvin"
+    static let isEnabledKey = "isEnabled"
+    static let globalWarmthStrengthKey = "globalWarmthStrength"
+    static let scheduleModeKey = "scheduleMode"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
         // Optimistic UI so the Kelvin readout updates immediately, then persist + tell the engine.
