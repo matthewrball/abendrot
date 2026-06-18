@@ -125,9 +125,10 @@ private struct AdvancedDisplayRow: View {
                     .foregroundStyle(Theme.Color.textFaint)
             }
         }
-        .menuStyle(.borderlessButton)
-        // Hide the system pull-down indicator so only our single styled chevron shows (the
-        // borderlessButton style adds its own → two chevrons otherwise).
+        // `.borderlessButton` draws its OWN pull-down arrow (on the left) and ignores
+        // `.menuIndicator(.hidden)`. Use a plain button style instead, which respects it — so only
+        // our single styled chevron (right of the badge) shows.
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
     }
