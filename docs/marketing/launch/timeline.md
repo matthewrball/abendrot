@@ -1,5 +1,7 @@
 # Launch timeline (T-6 weeks → T-0 → T+14)
 
+> Claims must comply with `docs/marketing/evidence-base.md` guardrails (couple warmth with "lower brightness"; red = circadian-sparing, never therapy; no sleep-outcome promises).
+
 Sequenced, not one blast (§14): soft pre-launch / build-in-public → coordinated **Product Hunt + Show HN** day → awesome-* PRs + newsletters → sustained. Aligned with the confirmed **staged-beta strategy** (§21.6: 0.1 → 0.2 → 0.3 → 1.0) and the **v0.9 designer beta** (§21.5).
 
 > Reminder: T-0 is the **branded 1.0** moment, which arrives only after the hardware matrix passes. The public betas before it are for validation and screenshot-harvesting, not the big launch.

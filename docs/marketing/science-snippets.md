@@ -1,5 +1,7 @@
 # The science, hedged
 
+> **Claims here must trace to `docs/marketing/evidence-base.md` (the canonical, verified source).** Where a citation below differs from the evidence base, the evidence base wins. Items marked `[VERIFY]` use sources that are not in the canonical 24-paper library and need reconciliation before any public surface ships.
+
 Short, cited, general-wellness snippets for the "The Science" panel (app), the landing page, and the README. Source material: `docs/research/research-sweep-main.json` → `science`.
 
 ## Hard rules (do not break)
@@ -32,12 +34,14 @@ Each snippet is one or two calm sentences plus a "Read the research" link. They 
 Beyond the rods and cones you see with, your eyes carry a non-visual sensor — melanopsin, in special retinal cells (ipRGCs) — most sensitive to blue light around **~480 nm**. It helps tell your brain whether it's day or night.
 
 > Source: Lucas RJ, Peirson SN, Berson DM, Brown TM, et al. (2014), _Trends in Neurosciences_ 37(1):1–9 — foundational ipRGC review. https://pmc.ncbi.nlm.nih.gov/articles/PMC4699304/
+<!-- [VERIFY] The ~480 nm ipRGC claim is canonical, but evidence-base.md grounds it on Berson 2002, Provencio 2000, and Bailes & Lucas 2013 (lambda-max ~479 nm) — not this Lucas 2014 review, which is not in the canonical library. Prefer the canonical trio, or confirm the Lucas 2014 citation before public use. -->
 
 ### 2. Evening light is louder than you'd think
 
 The circadian system is sensitive to evening light: most of the melatonin suppression seen under bright light already happens at fairly modest indoor levels. In a landmark study, dim room light (~106 lux) produced about **88%** of the suppression of much brighter light.
 
 > Source: Zeitzer JM, Dijk DJ, Kronauer RE, Brown EN, Czeisler CA (2000), _The Journal of Physiology_ 526(3):695–702. https://pmc.ncbi.nlm.nih.gov/articles/PMC2270041/
+<!-- [VERIFY] evidence-base.md (Approved Claim #8) states the canonical Zeitzer figures as ED50 = 106 ± 13.3 lux (half-maximal suppression at ~50-130 lux) and ~100 lux (~1% of 9000 lux) giving roughly HALF the maximal response. The "~106 lux → ~88%" figure here is not in the canonical evidence base; reconcile the exact percentage against the paper / evidence base before public use. -->
 
 ### 3. It's the blue content, not just the brightness
 
@@ -95,8 +99,8 @@ A few honest boundaries, so this stays a workflow claim and not an overreach:
 
 A trustworthy science panel says the unflattering parts too. These are good to surface in a "the honest version" expander.
 
-- **Warming alone may not be enough.** Some trials found that warming a screen _without_ dimming it had little measurable effect on melatonin or sleep, because intensity was the real driver. Abendrot encourages lowering brightness in the evening too, not just warming. ([Schoellhorn 2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC9974389/); [Hoehn et al., 2024, _Brain Communications_ 6(3):fcae173](https://academic.oup.com/braincomms/article/6/3/fcae173/7675955))
-- **Effects on real-world sleep are often small or mixed.** Physiological melatonin changes don't always translate into measurably better sleep. ([Hoehn 2024](https://academic.oup.com/braincomms/article/6/3/fcae173/7675955))
+- **Warming alone may not be enough.** Some trials found that warming a screen _without_ dimming it had little measurable effect on melatonin or sleep, because intensity was the real driver. Abendrot encourages lowering brightness in the evening too, not just warming. ([Schoellhorn 2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC9974389/))
+- **Effects on real-world sleep are often small or mixed.** Physiological melatonin changes don't always translate into measurably better sleep — a randomized real-world study found no measurable sleep-outcome difference from a software blue-reduction mode. ([Duraccio et al., 2021, _Sleep Health_, DOI 10.1016/j.sleh.2021.03.005](https://doi.org/10.1016/j.sleh.2021.03.005)) <!-- [VERIFY] The original draft cited "Hoehn et al., 2024, Brain Communications 6(3):fcae173" here; that paper is NOT in the canonical 24-paper library in evidence-base.md. The canonical grounding for "no measurable sleep benefit from software blue reduction" is Duraccio 2021 (evidence-base Approved Claim #11). Confirm the Hoehn citation independently before reintroducing it, or drop it. -->
 - **Blue-blocking glasses are not a proven fix.** A Cochrane review found blue-light-filtering lenses probably make little or no difference to eye strain, with weak evidence for sleep benefit. (We're an evening-light tool, not eyewear — but honesty matters.) ([Singh et al., 2023, _Cochrane_ CD013244](https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD013244.pub2/full))
 - **Blue-enriched light is good — at the right time.** Higher-color-temperature light boosts daytime alertness; the same property makes it counterproductive close to bedtime. Timing, not villainy. ([Chellappa et al., 2011, _PLoS ONE_ 6(1):e16429](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0016429))
 
@@ -104,19 +108,21 @@ A trustworthy science panel says the unflattering parts too. These are good to s
 
 ## Primary sources (full list)
 
+> **Reconciliation note.** Rows marked `[VERIFY]` below are NOT in the canonical 24-paper library in `docs/marketing/evidence-base.md`. They support honest-limitation / eye-strain caveats that sit deliberately *outside* the circadian evidence base (e.g. the AAO eye-strain guidance, the Cochrane blue-blocker review). They are retained, not deleted, but must be independently confirmed — or replaced with a canonical source — before going live on any public surface. Canonical equivalents where they exist: ipRGC/~480 nm → Berson 2002 + Bailes & Lucas 2013; "no measurable sleep benefit from software blue reduction" → Duraccio 2021.
+
 | # | Study | Source | Used for |
 |---|---|---|---|
-| 1 | Lucas et al. (2014) | _Trends Neurosci_ 37(1):1–9 | ipRGC / ~480 nm "third sensor" |
-| 2 | Zeitzer et al. (2000) | _J Physiol_ 526(3):695–702 | sensitivity to dim evening light |
-| 3 | Chang et al. (2015) | _PNAS_ 112(4):1232–1237 | screens before bed delay sleep/melatonin |
-| 4 | Schoellhorn et al. (2023) | _Communications Biology_ 6:228 | melanopic content > brightness |
-| 5 | Brown et al. (2022) | _PLoS Biology_ 20(3):e3001571 | 250 / 10 / 1 lux melanopic EDI consensus |
-| 6 | Phillips et al. (2019) | _PNAS_ 116(24):12019–12024 | >50-fold individual variability |
-| 7 | Chellappa et al. (2011) | _PLoS ONE_ 6(1):e16429 | blue-enriched light & alertness |
-| 8 | Hoehn et al. (2024) | _Brain Communications_ 6(3):fcae173 | real-world effects small/mixed |
-| 9 | Singh et al. (2023) | _Cochrane_ CD013244 | blue-blocking lenses unproven |
-| 10 | AAO (accessed 2026) | aao.org | screens don't damage eyes; eye-strain guidance |
-| 11 | AAO (accessed 2026) | aao.org | 20-20-20 rule |
+| 1 | Lucas et al. (2014) `[VERIFY]` | _Trends Neurosci_ 37(1):1–9 | ipRGC / ~480 nm "third sensor" — canonical equivalent: Berson 2002 + Bailes & Lucas 2013 |
+| 2 | Zeitzer et al. (2000) | _J Physiol_ 526(3):695–702 | sensitivity to dim evening light (canonical; confirm the "88%" figure) |
+| 3 | Chang et al. (2015) | _PNAS_ 112(4):1232–1237 | screens before bed delay sleep/melatonin (canonical) |
+| 4 | Schoellhorn et al. (2023) | _Communications Biology_ 6:228 | melanopic content > brightness (canonical) |
+| 5 | Brown et al. (2022) | _PLoS Biology_ 20(3):e3001571 | 250 / 10 / 1 lux melanopic EDI consensus (canonical) |
+| 6 | Phillips et al. (2019) | _PNAS_ 116(24):12019–12024 | >50-fold individual variability (canonical) |
+| 7 | Chellappa et al. (2011) `[VERIFY]` | _PLoS ONE_ 6(1):e16429 | blue-enriched light & alertness — not in canonical library |
+| 8 | Hoehn et al. (2024) `[VERIFY]` | _Brain Communications_ 6(3):fcae173 | real-world effects small/mixed — replaced in-text by Duraccio 2021 (canonical) |
+| 9 | Singh et al. (2023) `[VERIFY]` | _Cochrane_ CD013244 | blue-blocking lenses unproven — not in canonical library |
+| 10 | AAO (accessed 2026) `[VERIFY]` | aao.org | screens don't damage eyes; eye-strain guidance — outside circadian evidence base |
+| 11 | AAO (accessed 2026) `[VERIFY]` | aao.org | 20-20-20 rule — outside circadian evidence base |
 
 <!-- [FLAG] Every published health snippet should get a final hedged-language review before going
      live on any public surface (README, landing page, app). No medical claims; cite-don't-assert. -->

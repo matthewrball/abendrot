@@ -1,5 +1,7 @@
 # Product Hunt launch
 
+> Claims must comply with `docs/marketing/evidence-base.md` guardrails (couple warmth with "lower brightness"; red = circadian-sparing, never therapy; no sleep-outcome promises).
+
 Self-launch (keep the maker narrative). Tuesday/Wednesday/Thursday, **12:01 am PT**. Free + open source converts well here.
 
 > Voice: calm, poetic-but-precise, non-medical, no exclamation marks, no "please upvote." Lead with the reliability/designer hook for this audience (§21.5); health stays the brand story, not the pitch headline.

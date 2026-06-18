@@ -1,5 +1,7 @@
 # Show HN
 
+> Claims must comply with `docs/marketing/evidence-base.md` guardrails (couple warmth with "lower brightness"; red = circadian-sparing, never therapy; no sleep-outcome promises).
+
 Tuesday–Thursday, ~9 am–12 pm ET. Direct repo + `.dmg`, no signup gate. **Lead with the reliability/engineering/designer hook — NOT health.** The HN crowd is cynical about "circadian wellness"; health stays the brand story but is not the lede here (§21.5).
 
 > Voice: precise, technical, honest, no overstatement, no exclamation marks. Don't oversell the science. Be present for hard questions.

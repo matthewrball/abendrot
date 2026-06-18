@@ -1,5 +1,7 @@
 # Reddit launch
 
+> Claims must comply with `docs/marketing/evidence-base.md` guardrails (couple warmth with "lower brightness"; red = circadian-sparing, never therapy; no sleep-outcome promises).
+
 Per-subreddit drafts. **Verify each sub's live rules before posting** (self-promo windows, flair, "I made this" requirements vary and change). Lead with free + open source, **disclose authorship every time**, put media in-post, ask for **feedback, not upvotes**. Never post identical cross-posts in the same hour; space them out (see `timeline.md`).
 
 > Voice: calm, precise, non-medical, no exclamation marks. In sleep/health subs, no medical claims — link research, don't assert outcomes.

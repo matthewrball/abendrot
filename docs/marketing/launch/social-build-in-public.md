@@ -1,5 +1,7 @@
 # Build-in-public — X / Mastodon / Bluesky
 
+> Claims must comply with `docs/marketing/evidence-base.md` guardrails (couple warmth with "lower brightness"; red = circadian-sparing, never therapy; no sleep-outcome promises).
+
 Start 2–4 weeks before launch. Mirror across all three platforms (Croissant/Indigo or manual). Post the repo early. Engage authentically with indie-Mac-dev, design, FOSS, and circadian/sleep communities **for weeks before any ask**.
 
 > Voice: calm, precise, poetic-but-precise, non-medical, no exclamation marks, no growth-hack CTAs. Show the work; let the warm-shift clips do the selling. Hashtags sparingly: #buildinpublic #indiedev #macOS #opensource.

@@ -1,7 +1,7 @@
 ---
 name: abendrot
 title: "Abendrot — Master Plan (build → release → growth)"
-status: APPROVED for execution (2026-06-16) — staged-beta strategy confirmed
+status: IN EXECUTION — Session 6 (2026-06-17): §25 warming overhaul + max-warmth hybrid DONE & verified; public mirror re-synced/scrubbed. Living tracker = LAUNCH.md (workspace root).
 owner: matthewrball (matthewball.me)
 created: 2026-06-16
 positioning: circadian-health-first (reliability as proof)
@@ -642,15 +642,21 @@ Couple an optional dim nudge (warming without dimming blunts the benefit). Doc f
 
 ### Reframed §25 plan (priority order)
 
-- **P0 — "enabling actually warms something visible":** fix schedule-gating (follow the sunset
-  *window*, not the on/off flag), warmth-on-enable default, and persist UI state. (§25.B)
-- **P1 — "it truly warms (removes blue), not a tint":** add the **CoreDisplay white-point backend**
-  (universal, gamma-immune) as the top-tier built-in path; re-enable **gamma for base M-series** via a
-  chip+OS-aware classifier; demote overlay to the genuine floor; honest in-UI "tint only" note where
-  neither is available. (§25.F — gated on the white-point probe)
-- **P2 — feel:** mired-linear curve + 2700K-max/3400K-default warmest point. (§25.D/E)
-- **P3 — hygiene:** rebuild fresh + version stamp; a non-headless live-overlay smoke test (the 84
-  headless tests use fakes and never touch NSPanel/CALayer); doc citation fixes. (§25.G/H)
+**STATUS (Session 6, 2026-06-17): P1 + P2 DONE; P3 mostly done; P0 partially done. Granular living
+tracker is now `LAUNCH.md` (workspace root).**
+
+- ✅ **P1 — "it truly warms (removes blue), not a tint" — DONE:** gamma is the UNIVERSAL true-warm path
+  (built-in + external) via the chip+OS-aware `GammaClassifier`; overlay is the genuine floor; an honest
+  in-UI "tint only" note ships (§25.J, iterating). The CoreDisplay white-point backend was researched and
+  **SHELVED** (didn't warm in isolation; couples to Night Shift). (§25.F)
+- ✅ **P2 — feel — DONE (and superseded):** mired-linear curve shipped; warmest point is now **1900K
+  everyday max / 500K opt-in expanded range** (Session-6 hybrid — replaces the earlier 2700/3400 and the
+  pure-red 500 default). (§25.D/E + Session-6 RESULTS below)
+- 🟡 **P3 — hygiene — mostly done:** fresh rebuilds + 91/21 tests green; doc citation fixes done. A
+  non-headless live-overlay smoke test is still open. (§25.G/H)
+- 🟡 **P0 — "enabling actually warms" — partially done:** schedule-gating fixed (follow the sunset
+  *window*); warmth-on-enable default set (strength 0.7 → ~2412K); **warmestPoint now persists**.
+  Remaining: persist `isEnabled` / `globalWarmth` / `scheduleMode`. (§25.B)
 
 Full verified output (all three streams + verdicts): the Session-5 workflow result file.
 
