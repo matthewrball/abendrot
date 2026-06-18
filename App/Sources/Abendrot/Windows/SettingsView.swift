@@ -268,14 +268,14 @@ private struct ShortcutsTab: View {
             HStack {
                 Text("Reveal True Color").font(Theme.Typography.ui(13.5))
                 Spacer()
-                Text("⌥⌘T")
-                    .font(Theme.Typography.ui(13, weight: .medium))
-                    .foregroundStyle(Theme.Color.accentHighlight)
+                // Click the field and press a combination to rebind (default ⌥⌘T). Writes through
+                // KeyboardShortcuts' storage, so HotkeyService picks up the change live.
+                RevealShortcutRecorder()
             }
-            // TODO(settings): embed KeyboardShortcuts.Recorder + a Hold/Toggle mode picker.
-            Text("Hold to reveal true colour; release to ease warmth back. Switch to Toggle, or rebind, here — recorder lands in a later milestone.")
+            Text("Click the field and press a key combination to rebind. Hold the shortcut to reveal true colour; release to ease warmth back.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
+            // TODO(settings): a Hold/Toggle reveal-mode picker (RevealMode on HotkeyService).
         }
     }
 }
