@@ -3,7 +3,7 @@ project: abendrot
 project_path: /Users/ball/Documents/abendrot
 created: 2026-06-16
 origin_session: experiment (Documents/experiment) — planning/research session
-status: APPROVED for execution (2026-06-16) — open a session in this dir and paste RESUME-PROMPT.md
+status: SESSION 5 COMPLETE (2026-06-17) — §25 warming overhaul DONE + verified on real hardware (gamma is now the universal true-warm path). LIVE SOURCE OF TRUTH = RESUME-PROMPT.md (rewritten as the Session-5→6 handoff) + docs/abendrot-plan.md §25. This HANDOFF.md is the earlier full-context/decisions doc; durable decisions below still hold, but the current state + next steps (incl. the circadian-health "optimal max warmth" research) are in RESUME-PROMPT.md.
 ---
 
 # Handoff — Abendrot
