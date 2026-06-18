@@ -37,9 +37,13 @@ struct PopoverView: View {
             // divider when off.
             if model.state.isEnabled {
                 VStack(alignment: .leading, spacing: 0) {
-                    WarmSlider(strength: globalWarmthBinding)
+                    WarmSlider(strength: globalWarmthBinding, kelvin: model.globalKelvin)
                         .padding(.bottom, 14)
                     DividerLine().padding(.bottom, 14)
+                    Text("Mode")
+                        .font(Theme.Typography.ui(13, weight: .medium))
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .padding(.bottom, 8)
                     ModeControl(selection: modeBinding) { option in
                         model.setScheduleMode(option.toScheduleMode())
                     }
@@ -56,10 +60,6 @@ struct PopoverView: View {
                     .padding(.top, 4)
                     .transition(.advancedExpansion)
             }
-
-            // Centered chevron "expand" handle — the advanced disclosure (replaces the old icon).
-            HStack { Spacer(); expandHandle; Spacer() }
-                .padding(.top, model.isAdvancedExpanded ? 10 : 0)
 
             DividerLine().padding(.vertical, 14)
             footer
@@ -80,7 +80,6 @@ struct PopoverView: View {
                 .font(Theme.Typography.serif(15))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
-            statusReadout
         }
     }
 
@@ -97,31 +96,6 @@ struct PopoverView: View {
         } else {
             SunsetArcGlyph()
         }
-    }
-
-    /// The top-right status readout. In the warming phase the Kelvin number animates with a
-    /// sliding-digit transition (`.numericText`) as the warmth changes — lightweight (one GPU text
-    /// transition, no per-digit views) and it honours Reduce Motion (the number just snaps). Other
-    /// phases ("Off" / "True color" / "Idle") are plain text.
-    @ViewBuilder private var statusReadout: some View {
-        Group {
-            if model.statusPhase == .warming {
-                let kelvin = model.globalKelvin.value
-                HStack(spacing: 4) {
-                    Text("Warming ·")
-                    Text("\(kelvin)K")
-                        .contentTransition(.numericText(value: Double(kelvin)))
-                        // Slides the changed digits whenever the Kelvin changes — live during a
-                        // slider drag included. Reduce Motion → nil (the number just snaps).
-                        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin)
-                }
-            } else {
-                Text(model.statusSummary)
-            }
-        }
-        .font(Theme.Typography.ui(11.5))
-        .monospacedDigit()
-        .foregroundStyle(Theme.Color.accentHighlight)
     }
 
     // MARK: Master toggle
@@ -200,14 +174,25 @@ struct PopoverView: View {
     // MARK: Footer
 
     private var footer: some View {
-        HStack {
-            // Quit (left). Routes through NSApp.terminate → applicationShouldTerminate, which
-            // neutral-resets every display before exit (contract §9). An LSUIElement agent has no
-            // app menu, so this is the user's Quit affordance; ⌘Q also works when focused.
+        HStack(spacing: 12) {
+            // Settings (bottom-left).
+            Button {
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .foregroundStyle(Theme.Color.textMuted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+
+            // Quit — an "exit" door icon, not a power symbol (which reads like an on/off switch and
+            // gets confused with warming on/off). Routes through NSApp.terminate →
+            // applicationShouldTerminate, which neutral-resets every display before exit (contract
+            // §9). LSUIElement agents have no app menu, so this is the Quit affordance; ⌘Q also works.
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
-                Image(systemName: "power")
+                Image(systemName: "rectangle.portrait.and.arrow.right")
                     .foregroundStyle(Theme.Color.textMuted)
             }
             .buttonStyle(.plain)
@@ -224,38 +209,19 @@ struct PopoverView: View {
 
             Spacer()
 
-            // Settings (right).
+            // Advanced disclosure (bottom-right) — a chevron that rotates 180° when open.
             Button {
-                openSettings()
+                withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
+                    model.isAdvancedExpanded.toggle()
+                }
             } label: {
-                Image(systemName: "gearshape")
+                Image(systemName: "chevron.down")
+                    .rotationEffect(.degrees(model.isAdvancedExpanded ? 180 : 0))
                     .foregroundStyle(Theme.Color.textMuted)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
+            .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
         }
-    }
-
-    /// A centered chevron "expand" handle — the advanced (per-display engine) disclosure. A glass
-    /// pill whose chevron rotates 180° when open; replaces the old slider-icon toggle.
-    private var expandHandle: some View {
-        Button {
-            withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
-                model.isAdvancedExpanded.toggle()
-            }
-        } label: {
-            Image(systemName: "chevron.down")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.Color.textMuted)
-                .rotationEffect(.degrees(model.isAdvancedExpanded ? 180 : 0))
-                .padding(.horizontal, 20)
-                .padding(.vertical, 5)
-                .background(Capsule(style: .continuous).fill(Theme.Color.line.opacity(0.5)))
-                .overlay(Capsule(style: .continuous).strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5))
-                .contentShape(Capsule(style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
     }
 
     // MARK: Bindings (view ↔ AppModel intents)

@@ -62,10 +62,16 @@ struct MethodBadge: View {
 struct WarmSlider: View {
     @Binding var strength: Double
     var compact: Bool = false
+    /// When provided (the popover's main slider), the Warmth row shows this Kelvin readout inline,
+    /// with an info tooltip. Other callers pass nil (they have their own readouts).
+    var kelvin: Kelvin?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// True while the thumb is being pressed/dragged — drives the Liquid-Glass "grab" feedback
     /// (a springy scale-up + brighter glow), mirroring the master toggle's press effect.
     @GestureState private var isPressing = false
+    /// Drives the Kelvin info tooltip (shown on hover of the ⓘ).
+    @State private var showKelvinInfo = false
 
     private var trackHeight: CGFloat { compact ? 5 : 7 }
     private var thumbSize: CGFloat { compact ? 15 : 20 }
@@ -73,11 +79,7 @@ struct WarmSlider: View {
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 9) {
             if !compact {
-                // Kelvin readout intentionally omitted here — it lives only in the popover header
-                // now (one canonical, animated number), so the slider isn't a second place to read.
-                Text("Warmth")
-                    .font(Theme.Typography.ui(13, weight: .medium))
-                    .foregroundStyle(Theme.Color.textMuted)
+                warmthHeaderRow
             }
 
             gradientSlider
@@ -90,6 +92,56 @@ struct WarmSlider: View {
             .font(Theme.Typography.ui(11.5))
             .foregroundStyle(Theme.Color.textMuted)
         }
+        .overlay(alignment: .topTrailing) {
+            if showKelvinInfo, kelvin != nil {
+                kelvinTooltip
+                    .offset(y: 24)
+                    .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+                    .zIndex(1)
+            }
+        }
+        .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showKelvinInfo)
+    }
+
+    // MARK: Warmth header (label + inline Kelvin + info tooltip)
+
+    private var warmthHeaderRow: some View {
+        HStack(spacing: 6) {
+            Text("Warmth")
+                .font(Theme.Typography.ui(13, weight: .medium))
+                .foregroundStyle(Theme.Color.textMuted)
+            Spacer()
+            if let kelvin {
+                Text("\(kelvin.value)K")
+                    .font(Theme.Typography.serif(13))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Color.accentHighlight)
+                    .contentTransition(.numericText(value: Double(kelvin.value)))
+                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin.value)
+                Image(systemName: "info.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(showKelvinInfo ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                    .onHover { showKelvinInfo = $0 }
+                    .accessibilityLabel("What is Kelvin?")
+                    .accessibilityHint(kelvinInfoText)
+            }
+        }
+    }
+
+    private var kelvinInfoText: String {
+        "Kelvin is colour temperature — lower numbers are warmer and give off less blue light."
+    }
+
+    /// A small frosted-glass card explaining the Kelvin readout, animated in on hover.
+    private var kelvinTooltip: some View {
+        Text(kelvinInfoText)
+            .font(Theme.Typography.ui(11))
+            .foregroundStyle(Theme.Color.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: 188, alignment: .leading)
+            .padding(11)
+            .glassSurface(.frost, cornerRadius: 12)
+            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
     }
 
     // MARK: Custom gradient slider

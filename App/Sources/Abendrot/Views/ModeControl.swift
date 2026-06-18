@@ -15,7 +15,7 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .followSunset: return "Follow sunset"
+        case .followSunset: return "Sunset"
         case .schedule: return "Schedule"
         case .alwaysOn: return "Always on"
         }
