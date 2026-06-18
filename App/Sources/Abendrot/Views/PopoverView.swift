@@ -31,16 +31,17 @@ struct PopoverView: View {
                 // header and footer dividers (each contributes 14pt) instead of bottom-heavy.
                 .padding(.bottom, model.state.isEnabled ? 16 : 0)
 
-            // The warmth slider is only meaningful while warming is on — the master toggle owns
-            // on/off — so it hides and re-reveals with a soft blur-scale-fade. (Schedule mode lives
-            // in the Advanced section now and defaults to Sunset.)
+            // The warmth slider + the per-display rows are only meaningful while warming is on — the
+            // master toggle owns on/off — so they hide and re-reveal together with a soft
+            // blur-scale-fade. (Schedule mode lives in the Advanced section now; defaults to Sunset.)
             if model.state.isEnabled {
-                WarmSlider(strength: globalWarmthBinding, kelvin: model.globalKelvin)
-                    .padding(.bottom, 16)
-                    .transition(.softReveal)
+                VStack(alignment: .leading, spacing: 0) {
+                    WarmSlider(strength: globalWarmthBinding, kelvin: model.globalKelvin)
+                        .padding(.bottom, 16)
+                    displaySection
+                }
+                .transition(.softReveal)
             }
-
-            displaySection
 
             // Advanced "liquid expansion" — the glass grows to hold power rows.
             if model.isAdvancedExpanded {
@@ -172,14 +173,14 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            // Quit — an "exit" door icon, not a power symbol (which reads like an on/off switch and
+            // Quit — the ⎋ (escape) glyph, not a power symbol (which reads like an on/off switch and
             // gets confused with warming on/off). Routes through NSApp.terminate →
             // applicationShouldTerminate, which neutral-resets every display before exit (contract
             // §9). LSUIElement agents have no app menu, so this is the Quit affordance; ⌘Q also works.
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
+                Image(systemName: "escape")
                     .foregroundStyle(Theme.Color.textMuted)
             }
             .buttonStyle(.plain)
