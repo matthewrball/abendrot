@@ -100,7 +100,8 @@ struct PopoverView: View {
 
     private var masterToggle: some View {
         HStack {
-            Text("Warm my displays")
+            // Singular when there's a single screen (no external monitors), plural otherwise.
+            Text(model.state.displays.count == 1 ? "Warm my display" : "Warm my displays")
                 .font(Theme.Typography.ui(13, weight: .semibold))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
@@ -113,10 +114,16 @@ struct PopoverView: View {
 
     // MARK: Displays
 
-    private var displaySection: some View {
-        VStack(spacing: 8) {
-            ForEach(model.state.displays) { display in
-                DisplayRow(display: display, tintOnly: isTintOnly(display))
+    /// Per-display rows in the simple view, shown ONLY with 2+ displays — a lone screen needs no
+    /// row (nothing to disambiguate, and its method badge is just noise here). Power users still get
+    /// per-display controls in the advanced (⌥-click) expansion, and the app-level "can only tint"
+    /// banner above still fires for a single incompatible display.
+    @ViewBuilder private var displaySection: some View {
+        if model.state.displays.count > 1 {
+            VStack(spacing: 8) {
+                ForEach(model.state.displays) { display in
+                    DisplayRow(display: display, tintOnly: isTintOnly(display))
+                }
             }
         }
     }
