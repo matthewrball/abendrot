@@ -283,4 +283,23 @@ final class AppModel {
         case .warming:   return "Warming · \(globalKelvin.value)K"
         }
     }
+
+    // MARK: ── Incompatibility ("can only be tinted") detection — §25.J ──────────
+
+    /// A display can only be TINTED when no true-warm path is available to it: gamma is not
+    /// supported on this chip/OS (or private APIs are off) AND it is not DDC-capable. Capability-
+    /// based, so it reads honestly even before warming is enabled. Lives here (not in a view) so the
+    /// app-level banner in PopoverView and the per-display rows in AdvancedExpansion share one
+    /// source of truth.
+    func isTintOnly(_ display: DisplayState) -> Bool {
+        let priv = state.privateAPIsEnabled
+        let gammaPossible = priv && Self.isSupported(display.capabilities.gamma)
+        let ddcPossible = priv && Self.isSupported(display.capabilities.hardware)
+        return !(gammaPossible || ddcPossible)
+    }
+
+    private static func isSupported<T>(_ cap: Capability<T>) -> Bool {
+        if case .supported = cap { return true }
+        return false
+    }
 }

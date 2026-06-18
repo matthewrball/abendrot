@@ -8,6 +8,11 @@ import WarmthKit
 // controls; ⌥-click / right-click expands the SAME glass to the advanced power rows
 // (the "liquid expansion" of §21.3 — the popover grows, it does not open a new window).
 //
+// Simple view (while warming): the global warmth slider, then the schedule Mode control —
+// both reveal/hide with the master toggle. Per-display "Override" rows now live in the
+// advanced (⌥-click) expansion, not here. The app-level "can only tint" banner stays at the
+// top of the simple view.
+//
 // Renders entirely from `AppModel.state` (a contract `WarmthState`). All mutations go
 // back through `AppModel` → `WarmthEngine`.
 struct PopoverView: View {
@@ -31,14 +36,14 @@ struct PopoverView: View {
                 // header and footer dividers (each contributes 14pt) instead of bottom-heavy.
                 .padding(.bottom, model.state.isEnabled ? 16 : 0)
 
-            // The warmth slider + the per-display rows are only meaningful while warming is on — the
-            // master toggle owns on/off — so they hide and re-reveal together with a soft
-            // blur-scale-fade. (Schedule mode lives in the Advanced section now; defaults to Sunset.)
+            // The warmth slider + the schedule Mode control are only meaningful while warming is on
+            // — the master toggle owns on/off — so they hide and re-reveal together with a soft
+            // scale-fade. (Per-display "Override" rows live in the Advanced section now.)
             if model.state.isEnabled {
                 VStack(alignment: .leading, spacing: 0) {
                     WarmSlider(strength: globalWarmthBinding, kelvin: model.globalKelvin)
                         .padding(.bottom, 16)
-                    displaySection
+                    modeSection
                 }
                 .transition(.softReveal)
             }
@@ -114,44 +119,36 @@ struct PopoverView: View {
         }
     }
 
-    // MARK: Displays
+    // MARK: Schedule mode
 
-    /// Per-display rows in the simple view, shown ONLY with 2+ displays — a lone screen needs no
-    /// row (nothing to disambiguate, and its method badge is just noise here). Power users still get
-    /// per-display controls in the advanced (⌥-click) expansion, and the app-level "can only tint"
-    /// banner above still fires for a single incompatible display.
-    @ViewBuilder private var displaySection: some View {
-        if model.state.displays.count > 1 {
-            VStack(spacing: 8) {
-                ForEach(model.state.displays) { display in
-                    DisplayRow(model: model, display: display, tintOnly: isTintOnly(display))
-                }
-            }
+    /// The global schedule Mode, shown in the simple view directly under the warmth slider. Reveals
+    /// and hides with the master toggle (it lives inside the `isEnabled` `.softReveal` group).
+    /// Defaults to Sunset until the user picks here. Per-display "Override" rows live in the advanced
+    /// (⌥-click) expansion now, not in the simple view.
+    private var modeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Mode")
+                .font(Theme.Typography.ui(13, weight: .medium))
+                .foregroundStyle(Theme.Color.textMuted)
+            ModeControl(
+                selection: Binding(
+                    get: { ScheduleModeOption(model.state.scheduleMode) },
+                    set: { model.setScheduleMode($0.toScheduleMode()) }
+                ),
+                onChange: { _ in }
+            )
         }
     }
 
     // MARK: Incompatibility ("can only be tinted") detection — §25.J (DRAFT)
 
-    /// A display can only be TINTED when no true-warm path is available to it: gamma is not
-    /// supported on this chip/OS (or private APIs are off) AND it is not DDC-capable. Capability-
-    /// based, so it reads honestly even before warming is enabled.
-    private func isTintOnly(_ display: DisplayState) -> Bool {
-        let priv = model.state.privateAPIsEnabled
-        let gammaPossible = priv && isSupported(display.capabilities.gamma)
-        let ddcPossible = priv && isSupported(display.capabilities.hardware)
-        return !(gammaPossible || ddcPossible)
-    }
-
-    private func isSupported<T>(_ cap: Capability<T>) -> Bool {
-        if case .supported = cap { return true }
-        return false
-    }
-
     /// True when there is ≥1 display and EVERY connected display can only be tinted — the whole
-    /// Mac/OS can't truly warm anything, so we say so up front with a banner.
+    /// Mac/OS can't truly warm anything, so we say so up front with a banner. The per-display
+    /// tint-only test (`model.isTintOnly`) is shared with the moved per-display rows in the advanced
+    /// expansion (DRY — single source of truth on `AppModel`).
     private var allDisplaysTintOnly: Bool {
         let displays = model.state.displays
-        return !displays.isEmpty && displays.allSatisfy(isTintOnly)
+        return !displays.isEmpty && displays.allSatisfy(model.isTintOnly)
     }
 
     private var incompatibilityBanner: some View {

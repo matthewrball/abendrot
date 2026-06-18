@@ -3,13 +3,15 @@ import WarmthKit
 
 // MARK: - AdvancedExpansion
 //
-// The "liquid expansion" power rows (plan §4.4, §21.3): the global schedule Mode, plus per-app
-// exclusions + reveal-during-captures entry points.
+// The "liquid expansion" power rows (plan §4.4, §21.3): the per-display "Override" rows, plus
+// per-app exclusions + reveal-during-captures entry points.
 //
-// Per-display "Custom warmth" now lives on the display rows in the main popover (a simple toggle +
-// slider, no jargon). The engine internals (warming method, hardware DDC) were removed from the
-// popover entirely — they're troubleshooting/compatibility details, not daily menu-bar UX, and now
-// live in the Settings window's "Displays → (per-display) Advanced" compatibility section.
+// Per-display "Custom warmth" lives here now (a simple toggle + slider, no jargon), surfaced only
+// when the user expands the popover — a lone screen shows no per-display row (nothing to
+// disambiguate). The schedule Mode control moved OUT of here and into the simple popover (under the
+// warmth slider). The engine internals (warming method, hardware DDC) stay out of the popover
+// entirely — they're troubleshooting/compatibility details that live in the Settings window's
+// "Displays → (per-display) Advanced" compatibility section.
 struct AdvancedExpansion: View {
     @Bindable var model: AppModel
 
@@ -17,22 +19,19 @@ struct AdvancedExpansion: View {
         VStack(alignment: .leading, spacing: 12) {
             DividerLine()
 
-            // Global schedule mode — moved out of the simple popover; defaults to Sunset until the
-            // user picks here.
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Mode")
-                    .font(Theme.Typography.ui(13, weight: .medium))
-                    .foregroundStyle(Theme.Color.textMuted)
-                ModeControl(
-                    selection: Binding(
-                        get: { ScheduleModeOption(model.state.scheduleMode) },
-                        set: { model.setScheduleMode($0.toScheduleMode()) }
-                    ),
-                    onChange: { _ in }
-                )
-            }
+            // Per-display "Override" rows — moved out of the simple popover. Shown ONLY with 2+
+            // displays (a lone screen needs no row); the app-level "can only tint" banner in the
+            // simple view still fires for a single incompatible display. The `tintOnly` test is the
+            // shared `model.isTintOnly` (single source of truth, also used by that banner).
+            if model.state.displays.count > 1 {
+                VStack(spacing: 8) {
+                    ForEach(model.state.displays) { display in
+                        DisplayRow(model: model, display: display, tintOnly: model.isTintOnly(display))
+                    }
+                }
 
-            DividerLine()
+                DividerLine()
+            }
 
             // Per-app exclusions + screenshot-exempt — entry points only for this
             // structural pass; full pickers live in Settings → Advanced/Privacy.
@@ -63,6 +62,8 @@ struct AdvancedExpansion: View {
 
 // MARK: - Preview
 
+// `MockWarmthState.warming` has three displays, so the expansion renders the moved per-display
+// "Override" rows (the >1-display guard is satisfied).
 #Preview("Advanced expansion") {
     let model = AppModel(previewState: MockWarmthState.warming)
     model.isAdvancedExpanded = true
