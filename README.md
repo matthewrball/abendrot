@@ -62,17 +62,19 @@ Each connected display shows a small badge — `Gamma` / `Hardware` / `Overlay` 
 | | **Abendrot** | Apple Night Shift | f.lux | Redshift |
 |---|---|---|---|---|
 | Platform | macOS 26+ | macOS / iOS | macOS / Windows / Linux | Linux / X11 |
-| Warms external monitors reliably | Yes (layered, with fallback) | Often fails or tints | Gamma only; unreliable on externals | X11 gamma only |
-| Works on newest Apple Silicon | Yes | Built-in only | Gamma path can silently no-op | N/A on macOS |
-| Warms buttonless Apple displays (Studio Display, XDR, UltraFine) | Yes (gamma) | No | No | No |
-| Shows which method each display uses | Yes | No | No | No |
-| Per-display control | Yes | No | Limited | Per-output |
+| Warmest setting | **~1900 K** — the warming curve takes the blue channel to its practical minimum | ~2700–3400 K <sup>1</sup> (Apple publishes no value); never reaches ~1900 K | ~1900 K ("Candle") | Configurable |
+| Blue at the warmest setting | Driven to its practical zero | Reduced, but not eliminated <sup>2</sup> | Deep (candle) | Depends on setting |
+| Warms Apple's buttonless displays (Studio Display, Pro Display XDR) | Yes | Yes (Apple's own) | No | No |
+| Reliable on third-party external monitors | Yes (layered, with fallback) | Inconsistent <sup>1</sup> | Gamma only; unreliable | X11 only |
+| Shows the actual color temperature + method, per display | Yes | No — a "Less / More Warm" slider | No | Per-output |
 | Reveal-true-color hotkey | Yes (hold) | No | No | Toggle only |
 | Open source | Yes (MIT) | No | No (freeware, closed) | Yes (GPL) |
 | Telemetry | None by default | Apple's | Unknown (closed-source) | None |
 | Price | Free forever | Free (built in) | Free | Free |
 
-<sub>Competitor behavior reflects our own testing and community reports; cells are hedged where behavior varies. f.lux is closed-source freeware, so its data practices can't be independently verified.</sub>
+<sub>Night Shift is a fine, free, built-in option — especially on a MacBook's own display. Abendrot is for deeper warmth and reliable warming across **every** external display, with the actual Kelvin and warming method shown per screen.</sub>
+
+<sub><sup>1</sup> Apple publishes no Kelvin value for Night Shift; ~2700–3400 K is a third-party estimate (Iris, f.lux). On external displays, Apple states performance "depends on the characteristics of the display" ([Apple Support](https://support.apple.com/en-us/102191)). <sup>2</sup> Per f.lux co-founder Michael Herf (2017 spectrometer measurement, macOS 10.12.4), Night Shift removes under ~30% of blue light's biological impact at its default setting. Figures reflect third-party measurements/estimates and our own testing. General wellness, not medical advice.</sub>
 
 ## Install
 
