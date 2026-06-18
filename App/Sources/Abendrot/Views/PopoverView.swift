@@ -46,7 +46,9 @@ struct PopoverView: View {
             // Advanced "liquid expansion" — the glass grows to hold power rows.
             if model.isAdvancedExpanded {
                 AdvancedExpansion(model: model)
-                    .padding(.top, 4)
+                    // Match the breathing room the collapsed state has above the footer divider, so
+                    // the gap above the advanced section's first divider isn't tight.
+                    .padding(.top, 14)
                     .transition(.advancedExpansion)
             }
 
