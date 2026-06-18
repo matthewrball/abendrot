@@ -104,7 +104,7 @@ struct OnboardingView: View {
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.accentHighlight)
 
-            WarmSlider(strength: $warmestStrength, kelvin: nil)
+            WarmSlider(strength: $warmestStrength)
 
             PrimaryButton(title: "Looks right") {
                 // Set the user's chosen evening warmth STRENGTH (their nightly level), not the

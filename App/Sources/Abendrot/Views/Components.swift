@@ -55,32 +55,29 @@ struct MethodBadge: View {
 
 // MARK: - WarmSlider
 
-/// The signature warm-tinted "Softer ⟷ Warmer" strength slider. Kelvin is secondary
-/// (shown as a label), per plan §4.1. Wraps the system `Slider` for accessibility +
-/// keyboard, restyled with the ember track.
+/// The signature warm-tinted "Softer ⟷ Warmer" strength slider (plan §4.1). Strength is the
+/// canonical control; the Kelvin readout now lives only in the popover header (one animated
+/// number), not beside the slider. Wraps the system `Slider` for accessibility + keyboard,
+/// restyled with the ember track.
 struct WarmSlider: View {
     @Binding var strength: Double
-    var kelvin: Kelvin?
     var compact: Bool = false
+    /// Forwarded from the underlying `Slider` (true while dragging). Lets a caller suppress the
+    /// header's sliding-digit animation during a live drag so the Kelvin readout tracks the slider
+    /// 1:1 (direct manipulation) instead of trailing behind a per-frame transition.
+    var onEditingChanged: (Bool) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 9) {
             if !compact {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Warmth")
-                        .font(Theme.Typography.ui(13, weight: .medium))
-                        .foregroundStyle(Theme.Color.textMuted)
-                    Spacer()
-                    if let kelvin {
-                        Text("\(kelvin.value) K")
-                            .font(Theme.Typography.serif(13))
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.Color.accentHighlight)
-                    }
-                }
+                // Kelvin readout intentionally omitted here — it lives only in the popover header
+                // now (one canonical, animated number), so the slider isn't a second place to read.
+                Text("Warmth")
+                    .font(Theme.Typography.ui(13, weight: .medium))
+                    .foregroundStyle(Theme.Color.textMuted)
             }
 
-            Slider(value: $strength, in: 0...1)
+            Slider(value: $strength, in: 0...1, onEditingChanged: onEditingChanged)
                 .controlSize(compact ? .small : .regular)
                 .tint(Theme.Color.accent)
 

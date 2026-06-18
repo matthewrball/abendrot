@@ -158,8 +158,7 @@ private struct GeneralTab: View {
                     strength: Binding(
                         get: { model.state.globalWarmth.strength },
                         set: { model.setGlobalWarmth($0) }
-                    ),
-                    kelvin: nil
+                    )
                 )
             }
         }
@@ -341,7 +340,7 @@ private struct MaximumWarmthControl: View {
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textMuted)
 
-            WarmSlider(strength: warmestBinding, kelvin: nil)
+            WarmSlider(strength: warmestBinding)
 
             Toggle("Expanded range — reach candle & ember (below 1900 K)", isOn: $expanded)
                 .toggleStyle(.switch)

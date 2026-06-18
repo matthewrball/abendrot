@@ -15,6 +15,11 @@ struct PopoverView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openSettings) private var openSettings
 
+    /// True while the warmth slider is being dragged. During a drag the header's Kelvin readout
+    /// updates instantly (no sliding-digit transition) so it tracks the slider 1:1; the slide plays
+    /// only on settled / discrete changes (release, schedule shift, mode change).
+    @State private var isWarmthEditing = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -29,11 +34,8 @@ struct PopoverView: View {
             masterToggle
                 .padding(.bottom, 16)
 
-            WarmSlider(
-                strength: globalWarmthBinding,
-                kelvin: model.globalKelvin
-            )
-            .padding(.bottom, 14)
+            WarmSlider(strength: globalWarmthBinding, onEditingChanged: { isWarmthEditing = $0 })
+                .padding(.bottom, 14)
 
             DividerLine().padding(.bottom, 14)
 
@@ -70,11 +72,33 @@ struct PopoverView: View {
                 .font(Theme.Typography.serif(15))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
-            Text(model.statusSummary)
-                .font(Theme.Typography.ui(11.5))
-                .monospacedDigit()
-                .foregroundStyle(Theme.Color.accentHighlight)
+            statusReadout
         }
+    }
+
+    /// The top-right status readout. In the warming phase the Kelvin number animates with a
+    /// sliding-digit transition (`.numericText`) as the warmth changes — lightweight (one GPU text
+    /// transition, no per-digit views) and it honours Reduce Motion (the number just snaps). Other
+    /// phases ("Off" / "True color" / "Idle") are plain text.
+    @ViewBuilder private var statusReadout: some View {
+        Group {
+            if model.statusPhase == .warming {
+                let kelvin = model.globalKelvin.value
+                HStack(spacing: 4) {
+                    Text("Warming ·")
+                    Text("\(kelvin)K")
+                        .contentTransition(.numericText(value: Double(kelvin)))
+                        // Instant during a drag (track the slider 1:1); slide only on settled /
+                        // discrete changes. Reduce Motion → nil (the number just snaps).
+                        .animation(isWarmthEditing ? nil : Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin)
+                }
+            } else {
+                Text(model.statusSummary)
+            }
+        }
+        .font(Theme.Typography.ui(11.5))
+        .monospacedDigit()
+        .foregroundStyle(Theme.Color.accentHighlight)
     }
 
     // MARK: Master toggle

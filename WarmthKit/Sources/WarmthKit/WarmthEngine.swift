@@ -482,6 +482,20 @@ public actor WarmthEngine {
             )
         }
 
+        // Prefer the OS-localized display name ("Built-in Display", "LG UltraFine") over the generic
+        // EDID/"Display" fallback, so rows match System Settings. Real-display path only: tests inject
+        // identities (and assert on their names), and `NSScreen` is meaningless headless. `NSScreen`
+        // is main-actor isolated, so this awaits a single hop to the main actor.
+        if injectedDisplays == nil {
+            let ids = rows.map { $0.id.currentDisplayID }
+            let localizedNames = await DisplayNaming.localizedNames(for: ids)
+            for index in rows.indices {
+                if let name = localizedNames[rows[index].id.currentDisplayID] {
+                    rows[index].name = name
+                }
+            }
+        }
+
         box.value.displays = rows
     }
 

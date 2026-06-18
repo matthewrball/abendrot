@@ -71,7 +71,7 @@ private struct AdvancedDisplayRow: View {
                 layerMenu
             }
 
-            WarmSlider(strength: warmthBinding, kelvin: nil, compact: true)
+            WarmSlider(strength: warmthBinding, compact: true)
 
             if ddcCapable {
                 Toggle(isOn: ddcBinding) {

@@ -245,11 +245,25 @@ final class AppModel {
         state.globalWarmth.kelvin(warmestPoint: state.warmestPoint)
     }
 
+    /// The phase the status readout is in. Lets the popover header render the Kelvin number as its
+    /// own `Text` (so it can animate with a sliding-digit transition) while the non-warming phases
+    /// stay plain text.
+    enum StatusPhase: Equatable { case off, revealing, idle, warming }
+
+    var statusPhase: StatusPhase {
+        guard state.isEnabled else { return .off }
+        if state.isRevealing { return .revealing }
+        guard state.isScheduleActiveNow || state.globalWarmth.strength > 0 else { return .idle }
+        return .warming
+    }
+
     /// A short, glanceable status string for the popover title ("Warming · 2700K").
     var statusSummary: String {
-        guard state.isEnabled else { return "Off" }
-        if state.isRevealing { return "True color" }
-        guard state.isScheduleActiveNow || state.globalWarmth.strength > 0 else { return "Idle" }
-        return "Warming · \(globalKelvin.value)K"
+        switch statusPhase {
+        case .off:       return "Off"
+        case .revealing: return "True color"
+        case .idle:      return "Idle"
+        case .warming:   return "Warming · \(globalKelvin.value)K"
+        }
     }
 }
