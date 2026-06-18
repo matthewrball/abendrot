@@ -686,6 +686,45 @@ combos could still no-op — mitigated by the DDC opt-in escape, the overlay flo
 badge, and the planned one-tap "did this warm?" onboarding check (the real safety net, since a
 readback probe can't detect a silent no-op). Implemented + 91 tests green; adversarially reviewed.
 
+### Session-5 founder directives (2026-06-17) — warmth range, incompatibility honesty, testing, Quit
+
+Four directives from the founder while dogfooding the real app:
+
+1. **Maximum warmth must go MUCH warmer.** The research's 2700K warmest cap (chosen for legibility +
+   melanopic diminishing returns) is too conservative for the founder — at full slider it "isn't warm
+   enough." **Override the research rec in favor of user range:** lower `defaultWarmestPoint` so the
+   slider's "Warmer" end reaches a deep candle warmth (~1500K), recalibrate the default strength to
+   keep a comfortable out-of-box default, and lower `Kelvin.warmestSupported` to match. (Proper
+   follow-up: expose `warmestPoint` as a user setting so each user picks their own warmest end.)
+   Honesty stays intact: the melanopic-% claim is still only valid for the gamma/DDC path, and warmer
+   = less legible.
+
+2. **Be UPFRONT in-app about OS/hardware incompatibility (BINDING).** When a display can only be
+   tinted — gamma is `.unsupported` on this chip/OS (M5 Pro/Max/Ultra on macOS ≥ 26) AND DDC isn't
+   available — the app must say so *clearly*, not just via the subtle "Overlay" badge: e.g. a per-row
+   "tinted, not truly warmed — your [chip] on macOS [version] can't truly warm this display" note, and
+   an app-level banner when NOTHING connected can truly warm. The detection already exists
+   (`GammaClassifier` + `DisplayState.capabilities`/`appliedMethod`); this is surfacing it honestly.
+   **The founder wants to design this** — so build a preview path (below) and iterate the copy/visual
+   with them, don't finalize unilaterally.
+
+3. **Preview/simulate incompatible configs (so the founder can design the notice + we can test).**
+   Add a dev hook to force the overlay-only/incompatible state on a *compatible* Mac (e.g. an env var
+   that makes `GammaClassifier` return `.unsupported`, or reuse the kill switch
+   `setPrivateAPIsEnabled(false)` which already drops to overlay-only). Lets the founder see exactly
+   what an incompatible user sees and design the notice around it.
+
+4. **Pre-release testing matrix (BINDING before 1.0).** Test gamma warming across MANY more monitors
+   (brands, HDMI / DisplayPort / Thunderbolt / USB-C, resolutions, HDR/EDR) and Mac configs (M-series
+   base / Pro / Max / Ultra, Intel, multiple macOS 26.x point releases) to map exactly where gamma
+   works vs silently no-ops — and for each incompatible config, confirm the honesty notice (#2) fires
+   and reads well. Extends §8 device matrix + §21.2 hardware matrix; the founder wants to design the
+   incompatible-state UX as part of this.
+
+Also shipped this session: a **Quit** control in the popover footer (the `LSUIElement` agent had no
+Quit affordance) — `power` icon + ⌘Q, routed through `applicationShouldTerminate` so displays
+neutral-reset on exit.
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **Open #1 priority: §25 warming-mechanism overhaul (next session).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*

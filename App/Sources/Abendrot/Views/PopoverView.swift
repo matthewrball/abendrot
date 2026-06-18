@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import WarmthKit
 
 // MARK: - PopoverView
@@ -107,6 +108,21 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
+
+            // Quit. Routes through NSApp.terminate → applicationShouldTerminate, which
+            // neutral-resets every display before exit (contract §9). An LSUIElement agent
+            // has no app menu, so this is the user's Quit affordance; ⌘Q also works when the
+            // popover is focused.
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+                    .foregroundStyle(Theme.Color.textMuted)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("q", modifiers: .command)
+            .help("Quit Abendrot")
+            .accessibilityLabel("Quit Abendrot")
 
             Spacer()
 

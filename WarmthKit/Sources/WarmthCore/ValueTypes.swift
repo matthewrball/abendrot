@@ -9,7 +9,7 @@ import Foundation
 /// floor so callers can never construct an out-of-range temperature.
 public struct Kelvin: Hashable, Sendable, Comparable, Codable {
     public static let neutral = Kelvin(6500)
-    public static let warmestSupported = Kelvin(1900)   // floor we expose in UI
+    public static let warmestSupported = Kelvin(1500)   // warmest the slider can reach (deep candle)
 
     public let value: Int
 
