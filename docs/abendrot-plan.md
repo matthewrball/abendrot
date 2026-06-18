@@ -10,7 +10,7 @@ stack: native Swift (SwiftUI + AppKit), macOS 26 "Tahoe", Xcode 26
 repo: github.com/matthewrball/abendrot
 domain_primary: abendrot.app (purchased 2026-06-16)
 landing_secondary: matthewball.me/abendrot (301-redirect → abendrot.app)
-home_dir: /Users/ball/Documents/abendrot (canonical working dir going forward)
+home_dir: /Users/ball/Documents/abendrot/abendrot-build (private build repo; inside the workspace umbrella /Users/ball/Documents/abendrot)
 research_artifacts:
   - main sweep: docs/research/research-sweep-main.json (competitive, ux, naming, tech, analytics, marketing, science + synthesis)
   - stack sweep: docs/research/research-sweep-stack-exemplars.json (build-stack decision + exemplar app teardowns incl. Wispr Flow)
