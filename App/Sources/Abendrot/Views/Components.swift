@@ -62,10 +62,6 @@ struct MethodBadge: View {
 struct WarmSlider: View {
     @Binding var strength: Double
     var compact: Bool = false
-    /// Forwarded from the underlying `Slider` (true while dragging). Lets a caller suppress the
-    /// header's sliding-digit animation during a live drag so the Kelvin readout tracks the slider
-    /// 1:1 (direct manipulation) instead of trailing behind a per-frame transition.
-    var onEditingChanged: (Bool) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 9) {
@@ -77,7 +73,7 @@ struct WarmSlider: View {
                     .foregroundStyle(Theme.Color.textMuted)
             }
 
-            Slider(value: $strength, in: 0...1, onEditingChanged: onEditingChanged)
+            Slider(value: $strength, in: 0...1)
                 .controlSize(compact ? .small : .regular)
                 .tint(Theme.Color.accent)
 

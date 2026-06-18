@@ -15,11 +15,6 @@ struct PopoverView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openSettings) private var openSettings
 
-    /// True while the warmth slider is being dragged. During a drag the header's Kelvin readout
-    /// updates instantly (no sliding-digit transition) so it tracks the slider 1:1; the slide plays
-    /// only on settled / discrete changes (release, schedule shift, mode change).
-    @State private var isWarmthEditing = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -34,7 +29,7 @@ struct PopoverView: View {
             masterToggle
                 .padding(.bottom, 16)
 
-            WarmSlider(strength: globalWarmthBinding, onEditingChanged: { isWarmthEditing = $0 })
+            WarmSlider(strength: globalWarmthBinding)
                 .padding(.bottom, 14)
 
             DividerLine().padding(.bottom, 14)
@@ -88,9 +83,9 @@ struct PopoverView: View {
                     Text("Warming ·")
                     Text("\(kelvin)K")
                         .contentTransition(.numericText(value: Double(kelvin)))
-                        // Instant during a drag (track the slider 1:1); slide only on settled /
-                        // discrete changes. Reduce Motion → nil (the number just snaps).
-                        .animation(isWarmthEditing ? nil : Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin)
+                        // Slides the changed digits whenever the Kelvin changes — live during a
+                        // slider drag included. Reduce Motion → nil (the number just snaps).
+                        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin)
                 }
             } else {
                 Text(model.statusSummary)
