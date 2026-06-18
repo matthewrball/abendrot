@@ -19,6 +19,23 @@ struct AdvancedExpansion: View {
         VStack(alignment: .leading, spacing: 12) {
             DividerLine()
 
+            // Global schedule mode — moved out of the simple popover; defaults to Sunset until the
+            // user picks here.
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Mode")
+                    .font(Theme.Typography.ui(13, weight: .medium))
+                    .foregroundStyle(Theme.Color.textMuted)
+                ModeControl(
+                    selection: Binding(
+                        get: { ScheduleModeOption(model.state.scheduleMode) },
+                        set: { model.setScheduleMode($0.toScheduleMode()) }
+                    ),
+                    onChange: { _ in }
+                )
+            }
+
+            DividerLine()
+
             SectionLabel(text: "Per-display override & engine")
 
             ForEach(model.state.displays) { display in

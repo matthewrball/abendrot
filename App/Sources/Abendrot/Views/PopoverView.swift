@@ -31,25 +31,13 @@ struct PopoverView: View {
                 // header and footer dividers (each contributes 14pt) instead of bottom-heavy.
                 .padding(.bottom, model.state.isEnabled ? 16 : 0)
 
-            // The warmth slider + schedule mode control (and the divider between) are only meaningful
-            // while warming is on — the master toggle owns on/off. The whole group hides and
-            // re-reveals together with a soft blur-scale-fade, collapsing cleanly to just the footer
-            // divider when off.
+            // The warmth slider is only meaningful while warming is on — the master toggle owns
+            // on/off — so it hides and re-reveals with a soft blur-scale-fade. (Schedule mode lives
+            // in the Advanced section now and defaults to Sunset.)
             if model.state.isEnabled {
-                VStack(alignment: .leading, spacing: 0) {
-                    WarmSlider(strength: globalWarmthBinding, kelvin: model.globalKelvin)
-                        .padding(.bottom, 14)
-                    DividerLine().padding(.bottom, 14)
-                    Text("Mode")
-                        .font(Theme.Typography.ui(13, weight: .medium))
-                        .foregroundStyle(Theme.Color.textMuted)
-                        .padding(.bottom, 8)
-                    ModeControl(selection: modeBinding) { option in
-                        model.setScheduleMode(option.toScheduleMode())
-                    }
+                WarmSlider(strength: globalWarmthBinding, kelvin: model.globalKelvin)
                     .padding(.bottom, 16)
-                }
-                .transition(.softReveal)
+                    .transition(.softReveal)
             }
 
             displaySection
@@ -201,10 +189,12 @@ struct PopoverView: View {
 
             Spacer()
 
-            // Subtle reveal hint (plan §4.1 footer).
-            Text("Reveal True Color: ⌥⌘T (hold)")
-                .font(Theme.Typography.ui(10.5))
-                .foregroundStyle(Theme.Color.textFaint)
+            // Subtle reveal hint — only while warming is on (reveal does nothing when off).
+            if model.state.isEnabled {
+                Text("Reveal True Color: ⌥⌘T (hold)")
+                    .font(Theme.Typography.ui(10.5))
+                    .foregroundStyle(Theme.Color.textFaint)
+            }
 
             Spacer()
 
@@ -240,13 +230,6 @@ struct PopoverView: View {
 
     private var globalWarmthBinding: Binding<Double> {
         Binding(get: { model.state.globalWarmth.strength }, set: { model.setGlobalWarmth($0) })
-    }
-
-    private var modeBinding: Binding<ScheduleModeOption> {
-        Binding(
-            get: { ScheduleModeOption(model.state.scheduleMode) },
-            set: { model.setScheduleMode($0.toScheduleMode()) }
-        )
     }
 }
 

@@ -244,6 +244,9 @@ public actor WarmthEngine {
 
     /// Suspend warmth across ALL displays (true colour). Idempotent.
     public func beginReveal() async {
+        // Reveal is meaningless while warming is off (nothing to reveal-from), so the hotkey is
+        // effectively disabled until "Warm my displays" is on.
+        guard box.value.isEnabled else { return }
         guard !box.value.isRevealing else { return }
         box.value.isRevealing = true
         await reapply()
