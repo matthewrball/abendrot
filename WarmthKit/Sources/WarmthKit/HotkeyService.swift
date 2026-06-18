@@ -32,14 +32,20 @@ public final class HotkeyService {
 
     /// Install the reveal hotkey (default ⌥⌘T; configurable; supports HOLD and TOGGLE).
     public func installRevealHotkey() {
+        // Bind the default ⌥⌘T on first launch. `KeyboardShortcuts` fires its handlers ONLY when a
+        // shortcut is assigned to the name — without this the hotkey is unbound and NOTHING triggers
+        // reveal (not ⌥⌘T, not any combo). Carbon `RegisterEventHotKey` underneath, so no
+        // Accessibility permission is needed. Respect a user override: only set when none exists.
+        if KeyboardShortcuts.getShortcut(for: .revealTrueColor) == nil {
+            KeyboardShortcuts.setShortcut(.init(.t, modifiers: [.option, .command]), for: .revealTrueColor)
+        }
         KeyboardShortcuts.onKeyDown(for: .revealTrueColor) { [weak self] in
             self?.handleKeyDown()
         }
         KeyboardShortcuts.onKeyUp(for: .revealTrueColor) { [weak self] in
             self?.handleKeyUp()
         }
-        // TODO(milestone): expose binding configuration UI; set the ⌥⌘T default shortcut on
-        // first launch if the user hasn't customised it.
+        // TODO(settings): expose a KeyboardShortcuts.Recorder + Hold/Toggle picker so users can rebind.
     }
 
     // MARK: Key handling
