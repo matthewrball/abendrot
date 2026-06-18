@@ -10,11 +10,13 @@ struct GammaClassifierTests {
     private func env(
         appleSilicon: Bool,
         os: Int,
+        proClass: Bool = false,
         privateAPIs: Bool = true
     ) -> GammaClassifier.Environment {
         GammaClassifier.Environment(
             isAppleSilicon: appleSilicon,
             osMajorVersion: os,
+            appleSiliconIsProClass: proClass,
             privateAPIsEnabled: privateAPIs
         )
     }
@@ -32,22 +34,24 @@ struct GammaClassifierTests {
         }
     }
 
-    @Test("Apple Silicon + macOS 26 (Tahoe) → unsupported, gammaBrokenOnThisOS")
-    func appleSiliconTahoeBroken() {
-        let cap = GammaClassifier.classify(env(appleSilicon: true, os: 26))
+    @Test("base Apple Silicon + macOS 26 (Tahoe) → SUPPORTED (transfer table works on base M-series)")
+    func appleSiliconBaseTahoeSupported() {
+        #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 26))))
+        #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 27))))
+    }
+
+    @Test("high-end Apple Silicon (Pro/Max/Ultra) + macOS ≥ 26 → unsupported, gammaBrokenOnThisOS")
+    func appleSiliconProClassTahoeBroken() {
+        let cap = GammaClassifier.classify(env(appleSilicon: true, os: 26, proClass: true))
         #expect(!isSupported(cap))
         #expect(reason(cap) == .gammaBrokenOnThisOS)
+        #expect(reason(GammaClassifier.classify(env(appleSilicon: true, os: 30, proClass: true))) == .gammaBrokenOnThisOS)
     }
 
-    @Test("Apple Silicon + any macOS ≥ 26 stays broken (denylisted forward)")
-    func appleSiliconFutureBroken() {
-        #expect(reason(GammaClassifier.classify(env(appleSilicon: true, os: 27))) == .gammaBrokenOnThisOS)
-        #expect(reason(GammaClassifier.classify(env(appleSilicon: true, os: 30))) == .gammaBrokenOnThisOS)
-    }
-
-    @Test("Apple Silicon on a pre-26 OS → supported (transfer table still takes effect)")
+    @Test("Apple Silicon on a pre-26 OS → supported (even Pro/Max — the regression is ≥ 26 only)")
     func appleSiliconPre26Supported() {
         #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 25))))
+        #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 25, proClass: true))))
         #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 15))))
     }
 
@@ -64,15 +68,34 @@ struct GammaClassifierTests {
         #expect(!isSupported(intel))
         #expect(reason(intel) == .osDenylisted)
         // Apple Silicon Tahoe with kill switch is still unsupported (kill switch checked first).
-        let asTahoe = GammaClassifier.classify(env(appleSilicon: true, os: 26, privateAPIs: false))
+        let asTahoe = GammaClassifier.classify(env(appleSilicon: true, os: 26, proClass: true, privateAPIs: false))
         #expect(reason(asTahoe) == .osDenylisted)
     }
 
-    @Test("the broken-OS boundary is exactly macOS 26")
+    @Test("the broken-OS boundary is exactly macOS 26 for the Pro/Max bracket")
     func boundaryIs26() {
         #expect(GammaClassifier.firstBrokenAppleSiliconOSMajor == 26)
-        #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 25))))
-        #expect(!isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 26))))
+        // Pro/Max: supported at 25, broken at 26.
+        #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 25, proClass: true))))
+        #expect(!isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 26, proClass: true))))
+        // Base M-series: supported on both sides of the boundary.
+        #expect(isSupported(GammaClassifier.classify(env(appleSilicon: true, os: 26))))
+    }
+
+    @Test("base-chip brand detection: only 'Apple M<n>' is base; Pro/Max/Ultra + unknown fail safe")
+    func baseBrandDetection() {
+        // Confirmed base M-series → base (gamma allowed).
+        for base in ["Apple M1", "Apple M2", "Apple M3", "Apple M4", "Apple M5"] {
+            #expect(GammaClassifier.isBaseAppleSiliconBrand(base), "\(base) should be base")
+        }
+        // Pro/Max/Ultra → NOT base (gamma denied → overlay floor).
+        for hi in ["Apple M5 Pro", "Apple M2 Max", "Apple M2 Ultra", "Apple M4 Max"] {
+            #expect(!GammaClassifier.isBaseAppleSiliconBrand(hi), "\(hi) should not be base")
+        }
+        // Format drift / unreadable / non-Apple → fail SAFE to not-base (deny gamma).
+        for weird in ["AppleM5Pro", "Apple M", "Apple M5x", "", "Intel(R) Core(TM) i7"] {
+            #expect(!GammaClassifier.isBaseAppleSiliconBrand(weird), "\(weird) should fail safe to not-base")
+        }
     }
 }
 

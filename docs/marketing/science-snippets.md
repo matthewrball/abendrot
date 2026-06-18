@@ -61,13 +61,13 @@ The light level needed to suppress melatonin by half ranges from roughly **6 lux
 
 Ophthalmologists find no good evidence that the blue light from screens damages your eyes or causes macular degeneration. Digital eye strain — tired, dry eyes after a long session — comes mainly from reduced blinking and focusing effort, and it causes no lasting damage.
 
-> Source: American Academy of Ophthalmology, "Should You Be Worried About Blue Light?" (reviewed 2024). https://www.aao.org/eye-health/tips-prevention/should-you-be-worried-about-blue-light
+> Source: American Academy of Ophthalmology, "Should You Be Worried About Blue Light?" (accessed 2026). https://www.aao.org/eye-health/tips-prevention/should-you-be-worried-about-blue-light
 
 ### 7. The 20-20-20 habit
 
 For tired eyes, the evidence-aligned moves aren't about blue light at all: every **20 minutes**, look at something at least **20 feet** away for at least **20 seconds**, and remember to blink and take breaks.
 
-> Source: American Academy of Ophthalmology, "Eye Strain: How to Prevent Tired Eyes" (reviewed 2024) — states the 20-20-20 rule verbatim. https://www.aao.org/eye-health/diseases/what-is-eye-strain
+> Source: American Academy of Ophthalmology, "Eye Strain: How to Prevent Tired Eyes" (accessed 2026) — states the 20-20-20 rule verbatim. https://www.aao.org/eye-health/diseases/what-is-eye-strain
 
 ---
 
@@ -115,8 +115,8 @@ A trustworthy science panel says the unflattering parts too. These are good to s
 | 7 | Chellappa et al. (2011) | _PLoS ONE_ 6(1):e16429 | blue-enriched light & alertness |
 | 8 | Hoehn et al. (2024) | _Brain Communications_ 6(3):fcae173 | real-world effects small/mixed |
 | 9 | Singh et al. (2023) | _Cochrane_ CD013244 | blue-blocking lenses unproven |
-| 10 | AAO (2024) | aao.org | screens don't damage eyes; eye-strain guidance |
-| 11 | AAO (2024) | aao.org | 20-20-20 rule |
+| 10 | AAO (accessed 2026) | aao.org | screens don't damage eyes; eye-strain guidance |
+| 11 | AAO (accessed 2026) | aao.org | 20-20-20 rule |
 
 <!-- [FLAG] Every published health snippet should get a final hedged-language review before going
      live on any public surface (README, landing page, app). No medical claims; cite-don't-assert. -->

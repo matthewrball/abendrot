@@ -120,6 +120,11 @@ public actor WarmthEngine {
             value: WarmthState(
                 isEnabled: false,
                 scheduleMode: configuration.defaultScheduleMode,
+                // A sensible non-zero default so flipping the master toggle visibly warms even
+                // before the user touches the slider. At the default warmest point this lands
+                // around a comfortable ~3400K evening warmth, with headroom to go warmer or softer.
+                // (§25: "enabled but never warms" — zero default warmth was a root cause.)
+                globalWarmth: WarmthLevel(strength: 0.65),
                 warmestPoint: configuration.defaultWarmestPoint,
                 privateAPIsEnabled: configuration.startWithPrivateAPIsEnabled
             )
@@ -454,7 +459,7 @@ public actor WarmthEngine {
                 hardware: mapToDDCCaps(hardwareCap),
                 gamma: gammaCap,
                 overlay: overlayCap,
-                recommendedMethod: recommend(overlay: overlayCap, gamma: gammaCap, hardware: hardwareCap)
+                recommendedMethod: recommend(overlay: overlayCap, gamma: gammaCap, privateAPIsEnabled: box.value.privateAPIsEnabled)
             )
 
             // Preserve per-display settings across re-baseline: the live row if present, else the
@@ -647,9 +652,16 @@ public actor WarmthEngine {
     private func recommend(
         overlay: Capability<Void>,
         gamma: Capability<Void>,
-        hardware: Capability<Void>
+        privateAPIsEnabled: Bool
     ) -> DisplayMethod {
-        // Overlay is always the safe default; better layers are opt-in / proven later.
+        // The recommended *default* badge mirrors LayerResolver's automatic resolution BEFORE any
+        // DDC opt-in or user override: ANY display recommends gamma — the universal true white-point
+        // warm path — where supported (built-in or external); everything else defaults to the
+        // overlay floor. DDC is opt-in, so the hardware tier is deliberately excluded here — it only
+        // becomes the badge once the user enables it for a display. (§25.)
+        if privateAPIsEnabled, case .supported = gamma {
+            return .gamma
+        }
         if case .supported = overlay { return .overlay }
         return .off
     }

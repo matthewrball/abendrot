@@ -32,12 +32,18 @@ public struct WarmthLevel: Hashable, Sendable, Codable {
 
     /// Target CCT for a strength, given the user's configured warmest point.
     ///
-    /// Linear interpolation between neutral (strength 0) and the warmest point
-    /// (strength 1). Monotonically non-increasing in Kelvin as strength rises.
+    /// Interpolates in **mired** space (reciprocal megakelvin, M = 1e6/K), not Kelvin. Perceived
+    /// warmth — and, roughly, melanopic change — scale ~linearly with mireds, while equal Kelvin
+    /// steps near 6500K are nearly invisible and equal steps near 2700K are huge. A Kelvin-linear
+    /// ramp therefore feels dead through the first half of the slider then lurches warm; the
+    /// mired-linear ramp is perceptually even. Endpoints are unchanged (0 → neutral, 1 →
+    /// warmestPoint) and the result is monotonically non-increasing in Kelvin as strength rises.
+    /// (§25 melanopic research.)
     public func kelvin(warmestPoint: Kelvin) -> Kelvin {
-        let k = Double(Kelvin.neutral.value) -
-                strength * Double(Kelvin.neutral.value - warmestPoint.value)
-        return Kelvin(Int(k.rounded()))
+        let neutralMired = 1_000_000.0 / Double(Kelvin.neutral.value)
+        let warmestMired = 1_000_000.0 / Double(warmestPoint.value)
+        let mired = neutralMired + strength * (warmestMired - neutralMired)
+        return Kelvin(Int((1_000_000.0 / mired).rounded()))
     }
 }
 

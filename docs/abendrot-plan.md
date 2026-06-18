@@ -534,6 +534,158 @@ a policy change). If it truly no-ops → we need the path below.
 — either gamma works on this hardware (policy fix) or BetterDisplay's built-in technique is reproducible
 (new kill-switchable backend). The overlay was always meant to be the floor, not the product.
 
+### Session-5 addendum (2026-06-17) — run-2 symptom, the macl/FDA gotcha, the gamma probe, in-flight research
+
+Two things from the founder's runs that weren't yet in the docs (the files were write-locked at the
+time — see the gotcha below), now recorded:
+
+1. **Run-2 symptom — "no warming at all / app broken."** A later run showed not a weak tint but
+   *nothing*. Two non-exclusive causes, both now located in code (the live-path audit is verifying
+   which dominates):
+   - **Schedule-gating (most likely, and by design).** `WarmthEngine` computes
+     `engineOn = isEnabled && decision.isActiveNow && !isRevealing` (`WarmthEngine.swift:532`) and the
+     effective target is `.off` whenever `engineOn` is false (`:552`). The default `scheduleMode` is
+     `.followSystemNightShift` (`EngineConfiguration`, `EngineTypes.swift:18`). So if the founder's
+     **Night Shift is OFF or it is daytime**, `decision.isActiveNow == false` → the engine warms
+     NOTHING even though the toggle reads "enabled." That exactly reproduces "I turned it on and
+     nothing happened." **Isolate by setting Always-On + max warmth before concluding the engine is
+     broken.**
+   - **A macl-corrupt partial build.** The "broken" build may have been a half-written/locked artifact
+     from the macl issue below; a clean rebuild is the other half of the triage.
+
+2. **The macl / Full-Disk-Access gotcha (was build-blocking).** A prior agent's **sandboxed** bash
+   (xcodegen/xcodebuild/ditto) stamped `com.apple.macl` records on repo files under `~/Documents`, so
+   xcodegen/xcodebuild *and even editor writes* hit **"Operation not permitted"** (confirmed on
+   project.yml, scripts/dmg/plain-dmg.sh, project.pbxproj, this plan). **Fix:** System Settings →
+   Privacy & Security → **Full Disk Access** → enable Terminal (and Claude Code if building through
+   it) — FDA bypasses the macl. **Permanent alternative:** relocate the repo out of `~/Documents` (TCC
+   only guards Documents/Desktop/Downloads). **RULE: never build the app from a sandboxed agent —
+   build in the founder's FDA'd terminal.**
+   **Status (this session): FDA is CLEARED** — the previously-locked files now carry only
+   `com.apple.provenance` (the `com.apple.macl` is gone) and a repo write-test succeeds. The plan is
+   editable again.
+
+**Gamma reality-check probe — BUILT + type-checks clean (agenda step 1).**
+`scripts/probe/gamma-probe.swift` — a standalone Swift script (public CoreGraphics only; no private
+APIs, no entitlements, no app build) that **bypasses `GammaClassifier`** and calls
+`CGSetDisplayTransferByTable` directly on the **built-in** display, using the engine's *exact* warm
+curve (`rgbGain` + `GammaBackend.ramps`, copied verbatim). It sweeps 3400K → 2700K → 2000K → 1500K,
+~6s each, then auto-restores (Ctrl-C restores instantly). **The founder runs it** (it changes the real
+display, so it can't be run from an agent):
+```
+swift scripts/probe/gamma-probe.swift
+```
+Decision rule: screen visibly warms → **gamma works on this Mac**, and the fix is mostly a policy
+change (today gamma is auto-blocked on Apple-Silicon + macOS ≥ 26 by
+`GammaClassifier.firstBrokenAppleSiliconOSMajor = 26`, and `LayerResolver` never auto-selects gamma —
+only via override, and only when `.supported`). Nothing changes at any step → the no-op assumption
+holds → build BetterDisplay's private built-in path.
+
+**Session-5 in flight (background workflow):** (a) how BetterDisplay Pro / f.lux *truly* warm the
+built-in Apple panel on Tahoe (CoreDisplay private APIs → an implementable, kill-switchable backend);
+(b) the melanopic / blue-light benefit → warming curve + warmest-point default + §13-safe value-prop
+copy; (c) a live OverlayBackend/GammaBackend render-path audit (the 84 headless tests use fake
+backends, so a live regression would pass CI). Each stream is adversarially verified in a separate
+lane; findings fold into agenda steps 2–4.
+
+### Session-5 RESULTS (2026-06-17) — gamma confirmed, the real fix found, run-2 fully explained
+
+All three research/audit streams completed and were **adversarially verified `isSound` (high
+confidence)**; the built-in-warming stream was independently reproduced **on the founder's exact
+machine** (Apple **M5 MacBook Air, Mac17,3, macOS 26.5 build 25F71**). Headline outcomes:
+
+**1. Gamma WORKS on the founder's Mac — the classifier assumption was over-broad.** The founder's
+`gamma-probe.swift` sweep **visibly warmed** the built-in panel, and the research confirms why: the
+2026 gamma-no-op regression is **specific to M5 Pro/Max/Neo on macOS 26.3/26.4** (Apple DTS
+confirmed; FB22273730/FB22273782), and **base M5 / 26.5 round-trips correctly**. So
+`GammaClassifier`'s blanket *"Apple Silicon + macOS ≥ 26 → broken"* is wrong for base M-series.
+**Critical caveat (verifier):** a write+readback probe **cannot** detect the no-op (the bug makes
+`CGGetDisplayTransferByTable` read back the values you wrote while the pixels don't change) — so gamma
+must be gated by a **chip+OS allowlist or a visual check**, never a readback probe.
+
+**2. The superior, universal path: `CoreDisplay_SetWhitePointWithDuration(x, y, duration)`.** This is
+**Apple's own Night Shift / True Tone white-point mechanism** — a genuine white-point shift / blue
+removal (not an overlay, not the gamma LUT), so it is **immune to the Tahoe gamma no-op** and works
+even on the M5 Pro/Max where f.lux silently fails (a marketable wedge: *"warms the newest Macs where
+f.lux can't"*). Verified on-host: the symbol resolves, signature is
+`(double x, double y, double duration)`, it routes through `com.apple.CoreDisplay.master`, and
+**CoreBrightness (which implements Night Shift) imports it**. Shipping precedent: **Vimes** (iccir,
+MIT) uses it after `CBBlueLightClient setCCT:commit:`. No permission/entitlement. The founder's
+guessed symbols (`CoreDisplay_Display_SetUserColorMatrix`, `…SetGammaTable`, etc.) **do not exist** —
+the real color-matrix symbol is `CoreDisplay_SetAccessibilityMatrix` (lower priority). Pixel-level
+warming is **proven-mechanism but pending-visual** → settled by `whitepoint-probe.swift` (built,
+type-checks; founder runs it).
+
+**3. The "no warming / broken" run-2 is fully explained — and it was NOT an overlay regression**
+(393f300 *improved* the tint). Verified root causes, ranked:
+   - **Schedule-gating (primary).** Default `scheduleMode = .followSystemNightShift` →
+     `engineOn = isEnabled && decision.isActiveNow && …` is **false whenever the Night Shift follower
+     truthfully reports OFF** (daytime / Night Shift disabled). The degrade-to-evening-window fires
+     only when the follower is *unavailable* (`nil`), **not** when it reports a real `false`. So
+     enabling the app while Night Shift is off warms nothing. (`WarmthEngine.swift:515-532`,
+     `SchedulePolicy.swift:34-51`, `ScheduleResolver.swift:68-72`.)
+   - **`globalWarmth` defaults to `.off` (strength 0).** Flipping the toggle without dragging the
+     slider applies zero warmth. (`EngineTypes.swift:63`.)
+   - **No UI state persists** (only `launchAtLogin` + `softConfirmationTone`) → every launch resets to
+     disabled / off / follow-Night-Shift. A major "it worked then broke" contributor.
+   - **Stale on-disk build** (Debug bundle predates the M2 `@escaping` crash-fix) → could crash at
+     launch. Rebuild fresh.
+
+**4. Curve + warmest-point (verified science).** The strength→Kelvin map is **Kelvin-linear** today
+(`WarmthLevel.kelvin`) → "feels dead through the first half, then lurches warm." Fix: **mired-linear**
+(`M = 1e6/K`). Warmest-point should be **2700K max / ~3400K default** (1900K is candle-territory and
+invites the "just orange" verdict — keep `Kelvin.warmestSupported = 1900` only as the internal clamp).
+6500K→2700K removes ≈60% of per-lumen melanopic content (typical display white points, equal
+luminance) — a claim that is **honest only for the gamma/DDC/white-point path, not the overlay tint**.
+Couple an optional dim nudge (warming without dimming blunts the benefit). Doc fixes: AAO citation is
+**reviewed 2021, not 2024** (`science-snippets.md` L64/70/118-119); clean the Hoehn author string.
+
+### Reframed §25 plan (priority order)
+
+- **P0 — "enabling actually warms something visible":** fix schedule-gating (follow the sunset
+  *window*, not the on/off flag), warmth-on-enable default, and persist UI state. (§25.B)
+- **P1 — "it truly warms (removes blue), not a tint":** add the **CoreDisplay white-point backend**
+  (universal, gamma-immune) as the top-tier built-in path; re-enable **gamma for base M-series** via a
+  chip+OS-aware classifier; demote overlay to the genuine floor; honest in-UI "tint only" note where
+  neither is available. (§25.F — gated on the white-point probe)
+- **P2 — feel:** mired-linear curve + 2700K-max/3400K-default warmest point. (§25.D/E)
+- **P3 — hygiene:** rebuild fresh + version stamp; a non-headless live-overlay smoke test (the 84
+  headless tests use fakes and never touch NSPanel/CALayer); doc citation fixes. (§25.G/H)
+
+Full verified output (all three streams + verdicts): the Session-5 workflow result file.
+
+### Session-5 RESULTS part 2 (2026-06-17) — external gamma works → gamma is the UNIVERSAL warm path
+
+Founder ran `scripts/probe/gamma-probe-external.swift` (applies the gamma ramp to every display at
+once): the **external LG UltraFine warmed via gamma just like the built-in** on the base M5. This
+disproves the plan's standing assumption (§6.2) that "external gamma is flaky/dead on Apple Silicon"
+— the same untested-assumption pattern as the built-in. **Decision: gamma is the universal true-warm
+default for ANY display where the transfer table is supported** (built-in + external), not built-in
+only. Why this matters beyond unifying the two displays:
+
+- **Gamma is OS-level and display-agnostic** — it needs no per-monitor capability, so it's far more
+  universal than DDC (which needs each monitor to implement RGB-gain VCP, which many don't).
+- **It is the ONLY true-warm path for buttonless Apple displays** (LG UltraFine, Studio Display, Pro
+  Display XDR), which expose no DDC gain VCP. This is precisely the §2.2 differentiator ("warms the
+  UltraFine / Studio Display / Pro Display XDR where f.lux/Night Shift fail"). DDC literally cannot
+  warm them; gamma can.
+
+**New layered model** (supersedes the §6.2 "DDC-first for externals" table):
+
+| Display / chip | Automatic default | Opt-in upgrade | Floor |
+|---|---|---|---|
+| Any display, gamma supported (base M-series / Intel / pre-26) | **gamma** (true warm) | DDC (external, hardware) | overlay |
+| External, gamma broken (M5 Pro/Max/Ultra) | overlay | DDC (if monitor supports gain) | overlay |
+| Built-in, gamma broken (M5 Pro/Max/Ultra) | overlay | — | overlay |
+
+`LayerResolver` order is now: override → DDC (opt-in, external) → **gamma (any display, supported)** →
+overlay floor. DDC stays valuable as the opt-in hardware upgrade and as the external true-warm path
+for the gamma-broken Pro/Max bracket. **Universality caveat (honest):** gamma is verified on this base
+M5 (built-in + UltraFine); it's OS-level so it should generalize, but specific monitor/GPU/connection
+combos could still no-op — mitigated by the DDC opt-in escape, the overlay floor, the honest method
+badge, and the planned one-tap "did this warm?" onboarding check (the real safety net, since a
+readback probe can't detect a silent no-op). Implemented + 91 tests green; adversarially reviewed.
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **Open #1 priority: §25 warming-mechanism overhaul (next session).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
