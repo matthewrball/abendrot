@@ -240,13 +240,16 @@ struct DisplayRow: View {
                         .foregroundStyle(tintOnly ? Theme.Color.accentHighlight : Theme.Color.textFaint)
                 }
                 Spacer()
-                // "Custom warmth" override toggle — no engine/method jargon. Off = follows global.
+                Text("Override")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                // Per-display override toggle — off = follows global warmth.
                 Toggle("", isOn: overrideBinding)
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .tint(Theme.Color.accent)
-                    .accessibilityLabel("Custom warmth for \(display.name)")
+                    .accessibilityLabel("Override warmth for \(display.name)")
             }
 
             // The per-display slider exists only while the override is on, revealed calmly below.
