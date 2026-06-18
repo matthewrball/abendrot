@@ -61,13 +61,28 @@ struct PopoverView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            SunsetArcGlyph()
+            appIcon
                 .frame(width: 22, height: 22)
             Text("Abendrot")
                 .font(Theme.Typography.serif(15))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
             statusReadout
+        }
+    }
+
+    /// The real app icon (the sunset squircle), so the dropdown header matches the Dock/Finder icon
+    /// instead of the simplified menu-bar glyph. Falls back to the vector glyph if the icon image
+    /// can't be loaded. (The menu-bar status item keeps the template glyph — a full-colour squircle
+    /// there would break the monochrome menu-bar convention.)
+    @ViewBuilder private var appIcon: some View {
+        if let icon = NSImage(named: NSImage.applicationIconName) {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+        } else {
+            SunsetArcGlyph()
         }
     }
 
