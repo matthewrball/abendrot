@@ -130,10 +130,12 @@ struct PopoverView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(Theme.Typography.ui(12))
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentPress)
             Text("True warming isn’t available on this Mac, so your displays are being tinted rather than truly warmed — a known limitation on some Apple-silicon chips and macOS versions.")
                 .font(Theme.Typography.ui(11))
-                .foregroundStyle(Theme.Color.textMuted)
+                // Dark ink on the light-amber fill (same contrast convention as the method badges),
+                // so the banner is legible. (§25.J — readability fix.)
+                .foregroundStyle(Theme.Color.groundIndigo)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(11)

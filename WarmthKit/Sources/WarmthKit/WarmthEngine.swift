@@ -121,11 +121,11 @@ public actor WarmthEngine {
                 isEnabled: false,
                 scheduleMode: configuration.defaultScheduleMode,
                 // A sensible non-zero default so flipping the master toggle visibly warms even
-                // before the user touches the slider. With the warmest point at ~1000K (deep
-                // firelight) this lands around a comfortable ~2700K evening warmth, leaving most of
-                // the slider as headroom to go MUCH warmer toward the firelight end, or softer.
-                // (§25: "enabled but never warms" + founder wants a much warmer max.)
-                globalWarmth: WarmthLevel(strength: 0.25),
+                // before the user touches the slider. With the warmest point now at the ~500K
+                // near-pure-red extreme, this lands around a comfortable ~2400K evening warmth, with
+                // the upper slider reserved for the deep extreme (blue is already 0 by ~1900K; the
+                // warmest end keeps removing green). (§25: founder wants the absolute-max extreme.)
+                globalWarmth: WarmthLevel(strength: 0.15),
                 warmestPoint: configuration.defaultWarmestPoint,
                 privateAPIsEnabled: configuration.startWithPrivateAPIsEnabled
             )

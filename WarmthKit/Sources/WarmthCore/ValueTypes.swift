@@ -4,16 +4,17 @@ import Foundation
 
 /// Correlated colour temperature, clamped to a sane display range. Neutral = 6500K.
 ///
-/// The clamp range is 1000...6500: 6500K is the neutral white point and the warmest
-/// value we ever drive a panel to is well above 1000K, but the type keeps a generous
-/// floor so callers can never construct an out-of-range temperature.
+/// The clamp range is 500...6500: 6500K is the neutral white point; ~500K is the warmest
+/// extreme we expose (near-pure red — blue is already fully removed by ~1900K, so below that
+/// only green keeps falling). The type floors at 500 so callers can never construct an
+/// out-of-range temperature.
 public struct Kelvin: Hashable, Sendable, Comparable, Codable {
     public static let neutral = Kelvin(6500)
-    public static let warmestSupported = Kelvin(1000)   // warmest the slider can reach (deep firelight)
+    public static let warmestSupported = Kelvin(500)   // warmest the slider can reach (near-pure red)
 
     public let value: Int
 
-    public init(_ value: Int) { self.value = min(6500, max(1000, value)) }
+    public init(_ value: Int) { self.value = min(6500, max(500, value)) }
 
     public static func < (l: Kelvin, r: Kelvin) -> Bool { l.value < r.value }
 }
