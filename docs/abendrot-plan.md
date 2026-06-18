@@ -818,6 +818,67 @@ now plain-language ("Can only add a colour tint on this display").
 (still shows method badges + DDC/layer controls — move to a "Displays → Advanced" compatibility section);
 contract-doc touch-up; §25.J app-level banner; §25.K hardware matrix; then the gated public push.
 
+## 27. Execution Log — Session 8 (2026-06-18): settings de-jargon, popover swap, real Sunset
+
+Founder-dogfooding wave on top of Session 7. **4 build-repo commits** (`d66265d`→`70c55fc`); all
+verified **95/21 WarmthKit tests green + app BUILD SUCCEEDED**; one combined separate-lane code-review
+(`APPROVE-WITH-NITS`, all findings applied). **Nothing pushed** — public gate held; founder visual
+sign-off pending on the combined Session 7+8 Release build.
+
+**Settings de-jargon (§26 #2 — DONE).** The gear Settings window dropped all engine jargon: removed
+the per-display method badges + "Recommended: Gamma" and the raw "Enable private-API paths (DDC +
+Night Shift follow)" toggle. **Settings → Displays** is now a plain-language compatibility view —
+per-display status ("Truly warmed — removes blue light" / "Can only be tinted on this Mac…") + a
+per-display **Advanced** disclosure with a warming-method picker using Codex's labels (**Automatic /
+Standard / Screen tint / Hardware control** → engine `preferredMethod` nil/.gamma/.overlay/.hardware),
+offering only the methods that display can use (so an incompatible display shows fewer options; the
+option set itself tells the compatibility story). "Hardware control" is the explicit DDC opt-in
+(enables `isHardwareDDCEnabled`). Settings → Advanced kill switch reworded to "Use advanced warming
+methods". Removed the now-dead `MethodBadge`. `AppModel.setPreferredMethod` now updates
+`preferredMethod` optimistically so the picker tracks taps. **Frozen contract doc** updated for the
+additive `DisplayState.warmthOverridden` + `setWarmthOverride(_:for:)` (§26 #3 — DONE).
+
+**Popover Mode↔Displays swap (founder).** The schedule **Mode** control moved OUT of the advanced
+(chevron) expansion INTO the simple view (under the warmth slider, inside the master-toggle reveal
+group); the per-display **Override** rows moved the other way, INTO the advanced expansion. The
+tint-only test was hoisted from PopoverView to **`AppModel.isTintOnly`** as the single source of truth
+shared by the app-level incompatibility banner (simple view) and the moved per-display rows.
+
+**Sunset mode now warms at the user's REAL sunset + a ramp (founder ⭐).** A read-only architect
+investigation found "Sunset" never computed a sunset: `ScheduleModeOption.followSunset` maps to
+`.followSystemNightShift`, which follows Night Shift's on/off boolean and — when Night Shift is OFF
+(the common case for an app that *replaces* it) — fell back to a **hardcoded 20:00→06:00 wall-clock
+window**, not solar. A correct NOAA solar calculator already existed (`ScheduleResolver`) but was
+unreachable from the UI and never fed coordinates (no CoreLocation, no timezone→coord logic). The fix:
+- **`TimeZoneCoordinates`** (new, pure WarmthCore): ~100-zone IANA table → representative coords, with
+  a UTC-offset-longitude fallback (DST-corrected to the standard meridian) for unlisted zones. **Zero
+  permission, no network** — the founder's chosen approach over CoreLocation (keeps the no-permission
+  positioning; ±~20 min vs the old fixed clock).
+- **`ScheduleResolver.solarRampDecision` + `rampFactor`**: warmth eases in from solar elevation +6°,
+  reaches full at the −0.833° sunset horizon, holds through the night, eases back at sunrise. The
+  `.solar` case and the degrade path both use it.
+- **`WarmthEngine`**: `reapply` feeds the live system-timezone coordinate (live mode only — hermetic
+  tests pass nil so the fixed-window degrade stays deterministic); a **60s ramp ticker** (change-gated
+  publish) advances the ramp over the evening, since Night Shift OFF emits no notifications.
+- **Founder decision (review M1): Sunset ALWAYS uses the real-sunset ramp** when a coordinate is
+  available (always, in production), **regardless of Night Shift** — Abendrot computes its own sunset
+  rather than deferring to NS. The NS-follow / fixed-window path remains only as the no-coordinate
+  fallback (hermetic tests, unresolvable zone), so all existing degrade tests are unchanged.
+
+**"Schedule" (manual custom-time) mode dropped (founder).** It was an unbuilt stub (a hardcoded
+provisional window, no editor). Mode is now **Sunset / Always on**. The engine's `.custom` case is
+kept dormant (frozen-contract, still tested) so a real custom-schedule editor can return later with no
+re-plumbing; `ScheduleModeOption.init` maps a persisted `.custom` → Sunset.
+
+**Review (APPROVE-WITH-NITS) findings applied:** M1 above; M2 — the offset fallback now uses the
+DST-corrected standard meridian; N1/N2/N3 — stale comments (4-mode list, removed-MethodBadge ref,
+`.solar` dormancy note). Lows were by-design (mid-ramp Kelvin readout deliberately not surfaced,
+defensive degenerate-window guard, two-Task hardware-control transition) — no change.
+
+**Still open (next session):** founder visual sign-off; §25.J app-level banner UX (founder-owned);
+§25.K hardware matrix (now incl. Sunset-timing spot-checks); wire the per-app-exclusions +
+reveal-during-captures stubs; then the gated public push.
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
