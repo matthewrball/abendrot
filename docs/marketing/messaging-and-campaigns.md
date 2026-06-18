@@ -71,6 +71,11 @@ Calm, honest, anti-hype, evidence-led, privacy-respecting. The app should feel l
 
 ## 3. Taglines (all §13-safe)
 
+**Canonical brand descriptor (founder pick, 2026-06-18 — use for GitHub About, meta titles, README lead, directory listings):**
+> **Abendrot — a macOS app for your circadian rhythm.**
+>
+> Positioning, not a health-outcome claim (keep the "general wellness, not medical" framing nearby). This descriptor drops the "every display" differentiator, so always carry the moat in the adjacent line/subhead (e.g. "warms your screen on every display"). The evocative line (#2 below) stays the emotional hero.
+
 1. ⭐ **Warm every display. Read every line.** *(reliability + open-source, the two demonstrable truths)*
 2. ⭐ **Your screen, warming with the evening — on every display.** *(plan §1 north star, no health overclaim)*
 3. ⭐ **The warmth app that still works on your newest Mac.** *(plan §2.2 #5; grounded in §25: gamma/white-point warm where f.lux silently fails)*
