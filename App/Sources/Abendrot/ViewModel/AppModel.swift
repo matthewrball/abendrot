@@ -221,8 +221,12 @@ final class AppModel {
     }
 
     func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) {
-        if let method, let i = state.displays.firstIndex(where: { $0.id == id }) {
-            state.displays[i].appliedMethod = method
+        if let i = state.displays.firstIndex(where: { $0.id == id }) {
+            // Reflect the user's *choice* immediately so the method picker tracks taps without lag.
+            // The engine re-resolves and republishes the actually-applied method (which can differ
+            // if the chosen layer isn't usable). nil = automatic best-available.
+            state.displays[i].preferredMethod = method
+            if let method { state.displays[i].appliedMethod = method }
         }
         Task { await engine?.setPreferredMethod(method, for: id) }
     }

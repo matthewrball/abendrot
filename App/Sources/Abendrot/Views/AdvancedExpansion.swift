@@ -8,8 +8,8 @@ import WarmthKit
 //
 // Per-display "Custom warmth" now lives on the display rows in the main popover (a simple toggle +
 // slider, no jargon). The engine internals (warming method, hardware DDC) were removed from the
-// popover entirely — they're troubleshooting/compatibility details, not daily menu-bar UX, and
-// belong in the Settings window. (TODO(settings): a "Displays → Advanced" compatibility section.)
+// popover entirely — they're troubleshooting/compatibility details, not daily menu-bar UX, and now
+// live in the Settings window's "Displays → (per-display) Advanced" compatibility section.
 struct AdvancedExpansion: View {
     @Bindable var model: AppModel
 

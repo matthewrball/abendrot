@@ -223,8 +223,10 @@ private struct DisplaysTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "Displays", subtitle: "Each connected display and how it's warmed.")
-            ForEach(model.state.displays) { display in
-                AdvancedDisplayRowProxy(display: display, model: model)
+            VStack(spacing: 12) {
+                ForEach(model.state.displays) { display in
+                    DisplayConfigRow(display: display, model: model)
+                }
             }
             DividerLine()
             Button(role: .destructive) {
@@ -232,30 +234,223 @@ private struct DisplaysTab: View {
             } label: {
                 Label("Restore all displays to neutral", systemImage: "arrow.counterclockwise")
             }
-            Text("Emergency reset: returns every display to true colour via every layer. Always available.")
+            Text("Emergency reset: returns every display to true colour. Always available.")
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textFaint)
         }
     }
 }
 
-/// Reuses the advanced per-display row idiom inside Settings → Displays.
-private struct AdvancedDisplayRowProxy: View {
+/// One display in Settings → Displays: its name, a plain-language status of whether it can be truly
+/// warmed or only tinted, and a per-display "Advanced" disclosure revealing the warming-method
+/// picker. This *is* the "Displays → Advanced" compatibility section — the engine/method jargon
+/// (gamma / DDC / overlay badges) that used to sit on these rows is now expressed in plain language
+/// here and nowhere else. (§26 Settings de-jargon.)
+private struct DisplayConfigRow: View {
     let display: DisplayState
     @Bindable var model: AppModel
+    @State private var showAdvanced = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(display.name).font(Theme.Typography.ui(13))
-                    .foregroundStyle(Theme.Color.textPrimary)
-                Text("Recommended: \(display.capabilities.recommendedMethod.badge)")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(display.name)
+                        .font(Theme.Typography.ui(13, weight: .medium))
+                        .foregroundStyle(Theme.Color.textPrimary)
+                    Text(statusLine)
+                        .font(Theme.Typography.ui(11.5))
+                        .foregroundStyle(canTrueWarm ? Theme.Color.textMuted : Theme.Color.accentHighlight)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Button {
+                    withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
+                        showAdvanced.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("Advanced").font(Theme.Typography.ui(11))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .rotationEffect(.degrees(showAdvanced ? 180 : 0))
+                    }
+                    .foregroundStyle(Theme.Color.textMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showAdvanced
+                    ? "Hide advanced options for \(display.name)"
+                    : "Show advanced options for \(display.name)")
+            }
+
+            if showAdvanced {
+                WarmingMethodPicker(display: display, model: model)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .background(Theme.Color.line.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: showAdvanced)
+    }
+
+    /// A display can be *truly* warmed when a real white-point path is available — gamma or hardware
+    /// DDC — with advanced methods enabled. Otherwise it can only be tinted. (Mirrors the popover's
+    /// `isTintOnly`, §25.J.)
+    private var canTrueWarm: Bool {
+        let priv = model.state.privateAPIsEnabled
+        return priv && (isSupported(display.capabilities.gamma) || isSupported(display.capabilities.hardware))
+    }
+
+    private var statusLine: String {
+        canTrueWarm
+            ? "Truly warmed — removes blue light"
+            : "Can only be tinted on this Mac — true warming isn’t available for this display"
+    }
+
+    private func isSupported<T>(_ cap: Capability<T>) -> Bool {
+        if case .supported = cap { return true }
+        return false
+    }
+}
+
+// MARK: - Warming-method picker (plain-language per-display layer choice)
+
+/// The de-jargoned per-display warming-method control. Plain labels (Codex): **Automatic /
+/// Standard / Screen tint / Hardware control** map onto the engine's `DisplayMethod` override.
+/// Only methods actually usable for this display are offered, so the available options themselves
+/// communicate what the hardware/OS supports (an incompatible display offers only Automatic +
+/// Screen tint). (§26 Settings de-jargon.)
+private struct WarmingMethodPicker: View {
+    let display: DisplayState
+    @Bindable var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Warming method")
+                .font(Theme.Typography.ui(11.5, weight: .medium))
+                .foregroundStyle(Theme.Color.textMuted)
+
+            Picker("Warming method", selection: choiceBinding) {
+                ForEach(availableChoices) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Text(choiceBinding.wrappedValue.description)
+                .font(Theme.Typography.ui(11))
+                .foregroundStyle(Theme.Color.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let note = unavailableNote {
+                Text(note)
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            MethodBadge(method: display.appliedMethod)
         }
-        .padding(.vertical, 4)
+        .padding(.top, 2)
+    }
+
+    /// The methods offered for this display, in Codex's order, filtered to what's usable right now.
+    private var availableChoices: [WarmingMethodChoice] {
+        let priv = model.state.privateAPIsEnabled
+        var choices: [WarmingMethodChoice] = [.automatic]
+        if priv, isSupported(display.capabilities.gamma) { choices.append(.standard) }
+        choices.append(.screenTint)                                     // overlay is always available
+        if priv, isSupported(display.capabilities.hardware) { choices.append(.hardwareControl) }
+        return choices
+    }
+
+    private var choiceBinding: Binding<WarmingMethodChoice> {
+        Binding(
+            get: {
+                let current = WarmingMethodChoice(display.preferredMethod)
+                return availableChoices.contains(current) ? current : .automatic
+            },
+            set: { apply($0) }
+        )
+    }
+
+    /// "Hardware control" is the explicit DDC opt-in, so selecting it enables DDC for this display;
+    /// every other choice turns DDC back off (DDC is opt-in per display — contract invariant #2).
+    private func apply(_ choice: WarmingMethodChoice) {
+        switch choice {
+        case .hardwareControl:
+            model.setHardwareDDCEnabled(true, for: display.id)
+            model.setPreferredMethod(.hardware, for: display.id)
+        default:
+            model.setHardwareDDCEnabled(false, for: display.id)
+            model.setPreferredMethod(choice.preferredMethod, for: display.id)
+        }
+    }
+
+    private var unavailableNote: String? {
+        let priv = model.state.privateAPIsEnabled
+        if !priv {
+            return "Advanced warming methods are turned off in Advanced, so only a screen tint is available."
+        }
+        if !isSupported(display.capabilities.gamma), !isSupported(display.capabilities.hardware) {
+            return "This display can’t be truly warmed on this Mac — only a screen tint is available."
+        }
+        return nil
+    }
+
+    private func isSupported<T>(_ cap: Capability<T>) -> Bool {
+        if case .supported = cap { return true }
+        return false
+    }
+}
+
+/// Plain-language names for the per-display warming method (Settings → Displays → Advanced). Maps to
+/// the engine's `DisplayMethod` override: Automatic = best-available (nil), Standard = gamma (the OS
+/// white-point true-warm), Screen tint = overlay, Hardware control = DDC.
+private enum WarmingMethodChoice: String, CaseIterable, Identifiable {
+    case automatic, standard, screenTint, hardwareControl
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .automatic: return "Automatic"
+        case .standard: return "Standard"
+        case .screenTint: return "Screen tint"
+        case .hardwareControl: return "Hardware control"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .automatic:
+            return "Let Abendrot pick the best way to warm this display. Recommended."
+        case .standard:
+            return "Warm the whole display through macOS — truly removes blue light."
+        case .screenTint:
+            return "Lay a warm tint over the screen. Works everywhere, but it’s a tint, not true warming."
+        case .hardwareControl:
+            return "Adjust the monitor’s own colour over the cable. Only some external monitors support this."
+        }
+    }
+
+    var preferredMethod: DisplayMethod? {
+        switch self {
+        case .automatic: return nil
+        case .standard: return .gamma
+        case .screenTint: return .overlay
+        case .hardwareControl: return .hardware
+        }
+    }
+
+    init(_ method: DisplayMethod?) {
+        switch method {
+        case .gamma: self = .standard
+        case .overlay: self = .screenTint
+        case .hardware: self = .hardwareControl
+        default: self = .automatic        // nil or .off → automatic
+        }
     }
 }
 
@@ -286,18 +481,21 @@ private struct AdvancedTab: View {
     @Bindable var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: "Advanced", subtitle: "Power controls and the private-API kill switch.")
+            TabHeader(title: "Advanced", subtitle: "Power controls for warming and compatibility.")
 
             MaximumWarmthControl(model: model)
             DividerLine()
 
-            Toggle("Enable private-API paths (DDC + Night Shift follow)", isOn: Binding(
+            // The private-API kill switch, in plain language. On = Abendrot can truly warm displays
+            // (gamma / hardware) and follow Night Shift; off = the simplest, most compatible tint-only
+            // mode everywhere. (§26 de-jargon — was "Enable private-API paths (DDC + Night Shift follow)".)
+            Toggle("Use advanced warming methods", isOn: Binding(
                 get: { model.state.privateAPIsEnabled },
                 set: { model.setPrivateAPIsEnabled($0) }
             ))
             .toggleStyle(.switch)
             .tint(Theme.Color.accent)
-            Text("Off = overlay-only. Abendrot drops the hardware-DDC and Night-Shift-follow paths and warms every display via the universal Metal overlay.")
+            Text("Lets Abendrot truly warm your displays — removing blue light — and follow your Night Shift schedule. Turn this off to use the simplest, most compatible mode: a warm tint over every display.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
             // TODO(settings): per-app exclusion picker → AppModel.setExcludedApps.

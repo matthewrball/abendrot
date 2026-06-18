@@ -262,7 +262,13 @@ public actor WarmthEngine {
     public func endReveal() async
 
     // ── Per-display ───────────────────────────────────────────────────────────
+    /// Set a display's own "Custom warmth" value. Setting a per-display value implies the
+    /// override (`warmthOverridden = true`) — see `DisplayState.warmthOverridden`. (Additive, Session 7.)
     public func setWarmth(_ level: WarmthLevel, for id: DisplayIdentity) async
+    /// Toggle a display's "Custom warmth" override without changing its value. On → the display uses
+    /// its own `warmth` (seeded to the current global on enable); off → it follows the global
+    /// warmth/schedule. (Additive, Session 7 — replaces the old max(per-display, global) boost.)
+    public func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity) async
     /// Force a specific layer for a display, or nil to return to automatic best-available.
     public func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) async
     /// DDC opt-in toggle. No-op (returns .unsupported in state) where DDC isn't capable.
@@ -312,7 +318,11 @@ public struct DisplayState: Sendable, Equatable, Identifiable {
     public var name: String                       // human label for the row
     public var appliedMethod: DisplayMethod       // → the Hardware/Gamma/Overlay badge
     public var capabilities: DisplayCapabilities
-    public var warmth: WarmthLevel
+    public var warmth: WarmthLevel                 // the display's own value, used when overridden
+    /// When true, the display uses its OWN `warmth` (a user "Custom warmth" override — softer OR
+    /// warmer than global); when false it follows the global warmth/schedule. (Additive, Session 7;
+    /// replaces the old max(per-display, global) boost so an override can also be *softer*.)
+    public var warmthOverridden: Bool
     public var isHardwareDDCEnabled: Bool          // opt-in flag
     public var preferredMethod: DisplayMethod?     // user's explicit layer override (nil = auto)
     public var lastError: EngineErrorSummary?      // non-fatal, surfaced quietly in advanced mode
@@ -386,6 +396,11 @@ public enum RevealMode: String, Sendable, Codable { case hold, toggle }
 §6 `WarmthEngine` public methods + `WarmthState`/`DisplayState`, §7 schedule modes, §8 hotkey
 surface. Additive changes (new optional params, new state fields) are allowed; removals/renames
 need a contract version bump + a note to Lanes B and D.
+
+**Additive changes since v0 (no version bump — purely additive, per the policy above):**
+- **Session 7:** `DisplayState.warmthOverridden: Bool` + `WarmthEngine.setWarmthOverride(_:for:)`
+  — a true per-display override (softer *or* warmer) that replaced the old max(per-display, global)
+  boost. `setWarmth(_:for:)` now implies the override. No existing signature changed.
 
 **Open questions to resolve during M0–M1 (won't change the public surface):**
 1. Exact `warmestPoint` default and the slider's strength→Kelvin curve shape (perceptual vs linear).

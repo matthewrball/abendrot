@@ -4,54 +4,13 @@ import WarmthKit
 // MARK: - Shared Abendrot UI components
 //
 // Mirrors brand/explorations/components.html: warm slider, segmented mode control,
-// method badges, per-display rows. Provisional structure — final motion polish + the
-// "wet glass" specular/lens treatment are deferred to the /design-motion-principles
-// + brand-lock pass (§21.3). Hooks/TODOs are left explicit, not faked.
-
-// MARK: - MethodBadge
-
-/// The trust-proof badge showing HOW a display is warmed (Hardware / Gamma / Overlay).
-/// Drives directly from `DisplayState.appliedMethod` (the contract's `DisplayMethod`).
-struct MethodBadge: View {
-    let method: DisplayMethod
-
-    var body: some View {
-        Text(method.badge.uppercased())
-            .font(Theme.Typography.ui(10, weight: .bold))
-            .tracking(0.6)
-            .foregroundStyle(foreground)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(background, in: Capsule())
-    }
-
-    private var foreground: Color {
-        switch method {
-        case .hardware, .gamma, .overlay: return Theme.Color.groundIndigo
-        case .off: return Theme.Color.textMuted
-        }
-    }
-
-    // Hardware = best (green), Gamma = ember, Overlay = safe default (lilac-on-ember).
-    private var background: AnyShapeStyle {
-        switch method {
-        case .hardware:
-            return AnyShapeStyle(
-                LinearGradient(colors: [Theme.Color.accentHighlight, Theme.Color.accent],
-                               startPoint: .top, endPoint: .bottom)
-            )
-        case .gamma:
-            return AnyShapeStyle(
-                LinearGradient(colors: [Theme.Color.accentHighlight, Theme.Color.accentPress],
-                               startPoint: .top, endPoint: .bottom)
-            )
-        case .overlay:
-            return AnyShapeStyle(Theme.Color.accentHi)
-        case .off:
-            return AnyShapeStyle(Theme.Color.line)
-        }
-    }
-}
+// per-display rows. Provisional structure — final motion polish + the "wet glass"
+// specular/lens treatment are deferred to the /design-motion-principles + brand-lock
+// pass (§21.3). Hooks/TODOs are left explicit, not faked.
+//
+// The old engine "method badge" (Hardware / Gamma / Overlay) was removed from the UI in the
+// §26 de-jargon pass — warming method is now expressed in plain language in the popover rows and
+// Settings → Displays → Advanced, never as a raw badge.
 
 // MARK: - WarmSlider
 
