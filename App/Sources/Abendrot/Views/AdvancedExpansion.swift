@@ -109,6 +109,9 @@ private struct AdvancedDisplayRow: View {
             }
         }
         .menuStyle(.borderlessButton)
+        // Hide the system pull-down indicator so only our single styled chevron shows (the
+        // borderlessButton style adds its own → two chevrons otherwise).
+        .menuIndicator(.hidden)
         .fixedSize()
     }
 
