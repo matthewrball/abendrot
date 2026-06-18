@@ -80,8 +80,10 @@ struct ModeControl: View {
     private func segment(_ option: ScheduleModeOption) -> some View {
         let isSelected = option == selection
         return Text(option.label)
-            .font(Theme.Typography.ui(12, weight: isSelected ? .semibold : .medium))
-            .foregroundStyle(isSelected ? Theme.Color.textCream : Theme.Color.textMuted)
+            .font(Theme.Typography.ui(12, weight: isSelected ? .bold : .medium))
+            // Dark ink on the bright gradient (same convention as MethodBadge) — cream/white on the
+            // light-gold top of the ramp fails contrast. Muted on the dark track when unselected.
+            .foregroundStyle(isSelected ? Theme.Color.groundIndigo : Theme.Color.textMuted)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .padding(.vertical, 7)

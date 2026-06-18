@@ -132,9 +132,8 @@ struct WarmSlider: View {
             )
         }
         .frame(height: max(thumbSize, 22))
-        .focusable()
-        .onKeyPress(.leftArrow) { nudge(-0.05); return .handled }
-        .onKeyPress(.rightArrow) { nudge(0.05); return .handled }
+        // No `.focusable()`: a menu-bar NSPopover doesn't do tab-traversal, so it only produced a
+        // stray focus ring on click. VoiceOver still adjusts via the action below.
         .accessibilityElement()
         .accessibilityLabel("Warmth")
         .accessibilityValue("\(Int((strength * 100).rounded())) percent")
