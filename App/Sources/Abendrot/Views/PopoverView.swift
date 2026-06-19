@@ -25,9 +25,9 @@ struct PopoverView: View {
             header
             DividerLine().padding(.vertical, 14)
 
-            // Upfront honesty: if the whole Mac can't truly warm anything, say so. (§25.J DRAFT)
+            // Upfront honesty: if the whole Mac can't truly warm anything, say so. (§25.J)
             if allDisplaysTintOnly {
-                incompatibilityBanner
+                IncompatibilityNotice()
                     .padding(.bottom, 16)
             }
 
@@ -151,23 +151,6 @@ struct PopoverView: View {
         return !displays.isEmpty && displays.allSatisfy(model.isTintOnly)
     }
 
-    private var incompatibilityBanner: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(Theme.Typography.ui(12))
-                .foregroundStyle(Theme.Color.accentPress)
-            Text("True warming isn’t available on this Mac, so your displays are being tinted rather than truly warmed — a known limitation on some Apple-silicon chips and macOS versions.")
-                .font(Theme.Typography.ui(11))
-                // Dark ink on the light-amber fill (same contrast convention as the method badges),
-                // so the banner is legible. (§25.J — readability fix.)
-                .foregroundStyle(Theme.Color.groundIndigo)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(11)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Color.accentHi, in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
-    }
-
     // MARK: Footer
 
     private var footer: some View {
@@ -260,6 +243,65 @@ private struct SoftRevealModifier: ViewModifier {
         content
             .opacity(visible ? 1 : 0)
             .scaleEffect(visible ? 1 : 0.98, anchor: .top)
+    }
+}
+
+// MARK: - IncompatibilityNotice (§25.J)
+
+/// The app-level "this Mac can only tint" notice, shown when EVERY connected display is tint-only.
+/// Names the user's actual chip + macOS version (so the limitation is concrete, not vague) and offers
+/// a tappable "Why?" that reveals a plain-language, non-medical explanation. Dark ink on the amber
+/// fill for contrast. DRAFT copy/visual — pending founder design direction.
+private struct IncompatibilityNotice: View {
+    @State private var showWhy = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let ink = Theme.Color.groundIndigo
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(Theme.Typography.ui(12))
+                    .foregroundStyle(Theme.Color.accentPress)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("True warming isn’t available on this Mac, so your displays are being tinted rather than truly warmed — a known limitation on some Apple-silicon chips and macOS versions.")
+                        .font(Theme.Typography.ui(11))
+                        .foregroundStyle(ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) {
+                        Text(SystemInfo.summary)
+                            .font(Theme.Typography.ui(10, weight: .medium))
+                            .foregroundStyle(ink.opacity(0.75))
+                        Spacer()
+                        Button {
+                            withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
+                                showWhy.toggle()
+                            }
+                        } label: {
+                            Text(showWhy ? "Hide" : "Why?")
+                                .font(Theme.Typography.ui(10, weight: .semibold))
+                                .foregroundStyle(ink)
+                                .underline()
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(showWhy ? "Hide explanation" : "Why is true warming unavailable?")
+                    }
+                }
+            }
+
+            if showWhy {
+                Text("Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s colour at the system level, so here Abendrot can only lay a warm tint over the screen — it can’t remove blue light the way it does on other Macs. Nothing is broken; it’s a macOS limitation. An external monitor with its own colour controls can still be truly warmed via Hardware control (Settings → Displays).")
+                    .font(Theme.Typography.ui(10.5))
+                    .foregroundStyle(ink.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.accentHi, in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: showWhy)
     }
 }
 
