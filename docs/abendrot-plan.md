@@ -875,9 +875,39 @@ DST-corrected standard meridian; N1/N2/N3 — stale comments (4-mode list, remov
 `.solar` dormancy note). Lows were by-design (mid-ramp Kelvin readout deliberately not surfaced,
 defensive degenerate-window guard, two-Task hardware-control transition) — no change.
 
-**Still open (next session):** founder visual sign-off; §25.J app-level banner UX (founder-owned);
-§25.K hardware matrix (now incl. Sunset-timing spot-checks); wire the per-app-exclusions +
-reveal-during-captures stubs; then the gated public push.
+### Session 8 (cont., 2026-06-18) — §25.J notice, Settings polish, Sunset subtitle
+
+A second founder-dogfooding pass the same day (4 commits `22de9ce`→`0eed892`; 95/21 tests green,
+xcodebuild BUILD SUCCEEDED verified non-masked; separate-lane review `APPROVE-WITH-NITS`, §13 About
+copy verified compliant, all 3 nits applied):
+- **§25.J notice — working draft (founder-directed).** The app-level tint-only banner now names the
+  real chip + macOS version (new permission-free `SystemInfo` sysctl helper, mirrors GammaBackend's
+  brand-string read) + a tappable "Why?" plain-language, §13-safe explainer (notes an external monitor
+  with its own controls can still be truly warmed). The About "Built for the newest Macs" bullet was
+  softened so it doesn't overclaim against this notice. **Founder owns the final visual/copy.**
+- **Settings slider-drag bug fixed:** `isMovableByWindowBackground = false` (was stealing the custom
+  `WarmSlider`'s drag → the window moved instead of the slider; still draggable by the title-bar strip).
+- **Shortcuts tab removed (founder):** the Reveal-True-Color `RevealShortcutRecorder` rebind moved
+  under Settings → Advanced, below Maximum warmth.
+- **About page rebuilt (founder):** real app icon via a new shared `AppIconView` (also used by the
+  popover header) + mission + the every-display / free-OSS / private / newest-Macs angle + a §13-safe
+  "The science" section grounded in `evidence-base.md` (review-verified: brightness-coupling guardrail
+  satisfied; no banned claims).
+- **Sunset rename (founder + dual-advisor `/ask`: analyst sub-agent + Codex).** Both converged: KEEP
+  the "Sunset" label, fix descriptiveness with a one-line Mode subtitle ("Warms automatically around
+  your local sunset." / "Warms continuously, day and night."). **"Circadian" rejected** on §13 grounds
+  (implied physiological-effect claim + clinical voice); "Sunset Schedule" rejected (UI width / reads
+  like setup, not a mode).
+- **⚠️ Process lesson (durable):** the first §25.J build silently FAILED — `SystemInfo.swift` (a new
+  app-target file) was not in the xcodegen-generated, **gitignored** `.xcodeproj`, and `xcodebuild |
+  tail` masked the failure (the pipe's exit code was tail's, not xcodebuild's). FIX: new app files
+  require **`xcodegen generate`** before `xcodebuild`; build commands now capture the real xcodebuild
+  exit code and never pipe it into `tail`.
+
+**Still open (next session):** founder visual sign-off on the combined build; §25.J final look
+(founder-owned — working draft shipped); §25.K hardware matrix (now incl. Sunset-timing spot-checks);
+wire the per-app-exclusions + reveal-during-captures stubs + the Hold/Toggle reveal-mode picker; then
+the gated public push.
 
 ---
 
