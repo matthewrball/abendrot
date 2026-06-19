@@ -469,6 +469,7 @@ private struct AdvancedTab: View {
                 Text("Click the field and press a key combination to rebind (default ⌥⌘T). Hold the shortcut to reveal true colour; release to ease warmth back.")
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textMuted)
+                // TODO(settings): a Hold/Toggle reveal-mode picker (RevealMode on HotkeyService).
             }
             DividerLine()
 
@@ -623,7 +624,7 @@ private struct AboutTab: View {
                 aboutPoint("Every display", "Real warmth on built-in and external monitors — including buttonless Apple displays — where Night Shift and f.lux quietly give up.")
                 aboutPoint("Free & open source", "MIT-licensed. Read every line of the engine that touches your screen.")
                 aboutPoint("Private by default", "No account, no tracking, no telemetry. Nothing about your displays leaves your Mac.")
-                aboutPoint("Built for the newest Macs", "Routes around the cases where system colour shifting silently fails on recent Apple silicon.")
+                aboutPoint("Built for the newest Macs", "Uses the best warming method each display supports — and says so plainly when macOS only allows a tint, not true warming.")
             }
 
             DividerLine()

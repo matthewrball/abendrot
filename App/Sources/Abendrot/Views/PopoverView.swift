@@ -274,9 +274,9 @@ private struct IncompatibilityNotice: View {
                             .foregroundStyle(ink.opacity(0.75))
                         Spacer()
                         Button {
-                            withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
-                                showWhy.toggle()
-                            }
+                            // Single animation source: the container's `.animation(value: showWhy)`
+                            // below drives the reveal; an explicit withAnimation here would compound it.
+                            showWhy.toggle()
                         } label: {
                             Text(showWhy ? "Hide" : "Why?")
                                 .font(Theme.Typography.ui(10, weight: .semibold))
