@@ -122,6 +122,20 @@ struct PopoverView: View {
                 ),
                 onChange: { _ in }
             )
+            // One-line subtitle describing the selected mode — fixes "Sunset" reading as
+            // under-descriptive (dual-advisor pick: keep the clean label, add the subtitle).
+            Text(modeSubtitle)
+                .font(Theme.Typography.ui(11))
+                .foregroundStyle(Theme.Color.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Plain-language description of the currently-selected schedule mode, shown under the Mode control.
+    private var modeSubtitle: String {
+        switch ScheduleModeOption(model.state.scheduleMode) {
+        case .followSunset: return "Warms automatically around your local sunset."
+        case .alwaysOn: return "Warms continuously, day and night."
         }
     }
 
