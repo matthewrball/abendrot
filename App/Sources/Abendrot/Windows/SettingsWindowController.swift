@@ -39,7 +39,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.title = "Abendrot Settings"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
+        // NOT movable-by-background: a draggable background steals mouse-drags from the custom
+        // WarmSlider (a SwiftUI shape whose hit area reports mouseDownCanMoveWindow = true), so the
+        // window moved instead of the slider thumb. The window stays draggable by its transparent
+        // title-bar strip (where the traffic-light buttons live). (Settings slider-drag bug fix.)
+        window.isMovableByWindowBackground = false
         window.center()
         window.setFrameAutosaveName("AbendrotSettings")
 

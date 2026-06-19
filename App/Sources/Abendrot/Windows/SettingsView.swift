@@ -5,7 +5,7 @@ import WarmthKit
 // MARK: - SettingsTab
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, schedule, displays, shortcuts, advanced, privacy, about
+    case general, schedule, displays, advanced, privacy, about
     var id: String { rawValue }
 
     var title: String {
@@ -13,7 +13,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .schedule: return "Schedule"
         case .displays: return "Displays"
-        case .shortcuts: return "Shortcuts"
         case .advanced: return "Advanced"
         case .privacy: return "Privacy"
         case .about: return "About"
@@ -25,7 +24,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .schedule: return "sunset"
         case .displays: return "display.2"
-        case .shortcuts: return "keyboard"
         case .advanced: return "slider.horizontal.3"
         case .privacy: return "hand.raised"
         case .about: return "info.circle"
@@ -74,7 +72,6 @@ struct SettingsView: View {
         case .general: GeneralTab(model: model)
         case .schedule: ScheduleTab(model: model)
         case .displays: DisplaysTab(model: model)
-        case .shortcuts: ShortcutsTab()
         case .advanced: AdvancedTab(model: model)
         case .privacy: PrivacyTab(model: model)
         case .about: AboutTab()
@@ -450,27 +447,6 @@ private enum WarmingMethodChoice: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Shortcuts
-
-private struct ShortcutsTab: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: "Shortcuts", subtitle: "Reveal True Color and other hotkeys.")
-            HStack {
-                Text("Reveal True Color").font(Theme.Typography.ui(13.5))
-                Spacer()
-                // Click the field and press a combination to rebind (default ⌥⌘T). Writes through
-                // KeyboardShortcuts' storage, so HotkeyService picks up the change live.
-                RevealShortcutRecorder()
-            }
-            Text("Click the field and press a key combination to rebind. Hold the shortcut to reveal true colour; release to ease warmth back.")
-                .font(Theme.Typography.ui(12))
-                .foregroundStyle(Theme.Color.textMuted)
-            // TODO(settings): a Hold/Toggle reveal-mode picker (RevealMode on HotkeyService).
-        }
-    }
-}
-
 // MARK: - Advanced
 
 private struct AdvancedTab: View {
@@ -480,6 +456,20 @@ private struct AdvancedTab: View {
             TabHeader(title: "Advanced", subtitle: "Power controls for warming and compatibility.")
 
             MaximumWarmthControl(model: model)
+            DividerLine()
+
+            // Reveal True Color hotkey — moved here from the former Shortcuts tab, tucked under
+            // Maximum warmth (founder). Click the field to rebind; default ⌥⌘T.
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Reveal True Color").font(Theme.Typography.ui(13.5))
+                    Spacer()
+                    RevealShortcutRecorder()
+                }
+                Text("Click the field and press a key combination to rebind (default ⌥⌘T). Hold the shortcut to reveal true colour; release to ease warmth back.")
+                    .font(Theme.Typography.ui(12))
+                    .foregroundStyle(Theme.Color.textMuted)
+            }
             DividerLine()
 
             // The private-API kill switch, in plain language. On = Abendrot can truly warm displays
@@ -608,24 +598,62 @@ private struct PrivacyTab: View {
 
 private struct AboutTab: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header — the real app icon (not the menu-bar glyph) + wordmark.
             HStack(spacing: 12) {
-                SunsetArcGlyph().frame(width: 40, height: 40)
+                AppIconView().frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Abendrot")
-                        .font(Theme.Typography.serif(22))
+                        .font(Theme.Typography.serif(24))
                         .foregroundStyle(Theme.Color.textPrimary)
                     Text("Soften into the evening.")
                         .font(Theme.Typography.ui(12.5))
                         .foregroundStyle(Theme.Color.textMuted)
                 }
             }
+
+            // Mission — what it is, framed as the input it changes (no promised sleep outcome, §13).
+            Text("Abendrot warms your screen with the evening — on every display, built-in and external — so your screen gives off less blue light as the day winds down. It’s free, open source, and runs entirely on your Mac: no account, no telemetry.")
+                .font(Theme.Typography.ui(12.5))
+                .foregroundStyle(Theme.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // What makes it different (the marketing angle).
+            VStack(alignment: .leading, spacing: 8) {
+                aboutPoint("Every display", "Real warmth on built-in and external monitors — including buttonless Apple displays — where Night Shift and f.lux quietly give up.")
+                aboutPoint("Free & open source", "MIT-licensed. Read every line of the engine that touches your screen.")
+                aboutPoint("Private by default", "No account, no tracking, no telemetry. Nothing about your displays leaves your Mac.")
+                aboutPoint("Built for the newest Macs", "Routes around the cases where system colour shifting silently fails on recent Apple silicon.")
+            }
+
             DividerLine()
-            // TODO(settings): "The Science" easter-egg panel (plan §4.7) — cited,
-            // general-wellness framing only.
-            Text("The Science — a tasteful, cited panel about evening light — lands in a later milestone.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textFaint)
+
+            // The science — hedged, general-wellness only (§13 binding; grounded in evidence-base.md).
+            VStack(alignment: .leading, spacing: 6) {
+                Text("The science")
+                    .font(Theme.Typography.ui(13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.textPrimary)
+                Text("Your body clock is set mainly by short-wavelength blue light (around 480 nm), sensed by a dedicated set of cells in the eye. Abendrot warms the display by removing that blue first — reaching zero blue output at its everyday warmest (~1900 K). For the calmest evening light, pair warming with lower screen brightness: the effect is driven by intensity as much as colour, and people’s sensitivity to evening light varies widely.")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Abendrot reduces your blue-light exposure at night — a small, sensible nudge toward healthier evening light habits. It’s a general-wellness tool, not a medical device, and not a sleep treatment. The peer-reviewed research behind it is open for anyone to read.")
+                    .font(Theme.Typography.ui(11))
+                    .foregroundStyle(Theme.Color.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func aboutPoint(_ title: String, _ body: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(Theme.Typography.ui(12.5, weight: .medium))
+                .foregroundStyle(Theme.Color.textPrimary)
+            Text(body)
+                .font(Theme.Typography.ui(11))
+                .foregroundStyle(Theme.Color.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import WarmthKit
 
 // MARK: - Shared Abendrot UI components
@@ -263,5 +264,23 @@ struct DividerLine: View {
         Rectangle()
             .fill(Theme.Color.lineStrong)
             .frame(height: 0.5)
+    }
+}
+
+// MARK: - AppIconView
+
+/// The real app icon (the sunset squircle from `AppIcon`), matching the Dock/Finder icon. Falls back
+/// to the vector `SunsetArcGlyph` if the icon image can't be loaded. Used in the popover header and
+/// Settings → About (the menu-bar status item keeps the monochrome template glyph).
+struct AppIconView: View {
+    var body: some View {
+        if let icon = NSImage(named: NSImage.applicationIconName) {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+        } else {
+            SunsetArcGlyph()
+        }
     }
 }
