@@ -257,32 +257,13 @@ private struct ScheduleTab: View {
                 Text("Used to estimate your sunset. No location permission required.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(Theme.Color.textMuted)
-                // ponytail: curated cities only; add raw lat/long if uncovered locations matter.
-                Picker("Location", selection: locationSelection) {
-                    Text("Auto (from time zone)").tag(nil as TimeZoneCoordinates.Coordinate?)
-                    ForEach(MajorCities.all) { city in
-                        Text(city.name).tag(Optional(city.coordinate))
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(width: 260, alignment: .leading)
+                CityAutocomplete(model: model)
+                    .frame(width: 300, alignment: .leading)
                 Text(sunsetReadout)
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textFaint)
             }
         }
-    }
-
-    private var locationSelection: Binding<TimeZoneCoordinates.Coordinate?> {
-        Binding(
-            get: {
-                guard let coordinate = model.userCoordinate,
-                      MajorCities.all.contains(where: { $0.coordinate == coordinate }) else { return nil }
-                return coordinate
-            },
-            set: { model.setUserCoordinate($0) }
-        )
     }
 
     private var sunsetReadout: String {
@@ -294,6 +275,285 @@ private struct ScheduleTab: View {
         formatter.dateFormat = "h:mm a"
         formatter.timeZone = .current
         return "Today's sunset ≈ \(formatter.string(from: sunset))"
+    }
+}
+
+// MARK: - CityAutocomplete
+
+private struct CityAutocomplete: View {
+    @Bindable var model: AppModel
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var fieldFocused: Bool
+    @State private var query = ""
+    @State private var isOpen = false
+    @State private var hoveredID: String?
+    @State private var highlightedID: String?
+
+    private let popularCityNames = [
+        "San Francisco", "Seattle", "New York", "London", "Paris", "Tokyo", "Sydney", "São Paulo"
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            searchField
+                .zIndex(2)
+
+            if isOpen {
+                dropdown
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                    .zIndex(1)
+            }
+        }
+        .onAppear { syncQueryToSelection() }
+        .onChange(of: model.userCoordinate) { _, _ in
+            if !fieldFocused { syncQueryToSelection() }
+        }
+        .onChange(of: fieldFocused) { _, focused in
+            if focused {
+                open()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    if !fieldFocused { close() }
+                }
+            }
+        }
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isOpen)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Color.textFaint)
+
+            TextField("", text: $query, prompt: Text("Search for your city…"))
+                .textFieldStyle(.plain)
+                .font(Theme.Typography.ui(12.5))
+                .foregroundStyle(Theme.Color.textPrimary)
+                .focused($fieldFocused)
+                .onSubmit { selectHighlightedOrFirst() }
+                .onChange(of: query) { _, _ in
+                    if fieldFocused { isOpen = true }
+                    highlightedID = filteredCities.first?.id
+                }
+
+            Button {
+                if selectedCity == nil {
+                    open()
+                } else {
+                    selectAuto()
+                }
+            } label: {
+                Image(systemName: selectedCity == nil ? "chevron.down" : "xmark.circle.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.Color.textFaint)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(selectedCity == nil ? "Show cities" : "Use automatic location")
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .glassSurface(.frost, cornerRadius: Theme.Radius.control)
+        .overlay(searchFieldStroke)
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
+        .onTapGesture { open() }
+    }
+
+    private var dropdown: some View {
+        VStack(spacing: 4) {
+            cityRow(title: "Auto (from time zone)", systemImage: "globe", selected: selectedCity == nil) {
+                selectAuto()
+            }
+
+            if filteredCities.isEmpty {
+                Text("No cities found")
+                    .font(Theme.Typography.ui(12))
+                    .foregroundStyle(Theme.Color.textFaint)
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                    .padding(.horizontal, 10)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 3) {
+                        ForEach(filteredCities) { city in
+                            cityRow(
+                                title: city.name,
+                                systemImage: nil,
+                                selected: city == selectedCity,
+                                highlighted: city.id == highlightedID || city.id == hoveredID
+                            ) {
+                                select(city)
+                            }
+                            .onHover { hovering in
+                                hoveredID = hovering ? city.id : nil
+                                if hovering { highlightedID = city.id }
+                            }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .frame(maxHeight: min(CGFloat(filteredCities.count), 7) * 37)
+            }
+        }
+        .padding(6)
+        .glassSurface(.frost, cornerRadius: Theme.Radius.control + 2)
+        .overlay(dropdownStroke)
+        .shadow(color: .black.opacity(0.24), radius: 18, y: 8)
+    }
+
+    private func cityRow(
+        title: String,
+        systemImage: String?,
+        selected: Bool,
+        highlighted: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.Color.textFaint)
+                        .frame(width: 15)
+                }
+
+                Text(title)
+                    .font(Theme.Typography.ui(12.5, weight: selected ? .medium : .regular))
+                    .foregroundStyle(selected ? Theme.Color.textPrimary : Theme.Color.textMuted)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Theme.Color.accentHighlight)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(rowBackground(selected: selected, highlighted: highlighted))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.control - 2, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func rowBackground(selected: Bool, highlighted: Bool) -> some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control - 2, style: .continuous)
+            .fill(highlighted ? Theme.Color.line.opacity(0.7) : Theme.Color.line.opacity(selected ? 0.45 : 0))
+            .overlay(alignment: .leading) {
+                if selected {
+                    RoundedRectangle(cornerRadius: Theme.Radius.pill, style: .continuous)
+                        .fill(Theme.Gradient.sunset)
+                        .frame(width: 3)
+                        .padding(.vertical, 7)
+                }
+            }
+            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: highlighted)
+            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: selected)
+    }
+
+    private var searchFieldStroke: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+            .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous)
+                    .strokeBorder(Theme.Color.line.opacity(0.5), lineWidth: 0.5)
+                    .padding(1)
+            )
+    }
+
+    private var dropdownStroke: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control + 2, style: .continuous)
+            .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.control + 1, style: .continuous)
+                    .strokeBorder(Theme.Color.line.opacity(0.55), lineWidth: 0.5)
+                    .padding(1)
+            )
+    }
+
+    private var selectedCity: MajorCities.City? {
+        guard let coordinate = model.userCoordinate else { return nil }
+        return MajorCities.all.first { $0.coordinate == coordinate }
+    }
+
+    private var selectionText: String {
+        if let selectedCity { return selectedCity.name }
+        return "Auto — \(timeZoneCityName)"
+    }
+
+    private var timeZoneCityName: String {
+        let raw = TimeZone.current.identifier.split(separator: "/").last.map(String.init) ?? TimeZone.current.identifier
+        return raw.replacingOccurrences(of: "_", with: " ")
+    }
+
+    private var filteredCities: [MajorCities.City] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == selectionText {
+            return defaultCities
+        }
+
+        let needle = normalized(trimmed)
+        let prefix = MajorCities.all.filter { normalized($0.name).hasPrefix(needle) }
+        let contains = MajorCities.all.filter {
+            let name = normalized($0.name)
+            return !name.hasPrefix(needle) && name.contains(needle)
+        }
+        return Array((prefix + contains).prefix(8))
+    }
+
+    private var defaultCities: [MajorCities.City] {
+        var result: [MajorCities.City] = []
+        if let selectedCity { result.append(selectedCity) }
+        for name in popularCityNames {
+            if let city = MajorCities.all.first(where: { $0.name == name }), !result.contains(city) {
+                result.append(city)
+            }
+        }
+        return Array(result.prefix(8))
+    }
+
+    private func normalized(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+    }
+
+    private func open() {
+        fieldFocused = true
+        isOpen = true
+        if query == selectionText { query = "" }
+        highlightedID = filteredCities.first?.id
+    }
+
+    private func close() {
+        isOpen = false
+        hoveredID = nil
+        highlightedID = nil
+        syncQueryToSelection()
+    }
+
+    private func syncQueryToSelection() {
+        query = selectionText
+    }
+
+    private func selectAuto() {
+        model.setUserCoordinate(nil)
+        fieldFocused = false
+        close()
+    }
+
+    private func select(_ city: MajorCities.City) {
+        model.setUserCoordinate(city.coordinate)
+        fieldFocused = false
+        close()
+    }
+
+    private func selectHighlightedOrFirst() {
+        if let highlightedID, let city = filteredCities.first(where: { $0.id == highlightedID }) {
+            select(city)
+        } else if let city = filteredCities.first {
+            select(city)
+        }
     }
 }
 
