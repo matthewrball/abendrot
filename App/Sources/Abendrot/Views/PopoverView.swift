@@ -40,7 +40,7 @@ struct PopoverView: View {
             // scale-fade. (Per-display "Override" rows live in the Advanced section now.)
             if model.state.isEnabled {
                 VStack(alignment: .leading, spacing: 0) {
-                    WarmSlider(strength: globalWarmthBinding, kelvin: model.globalKelvin)
+                    WarmSlider(strength: globalWarmthBinding, model: model, kelvin: model.globalKelvin)
                         .padding(.bottom, 16)
                     modeSection
                 }
@@ -133,9 +133,7 @@ struct PopoverView: View {
     /// (⌥-click) expansion now, not in the simple view.
     private var modeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Mode")
-                .font(Theme.Typography.ui(13, weight: .medium))
-                .foregroundStyle(Theme.Color.textMuted)
+            SectionLabel("Mode")
             ModeControl(
                 selection: Binding(
                     get: { ScheduleModeOption(model.state.scheduleMode) },
@@ -154,12 +152,7 @@ struct PopoverView: View {
     }
 
     /// Plain-language description of the currently-selected schedule mode, shown under the Mode control.
-    private var modeSubtitle: String {
-        switch ScheduleModeOption(model.state.scheduleMode) {
-        case .followSunset: return "Warms automatically around your local sunset."
-        case .alwaysOn: return "Warms continuously, day and night."
-        }
-    }
+    private var modeSubtitle: String { ScheduleModeOption(model.state.scheduleMode).subtitle }
 
     // MARK: Incompatibility ("can only be tinted") detection — §25.J (DRAFT)
 

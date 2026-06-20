@@ -83,7 +83,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
         }
         .frame(minWidth: 680, minHeight: 480)
-        .background(SettingsFrostBackground())
+        .background(FrostBackground())
     }
 
     @ViewBuilder
@@ -97,18 +97,6 @@ struct SettingsView: View {
         case .statistics: StatisticsTab(model: model)
         case .about: AboutTab()
         }
-    }
-}
-
-// MARK: - Frosted-ember background
-
-/// The persistent "frosted ember" material for Settings (§21.3). Degrades to the
-/// ember SOLID under Reduce Transparency via `GlassSurface`.
-private struct SettingsFrostBackground: View {
-    var body: some View {
-        Color.clear
-            .glassSurface(.frost, cornerRadius: 0)
-            .ignoresSafeArea()
     }
 }
 
@@ -132,13 +120,15 @@ private struct TabHeader: View {
 
 /// "Built by Matthew Ball" → matthewball.me. The name is always underlined so it reads as a link, and
 /// it brightens on hover (same hue) for a clear, colour-preserving affordance. Shared by the Settings
-/// sidebar footer and the About page so the two stay congruent.
-private struct BylineLink: View {
+/// sidebar footer (11) and the About page (11.5) so the two stay congruent — `fontSize` is the only
+/// difference between the two placements.
+struct BylineLink: View {
+    var fontSize: CGFloat = 11
     @State private var hovering = false
     var body: some View {
         Link(destination: URL(string: "https://matthewball.me/")!) {
             (Text("Built by ") + Text("Matthew Ball").underline())
-                .font(Theme.Typography.ui(11))
+                .font(Theme.Typography.ui(fontSize))
                 .foregroundStyle(Theme.Color.textMuted)
                 .opacity(hovering ? 1 : 0.85)
                 .animation(.easeOut(duration: 0.12), value: hovering)
@@ -240,6 +230,7 @@ private struct GeneralTab: View {
                             get: { model.state.globalWarmth.strength },
                             set: { model.setGlobalWarmth($0) }
                         ),
+                        model: model,
                         kelvin: model.globalKelvin
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
@@ -323,35 +314,24 @@ private struct ScheduleTab: View {
                 ),
                 onChange: { _ in }
             )
-            Text("Sunset warms automatically around your local sunset — easing in beforehand and holding through the night — using your time zone to estimate sunrise and sunset. No location permission required. Always on keeps warmth on around the clock.")
+            // Mirrors the menu-bar popover: shows ONLY the selected mode's one-line subtitle (the shared
+            // `ScheduleModeOption.subtitle`), updating live as you toggle Sunset ↔ Always on.
+            Text(ScheduleModeOption(model.state.scheduleMode).subtitle)
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
 
             VStack(alignment: .leading, spacing: 7) {
-                Text("Location")
-                    .font(Theme.Typography.ui(13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.textPrimary)
+                SectionLabel("Location")
                 Text("Used to estimate your sunset. No location permission required.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(Theme.Color.textMuted)
-                CityAutocomplete(model: model)
+                CityAutocomplete(model: model, opensUpward: true)
                     .frame(width: 300, alignment: .leading)
-                Text(sunsetReadout)
+                Text(model.todaysSunsetReadout)
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textFaint)
             }
         }
-    }
-
-    private var sunsetReadout: String {
-        let coordinate = model.userCoordinate ?? TimeZoneCoordinates.current()
-        guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coordinate, on: Date()) else {
-            return "Today's sunset: —"
-        }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        formatter.timeZone = .current
-        return "Today's sunset ≈ \(formatter.string(from: sunset))"
     }
 }
 
@@ -477,28 +457,26 @@ struct CityAutocomplete: View {
                     .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
                     .padding(.horizontal, 10)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(filteredCities) { city in
-                            cityRow(
-                                title: city.name,
-                                systemImage: nil,
-                                selected: city == selectedCity,
-                                highlighted: city.id == highlightedID || city.id == hoveredID
-                            ) {
-                                select(city)
-                            }
-                            .onHover { hovering in
-                                hoveredID = hovering ? city.id : nil
-                                if hovering { highlightedID = city.id }
-                            }
+                // Up to 3 results in a plain VStack (NOT a ScrollView): inside the floating dropdown the
+                // ScrollView was proposed only the field's height and collapsed to ~0, hiding the cities.
+                // A VStack sizes to its rows, so the results always render — and good autocomplete doesn't
+                // need a long list (founder: the search does the narrowing).
+                VStack(spacing: 3) {
+                    ForEach(filteredCities.prefix(3)) { city in
+                        cityRow(
+                            title: city.name,
+                            systemImage: nil,
+                            selected: city == selectedCity,
+                            highlighted: city.id == highlightedID || city.id == hoveredID
+                        ) {
+                            select(city)
+                        }
+                        .onHover { hovering in
+                            hoveredID = hovering ? city.id : nil
+                            if hovering { highlightedID = city.id }
                         }
                     }
                 }
-                .scrollIndicators(.hidden)
-                // Keep the dropdown short so it fits a compact Settings window (the search does the
-                // narrowing); extra matches scroll. (Founder: don't need a long list with good autocomplete.)
-                .frame(maxHeight: min(CGFloat(filteredCities.count), 3) * 35)
             }
         }
         .padding(6)
@@ -731,7 +709,7 @@ private struct DisplayConfigRow: View {
     /// `isTintOnly`, §25.J.)
     private var canTrueWarm: Bool {
         let priv = model.state.privateAPIsEnabled
-        return priv && (isSupported(display.capabilities.gamma) || isSupported(display.capabilities.hardware))
+        return priv && (display.capabilities.gamma.isSupported || display.capabilities.hardware.isSupported)
     }
 
     // Single source so the copy and its colour can't drift apart (review): incompatibility uses the
@@ -748,11 +726,6 @@ private struct DisplayConfigRow: View {
 
     private var statusLine: String { status.text }
     private var statusColor: Color { status.color }
-
-    private func isSupported<T>(_ cap: Capability<T>) -> Bool {
-        if case .supported = cap { return true }
-        return false
-    }
 }
 
 // MARK: - Per-display override + custom warmth (Settings superset of the popover quick control)
@@ -789,7 +762,7 @@ private struct PerDisplayWarmthControl: View {
                 // not compact) — so use the compact slider and don't add a second caption row. The
                 // "Override · Custom warmth for this display" header above is label enough. (Fixes the
                 // duplicate Softer/Warmer.)
-                WarmSlider(strength: warmthBinding, compact: true)
+                WarmSlider(strength: warmthBinding, model: model, compact: true)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
@@ -857,9 +830,9 @@ private struct WarmingMethodPicker: View {
     private var availableChoices: [WarmingMethodChoice] {
         let priv = model.state.privateAPIsEnabled
         var choices: [WarmingMethodChoice] = []
-        if priv, isSupported(display.capabilities.gamma) { choices.append(.standard) }
+        if priv, display.capabilities.gamma.isSupported { choices.append(.standard) }
         choices.append(.screenTint)                                     // overlay is always available
-        if priv, isSupported(display.capabilities.hardware) { choices.append(.hardwareControl) }
+        if priv, display.capabilities.hardware.isSupported { choices.append(.hardwareControl) }
         return choices
     }
 
@@ -900,15 +873,10 @@ private struct WarmingMethodPicker: View {
         if !priv {
             return "Advanced warming isn’t available on this Mac, so only a screen tint is possible."
         }
-        if !isSupported(display.capabilities.gamma), !isSupported(display.capabilities.hardware) {
+        if !display.capabilities.gamma.isSupported, !display.capabilities.hardware.isSupported {
             return "This display can’t be truly warmed on this Mac — only a screen tint is available."
         }
         return nil
-    }
-
-    private func isSupported<T>(_ cap: Capability<T>) -> Bool {
-        if case .supported = cap { return true }
-        return false
     }
 }
 
@@ -950,9 +918,7 @@ private struct AdvancedTab: View {
             // Reveal True Color hotkey — moved here from the former Shortcuts tab, tucked under
             // Maximum warmth (founder). Click the field to rebind; default ⌥⌘T.
             VStack(alignment: .leading, spacing: 12) {
-                Text("Reveal True Color")
-                    .font(Theme.Typography.ui(13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.textPrimary)
+                SectionLabel("Reveal True Color")
                 Text("Instantly see your screen's true colours — bound to a keyboard shortcut.")
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textMuted)
@@ -1035,9 +1001,7 @@ private struct ExcludedAppsControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text("Excluded apps")
-                .font(Theme.Typography.ui(13.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.textPrimary)
+            SectionLabel("Excluded apps")
             Text("Abendrot pauses warming (shows true colour) while one of these apps is frontmost — for colour-critical work.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
@@ -1150,9 +1114,7 @@ private struct MaximumWarmthControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Maximum warmth")
-                    .font(Theme.Typography.ui(13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.textPrimary)
+                SectionLabel("Maximum warmth")
                 Spacer()
                 Text("\(model.state.warmestPoint.displayValue) K")
                     .font(Theme.Typography.serif(14))
@@ -1165,7 +1127,7 @@ private struct MaximumWarmthControl: View {
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textMuted)
 
-            WarmSlider(strength: warmestBinding)
+            WarmSlider(strength: warmestBinding, model: model)
 
             Toggle("Expanded range — reach candle & ember (below 1900 K)", isOn: $expanded)
                 .toggleStyle(.switch)
@@ -1251,7 +1213,7 @@ private struct StatisticsTab: View {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 VStack(alignment: .leading, spacing: 18) {
                     statBlock(title: "Abendrot has warmed your Mac for",
-                              value: Self.durationString(model.totalWarmedSeconds), big: true)
+                              value: model.warmedDurationString, big: true)
                     statBlock(title: "Warm sunset counter",
                               value: "\(model.warmSunsetCount)")
                 }
@@ -1297,18 +1259,6 @@ private struct StatisticsTab: View {
                 .contentTransition(.numericText())
         }
     }
-
-    /// "2d 17h 41m 46s", dropping leading-zero top units but always keeping at least m + s.
-    static func durationString(_ seconds: Double) -> String {
-        let s = max(0, Int(seconds))
-        let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60, sec = s % 60
-        var parts: [String] = []
-        if d > 0 { parts.append("\(d)d") }
-        if h > 0 || d > 0 { parts.append("\(h)h") }
-        parts.append("\(m)m")
-        parts.append("\(sec)s")
-        return parts.joined(separator: " ")
-    }
 }
 
 // MARK: - About
@@ -1350,9 +1300,7 @@ private struct AboutTab: View {
 
             // The science — hedged, general-wellness only (§13 binding; grounded in evidence-base.md).
             VStack(alignment: .leading, spacing: 6) {
-                Text("The science")
-                    .font(Theme.Typography.ui(13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.textPrimary)
+                SectionLabel("The science")
                 Text("Your body clock is set mainly by short-wavelength blue light (around 480 nm), sensed by a dedicated set of cells in the eye. Abendrot warms the display by removing that blue first — reaching zero blue output at its everyday warmest (~1900 K). For the calmest evening light, pair warming with lower screen brightness: the effect is driven by intensity as much as colour, and people’s sensitivity to evening light varies widely.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(Theme.Color.textMuted)

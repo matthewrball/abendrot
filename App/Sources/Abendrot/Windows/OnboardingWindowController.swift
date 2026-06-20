@@ -52,12 +52,11 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         window.title = "Welcome to Abendrot"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        // Clear window so the rounded glass card floats (popover-style), not a frosted box.
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        // NOT grab-anywhere (unlike About): step 2 carries the WarmSlider, and movable-by-background
-        // would steal its drag and move the whole window instead — the exact bug SettingsWindowController
-        // fixes the same way. The window still drags by its transparent title-bar strip.
+        // A normal frosted window (matches Settings): the content fills it via `FrostBackground`, the OS
+        // rounds the corners, and the traffic-light buttons integrate cleanly into the transparent title
+        // bar. (Previously a CLEAR floating glass card, which left the traffic lights detached with a weird
+        // double border.) Dragging is handled by a SwiftUI drag background in OnboardingView (grab-anywhere,
+        // slider-safe), so the window stays NOT movable-by-background — that would steal the WarmSlider's drag.
         window.isMovableByWindowBackground = false
         window.center()
 

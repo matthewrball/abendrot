@@ -19,6 +19,15 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
         }
     }
 
+    /// One-line, plain-language description of the selected mode — the SINGLE source of truth shared by
+    /// the popover Mode control and Settings → Schedule, so the two never drift.
+    var subtitle: String {
+        switch self {
+        case .followSunset: return "Warms automatically around your local sunset."
+        case .alwaysOn: return "Warms continuously, day and night."
+        }
+    }
+
     /// Classify a contract `ScheduleMode` into a UI option. There is no "Off" option — the master
     /// "Warm my displays" toggle owns on/off — so a (UI-less) engine `.off` maps to the Sunset
     /// default. The manual "Schedule" (custom-time) option was removed; the engine's `.custom` case

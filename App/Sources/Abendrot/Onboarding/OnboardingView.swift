@@ -1,18 +1,22 @@
 import SwiftUI
+import AppKit
 import WarmthKit
 
 // MARK: - OnboardingStep
 
 private enum OnboardingStep: Int, CaseIterable {
-    case welcome, warmth, schedule, allSet
+    // Mode FIRST, then the warmth preview: the schedule is the cheap decision a new user can actually
+    // reason about, and putting warmth last lands onboarding on its strongest sensory beat — the screen
+    // blooming warm under the user's finger.
+    case welcome, schedule, warmth, allSet
 
     /// The numbered position shown in "Step X of 3" — nil for the closing `allSet` screen, which is a
     /// completion confirmation, not a numbered setup step (keeps the "3 clicks to warmth" framing).
     var numberedIndex: Int? {
         switch self {
         case .welcome: return 1
-        case .warmth: return 2
-        case .schedule: return 3
+        case .schedule: return 2
+        case .warmth: return 3
         case .allSet: return nil
         }
     }
@@ -21,11 +25,13 @@ private enum OnboardingStep: Int, CaseIterable {
 
 // MARK: - OnboardingView
 //
-// "3 clicks to warmth" (plan §21.3, §4.6): welcome → set your warmth → confirm the schedule — three
+// "3 clicks to warmth" (plan §21.3, §4.6): welcome → choose the schedule → set your warmth — three
 // numbered setup steps, then a brief UNNUMBERED "you're all set" confirmation that carries the privacy
 // reassurance. Calm glass; everything else lives in Settings. The app needs no permissions, so onboarding
 // asks for none — it just orients the user (a menu-bar agent launches invisibly) and lands them on warmth.
-// The schedule step enables warming (the "to warmth" payoff) and advances to the closing screen.
+// Mode comes FIRST, applied LIVE so its effect is visible (Always-on warms now; Sunset stays neutral in
+// daylight and says exactly when it will kick in); the warmth step then forces a "preview of your evening"
+// so the screen blooms regardless of the chosen mode/time — the guaranteed payoff beat.
 struct OnboardingView: View {
     @Bindable var model: AppModel
     var onFinish: () -> Void
@@ -54,7 +60,15 @@ struct OnboardingView: View {
                                            // step 3's science card + location picker). The picker dropdown
                                            // floats, so it needn't fit in-flow. Mirror this height in
                                            // OnboardingWindowController's contentRect.
-        .glassSurface(.popover)
+        // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
+        // miss. `performDrag` only fires for clicks that fall THROUGH to this background, so interactive
+        // controls (slider, buttons, mode control, city picker) keep their own drags. (This is why we keep
+        // `isMovableByWindowBackground` off — it would steal the WarmSlider's drag.)
+        .background(WindowDraggableBackground())
+        // Fill the window with the frosted-ember glass (same as Settings/About) so the OS rounds the
+        // corners and the traffic-light buttons sit cleanly in the transparent title bar — no detached
+        // floating-card border.
+        .background(FrostBackground())
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
 
@@ -94,20 +108,26 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: Step 2 — max warmth
+    // MARK: Step 3 — set the warmth (a live "preview of your evening")
 
     private var warmthStep: some View {
         VStack(spacing: 14) {
-            Text("Set your warmest")
+            Text("How warm should it get?")
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
-            Text("Drag until your screen feels like candlelight. This is your night maximum.")
+            // Honest framing (fixes the old "set your maximum" copy — the slider sets everyday warmth, not
+            // the ceiling). For Sunset users the forced preview is explicitly "your evening" so the cool-down
+            // on finish reads as intended, not a glitch.
+            Text(scheduleOption == .followSunset
+                 ? "A preview of your evening — drag to set how warm. You can change it anytime."
+                 : "Drag to set how warm. You can change it anytime.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Live applied Kelvin — the slider drives the engine directly (below), so this number and
-            // the screen warm together as you drag, instead of only committing on "Looks right".
+            // Live applied Kelvin — the slider drives the engine directly, so this number and the screen
+            // warm together as you drag.
             Text("\(model.globalKelvin.displayValue) K")
                 .font(Theme.Typography.serif(30))
                 .monospacedDigit()
@@ -116,24 +136,30 @@ struct OnboardingView: View {
             // Same science-backed accent metric as the popover ticker (instant updates here).
             BlueLightReductionLabel(kelvin: model.globalKelvin, animated: false)
 
-            // Bind STRAIGHT to the engine so dragging warms the screen live (mirrors the popover's global
-            // slider). Sets the nightly warmth STRENGTH within the warmest-point ceiling (default 1900K);
-            // power users can push the ceiling lower later via Settings → Advanced.
             WarmSlider(strength: Binding(
                 get: { model.state.globalWarmth.strength },
                 set: { model.setGlobalWarmth($0) }
-            ))
+            ), model: model)
 
-            PrimaryButton(title: "Looks right") { advance() }   // warmth is already applied live
+            PrimaryButton(title: "Looks right") {
+                // Restore the schedule chosen in step 2 (this step forced Always-on so the screen could
+                // bloom regardless of time). Sunset users ease back to neutral in daylight — expected,
+                // because this step was framed as "a preview of your evening".
+                model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+                advance()
+            }
         }
-        // The live preview is only visible while warming is ON; a fresh install starts disabled, so turn
-        // it on here — now WITH the warm-on confirmation tone (gated by the sound pref) — when the user reaches this
-        // step. (NOTE: in daytime Sunset mode the schedule still gates the screen to neutral; the live
-        // preview shows in the evening/at night or in Always-on mode.)
-        .onAppear { model.setEnabled(true, userInitiated: true) }
+        // Force the warm preview so the screen blooms regardless of the chosen mode/time — the one
+        // guaranteed "this is what warm looks like" moment, starting at the warmest. Warming is already
+        // on (from step 2), so this is a silent override; the "Looks right" button restores the real mode.
+        .onAppear {
+            model.setScheduleMode(.alwaysOn, userInitiated: false)
+            model.setGlobalWarmth(1.0)
+            model.setEnabled(true, userInitiated: false)
+        }
     }
 
-    // MARK: Step 3 — confirm schedule
+    // MARK: Step 2 — choose the schedule (mode FIRST, applied live so its effect is visible)
 
     private var scheduleStep: some View {
         VStack(spacing: 13) {
@@ -141,38 +167,54 @@ struct OnboardingView: View {
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            // Tick the mode tone on each toggle (same as the popover), gated by the sound pref.
-            ModeControl(selection: $scheduleOption) { option in model.playSoftModeTone(option.toScheduleMode()) }
+            // Apply the mode LIVE on each toggle so the user feels the difference immediately: Always-on
+            // warms the screen now; Sunset (in daylight) eases back to neutral. `setScheduleMode` also
+            // plays the soft mode tick (gated by the sound pref).
+            ModeControl(selection: $scheduleOption) { option in
+                model.setScheduleMode(option.toScheduleMode())
+            }
 
             if scheduleOption == .followSunset {
                 VStack(alignment: .leading, spacing: 11) {
                     sunsetScienceCard
-                    // Sunset needs a location to time the sunset. Reuse the Settings liquid-glass city
-                    // picker — "Auto (from time zone)" is pre-selected, so the user can simply continue.
                     VStack(alignment: .leading, spacing: 6) {
+                        // It's not broken — it's armed. Say what's happening AND exactly when, so the
+                        // neutral daytime screen never reads as "nothing happened".
+                        Text(model.isWarmingActive
+                             ? "The sun has set — your screen is warming now."
+                             : "It’s daytime, so your screen stays neutral for now. Warmth eases in around your local sunset:")
+                            .font(Theme.Typography.ui(11.5))
+                            .foregroundStyle(Theme.Color.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
                         CityAutocomplete(model: model, opensUpward: true)
-                        Text(sunsetReadout)
-                            .font(Theme.Typography.ui(11))
-                            .foregroundStyle(Theme.Color.textFaint)
+                        Text(model.todaysSunsetReadout)
+                            .font(Theme.Typography.ui(12, weight: .semibold))
+                            .foregroundStyle(Theme.Color.accentHighlight)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
             } else {
-                Text("Warmth stays on around the clock.")
+                Text("Warmth starts now and stays on — day and night.")
                     .font(Theme.Typography.ui(12.5))
                     .foregroundStyle(Theme.Color.textMuted)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
             }
 
-            PrimaryButton(title: scheduleOption == .followSunset ? "Soften into the evening" : "Start warming") {
-                model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)   // toggle already ticked
-                model.setEnabled(true, userInitiated: false)
-                advance()   // → the closing "You're all set" screen
-            }
+            PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
         }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: scheduleOption)
+        // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
+        // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
+        // — "Abendrot is now active"; the mode tick then plays on each toggle.
+        .onAppear {
+            // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
+            // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
+            model.setEnabled(true, userInitiated: true)
+            model.setGlobalWarmth(1.0)
+            model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+        }
     }
 
     // MARK: Step 4 — closing confirmation (not numbered) — privacy reassurance lives here now
@@ -254,19 +296,6 @@ struct OnboardingView: View {
         )
     }
 
-    /// Live "Today's sunset ≈ h:mm a" for the chosen (or auto) location — same logic as Settings →
-    /// Schedule, so the picked city feels real. Zero permission, zero network (time-zone coordinates).
-    private var sunsetReadout: String {
-        let coordinate = model.userCoordinate ?? TimeZoneCoordinates.current()
-        guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coordinate, on: Date()) else {
-            return "Today's sunset: —"
-        }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        formatter.timeZone = .current
-        return "Today's sunset ≈ \(formatter.string(from: sunset))"
-    }
-
     // MARK: Helpers
 
     private func advance() {
@@ -301,6 +330,22 @@ struct PrimaryButton: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - WindowDraggableBackground
+//
+// A transparent NSView that lets the user drag the whole onboarding card from any empty area, not just the
+// thin transparent title-bar strip. It only starts a window drag on mouse-downs that fall THROUGH to it —
+// interactive SwiftUI controls consume their own events first — so it never steals a control's drag. Used
+// instead of `isMovableByWindowBackground`, which steals the custom WarmSlider's drag.
+private struct WindowDraggableBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { DragView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class DragView: NSView {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
 }
 

@@ -122,7 +122,7 @@ private struct AboutView: View {
                     .padding(.top, 38)
                     .padding(.horizontal, 36)
 
-                BuiltBySignature()
+                BylineLink(fontSize: 11.5)
                     .padding(.top, 34)
 
                 AboutFooterLinks()
@@ -139,23 +139,11 @@ private struct AboutView: View {
         .frame(width: 460, height: 640)
         // Persistent frosted-ember glass, full-bleed to the window edges (cornerRadius 0 — the window
         // itself supplies the rounded corners). The sunset halo behind the icon lives in AboutHeader.
-        .background(AboutFrostBackground())
+        .background(FrostBackground())
         .onAppear {
             guard !reduceMotion else { appeared = true; return }
             withAnimation(.smooth(duration: 0.55)) { appeared = true }
         }
-    }
-}
-
-// MARK: - Frosted-ember background
-
-/// The persistent "frosted ember" material for the About card (§21.3), matching Settings. Degrades to
-/// the ember SOLID under Reduce Transparency via `GlassSurface`.
-private struct AboutFrostBackground: View {
-    var body: some View {
-        Color.clear
-            .glassSurface(.frost, cornerRadius: 0)
-            .ignoresSafeArea()
     }
 }
 
@@ -270,7 +258,7 @@ private struct WarmedTimeStat: View {
                     Text("Abendrot has warmed your Mac for")
                         .font(Theme.Typography.ui(11))
                         .foregroundStyle(Theme.Color.textMuted)
-                    Text(Self.durationString(model.totalWarmedSeconds))
+                    Text(model.warmedDurationString)
                         .font(Theme.Typography.serif(20))
                         .monospacedDigit()
                         .foregroundStyle(Theme.Color.accentHighlight)
@@ -279,41 +267,6 @@ private struct WarmedTimeStat: View {
             }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    /// "2d 17h 41m 46s", dropping leading-zero top units but always keeping at least m + s.
-    /// Mirrors `StatisticsTab.durationString` (kept in sync; the two read the same `totalWarmedSeconds`).
-    static func durationString(_ seconds: Double) -> String {
-        let s = max(0, Int(seconds))
-        let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60, sec = s % 60
-        var parts: [String] = []
-        if d > 0 { parts.append("\(d)d") }
-        if h > 0 || d > 0 { parts.append("\(h)h") }
-        parts.append("\(m)m")
-        parts.append("\(sec)s")
-        return parts.joined(separator: " ")
-    }
-}
-
-// MARK: - Signature
-
-/// "Built by Matthew Ball" → matthewball.me. Replicates the shared `BylineLink` styling (that type is
-/// `private` to SettingsView, so we re-implement the same underlined, hover-brightening link here rather
-/// than reach across files) so the About window and Settings stay congruent.
-private struct BuiltBySignature: View {
-    @State private var hovering = false
-
-    var body: some View {
-        Link(destination: URL(string: "https://matthewball.me/")!) {
-            (Text("Built by ") + Text("Matthew Ball").underline())
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textMuted)
-                .opacity(hovering ? 1 : 0.85)
-                .animation(.easeOut(duration: 0.12), value: hovering)
-        }
-        .buttonStyle(.plain)
-        .pointerStyle(.link)
-        .onHover { hovering = $0 }
     }
 }
 

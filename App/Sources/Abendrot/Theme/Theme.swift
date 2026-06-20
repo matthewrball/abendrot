@@ -14,8 +14,8 @@ import SwiftUI
 //
 // Token discipline (baked into tokens.json):
 //   - Never pure #000 — grounds are warm-tinted near-blacks.
-//   - `Theme.Color.revealTrueWhite` (#FFFFFF) is RESERVED for the Reveal-True-Color
-//     veil only. Body text is `textPrimary` (#ECE8F4), never white.
+//   - #FFFFFF is RESERVED for the Reveal-True-Color veil only. Body text is
+//     `textPrimary` (#ECE8F4), never white.
 //   - Light + Reduce-Transparency surfaces are warm cream / twilight, never grey.
 enum Theme {
 
@@ -32,8 +32,6 @@ enum Theme {
         // Twilight grounds (dark) / warm cream (light)
         static let groundIndigo = SwiftUI.Color("GroundIndigo", bundle: .main)
         static let groundPlum = SwiftUI.Color("GroundPlum", bundle: .main)
-        static let groundTwilight = SwiftUI.Color("GroundTwilight", bundle: .main)
-        static let groundTwilight2 = SwiftUI.Color("GroundTwilight2", bundle: .main)
 
         /// Fixed near-black ink for text/glyphs ON the bright accent gradient (selected segmented-control
         /// segment, onboarding CTA, etc.). NOT `groundIndigo` — that is an adaptive GROUND (cream in Light
@@ -45,14 +43,10 @@ enum Theme {
         static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .main)
         static let textMuted = SwiftUI.Color("TextMuted", bundle: .main)
         static let textFaint = SwiftUI.Color("TextFaint", bundle: .main)
-        static let textCream = SwiftUI.Color("TextCream", bundle: .main)
 
         // Lines / dividers
         static let line = SwiftUI.Color("LineBase", bundle: .main)
         static let lineStrong = SwiftUI.Color("LineStrong", bundle: .main)
-
-        /// RESERVED: the only #FFFFFF in the system — Reveal-True-Color veil only.
-        static let revealTrueWhite = SwiftUI.Color("RevealTrueWhite", bundle: .main)
 
         // Reduce-Transparency SOLID fallback (ember-tinted gradient endpoints).
         static let solidTop = SwiftUI.Color("SolidTop", bundle: .main)
@@ -92,7 +86,6 @@ enum Theme {
 
         /// Approximation of the `ease-warm` cubic-bezier as a SwiftUI timing curve.
         static let warm = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durBase)
-        static let warmFast = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durFast)
 
         /// The one "big" moment — Reveal True Color "lift the veil" (§21.3).
         /// Physical/elastic spring, not a fade.

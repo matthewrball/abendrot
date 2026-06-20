@@ -69,9 +69,14 @@ final class AppModel {
     /// (deeper, dampened) on warming-OFF. Built lazily on first toggle; nil if the sound file is missing.
     @ObservationIgnored private lazy var confirmationChime: ConfirmationChime? = ConfirmationChime()
 
-    /// Warm, synthesized "swoosh" played when the advanced popover panel expands. Built lazily on first
-    /// expand; nil only if the audio buffer can't be allocated. See `toggleAdvanced()`.
+    /// Airy, synthesized "swoosh" for the advanced popover panel — rising on expand, falling on collapse.
+    /// Built lazily on first toggle; nil only if the audio buffers can't be allocated. See `toggleAdvanced()`.
     @ObservationIgnored private lazy var expandSwoosh: SwooshSound? = SwooshSound()
+
+    /// The synthesized "dial detent" tick for slider drags. Owned here (not a global) so the gate +
+    /// graph live together, matching the chime/swoosh; the `WarmSlider` view routes through `dialTick`/
+    /// `dialRatchet`. Built lazily on first drag.
+    @ObservationIgnored private lazy var dialTickPlayer = DialTick()
 
     // MARK: Engine wiring (nil in previews)
 
@@ -252,14 +257,34 @@ final class AppModel {
         confirmationChime?.play(pitchCents: cents, volume: 0.22)   // ~0.11 effective vs the 0.5 master
     }
 
-    /// Flip the popover's advanced panel. Plays the warm swoosh on EXPAND only (collapse stays silent),
-    /// gated by the SAME "Soft confirmation tone" pref as the chimes. The caller wraps this in
+    /// Flip the popover's advanced panel. Plays the airy swoosh — rising on EXPAND, falling on COLLAPSE
+    /// — gated by the SAME "Soft confirmation tone" pref as the chimes. The caller wraps this in
     /// `withAnimation` so the panel still animates; the swoosh is just a side effect of the flip.
     func toggleAdvanced() {
         isAdvancedExpanded.toggle()
-        if isAdvancedExpanded, UserDefaults.standard.bool(forKey: "softConfirmationTone") {
-            expandSwoosh?.play(volume: 0.28)   // ponytail: quiet by ear; tune with the synth knobs below
-        }
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        // ponytail: quiet by ear; tune with the synth knobs in SwooshSound.
+        expandSwoosh?.play(opening: isAdvancedExpanded, volume: 0.03)
+    }
+
+    /// One slider-drag detent click — gated by the SAME "Soft confirmation tone" pref as the chimes
+    /// (General tab). Owns both the gate and the tick graph so the `WarmSlider` view doesn't reach a
+    /// global or read the pref inline.
+    func dialTick(volume: Float) {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        dialTickPlayer.tick(volume: volume)
+    }
+
+    /// A burst of detent clicks spread across a tap's glide — gated identically to `dialTick`.
+    func dialRatchet(steps: Int, duration: Double, volume: Float) {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        dialTickPlayer.ratchet(steps: steps, duration: duration, volume: volume)
+    }
+
+    /// Pre-spin the dial engine on slider press (gated like `dialTick`) so the first click is tight.
+    func dialPrewarm() {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        dialTickPlayer.prewarm()
     }
 
     func setGlobalWarmth(_ strength: Double) {
@@ -403,6 +428,29 @@ final class AppModel {
         Task { await engine?.setUserCoordinate(coordinate) }
     }
 
+    /// "h:mm a" formatter for the sunset readout, built once (DateFormatter is expensive to create).
+    private static let sunsetReadoutFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        formatter.timeZone = .current
+        return formatter
+    }()
+
+    /// Live "Today's sunset ≈ h:mm a" for the chosen (or auto) location — zero permission, zero network
+    /// (time-zone coordinates). Shared by Settings → Schedule and onboarding so the picked city feels real.
+    var todaysSunsetReadout: String {
+        let coordinate = userCoordinate ?? TimeZoneCoordinates.current()
+        guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coordinate, on: Date()) else {
+            return "Today's sunset: —"
+        }
+        // Format in the CITY's local clock, not the user's — otherwise a far city's sunset prints in
+        // the Mac's timezone (e.g. Tokyo's 7 PM shown as "3 AM"). Same longitude approximation (15°/hour)
+        // the resolver uses to compute it. Safe to mutate the shared formatter: AppModel is @MainActor.
+        let formatter = Self.sunsetReadoutFormatter
+        formatter.timeZone = TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) ?? .current
+        return "Today's sunset ≈ \(formatter.string(from: sunset))"
+    }
+
     /// Add one bundle id to the exclusion set (Advanced → Excluded apps "Add app…").
     func addExcludedApp(_ id: String) { setExcludedApps(excludedApps.union([id])) }
 
@@ -420,6 +468,19 @@ final class AppModel {
     /// Live total warmed time = the persisted base + any in-flight period's elapsed.
     var totalWarmedSeconds: Double {
         warmedSecondsBase + (warmingStartedAt.map { max(0, Date().timeIntervalSince($0)) } ?? 0)
+    }
+
+    /// `totalWarmedSeconds` rendered as "2d 17h 41m 46s", dropping leading-zero top units but always
+    /// keeping at least m + s. Shared by the Statistics tab and the About window so the two read the same.
+    var warmedDurationString: String {
+        let s = max(0, Int(totalWarmedSeconds))
+        let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60, sec = s % 60
+        var parts: [String] = []
+        if d > 0 { parts.append("\(d)d") }
+        if h > 0 || d > 0 { parts.append("\(h)h") }
+        parts.append("\(m)m")
+        parts.append("\(sec)s")
+        return parts.joined(separator: " ")
     }
 
     func setStatsEnabled(_ on: Bool) {
@@ -446,9 +507,9 @@ final class AppModel {
     // current run's un-flushed time; add a periodic flush timer only if that ever matters.
     private func updateWarmingStats() {
         updateWarmSunsetCount()
-        // "Actively warming" = enabled, the schedule says warm NOW, and not mid-reveal. NOT
-        // `statusPhase == .warming`, which is also true in daytime Sunset mode (strength > 0 while the
-        // solar ramp applies 0) and would over-count the daylight hours.
+        // "Actively warming" = enabled, the schedule says warm NOW, and not mid-reveal. NOT merely
+        // "enabled with strength > 0", which is also true in daytime Sunset mode (the solar ramp applies
+        // 0 while the schedule is inactive) and would over-count the daylight hours.
         let warmingNow = statsEnabled && state.isEnabled && state.isScheduleActiveNow && !state.isRevealing
         let now = Date()
         if warmingNow {
@@ -512,28 +573,6 @@ final class AppModel {
         state.isEnabled && state.isScheduleActiveNow && !state.isRevealing
     }
 
-    /// The phase the status readout is in. Lets the popover header render the Kelvin number as its
-    /// own `Text` (so it can animate with a sliding-digit transition) while the non-warming phases
-    /// stay plain text.
-    enum StatusPhase: Equatable { case off, revealing, idle, warming }
-
-    var statusPhase: StatusPhase {
-        guard state.isEnabled else { return .off }
-        if state.isRevealing { return .revealing }
-        guard state.isScheduleActiveNow || state.globalWarmth.strength > 0 else { return .idle }
-        return .warming
-    }
-
-    /// A short, glanceable status string for the popover title ("Warming · 2700K").
-    var statusSummary: String {
-        switch statusPhase {
-        case .off:       return "Off"
-        case .revealing: return "True color"
-        case .idle:      return "Idle"
-        case .warming:   return "Warming · \(globalKelvin.displayValue)K"
-        }
-    }
-
     // MARK: ── Incompatibility ("can only be tinted") detection — §25.J ──────────
 
     /// A display can only be TINTED when no true-warm path is available to it: gamma is not
@@ -543,13 +582,19 @@ final class AppModel {
     /// source of truth.
     func isTintOnly(_ display: DisplayState) -> Bool {
         let priv = state.privateAPIsEnabled
-        let gammaPossible = priv && Self.isSupported(display.capabilities.gamma)
-        let ddcPossible = priv && Self.isSupported(display.capabilities.hardware)
+        let gammaPossible = priv && display.capabilities.gamma.isSupported
+        let ddcPossible = priv && display.capabilities.hardware.isSupported
         return !(gammaPossible || ddcPossible)
     }
+}
 
-    private static func isSupported<T>(_ cap: Capability<T>) -> Bool {
-        if case .supported = cap { return true }
+// MARK: - Capability
+
+extension Capability {
+    /// True when this capability is `.supported`. Shared by `AppModel.isTintOnly` and the Settings →
+    /// Displays method/warning logic so the "can this display be truly warmed?" test reads one way.
+    var isSupported: Bool {
+        if case .supported = self { return true }
         return false
     }
 }
@@ -572,69 +617,69 @@ extension Kelvin {
 /// (short) chime so its render thread doesn't run forever.
 @MainActor
 private final class ConfirmationChime {
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
+    private let core = OneShotPlayer()
     private let pitch = AVAudioUnitTimePitch()
     private let file: AVAudioFile
-    private var idleTask: Task<Void, Never>?
 
     init?() {
         guard let f = try? AVAudioFile(forReading: URL(fileURLWithPath: "/System/Library/Sounds/Glass.aiff")) else {
             return nil
         }
         file = f
-        engine.attach(player)
-        engine.attach(pitch)
-        engine.connect(player, to: pitch, format: file.processingFormat)
-        engine.connect(pitch, to: engine.mainMixerNode, format: file.processingFormat)
-        engine.mainMixerNode.outputVolume = 0.5
+        core.engine.attach(core.player)
+        core.engine.attach(pitch)
+        core.engine.connect(core.player, to: pitch, format: file.processingFormat)
+        core.engine.connect(pitch, to: core.engine.mainMixerNode, format: file.processingFormat)
+        core.engine.mainMixerNode.outputVolume = 0.5
     }
 
     func play(pitchCents: Float, volume: Float = 1.0) {
         pitch.pitch = pitchCents
-        player.volume = volume              // per-play loudness; warming = 1.0, mode tick = quieter
-        if !engine.isRunning { try? engine.start() }
-        guard engine.isRunning else { return }
-        player.stop()                       // reset if a prior chime is still scheduled (rapid re-toggle)
-        player.scheduleFile(file, at: nil)
-        player.play()
-        // Stop the engine shortly after the (sub-2s) chime so the render thread doesn't run indefinitely.
-        idleTask?.cancel()
-        idleTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(3))
-            guard let self, !self.player.isPlaying else { return }
-            self.engine.stop()
-        }
+        // per-play loudness; warming = 1.0, mode tick = quieter. Engine idles 3s after the (sub-2s) chime.
+        core.fire(file: file, volume: volume, idleAfter: 3)
     }
 }
 
-/// An airy, light "swoosh" for expanding the advanced popover panel — no audio asset; rendered once
-/// into a buffer. Recipe: white noise HIGH-PASSED (cutoff sweeps ≈1500→4200 Hz so only the "air" is
-/// kept — no mid body, which read as hard), then gently low-passed (~7.5 kHz ceiling) so it shimmers
-/// like frosted glass instead of hissing, on a soft clickless raised-cosine envelope over ~0.3 s. Same
-/// lazy main-actor engine pattern as `ConfirmationChime`; the engine idles itself after the one-shot.
+/// An airy, light "swoosh" for the advanced popover panel — no audio asset; two buffers rendered once.
+/// Recipe: white noise HIGH-PASSED (cutoff sweeps so only the "air" is kept — no mid body, which read
+/// as hard), then gently low-passed (~7.5 kHz ceiling) so it shimmers like frosted glass instead of
+/// hissing, on a soft clickless raised-cosine envelope over ~0.3 s. OPEN sweeps the cutoff UP (rising,
+/// "opening"); CLOSE sweeps it DOWN (falling, "settling") — the only difference, so they read as a
+/// pair. Same lazy main-actor engine pattern as `ConfirmationChime`; the engine idles after the shot.
 @MainActor
 private final class SwooshSound {
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    private let buffer: AVAudioPCMBuffer
-    private var idleTask: Task<Void, Never>?
+    private let core = OneShotPlayer()
+    private let openBuffer: AVAudioPCMBuffer
+    private let closeBuffer: AVAudioPCMBuffer
 
     init?() {
         let sampleRate = 44_100.0
-        let duration = 0.32
-        let frames = AVAudioFrameCount(sampleRate * duration)
+        let frames = AVAudioFrameCount(sampleRate * 0.32)   // ~0.3 s one-shot
         guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
-              let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
+              let open = Self.render(rising: true, format: format, frames: frames, sampleRate: sampleRate),
+              let close = Self.render(rising: false, format: format, frames: frames, sampleRate: sampleRate)
+        else { return nil }
+        openBuffer = open
+        closeBuffer = close
+        core.engine.attach(core.player)
+        core.engine.connect(core.player, to: core.engine.mainMixerNode, format: format)
+    }
+
+    /// Render one swoosh buffer. `rising` sweeps the high-pass cutoff UP (open); `false` sweeps it DOWN
+    /// (close). Reversing that sweep is the ONLY difference between the paired open/close sounds.
+    private static func render(rising: Bool, format: AVAudioFormat, frames: AVAudioFrameCount,
+                               sampleRate: Double) -> AVAudioPCMBuffer? {
+        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
               let out = buf.floatChannelData?[0] else { return nil }
         buf.frameLength = frames
-        buffer = buf
 
         // ponytail: taste-tune by ear — "airy & light like frosted glass" = high-passed AIR (no mid
         // body/resonance — that read as "hard"), softly smoothed so it shimmers not hisses, and quiet.
-        // Raise hpEnd for airier/thinner; lower fcLP for a softer/darker top; raise duration for slower.
-        let hpStart = 1500.0, hpEnd = 4200.0   // high-pass cutoff sweeps UP → airy "opening", no body
-        let fcLP = 7500.0                       // soft ceiling → frosted-glass smooth, not gritty
+        // Widen [lo, hi] for a bigger sweep; lower fcLP for a softer/darker top.
+        let lo = 1500.0, hi = 4200.0            // high-pass cutoff sweep ends (Hz)
+        let hpStart = rising ? lo : hi          // open rises lo→hi; close falls hi→lo
+        let hpEnd = rising ? hi : lo
+        let fcLP = 7500.0                        // soft ceiling → frosted-glass smooth, not gritty
         let aLP = 1.0 - exp(-2.0 * Double.pi * fcLP / sampleRate)
         var lpHP = 0.0, lpOut = 0.0
         let n = Int(frames)
@@ -649,23 +694,10 @@ private final class SwooshSound {
             let env = pow(sin(Double.pi * t), 1.4)  // soft raised cosine (tapered = lighter); 0 at ends
             out[i] = Float(max(-1.0, min(1.0, lpOut * env * 0.5)))   // low internal gain → headroom, no clip
         }
-
-        engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
+        return buf
     }
 
-    func play(volume: Float) {
-        player.volume = volume
-        if !engine.isRunning { try? engine.start() }
-        guard engine.isRunning else { return }
-        player.stop()                       // restart cleanly on a rapid re-expand
-        player.scheduleBuffer(buffer, at: nil)
-        player.play()
-        idleTask?.cancel()
-        idleTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
-            guard let self, !self.player.isPlaying else { return }
-            self.engine.stop()
-        }
+    func play(opening: Bool, volume: Float) {
+        core.fire(buffer: opening ? openBuffer : closeBuffer, volume: volume, idleAfter: 2)
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 import WarmthKit
 
 // MARK: - Shared Abendrot UI components
@@ -21,6 +22,8 @@ import WarmthKit
 /// restyled with the ember track.
 struct WarmSlider: View {
     @Binding var strength: Double
+    /// The view-model — owns the dial-tick graph + its "Soft confirmation tone" gate (`dialTick`/`dialRatchet`).
+    var model: AppModel
     var compact: Bool = false
     /// When provided (the popover's main slider), the Warmth row shows this Kelvin readout inline,
     /// with an info tooltip. Other callers pass nil (they have their own readouts).
@@ -32,9 +35,17 @@ struct WarmSlider: View {
     @GestureState private var isPressing = false
     /// Drives the Kelvin info tooltip (shown on hover of the ⓘ).
     @State private var showKelvinInfo = false
+    /// Last detent index the value crossed during a drag — drives the dial tick + thumb pop (one per
+    /// detent), reset between presses. nil = not mid-manipulation.
+    @State private var lastDetent: Int? = nil
+    /// Bumped on each detent crossing to fire the thumb's "pop" keyframe — the visual half of the click.
+    @State private var popTrigger = 0
 
     private var trackHeight: CGFloat { compact ? 5 : 7 }
     private var thumbSize: CGFloat { compact ? 15 : 20 }
+    /// Detents spanning the track — the notch count AND the click cadence, kept in one place so the
+    /// marks you see line up exactly with the clicks you hear. More = finer/denser mini ticks.
+    private let detentCount = 60
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 12) {
@@ -42,15 +53,20 @@ struct WarmSlider: View {
                 warmthTicker
             }
 
-            gradientSlider
-
-            HStack {
+            // "Softer" / "Warmer" flank the slider inline (founder) instead of sitting beneath it —
+            // tighter, and the words read as the two ends of the track. `fixedSize` keeps the labels
+            // intact so the slider takes the middle.
+            HStack(spacing: 10) {
                 Text("Softer")
-                Spacer()
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .fixedSize()
+                gradientSlider
                 Text("Warmer")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .fixedSize()
             }
-            .font(Theme.Typography.ui(11.5))
-            .foregroundStyle(Theme.Color.textMuted)
         }
         .overlay(alignment: .topLeading) {
             if showKelvinInfo, kelvin != nil {
@@ -68,10 +84,7 @@ struct WarmSlider: View {
     private var warmthTicker: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
-                Text("Warmth".uppercased())
-                    .font(Theme.Typography.ui(11, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Theme.Color.textFaint)
+                SectionLabel("Warmth")
                 if kelvin != nil {
                     Image(systemName: "info.circle")
                         .font(.system(size: 10.5))
@@ -145,11 +158,39 @@ struct WarmSlider: View {
                             .frame(width: thumbX + thumbSize / 2, height: trackHeight)
                     }
 
+                // Faint dial graduations — one notch per detent, brighter majors every 10 — over the
+                // track so the thumb visibly clicks past them (it covers the notch it sits on). White at
+                // low opacity reads on the dark groove ahead and as a soft highlight on the filled ramp.
+                Canvas { ctx, size in
+                    let cy = size.height / 2
+                    for i in 0...detentCount {
+                        let x = CGFloat(i) / CGFloat(detentCount) * usable + thumbSize / 2
+                        let major = i % 10 == 0
+                        let half = (trackHeight + (major ? 5 : 2)) / 2
+                        var p = Path()
+                        p.move(to: CGPoint(x: x, y: cy - half))
+                        p.addLine(to: CGPoint(x: x, y: cy + half))
+                        ctx.stroke(p, with: .color(.white.opacity(major ? 0.28 : 0.14)),
+                                   lineWidth: major ? 1 : 0.6)
+                    }
+                }
+                .allowsHitTesting(false)
+
                 glassThumb(pressed: isPressing)
                     .frame(width: thumbSize, height: thumbSize)
                     .scaleEffect(isPressing ? 1.12 : 1.0)
                     // Snappy, well-damped press feedback — settles fast so rapid clicks don't throb.
                     .animation(.spring(response: 0.2, dampingFraction: 0.86), value: isPressing)
+                    // Visual "click": a quick scale pop on each detent (multiplies with the press scale
+                    // above). Re-fires when `popTrigger` bumps; settles back to 1.0 between clicks.
+                    .keyframeAnimator(initialValue: 1.0, trigger: popTrigger) { view, scale in
+                        view.scaleEffect(scale)
+                    } keyframes: { _ in
+                        KeyframeTrack {
+                            CubicKeyframe(1.12, duration: 0.05)
+                            CubicKeyframe(1.0, duration: 0.13)
+                        }
+                    }
                     .offset(x: thumbX)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -157,18 +198,44 @@ struct WarmSlider: View {
             // (below) disables this so the thumb tracks the finger 1:1 — no lag, no jitter.
             .animation(reduceMotion ? nil : .smooth(duration: 0.16), value: strength)
             .contentShape(Rectangle())
+            // Clicky "dial" feedback, gated on the "Soft confirmation tone" pref. Driven here (not via
+            // onChange) so a 1:1 drag and a glide-on-tap are told apart. ponytail: 40 detents = a fine
+            // click-dial; tune the click timbre + loudness in DialTick.
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .updating($isPressing) { _, state, _ in state = true }
                     .onChanged { value in
+                        // Pre-spin the audio engine on press-down (first event of the gesture) so the very
+                        // first click isn't delayed by render-thread startup.
+                        if lastDetent == nil { model.dialPrewarm() }
                         let target = Double((value.location.x - thumbSize / 2) / usable).clamped01
+                        // Detent = which notch line the thumb has PASSED (floor, not round): a click fires the
+                        // instant the thumb CENTER crosses a notch, exactly in line with the marks. (Round flips
+                        // at the midpoint BETWEEN notches — half a notch off, which read as "not lined up".)
+                        let toDetent = Int((target * Double(detentCount)).rounded(.down))
                         if abs(value.translation.width) > 2 {
                             var tx = Transaction(); tx.disablesAnimations = true   // drag: follow finger 1:1
                             withTransaction(tx) { strength = target }
+                            // One click + thumb pop per notch the thumb crosses. The model gates on the pref.
+                            if let last = lastDetent, toDetent != last {
+                                model.dialTick(volume: 0.2)
+                                if !reduceMotion { popTrigger &+= 1 }
+                            }
                         } else {
-                            strength = target                                       // tap: glide there
+                            // Tap / press-down: the thumb GLIDES to target via .smooth(0.16) above — ratchet
+                            // the clicks across that same glide so they track the moving thumb. Reduce Motion
+                            // skips the glide (instant), so it gets a single click instead.
+                            let fromDetent = Int((strength.clamped01 * Double(detentCount)).rounded(.down))   // before the jump
+                            strength = target
+                            let steps = abs(toDetent - fromDetent)
+                            if lastDetent == nil, steps >= 1 {
+                                if reduceMotion { model.dialTick(volume: 0.2) }
+                                else { model.dialRatchet(steps: steps, duration: 0.16, volume: 0.2); popTrigger &+= 1 }
+                            }
                         }
+                        lastDetent = toDetent
                     }
+                    .onEnded { _ in lastDetent = nil }
             )
         }
         .frame(height: max(thumbSize, 22))
@@ -290,7 +357,7 @@ struct DisplayRow: View {
 
             // The per-display slider exists only while the override is on, revealed calmly below.
             if display.warmthOverridden {
-                WarmSlider(strength: warmthBinding, compact: true)
+                WarmSlider(strength: warmthBinding, model: model, compact: true)
                     .padding(.top, 10)
                     .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
             }
@@ -331,11 +398,14 @@ struct DisplayRow: View {
 
 struct SectionLabel: View {
     let text: String
+    init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text.uppercased())
-            .font(Theme.Typography.ui(11, weight: .semibold))
-            .tracking(0.8)
-            .foregroundStyle(Theme.Color.textFaint)
+        // The app's one section-heading style: sentence case · 13pt semibold · secondary — native
+        // macOS System Settings (founder). Route every popover + Settings section title through here so
+        // they never drift apart again.
+        Text(text)
+            .font(Theme.Typography.ui(13, weight: .semibold))
+            .foregroundStyle(Theme.Color.textMuted)
     }
 }
 
@@ -346,6 +416,19 @@ struct DividerLine: View {
         Rectangle()
             .fill(Theme.Color.lineStrong)
             .frame(height: 0.5)
+    }
+}
+
+// MARK: - FrostBackground
+
+/// The persistent "frosted ember" material backing the Settings and About windows (§21.3). Full-bleed
+/// (cornerRadius 0 — the window supplies the rounded corners) and degrades to the ember SOLID under
+/// Reduce Transparency via `GlassSurface`. Shared so the two windows can't drift.
+struct FrostBackground: View {
+    var body: some View {
+        Color.clear
+            .glassSurface(.frost, cornerRadius: 0)
+            .ignoresSafeArea()
     }
 }
 
@@ -363,6 +446,111 @@ struct AppIconView: View {
                 .aspectRatio(contentMode: .fit)
         } else {
             SunsetArcGlyph()
+        }
+    }
+}
+
+// MARK: - DialTick
+//
+/// A realistic "dial detent" click for slider adjustment — synthesized once (no asset). Each grain
+/// models a real detent: a sharp broadband SNAP exciting a tiny resonant body (a few damped modes — a
+/// bright "tick" pair plus a faint low "tock"), so it reads as a mechanical click rather than a beep or
+/// a flat noise burst. Four grains are slightly detuned so a sweep sounds organic, not like one looped
+/// sample. Round-robined per detent crossing. Quiet; the "Soft confirmation tone" gate lives on
+/// `AppModel` (`dialTick`/`dialRatchet`), which owns the one instance. Lazy main-actor engine, idles when idle.
+@MainActor
+final class DialTick {
+    private let core = OneShotPlayer()
+    private var grains: [AVAudioPCMBuffer] = []
+    private var next = 0
+    private var ratchetTask: Task<Void, Never>?
+
+    init() {
+        let sampleRate = 44_100.0
+        let frames = AVAudioFrameCount(sampleRate * 0.030)   // ~30 ms — room for the resonant body to ring out
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else { return }
+        // ponytail: taste-tune by ear — four detuned variants keep a fast sweep organic. tick(volume:)
+        // at the call site is the loudness knob; the snap + resonant modes (freq/decay/gain) live in grain().
+        let detunes = [0.97, 0.99, 1.02, 1.04]
+        grains = detunes.compactMap { Self.grain(detune: $0, format: format, frames: frames, sampleRate: sampleRate) }
+        guard !grains.isEmpty else { return }
+        core.engine.attach(core.player)
+        core.engine.connect(core.player, to: core.engine.mainMixerNode, format: format)
+    }
+
+    private static func grain(detune: Double, format: AVAudioFormat, frames: AVAudioFrameCount,
+                              sampleRate: Double) -> AVAudioPCMBuffer? {
+        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
+              let out = buf.floatChannelData?[0] else { return nil }
+        buf.frameLength = frames
+        // A real detent click = a sharp broadband SNAP that excites a small resonant body. Model the body
+        // as a few damped modes (a bright tick pair + a faint low tock), detuned per grain so it's organic.
+        let fcHP = 3000.0
+        let aHP = 1.0 - exp(-2.0 * Double.pi * fcHP / sampleRate)
+        let snapDecay = 2600.0                                  // mechanism snap — ~1 ms, broadband
+        // resonant modes of the little "housing": (Hz, decay 1/s, gain)
+        let modes: [(f: Double, d: Double, g: Double)] = [
+            (1900 * detune, 360, 0.50),   // primary bright tick
+            (3400 * detune, 520, 0.30),   // upper sparkle → crispness
+            (260  * detune, 130, 0.16),   // faint low tock → just enough body to feel tactile
+        ]
+        var lpHP = 0.0
+        let n = Int(frames)
+        for i in 0..<n {
+            let tSec = Double(i) / sampleRate
+            let t01 = Double(i) / Double(n)
+            let white = Double.random(in: -1...1)
+            lpHP += aHP * (white - lpHP)
+            let snap = (white - lpHP) * exp(-tSec * snapDecay)              // bright broadband transient
+            var body = 0.0
+            for m in modes { body += m.g * sin(2.0 * Double.pi * m.f * tSec) * exp(-tSec * m.d) }
+            var s = snap * 0.55 + body * 0.5
+            if t01 > 0.75 { s *= cos((t01 - 0.75) / 0.25 * Double.pi / 2) }  // clickless silent tail
+            out[i] = Float(max(-1.0, min(1.0, s)))
+        }
+        return buf
+    }
+
+    /// One click. Retriggers immediately (`stop`) so back-to-back clicks read as a tight ratchet rather
+    /// than a queue of lagging grains. Does NOT touch the ratchet task (the ratchet loop calls this).
+    /// Idles the engine 2s after the dial goes quiet.
+    private func fire(volume: Float) {
+        guard !grains.isEmpty else { return }
+        let buffer = grains[next % grains.count]
+        next &+= 1
+        core.fire(buffer: buffer, volume: volume, idleAfter: 2)
+    }
+
+    /// Spin up the engine on slider press so the first detent click isn't delayed by engine startup.
+    func prewarm() {
+        guard !grains.isEmpty else { return }
+        core.prewarm(idleAfter: 2)
+    }
+
+    /// A single detent click (a 1:1 drag step). Cancels any in-flight tap ratchet so the two never
+    /// overlap — once the user starts dragging, the drag supersedes the tap glide.
+    func tick(volume: Float) {
+        ratchetTask?.cancel()
+        fire(volume: volume)
+    }
+
+    /// A burst of `steps` clicks spread evenly across `duration` — used for a TAP, whose thumb glides
+    /// to the target over that same duration, so the clicks track the moving thumb instead of firing all
+    /// at once. `steps <= 1` is just a single click.
+    func ratchet(steps: Int, duration: Double, volume: Float) {
+        ratchetTask?.cancel()
+        let count = min(steps, 64)
+        guard count >= 1 else { return }
+        guard count > 1 else { fire(volume: volume); return }
+        let dt = duration / Double(count)
+        ratchetTask = Task { @MainActor [weak self] in
+            for i in 0..<count {
+                self?.fire(volume: volume)
+                if i < count - 1 {
+                    try? await Task.sleep(for: .seconds(dt))
+                    if Task.isCancelled { return }
+                }
+            }
         }
     }
 }

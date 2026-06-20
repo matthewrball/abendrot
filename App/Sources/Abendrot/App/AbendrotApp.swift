@@ -50,11 +50,25 @@ struct AbendrotApp: App {
         // clutter the UI under test. Delete this whole scene to remove. NOT gated behind `#if DEBUG`
         // because the founder dogfoods the Release build.
         MenuBarExtra("Replay onboarding", systemImage: "sparkles") {
+            Button("Relaunch (latest build)") {
+                relaunchFromLatestBuild()
+            }
+            Divider()
             Button("Replay onboarding") {
                 OnboardingWindowController.show(model: model)
             }
-            Button("Reset onboarding flag (next launch shows it)") {
-                UserDefaults.standard.removeObject(forKey: AppModel.hasCompletedOnboardingKey)
+            Button("Reset onboarding + ALL settings (fresh install + relaunch)") {
+                // TRUE fresh-install reset: wipe the ENTIRE app defaults domain — the onboarding flag
+                // plus warmth, schedule, location, excluded apps, stats, everything — then relaunch so a
+                // brand-new instance comes straight up (onboarding shows AND every setting is back to
+                // out-of-box). `synchronize()` flushes the wipe to disk BEFORE the relaunch, and the
+                // relaunch force-kills (SIGKILL) so no orderly shutdown re-flushes state into the wiped
+                // domain.
+                if let domain = Bundle.main.bundleIdentifier {
+                    UserDefaults.standard.removePersistentDomain(forName: domain)
+                    UserDefaults.standard.synchronize()
+                }
+                relaunchFromLatestBuild(force: true)
             }
         }
 
@@ -64,6 +78,27 @@ struct AbendrotApp: App {
             SettingsLauncher(model: model)
         }
     }
+}
+
+// MARK: - Dev relaunch (Session 11)
+
+/// DEV-ONLY: kill this instance and reopen the freshly-built app from the founder's Release build path
+/// — the dogfooding "restart from latest build" the founder otherwise runs by hand. The `/bin/sh` child
+/// is reparented to launchd when the kill takes us down, so `open` still fires; the short sleep lets the
+/// old instance go before the new one launches. Paired with the dev MenuBarExtra above — delete both
+/// before shipping.
+///
+/// `force` (the fresh-install reset) sends SIGKILL so NO orderly shutdown runs — otherwise
+/// `applicationShouldTerminate` would flush in-memory state (e.g. the warmed-time stat) back into the
+/// defaults we just wiped, so the "fresh" instance wouldn't be fresh. Plain relaunch uses SIGTERM so
+/// displays still neutral-reset and stats persist across the restart.
+private func relaunchFromLatestBuild(force: Bool = false) {
+    let appPath = "/Users/ball/Documents/abendrot/abendrot-build/build/Release/Build/Products/Release/Abendrot.app"
+    let kill = force ? "killall -9 Abendrot 2>/dev/null" : "killall Abendrot 2>/dev/null"
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/bin/sh")
+    task.arguments = ["-c", "\(kill); sleep 0.5; open \"\(appPath)\""]
+    try? task.run()
 }
 
 // MARK: - SettingsLauncher
