@@ -1271,7 +1271,7 @@ private struct StatisticsTab: View {
                 VStack(alignment: .leading, spacing: 18) {
                     statBlock(title: "Abendrot has warmed your Mac for",
                               value: Self.durationString(model.totalWarmedSeconds), big: true)
-                    statBlock(title: "Sunsets since you installed Abendrot",
+                    statBlock(title: "Sunset counter",
                               value: "\(model.sunsetCount)")
                 }
             }
