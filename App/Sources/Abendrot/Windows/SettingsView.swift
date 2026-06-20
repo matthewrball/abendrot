@@ -1271,8 +1271,8 @@ private struct StatisticsTab: View {
                 VStack(alignment: .leading, spacing: 18) {
                     statBlock(title: "Abendrot has warmed your Mac for",
                               value: Self.durationString(model.totalWarmedSeconds), big: true)
-                    statBlock(title: "Sunset counter",
-                              value: "\(model.sunsetCount)")
+                    statBlock(title: "Warm sunset counter",
+                              value: "\(model.warmSunsetCount)")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1353,8 +1353,8 @@ private struct AboutTab: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 18) {
-                AboutLink(title: "GitHub", assetImage: "github", url: "https://github.com/matthewrball/abendrot")
                 AboutLink(title: "abendrot.app", systemImage: "globe", url: "https://abendrot.app")
+                AboutLink(title: "GitHub", assetImage: "github", url: "https://github.com/matthewrball/abendrot")
             }
 
             // What makes it different (the marketing angle).

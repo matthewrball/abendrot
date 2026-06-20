@@ -331,14 +331,14 @@ private struct AboutFooterLinks: View {
     var body: some View {
         HStack(spacing: 10) {
             AboutPillLink(
-                title: "GitHub",
-                icon: .githubAssetOrSymbol,
-                url: "https://github.com/matthewrball/abendrot"
-            )
-            AboutPillLink(
                 title: "abendrot.app",
                 icon: .symbol("globe"),
                 url: "https://abendrot.app"
+            )
+            AboutPillLink(
+                title: "GitHub",
+                icon: .githubAssetOrSymbol,
+                url: "https://github.com/matthewrball/abendrot"
             )
         }
         .padding(.horizontal, 28)

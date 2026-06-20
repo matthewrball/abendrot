@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AppKit
 import WarmthKit
 
 // MARK: - AppModel
@@ -58,10 +59,14 @@ final class AppModel {
     /// Total seconds Abendrot has actively warmed, EXCLUDING any in-flight period (the live total
     /// adds the open period via `totalWarmedSeconds`). Persisted.
     private(set) var warmedSecondsBase: Double = 0
+    /// Sunsets that occurred while in Sunset mode + enabled — counted once per local day. Persisted.
+    private(set) var warmSunsetCount: Int = 0
     /// Whether to accumulate the local stats at all (default on; nothing leaves the Mac either way).
     private(set) var statsEnabled: Bool = true
     /// Start of the current warming period, or nil when not warming. In-memory bookkeeping only.
     @ObservationIgnored private var warmingStartedAt: Date?
+    /// Start-of-day (timeIntervalSince1970) of the last counted warm sunset — de-dupes per day.
+    @ObservationIgnored private var lastWarmSunsetDay: Double = 0
 
     // MARK: Engine wiring (nil in previews)
 
@@ -155,7 +160,7 @@ final class AppModel {
         // engine's initial state-stream snapshot landing before these restores publish; this ordering
         // doesn't affect that — the published state converges once the engine applies the restores.)
         if let enabled = defaults.object(forKey: Self.isEnabledKey) as? Bool {
-            setEnabled(enabled)
+            setEnabled(enabled, userInitiated: false)   // restore must not play the confirmation tone
         }
 
         // Reveal behaviour (hold vs toggle, §3). A fresh install keeps the default hold.
@@ -174,14 +179,13 @@ final class AppModel {
             setUserCoordinate(.init(latitude: lat, longitude: lon))
         }
 
-        // Statistics (local-only). `double` returns 0 for an unset key — the right fresh-install
-        // default; the collect flag defaults ON. Stamp the install date once (it drives the sunset
-        // counter). Then start counting immediately if we're already warming.
+        // Statistics (local-only). `double`/`integer` return 0 for an unset key — the right
+        // fresh-install default; the collect flag defaults ON. Then start counting immediately if
+        // we're already warming / past today's sunset.
         warmedSecondsBase = defaults.double(forKey: Self.warmedSecondsKey)
+        warmSunsetCount = defaults.integer(forKey: Self.warmSunsetCountKey)
+        lastWarmSunsetDay = defaults.double(forKey: Self.lastWarmSunsetDayKey)
         statsEnabled = (defaults.object(forKey: Self.statsEnabledKey) as? Bool) ?? true
-        if defaults.object(forKey: Self.installDateKey) == nil {
-            defaults.set(Date().timeIntervalSince1970, forKey: Self.installDateKey)
-        }
         updateWarmingStats()
     }
 
@@ -196,11 +200,23 @@ final class AppModel {
 
     // MARK: ── Global intents ────────────────────────────────────────────────
 
-    func setEnabled(_ enabled: Bool) {
+    func setEnabled(_ enabled: Bool, userInitiated: Bool = true) {
         // Optimistic UI (plan §5.2 — no spinners): reflect immediately, engine confirms.
+        let changed = enabled != state.isEnabled
         state.isEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.isEnabledKey)
         Task { await engine?.setEnabled(enabled) }
+        // Tone only on a real user toggle (not the launch-time restore, which passes userInitiated: false).
+        if userInitiated, changed { playSoftConfirmationTone() }
+    }
+
+    /// A subtle tick when the user toggles warming, if "Soft confirmation tone" is on (General tab).
+    /// The key is owned by that tab's `@AppStorage("softConfirmationTone")`.
+    private func playSoftConfirmationTone() {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        guard let tone = NSSound(named: "Tink") else { return }
+        tone.volume = 0.6
+        tone.play()
     }
 
     func setGlobalWarmth(_ strength: Double) {
@@ -244,7 +260,8 @@ final class AppModel {
     static let userLatitudeKey = "userLatitude"
     static let userLongitudeKey = "userLongitude"
     static let warmedSecondsKey = "stats.warmedSeconds"
-    static let installDateKey = "stats.installDate"
+    static let warmSunsetCountKey = "stats.warmSunsetCount"
+    static let lastWarmSunsetDayKey = "stats.lastWarmSunsetDay"
     static let statsEnabledKey = "stats.enabled"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
@@ -361,17 +378,6 @@ final class AppModel {
         warmedSecondsBase + (warmingStartedAt.map { max(0, Date().timeIntervalSince($0)) } ?? 0)
     }
 
-    /// Number of sunsets since first launch — a day counter (one sunset ≈ one local day). Computed
-    /// from the stored install date, so it needs no live tracking and survives the app being asleep.
-    var sunsetCount: Int {
-        let ti = UserDefaults.standard.double(forKey: Self.installDateKey)
-        guard ti > 0 else { return 0 }
-        let cal = Calendar.current
-        return max(0, cal.dateComponents([.day],
-                                         from: cal.startOfDay(for: Date(timeIntervalSince1970: ti)),
-                                         to: cal.startOfDay(for: Date())).day ?? 0)
-    }
-
     func setStatsEnabled(_ on: Bool) {
         statsEnabled = on
         UserDefaults.standard.set(on, forKey: Self.statsEnabledKey)
@@ -381,17 +387,23 @@ final class AppModel {
     func resetStatistics() {
         flushWarmingSession()  // close the open warming run cleanly first
         warmedSecondsBase = 0
+        warmSunsetCount = 0
+        lastWarmSunsetDay = 0
         warmingStartedAt = nil
         persistStats()
-        updateWarmingStats()   // re-open a run immediately if still warming (no dead 0s gap)
+        updateWarmingStats()   // re-open a run / re-count today's sunset immediately if applicable
     }
 
-    /// Edge-detect the warming phase on each state tick and accrue time (only while `statsEnabled`).
+    /// Edge-detect actual warming on each state tick and accrue time (only while `statsEnabled`).
     /// Accrues incrementally each tick so an unclean exit loses at most the un-flushed tail.
     // ponytail: best-effort local stats — steady warming emits no state ticks, so a crash can lose the
-    // current session's un-flushed time; add a periodic flush timer only if that ever matters.
+    // current run's un-flushed time; add a periodic flush timer only if that ever matters.
     private func updateWarmingStats() {
-        let warmingNow = statsEnabled && statusPhase == .warming
+        updateWarmSunsetCount()
+        // "Actively warming" = enabled, the schedule says warm NOW, and not mid-reveal. NOT
+        // `statusPhase == .warming`, which is also true in daytime Sunset mode (strength > 0 while the
+        // solar ramp applies 0) and would over-count the daylight hours.
+        let warmingNow = statsEnabled && state.isEnabled && state.isScheduleActiveNow && !state.isRevealing
         let now = Date()
         if warmingNow {
             if let start = warmingStartedAt {
@@ -402,10 +414,26 @@ final class AppModel {
             }
             persistStats()
         } else if let start = warmingStartedAt {
-            warmedSecondsBase += max(0, now.timeIntervalSince(start))       // close the session
+            warmedSecondsBase += max(0, now.timeIntervalSince(start))       // close the run
             warmingStartedAt = nil
             persistStats()
         }
+    }
+
+    /// Count one "warm sunset" per local day: the user is in Sunset mode + enabled and today's real
+    /// sunset has passed. The dayKey guard makes the (1440-sample) sunset scan run ~once/day.
+    private func updateWarmSunsetCount() {
+        guard statsEnabled, state.isEnabled,
+              ScheduleModeOption(state.scheduleMode) == .followSunset else { return }
+        let cal = Calendar.current
+        let dayKey = cal.startOfDay(for: Date()).timeIntervalSince1970
+        guard lastWarmSunsetDay != dayKey else { return }
+        let coord = userCoordinate ?? TimeZoneCoordinates.current()
+        guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coord, on: Date()),
+              Date() >= sunset else { return }
+        warmSunsetCount += 1
+        lastWarmSunsetDay = dayKey
+        persistStats()
     }
 
     private func flushWarmingSession() {
@@ -416,7 +444,10 @@ final class AppModel {
     }
 
     private func persistStats() {
-        UserDefaults.standard.set(warmedSecondsBase, forKey: Self.warmedSecondsKey)
+        let d = UserDefaults.standard
+        d.set(warmedSecondsBase, forKey: Self.warmedSecondsKey)
+        d.set(warmSunsetCount, forKey: Self.warmSunsetCountKey)
+        d.set(lastWarmSunsetDay, forKey: Self.lastWarmSunsetDayKey)
     }
 
     // MARK: ── Derived display helpers ───────────────────────────────────────
