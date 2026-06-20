@@ -273,8 +273,14 @@ public actor WarmthEngine {
     public func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) async
     /// DDC opt-in toggle. No-op (returns .unsupported in state) where DDC isn't capable.
     public func setHardwareDDCEnabled(_ enabled: Bool, for id: DisplayIdentity) async
-    /// Per-app exclusions (v1.0 = per-app only; per-website is future, §21‑E8).
+    /// Per-app exclusions (v1.0 = per-app only; per-website is future, §21‑E8). The engine owns the
+    /// membership check; changing the set re-evaluates suspend immediately. (Additive, Session 8.)
     public func setExcludedApps(_ bundleIDs: Set<String>) async
+    /// The app-side NSWorkspace bridge (`FrontmostAppMonitor`) reports the frontmost app's bundle id
+    /// here (nil = none / unresolvable). While that app is in the exclusion set the engine suspends
+    /// warmth across all displays — independent of hold-to-reveal, so the two **compose** (warmth is
+    /// off if reveal is active OR an excluded app is frontmost). (Additive, Session 8.)
+    public func setFrontmostApp(_ bundleID: String?) async
 
     // ── Safety ────────────────────────────────────────────────────────────────
     /// Emergency "Restore Displays": neutral gamma + overlay teardown + DDC native-state restore
@@ -401,11 +407,17 @@ need a contract version bump + a note to Lanes B and D.
 - **Session 7:** `DisplayState.warmthOverridden: Bool` + `WarmthEngine.setWarmthOverride(_:for:)`
   — a true per-display override (softer *or* warmer) that replaced the old max(per-display, global)
   boost. `setWarmth(_:for:)` now implies the override. No existing signature changed.
+- **Session 8:** `WarmthEngine.setFrontmostApp(_:)` — the frontmost-app input that drives
+  suspend-while-excluded (resolves open-Q3, below). Suspend composes with hold-to-reveal: warmth is
+  off if reveal is active OR an excluded app is frontmost. No existing signature changed.
 
 **Open questions to resolve during M0–M1 (won't change the public surface):**
 1. Exact `warmestPoint` default and the slider's strength→Kelvin curve shape (perceptual vs linear).
 2. Whether `OverlayBackend` uses one panel per screen or a shared `CAMetalLayer` host (perf).
-3. Whether `setExcludedApps` belongs on the engine or a thin app-side coordinator.
+3. **Resolved (Session 8): exclusions are engine-owned.** The membership check (frontmost ∈
+   excluded set) lives in the engine so suspend-while-excluded is unit-testable headlessly; the app
+   layer is a thin `@MainActor` NSWorkspace→engine bridge (`FrontmostAppMonitor`) that only forwards
+   the frontmost bundle id via `setFrontmostApp(_:)`. Additive — no existing API changed.
 
 **Verification gate (Lane G), before B/D treat this as fact:**
 - [ ] `swift build` clean on Xcode 26 / macOS 26 with Swift 6 strict concurrency.

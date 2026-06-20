@@ -504,11 +504,114 @@ private struct AdvancedTab: View {
             Text("Lets Abendrot truly warm your displays — removing blue light — and follow your Night Shift schedule. Turn this off to use the simplest, most compatible mode: a warm tint over every display.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
-            // TODO(settings): per-app exclusion picker → AppModel.setExcludedApps.
-            Text("Per-app exclusions — picker coming in a later milestone.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textFaint)
+
+            DividerLine()
+            ExcludedAppsControl(model: model)
         }
+    }
+}
+
+// MARK: - Excluded apps (suspend-while-frontmost picker)
+
+/// Settings → Advanced → Excluded apps. While one of these apps is the frontmost app, Abendrot
+/// suspends warming across all displays (true colour) — for colour-critical work. The list is the
+/// observed `model.excludedApps`; rows resolve a friendly name + icon from the bundle id, and "Add
+/// app…" picks an `.app` via `NSOpenPanel` (the app is not sandboxed, so no entitlement is needed).
+private struct ExcludedAppsControl: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("Excluded apps")
+                .font(Theme.Typography.ui(13.5))
+            Text("Abendrot pauses warming (shows true colour) while one of these apps is frontmost — for colour-critical work.")
+                .font(Theme.Typography.ui(12))
+                .foregroundStyle(Theme.Color.textMuted)
+
+            if model.excludedApps.isEmpty {
+                Text("None — add an app below.")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textFaint)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(model.excludedApps.sorted(), id: \.self) { bundleID in
+                        ExcludedAppRow(bundleID: bundleID) {
+                            model.removeExcludedApp(bundleID)
+                        }
+                    }
+                }
+            }
+
+            Button {
+                addApp()
+            } label: {
+                Label("Add app…", systemImage: "plus")
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    /// Pick an application bundle and add its bundle id to the exclusion set. The panel + `Bundle`
+    /// read work without entitlements because the app is not sandboxed.
+    private func addApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let id = Bundle(url: url)?.bundleIdentifier else { return }
+        model.addExcludedApp(id)
+    }
+}
+
+/// One excluded-app row: the app's icon + friendly name (resolved from the bundle id, falling back to
+/// the raw id when the app can't be located), and a ✕ to remove it.
+private struct ExcludedAppRow: View {
+    let bundleID: String
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let icon = resolved.icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 16, height: 16)
+            } else {
+                Image(systemName: "app.dashed")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.textFaint)
+                    .frame(width: 16, height: 16)
+            }
+            Text(resolved.name)
+                .font(Theme.Typography.ui(12.5))
+                .foregroundStyle(Theme.Color.textPrimary)
+            Spacer()
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Theme.Color.textMuted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(resolved.name) from excluded apps")
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .background(Theme.Color.line.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
+    }
+
+    /// Resolve a display name + icon from the bundle id via LaunchServices. Falls back to the raw
+    /// bundle id and no icon when the app isn't installed / can't be located.
+    private var resolved: (name: String, icon: NSImage?) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            return (bundleID, nil)
+        }
+        let name = FileManager.default.displayName(atPath: url.path)
+        // Drop a trailing ".app" the display name can carry when the Finder localization is absent.
+        let trimmed = name.hasSuffix(".app") ? String(name.dropLast(4)) : name
+        return (trimmed, NSWorkspace.shared.icon(forFile: url.path))
     }
 }
 

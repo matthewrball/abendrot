@@ -331,11 +331,32 @@ public actor WarmthEngine {
         )
     }
 
-    /// Per-app exclusions (v1.0 = per-app only; per-website is future, §21‑E8).
+    /// Per-app exclusions (v1.0 = per-app only; per-website is future, §21‑E8). Re-evaluates suspend
+    /// immediately so excluding the app you're currently in (or un-excluding it) takes effect now.
     public func setExcludedApps(_ bundleIDs: Set<String>) async {
-        // TODO(milestone): persist exclusions and suspend warmth while an excluded app is front.
         box.excludedApps = bundleIDs
+        if recomputeExcludedSuspend() { await reapply() }
         publish()
+    }
+
+    /// The app-side NSWorkspace bridge reports the frontmost app's bundle id here (nil if none /
+    /// unresolvable). The engine owns the membership check so suspend-while-excluded is unit-testable
+    /// (resolves contract open-Q3). Suspends warmth across all displays while an excluded app is
+    /// frontmost — independent of hold-to-reveal, so the two compose. Change-gated.
+    public func setFrontmostApp(_ bundleID: String?) async {
+        box.frontmostBundleID = bundleID
+        // Publish-on-change only (deliberately unlike setExcludedApps): the frontmost id isn't part of
+        // the published WarmthState, so when suspend doesn't flip there is nothing new to publish.
+        if recomputeExcludedSuspend() { await reapply(); publish() }
+    }
+
+    /// Recompute whether the current frontmost app is in the exclusion set. Returns true if the
+    /// suspend state flipped (so the caller can reapply only on change). Pure over box fields.
+    private func recomputeExcludedSuspend() -> Bool {
+        let now = box.frontmostBundleID.map { box.excludedApps.contains($0) } ?? false
+        guard now != box.isExcludedAppFrontmost else { return false }
+        box.isExcludedAppFrontmost = now
+        return true
     }
 
     // MARK: ── Safety ────────────────────────────────────────────────────────────
@@ -616,7 +637,7 @@ public actor WarmthEngine {
         )
         box.value.isScheduleActiveNow = decision.isActiveNow
 
-        let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing
+        let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing && !box.isExcludedAppFrontmost
         let warmestPoint = box.value.warmestPoint
 
         // Snapshot the work set by VALUE before any await. The engine is an actor, so each await is
@@ -782,6 +803,12 @@ public actor WarmthEngine {
 private struct WarmthStateBox {
     var value: WarmthState
     var excludedApps: Set<String> = []
+    /// The frontmost app's bundle id reported by the app-side `FrontmostAppMonitor` (nil = none /
+    /// unresolvable). Engine-private — not part of the published surface.
+    var frontmostBundleID: String? = nil
+    /// Derived: whether `frontmostBundleID` is in `excludedApps`. When true the engine suspends
+    /// warmth across all displays (true colour), independent of (and composing with) hold-to-reveal.
+    var isExcludedAppFrontmost: Bool = false
 }
 
 // MARK: - NoopBackend (test-support neutral layer)

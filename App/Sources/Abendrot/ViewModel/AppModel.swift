@@ -41,10 +41,16 @@ final class AppModel {
     /// service) still render. Persisted; restored in `applyPersistedState()`.
     var revealMode: RevealMode = .hold
 
+    /// Bundle ids the user has excluded — while one is frontmost the engine suspends warmth (true
+    /// colour) across all displays. The UI source of truth for the Advanced → Excluded apps picker;
+    /// mirrored into the engine via `setExcludedApps`. Persisted; restored in `applyPersistedState()`.
+    var excludedApps: Set<String> = []
+
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
     private var hotkeyService: HotkeyService?
+    private var frontmostMonitor: FrontmostAppMonitor?
     private var observationTask: Task<Void, Never>?
 
     // MARK: Init
@@ -55,12 +61,14 @@ final class AppModel {
         self.engine = engine
         self.state = WarmthState(scheduleMode: configuration.defaultScheduleMode)
         self.hotkeyService = HotkeyService(engine: engine)
+        self.frontmostMonitor = FrontmostAppMonitor(engine: engine)
     }
 
     /// Preview / scaffold initializer — seeds a mock state, no live actor.
     init(previewState: WarmthState) {
         self.engine = nil
         self.hotkeyService = nil
+        self.frontmostMonitor = nil
         self.state = previewState
     }
 
@@ -71,6 +79,9 @@ final class AppModel {
     func start() {
         guard let engine else { return }
         hotkeyService?.installRevealHotkey()
+        // Seeds the current frontmost app immediately. If that `setFrontmostApp` lands before the
+        // `engine.start()` Task below, it's harmless — the engine recomputes suspend wholesale each pass.
+        frontmostMonitor?.start()
         observationTask = Task { [weak self] in
             for await snapshot in await engine.stateUpdates() {
                 self?.state = snapshot
@@ -134,12 +145,18 @@ final class AppModel {
            let mode = RevealMode(rawValue: raw) {
             setRevealMode(mode)
         }
+
+        // Excluded apps (suspend warmth while one is frontmost). Fresh install = none.
+        if let arr = defaults.array(forKey: Self.excludedAppsKey) as? [String] {
+            setExcludedApps(Set(arr))
+        }
     }
 
     /// Neutral-reset + tear down. Call on app quit.
     func shutdown() async {
         observationTask?.cancel()
         observationTask = nil
+        frontmostMonitor?.stop()
         await engine?.shutdown()
     }
 
@@ -189,6 +206,7 @@ final class AppModel {
     static let globalWarmthStrengthKey = "globalWarmthStrength"
     static let scheduleModeKey = "scheduleMode"
     static let revealModeKey = "revealMode"
+    static let excludedAppsKey = "excludedApps"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
         // Optimistic UI so the Kelvin readout updates immediately, then persist + tell the engine.
@@ -261,8 +279,17 @@ final class AppModel {
     }
 
     func setExcludedApps(_ bundleIDs: Set<String>) {
+        excludedApps = bundleIDs
+        // Persist a sorted [String] (stable, plist-native) so the set survives relaunch (§25.B).
+        UserDefaults.standard.set(bundleIDs.sorted(), forKey: Self.excludedAppsKey)
         Task { await engine?.setExcludedApps(bundleIDs) }
     }
+
+    /// Add one bundle id to the exclusion set (Advanced → Excluded apps "Add app…").
+    func addExcludedApp(_ id: String) { setExcludedApps(excludedApps.union([id])) }
+
+    /// Remove one bundle id from the exclusion set (the row's ✕ button).
+    func removeExcludedApp(_ id: String) { setExcludedApps(excludedApps.subtracting([id])) }
 
     // MARK: ── Safety ────────────────────────────────────────────────────────
 
