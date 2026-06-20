@@ -195,10 +195,19 @@ struct DisplayRow: View {
                     Text(display.name)
                         .font(Theme.Typography.ui(12.5))
                         .foregroundStyle(Theme.Color.textPrimary)
-                    Text(subtitle)
-                        .font(Theme.Typography.ui(10.5))
-                        .foregroundStyle(tintOnly ? Theme.Color.accentHighlight : Theme.Color.textFaint)
-                        .help(tintOnlyExplanation)
+                    HStack(spacing: 4) {
+                        // Small warning glyph (matches the §25.J banner) so the tint-only tooltip is
+                        // discoverable, not just hover-anywhere. Hovering either icon or text shows it.
+                        if tintOnly {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(Theme.Typography.ui(8.5))
+                                .foregroundStyle(Theme.Color.accentHighlight)
+                        }
+                        Text(subtitle)
+                            .font(Theme.Typography.ui(10.5))
+                            .foregroundStyle(tintOnly ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                    }
+                    .help(tintOnlyExplanation)
                 }
                 Spacer()
                 Text("Override")
