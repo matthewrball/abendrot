@@ -5,7 +5,7 @@ import WarmthKit
 // MARK: - SettingsTab
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, schedule, displays, advanced, privacy, about
+    case general, schedule, displays, advanced, privacy, statistics, about
     var id: String { rawValue }
 
     var title: String {
@@ -15,6 +15,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .displays: return "Displays"
         case .advanced: return "Advanced"
         case .privacy: return "Privacy"
+        case .statistics: return "Statistics"
         case .about: return "About"
         }
     }
@@ -26,6 +27,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .displays: return "display.2"
         case .advanced: return "slider.horizontal.3"
         case .privacy: return "hand.raised"
+        case .statistics: return "chart.bar.xaxis"
         case .about: return "info.circle"
         }
     }
@@ -56,18 +58,18 @@ struct SettingsView: View {
                 .scrollContentBackground(.hidden)
 
                 Spacer(minLength: 12)
-                // Hide the sidebar branding on About (it duplicates the About-page header): slide it
-                // out to the leading edge + fade, and back when leaving About (founder). Scoped in a
-                // Group so the sidebar list's selection isn't swept into the same animation.
-                Group {
-                    if model.settingsTab != .about {
-                        SidebarBranding()
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 14)
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                    }
-                }
-                .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.settingsTab)
+                // Hide the sidebar branding on About (it duplicates the About-page header). Animate
+                // offset+opacity on an always-present view rather than a conditional transition, so the
+                // slide-OUT (entering About) is exactly as smooth as the slide-IN (leaving) — a SwiftUI
+                // removal transition snapped instead of sliding (founder). Stays in the layout (offset
+                // off-screen + faded) so nothing reflows.
+                SidebarBranding()
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(model.settingsTab == .about ? 0 : 1)
+                    .offset(x: model.settingsTab == .about ? -200 : 0)
+                    .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.settingsTab)
             }
             .navigationSplitViewColumnWidth(min: 172, ideal: 180)
             .toolbar(removing: .sidebarToggle)
@@ -91,6 +93,7 @@ struct SettingsView: View {
         case .displays: DisplaysTab(model: model)
         case .advanced: AdvancedTab(model: model)
         case .privacy: PrivacyTab(model: model)
+        case .statistics: StatisticsTab(model: model)
         case .about: AboutTab()
         }
     }
@@ -201,6 +204,36 @@ private struct GeneralTab: View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "General", subtitle: "How Abendrot behaves day to day.")
 
+            // The primary control, first and consistent with the menu-bar popover (founder): the
+            // master toggle + the SAME liquid-glass WarmSlider (Warmth label, inline Kelvin + ⓘ,
+            // Softer/Warmer). The slider reveals with the toggle, exactly like the popover.
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Warm my displays")
+                        .font(Theme.Typography.ui(13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.textPrimary)
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { model.state.isEnabled },
+                        set: { model.setEnabled($0) }
+                    ))
+                    .labelsHidden()
+                }
+                if model.state.isEnabled {
+                    WarmSlider(
+                        strength: Binding(
+                            get: { model.state.globalWarmth.strength },
+                            set: { model.setGlobalWarmth($0) }
+                        ),
+                        kelvin: model.globalKelvin
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                }
+            }
+            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.isEnabled)
+
+            DividerLine()
+
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, isOn in
                     setLaunchAtLogin(isOn)
@@ -218,36 +251,6 @@ private struct GeneralTab: View {
                     .foregroundStyle(Theme.Color.textFaint)
             }
             Toggle("Soft confirmation tone", isOn: $softTone)
-
-            DividerLine()
-
-            VStack(alignment: .leading, spacing: 9) {
-                // Mirror the popover's master control: an enable/disable toggle above the warmth
-                // slider (founder — Settings should turn warming on/off, not just adjust the level).
-                Toggle("Warm my displays", isOn: Binding(
-                    get: { model.state.isEnabled },
-                    set: { model.setEnabled($0) }
-                ))
-                HStack {
-                    Text("Default warmth")
-                        .font(Theme.Typography.ui(13.5))
-                    Spacer()
-                    Text("\(model.globalKelvin.value) K")
-                        .font(Theme.Typography.serif(14))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.Color.accentHighlight)
-                        .contentTransition(.numericText(value: Double(model.globalKelvin.value)))
-                        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.globalKelvin.value)
-                }
-                WarmSlider(
-                    strength: Binding(
-                        get: { model.state.globalWarmth.strength },
-                        set: { model.setGlobalWarmth($0) }
-                    )
-                )
-                .disabled(!model.state.isEnabled)
-                .opacity(model.state.isEnabled ? 1 : 0.45)
-            }
         }
         .toggleStyle(.switch)
         .tint(Theme.Color.accent)
@@ -774,17 +777,12 @@ private struct PerDisplayWarmthControl: View {
                     .accessibilityLabel("Override warmth for \(display.name)")
             }
             if display.warmthOverridden {
-                VStack(spacing: 6) {
-                    WarmSlider(strength: warmthBinding)
-                    HStack {
-                        Text("Softer")
-                        Spacer()
-                        Text("Warmer")
-                    }
-                    .font(Theme.Typography.ui(10.5))
-                    .foregroundStyle(Theme.Color.textFaint)
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                // WarmSlider already renders its own Softer/Warmer caption (and a "Warmth" header when
+                // not compact) — so use the compact slider and don't add a second caption row. The
+                // "Override · Custom warmth for this display" header above is label enough. (Fixes the
+                // duplicate Softer/Warmer.)
+                WarmSlider(strength: warmthBinding, compact: true)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
         .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: display.warmthOverridden)
@@ -811,35 +809,30 @@ private struct WarmingMethodPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Inline with the title (founder), mirroring the Override row: label left, the brand
-            // switcher right at a constrained width — not a full-width control below the label.
-            HStack(spacing: 10) {
-                Text("Warming method")
-                    .font(Theme.Typography.ui(11.5, weight: .medium))
-                    .foregroundStyle(Theme.Color.textMuted)
-                Spacer(minLength: 12)
-                if availableChoices.count == 1, let choice = availableChoices.first {
-                    Text(choice.label)
-                        .font(Theme.Typography.ui(12, weight: .bold))
-                        .foregroundStyle(Theme.Color.groundIndigo)
-                        .lineLimit(1)
-                        .padding(.vertical, 7)
-                        .padding(.horizontal, 16)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(Theme.Gradient.sunset)
-                                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
-                        )
-                        .accessibilityLabel("Warming method: \(choice.label)")
-                } else {
-                    BrandSegmentedControl(
-                        options: availableChoices,
-                        selection: choiceBinding,
-                        label: \.label,
-                        onChange: { _ in }
+            Text("Warming method")
+                .font(Theme.Typography.ui(11.5, weight: .medium))
+                .foregroundStyle(Theme.Color.textMuted)
+
+            if availableChoices.count == 1, let choice = availableChoices.first {
+                Text(choice.label)
+                    .font(Theme.Typography.ui(12, weight: .bold))
+                    .foregroundStyle(Theme.Color.groundIndigo)
+                    .lineLimit(1)
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 16)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Theme.Gradient.sunset)
+                            .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
                     )
-                    .frame(width: CGFloat(availableChoices.count) * 110)
-                }
+                    .accessibilityLabel("Warming method: \(choice.label)")
+            } else {
+                BrandSegmentedControl(
+                    options: availableChoices,
+                    selection: choiceBinding,
+                    label: \.label,
+                    onChange: { _ in }
+                )
             }
 
             if let note = unavailableNote {
@@ -948,41 +941,62 @@ private struct AdvancedTab: View {
 
             // Reveal True Color hotkey — moved here from the former Shortcuts tab, tucked under
             // Maximum warmth (founder). Click the field to rebind; default ⌥⌘T.
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Reveal True Color").font(Theme.Typography.ui(13.5))
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Reveal True Color")
+                    .font(Theme.Typography.ui(13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.textPrimary)
+                Text("Instantly see your screen's true colours — bound to a keyboard shortcut.")
+                    .font(Theme.Typography.ui(12))
+                    .foregroundStyle(Theme.Color.textMuted)
+
+                // The shortcut as a clear, labelled liquid-glass input — mirrors the Schedule "Location"
+                // field so it's obvious you're setting a keyboard shortcut (founder), not a bare pill
+                // tucked in the corner. The recorder sits on the right; the whole row reads as a field.
+                HStack(spacing: 10) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.Color.accentHighlight)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Keyboard shortcut")
+                            .font(Theme.Typography.ui(12.5, weight: .medium))
+                            .foregroundStyle(Theme.Color.textPrimary)
+                        Text("Click to record — default ⌥⌘T")
+                            .font(Theme.Typography.ui(11))
+                            .foregroundStyle(Theme.Color.textFaint)
+                    }
                     Spacer()
                     RevealShortcutRecorder()
                 }
-                Text("Click the field and press a key combination to rebind (default ⌥⌘T).")
-                    .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.textMuted)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .glassSurface(.frost, cornerRadius: Theme.Radius.control)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                )
 
-                // Hold vs Toggle (§3 locked: ship both, default hold). On-brand liquid-glass switcher
-                // (BrandSegmentedControl) to match the per-display method picker and the popover Mode
-                // control, replacing the native segmented Picker (founder: more liquid glass).
-                HStack {
-                    BrandSegmentedControl(
-                        options: RevealMode.allCases,
-                        selection: Binding(get: { model.revealMode }, set: { model.setRevealMode($0) }),
-                        label: { $0 == .hold ? "Hold" : "Toggle" }
-                    )
-                    .frame(width: 200)
-                    Spacer()
+                // Hold vs Toggle (§3 locked: ship both, default hold) — on-brand glass switcher.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Behaviour")
+                        .font(Theme.Typography.ui(12, weight: .medium))
+                        .foregroundStyle(Theme.Color.textMuted)
+                    HStack {
+                        BrandSegmentedControl(
+                            options: RevealMode.allCases,
+                            selection: Binding(get: { model.revealMode }, set: { model.setRevealMode($0) }),
+                            label: { $0 == .hold ? "Hold" : "Toggle" }
+                        )
+                        .frame(width: 200)
+                        Spacer()
+                    }
+                    Text(model.revealMode == .hold
+                         ? "Hold the shortcut to reveal true colour; release to ease warmth back."
+                         : "Press the shortcut to reveal true colour; press again to ease it back.")
+                        .font(Theme.Typography.ui(12))
+                        .foregroundStyle(Theme.Color.textMuted)
                 }
                 .padding(.top, 2)
-
-                Text(model.revealMode == .hold
-                     ? "Hold the shortcut to reveal true colour; release to ease warmth back."
-                     : "Press the shortcut to reveal true colour; press again to ease it back.")
-                    .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.textMuted)
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
-                    .fill(Theme.Color.line.opacity(0.4))
-            )
             DividerLine()
             ExcludedAppsControl(model: model)
 
@@ -1191,10 +1205,10 @@ private struct PrivacyTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             TabHeader(title: "Privacy", subtitle: "Local-first. No account, no telemetry by default.")
-            privacyPoint("No Accessibility permission", "Hold-to-reveal uses a Carbon global hotkey — no Accessibility access required.")
-            privacyPoint("No Screen Recording", "Display capabilities are classified, never measured by screen capture.")
-            privacyPoint("No Location data", "Your sunset is computed from your time zone — or a city you pick yourself — never your GPS. Abendrot never asks for Location access.")
-            privacyPoint("No Sandbox surprises", "Warmth applies locally; nothing about your displays leaves the machine.")
+            privacyPoint("No accessibility permission", "Hold-to-reveal uses a Carbon global hotkey — no accessibility access required.")
+            privacyPoint("No screen recording", "Display capabilities are classified, never measured by screen capture.")
+            privacyPoint("No location data", "Your sunset is computed from your time zone — or a city you pick yourself — never your GPS. Abendrot never asks for location access.")
+            privacyPoint("No sandbox surprises", "Warmth applies locally; nothing about your displays leaves the machine.")
             privacyPoint("Manual reveal during captures", "Auto screenshot/recording suspend is out of scope for v1.0; reveal true colour manually with the hotkey.")
         }
     }
@@ -1209,6 +1223,83 @@ private struct PrivacyTab: View {
                 .foregroundStyle(Theme.Color.textMuted)
                 .padding(.leading, 24)
         }
+    }
+}
+
+// MARK: - Statistics
+
+/// How long Abendrot has actively warmed the Mac (local-only — never sent anywhere). The headline
+/// total ticks live via a `TimelineView` while the tab is open; `AppModel` owns the accrual.
+private struct StatisticsTab: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            TabHeader(title: "Statistics", subtitle: "How long Abendrot has softened your evenings — counted on this Mac only.")
+
+            // Live readout: refresh the elapsed total once a second while the tab is visible.
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                VStack(alignment: .leading, spacing: 18) {
+                    statBlock(title: "Abendrot has warmed your Mac for",
+                              value: Self.durationString(model.totalWarmedSeconds), big: true)
+                    HStack(alignment: .top, spacing: 32) {
+                        statBlock(title: "Average session", value: Self.durationString(model.averageWarmedSeconds))
+                        statBlock(title: "Total sessions", value: "\(model.warmingSessions)")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .glassSurface(.frost, cornerRadius: Theme.Radius.control)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                    .strokeBorder(.white.opacity(0.06), lineWidth: 1)
+            )
+
+            HStack {
+                Button(role: .destructive) { model.resetStatistics() } label: {
+                    Label("Reset statistics", systemImage: "arrow.counterclockwise")
+                }
+                Spacer()
+            }
+
+            DividerLine()
+
+            Toggle("Collect statistics on this Mac", isOn: Binding(
+                get: { model.statsEnabled },
+                set: { model.setStatsEnabled($0) }
+            ))
+            .toggleStyle(.switch)
+            .tint(Theme.Color.accent)
+            Text("Stored locally and never sent anywhere. Turn off to stop counting.")
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textFaint)
+        }
+    }
+
+    private func statBlock(title: String, value: String, big: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(Theme.Typography.ui(big ? 12.5 : 11.5))
+                .foregroundStyle(Theme.Color.textMuted)
+            Text(value)
+                .font(Theme.Typography.serif(big ? 27 : 17))
+                .monospacedDigit()
+                .foregroundStyle(Theme.Color.accentHighlight)
+                .contentTransition(.numericText())
+        }
+    }
+
+    /// "2d 17h 41m 46s", dropping leading-zero top units but always keeping at least m + s.
+    static func durationString(_ seconds: Double) -> String {
+        let s = max(0, Int(seconds))
+        let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60, sec = s % 60
+        var parts: [String] = []
+        if d > 0 { parts.append("\(d)d") }
+        if h > 0 || d > 0 { parts.append("\(h)h") }
+        parts.append("\(m)m")
+        parts.append("\(sec)s")
+        return parts.joined(separator: " ")
     }
 }
 
@@ -1233,6 +1324,12 @@ private struct AboutTab: View {
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 18) {
+                AboutLink(title: "GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/matthewrball/abendrot")
+                AboutLink(title: "abendrot.app", systemImage: "globe", url: "https://abendrot.app")
+            }
+
             // What makes it different (the marketing angle).
             VStack(alignment: .leading, spacing: 8) {
                 aboutPoint("Every display", "Real warmth on built-in and external monitors — including buttonless Apple displays — where Night Shift and f.lux quietly give up.")
@@ -1256,12 +1353,6 @@ private struct AboutTab: View {
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textFaint)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-
-            DividerLine()
-            HStack(spacing: 18) {
-                AboutLink(title: "GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/matthewrball/abendrot")
-                AboutLink(title: "abendrot.app", systemImage: "globe", url: "https://abendrot.app")
             }
         }
     }

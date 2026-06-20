@@ -53,6 +53,18 @@ final class AppModel {
     /// Manual Sunset location override. nil = Auto from system time zone; no permission or network.
     var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
 
+    // MARK: Statistics (local-only — never leaves this Mac, "Private by default")
+
+    /// Total seconds Abendrot has actively warmed, EXCLUDING any in-flight session (the live total
+    /// adds the open session via `totalWarmedSeconds`). Persisted.
+    private(set) var warmedSecondsBase: Double = 0
+    /// Count of distinct warming sessions (one contiguous warming period each). Persisted.
+    private(set) var warmingSessions: Int = 0
+    /// Whether to accumulate the local stats at all (default on; nothing leaves the Mac either way).
+    private(set) var statsEnabled: Bool = true
+    /// Start of the current warming session, or nil when not warming. In-memory bookkeeping only.
+    @ObservationIgnored private var warmingStartedAt: Date?
+
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
@@ -92,6 +104,7 @@ final class AppModel {
         observationTask = Task { [weak self] in
             for await snapshot in await engine.stateUpdates() {
                 self?.state = snapshot
+                self?.updateWarmingStats()
             }
         }
         // Start the engine, THEN replay persisted user state (§25.B) in the same task so the
@@ -162,10 +175,19 @@ final class AppModel {
            let lon = defaults.object(forKey: Self.userLongitudeKey) as? Double {
             setUserCoordinate(.init(latitude: lat, longitude: lon))
         }
+
+        // Statistics (local-only). `double`/`integer` return 0 for an unset key — the right
+        // fresh-install default; the collect flag defaults ON. Then start counting immediately if
+        // we're already warming.
+        warmedSecondsBase = defaults.double(forKey: Self.warmedSecondsKey)
+        warmingSessions = defaults.integer(forKey: Self.warmingSessionsKey)
+        statsEnabled = (defaults.object(forKey: Self.statsEnabledKey) as? Bool) ?? true
+        updateWarmingStats()
     }
 
     /// Neutral-reset + tear down. Call on app quit.
     func shutdown() async {
+        flushWarmingSession()   // capture the in-flight warming time before quitting
         observationTask?.cancel()
         observationTask = nil
         frontmostMonitor?.stop()
@@ -221,6 +243,9 @@ final class AppModel {
     static let excludedAppsKey = "excludedApps"
     static let userLatitudeKey = "userLatitude"
     static let userLongitudeKey = "userLongitude"
+    static let warmedSecondsKey = "stats.warmedSeconds"
+    static let warmingSessionsKey = "stats.warmingSessions"
+    static let statsEnabledKey = "stats.enabled"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
         // Optimistic UI so the Kelvin readout updates immediately, then persist + tell the engine.
@@ -327,6 +352,69 @@ final class AppModel {
     func setPrivateAPIsEnabled(_ enabled: Bool) {
         state.privateAPIsEnabled = enabled
         Task { await engine?.setPrivateAPIsEnabled(enabled) }
+    }
+
+    // MARK: ── Statistics (local-only) ───────────────────────────────────────
+
+    /// Live total warmed time = the persisted base + any in-flight session's elapsed.
+    var totalWarmedSeconds: Double {
+        warmedSecondsBase + (warmingStartedAt.map { max(0, Date().timeIntervalSince($0)) } ?? 0)
+    }
+
+    /// Mean seconds per warming session (0 with no sessions).
+    var averageWarmedSeconds: Double {
+        warmingSessions > 0 ? totalWarmedSeconds / Double(warmingSessions) : 0
+    }
+
+    func setStatsEnabled(_ on: Bool) {
+        statsEnabled = on
+        UserDefaults.standard.set(on, forKey: Self.statsEnabledKey)
+        updateWarmingStats()   // off → closes any open session; on → resumes if currently warming
+    }
+
+    func resetStatistics() {
+        flushWarmingSession()  // close the open session cleanly first
+        warmedSecondsBase = 0
+        warmingSessions = 0
+        warmingStartedAt = nil
+        persistStats()
+        updateWarmingStats()   // re-open a session immediately if still warming (no dead 0s gap)
+    }
+
+    /// Edge-detect the warming phase on each state tick and accrue time (only while `statsEnabled`).
+    /// Accrues incrementally each tick so an unclean exit loses at most the un-flushed tail.
+    // ponytail: best-effort local stats — steady warming emits no state ticks, so a crash can lose the
+    // current session's un-flushed time; add a periodic flush timer only if that ever matters.
+    private func updateWarmingStats() {
+        let warmingNow = statsEnabled && statusPhase == .warming
+        let now = Date()
+        if warmingNow {
+            if let start = warmingStartedAt {
+                warmedSecondsBase += max(0, now.timeIntervalSince(start))   // accrue since last tick
+                warmingStartedAt = now
+            } else {
+                warmingStartedAt = now                                      // new session
+                warmingSessions += 1
+            }
+            persistStats()
+        } else if let start = warmingStartedAt {
+            warmedSecondsBase += max(0, now.timeIntervalSince(start))       // close the session
+            warmingStartedAt = nil
+            persistStats()
+        }
+    }
+
+    private func flushWarmingSession() {
+        guard let start = warmingStartedAt else { return }
+        warmedSecondsBase += max(0, Date().timeIntervalSince(start))
+        warmingStartedAt = nil
+        persistStats()
+    }
+
+    private func persistStats() {
+        let d = UserDefaults.standard
+        d.set(warmedSecondsBase, forKey: Self.warmedSecondsKey)
+        d.set(warmingSessions, forKey: Self.warmingSessionsKey)
     }
 
     // MARK: ── Derived display helpers ───────────────────────────────────────
