@@ -30,7 +30,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 580),
             // `.fullSizeContentView` MUST be present at creation for the glass chrome.
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
