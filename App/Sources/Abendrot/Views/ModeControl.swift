@@ -90,7 +90,7 @@ struct ModeControl: View {
     private func segment(_ option: ScheduleModeOption) -> some View {
         let isSelected = option == selection
         // Dark ink on the bright gradient (the app's high-contrast convention); muted on the track.
-        let ink = isSelected ? Theme.Color.groundIndigo : Theme.Color.textMuted
+        let ink = isSelected ? Theme.Color.inkOnAccent : Theme.Color.textMuted
         return VStack(spacing: stackGap) {
             ModeGlyph(size: glyphSize, ink: ink, option: option,
                       isSelected: isSelected, reduceMotion: reduceMotion)
@@ -285,7 +285,7 @@ struct BrandSegmentedControl<Option: Identifiable & Equatable>: View {
             .font(Theme.Typography.ui(12, weight: isSelected ? .bold : .medium))
             // Dark ink on the bright gradient (the app's high-contrast convention) — cream/white on
             // the light-gold top of the ramp fails contrast. Muted on the dark track when unselected.
-            .foregroundStyle(isSelected ? Theme.Color.groundIndigo : Theme.Color.textMuted)
+            .foregroundStyle(isSelected ? Theme.Color.inkOnAccent : Theme.Color.textMuted)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .padding(.vertical, 7)

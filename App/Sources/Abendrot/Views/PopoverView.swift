@@ -272,7 +272,7 @@ private struct IncompatibilityNotice: View {
     @State private var showWhy = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let ink = Theme.Color.groundIndigo
+    private let ink = Theme.Color.inkOnAccent
     private let summary = "This Mac can only tint your displays"
     private let explanation = "True warming isn’t available on this Mac, so Abendrot can only add a warm colour tint to your displays — a known limitation on some Apple-silicon chips and macOS versions."
 

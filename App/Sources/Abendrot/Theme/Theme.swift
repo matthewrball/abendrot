@@ -35,6 +35,12 @@ enum Theme {
         static let groundTwilight = SwiftUI.Color("GroundTwilight", bundle: .main)
         static let groundTwilight2 = SwiftUI.Color("GroundTwilight2", bundle: .main)
 
+        /// Fixed near-black ink for text/glyphs ON the bright accent gradient (selected segmented-control
+        /// segment, onboarding CTA, etc.). NOT `groundIndigo` — that is an adaptive GROUND (cream in Light
+        /// Mode) and washes out on the gradient (~1.3:1). Matches groundIndigo's DARK value, so Dark Mode is
+        /// pixel-unchanged while Light Mode becomes legible (WCAG AA).
+        static let inkOnAccent = SwiftUI.Color(.sRGB, red: 0x16 / 255.0, green: 0x0A / 255.0, blue: 0x12 / 255.0, opacity: 1)
+
         // Text
         static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .main)
         static let textMuted = SwiftUI.Color("TextMuted", bundle: .main)

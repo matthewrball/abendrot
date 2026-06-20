@@ -824,7 +824,7 @@ private struct WarmingMethodPicker: View {
             if availableChoices.count == 1, let choice = availableChoices.first {
                 Text(choice.label)
                     .font(Theme.Typography.ui(12, weight: .bold))
-                    .foregroundStyle(Theme.Color.groundIndigo)
+                    .foregroundStyle(Theme.Color.inkOnAccent)
                     .lineLimit(1)
                     .padding(.vertical, 7)
                     .padding(.horizontal, 16)

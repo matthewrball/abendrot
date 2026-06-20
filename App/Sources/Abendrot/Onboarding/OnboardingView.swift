@@ -182,6 +182,7 @@ struct OnboardingView: View {
                 .font(.system(size: 46, weight: .light))
                 .foregroundStyle(Theme.Color.accentHighlight)
                 .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
+                .accessibilityHidden(true)
 
             Text("You’re all set")
                 .font(Theme.Typography.serif(22))
@@ -216,7 +217,7 @@ struct OnboardingView: View {
             Link(destination: URL(string: "https://doi.org/10.1371/journal.pbio.3001571")!) {
                 HStack(spacing: 4) {
                     Text("Brown et al. · PLoS Biology · 2022")
-                    Image(systemName: "arrow.up.right").font(.system(size: 8, weight: .semibold))
+                    Image(systemName: "arrow.up.right").font(.system(size: 8, weight: .semibold)).accessibilityHidden(true)
                 }
                 .font(Theme.Typography.ui(10, weight: .medium))
                 .foregroundStyle(Theme.Color.accent)
@@ -235,6 +236,7 @@ struct OnboardingView: View {
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(Theme.Color.accentHighlight)
+                .accessibilityHidden(true)
             Text("Private by default. Nothing about you or your displays ever leaves this Mac — no account, no tracking, no telemetry.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textMuted)
@@ -287,7 +289,7 @@ struct PrimaryButton: View {
         Button(action: action) {
             Text(title)
                 .font(Theme.Typography.ui(13, weight: .semibold))
-                .foregroundStyle(Theme.Color.groundIndigo)
+                .foregroundStyle(Theme.Color.inkOnAccent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(
