@@ -152,7 +152,9 @@ private struct BylineLink: View {
 /// a link cursor. Used for the About page's GitHub / website links.
 private struct AboutLink: View {
     let title: String
-    let systemImage: String
+    var systemImage: String? = nil
+    /// A template image asset (e.g. the GitHub mark) — tinted with the accent, used when no SF Symbol fits.
+    var assetImage: String? = nil
     let url: String
     @State private var hovering = false
     var body: some View {
@@ -160,7 +162,7 @@ private struct AboutLink: View {
             Label {
                 Text(title).underline()
             } icon: {
-                Image(systemName: systemImage)
+                icon
             }
             .font(Theme.Typography.ui(12, weight: .medium))
             .foregroundStyle(Theme.Color.accent)
@@ -170,6 +172,18 @@ private struct AboutLink: View {
         .buttonStyle(.plain)
         .pointerStyle(.link)
         .onHover { hovering = $0 }
+    }
+
+    @ViewBuilder private var icon: some View {
+        if let assetImage {
+            Image(assetImage)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 12, height: 12)
+        } else if let systemImage {
+            Image(systemName: systemImage)
+        }
     }
 }
 
@@ -234,23 +248,36 @@ private struct GeneralTab: View {
 
             DividerLine()
 
-            Toggle("Launch at login", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, isOn in
-                    setLaunchAtLogin(isOn)
-                }
+            // Far-right switches (label left, control trailing) to match the master toggle and the
+            // standard macOS settings layout (founder).
+            HStack {
+                Text("Launch at login").font(Theme.Typography.ui(13))
+                Spacer()
+                Toggle("", isOn: $launchAtLogin)
+                    .labelsHidden()
+                    .onChange(of: launchAtLogin) { _, isOn in setLaunchAtLogin(isOn) }
+            }
             if let launchAtLoginError {
                 Text(launchAtLoginError)
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(Theme.Color.textFaint)
             }
             // Show-in-menu-bar with clear re-entry (plan §4.3).
-            Toggle("Show icon in menu bar", isOn: $model.showInMenuBar)
+            HStack {
+                Text("Show icon in menu bar").font(Theme.Typography.ui(13))
+                Spacer()
+                Toggle("", isOn: $model.showInMenuBar).labelsHidden()
+            }
             if !model.showInMenuBar {
                 Text("Hidden from the menu bar. Re-open with ⌥⌘T, or relaunch Abendrot to bring Settings back.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(Theme.Color.textFaint)
             }
-            Toggle("Soft confirmation tone", isOn: $softTone)
+            HStack {
+                Text("Soft confirmation tone").font(Theme.Typography.ui(13))
+                Spacer()
+                Toggle("", isOn: $softTone).labelsHidden()
+            }
         }
         .toggleStyle(.switch)
         .tint(Theme.Color.accent)
@@ -301,7 +328,7 @@ private struct ScheduleTab: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Text("Location")
-                    .font(Theme.Typography.ui(13.5))
+                    .font(Theme.Typography.ui(13.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.textPrimary)
                 Text("Used to estimate your sunset. No location permission required.")
                     .font(Theme.Typography.ui(11.5))
@@ -1028,7 +1055,8 @@ private struct ExcludedAppsControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             Text("Excluded apps")
-                .font(Theme.Typography.ui(13.5))
+                .font(Theme.Typography.ui(13.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.textPrimary)
             Text("Abendrot pauses warming (shows true colour) while one of these apps is frontmost — for colour-critical work.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
@@ -1142,7 +1170,8 @@ private struct MaximumWarmthControl: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Maximum warmth")
-                    .font(Theme.Typography.ui(13.5))
+                    .font(Theme.Typography.ui(13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.textPrimary)
                 Spacer()
                 Text("\(model.state.warmestPoint.value) K")
                     .font(Theme.Typography.serif(14))
@@ -1242,10 +1271,8 @@ private struct StatisticsTab: View {
                 VStack(alignment: .leading, spacing: 18) {
                     statBlock(title: "Abendrot has warmed your Mac for",
                               value: Self.durationString(model.totalWarmedSeconds), big: true)
-                    HStack(alignment: .top, spacing: 32) {
-                        statBlock(title: "Average session", value: Self.durationString(model.averageWarmedSeconds))
-                        statBlock(title: "Total sessions", value: "\(model.warmingSessions)")
-                    }
+                    statBlock(title: "Sunsets since you installed Abendrot",
+                              value: "\(model.sunsetCount)")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1326,7 +1353,7 @@ private struct AboutTab: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 18) {
-                AboutLink(title: "GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/matthewrball/abendrot")
+                AboutLink(title: "GitHub", assetImage: "github", url: "https://github.com/matthewrball/abendrot")
                 AboutLink(title: "abendrot.app", systemImage: "globe", url: "https://abendrot.app")
             }
 

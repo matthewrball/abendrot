@@ -30,6 +30,16 @@ struct AbendrotApp: App {
             Image(nsImage: MenuBarGlyph.image())
         }
         .menuBarExtraStyle(.window)
+        // Replace AppKit's default About panel: the standard "About Abendrot" menu item
+        // (and any caller of `orderFrontStandardAboutPanel`) opens our branded glass
+        // `AboutWindowController` instead. `model` is in scope from the App body.
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Abendrot") {
+                    AboutWindowController.show(model: model)
+                }
+            }
+        }
 
         // A SwiftUI Settings scene only so ⌘, / `openSettings()` resolve; the real glass
         // window is the programmatic one. This scene routes to it.

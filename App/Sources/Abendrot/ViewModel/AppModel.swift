@@ -55,14 +55,12 @@ final class AppModel {
 
     // MARK: Statistics (local-only — never leaves this Mac, "Private by default")
 
-    /// Total seconds Abendrot has actively warmed, EXCLUDING any in-flight session (the live total
-    /// adds the open session via `totalWarmedSeconds`). Persisted.
+    /// Total seconds Abendrot has actively warmed, EXCLUDING any in-flight period (the live total
+    /// adds the open period via `totalWarmedSeconds`). Persisted.
     private(set) var warmedSecondsBase: Double = 0
-    /// Count of distinct warming sessions (one contiguous warming period each). Persisted.
-    private(set) var warmingSessions: Int = 0
     /// Whether to accumulate the local stats at all (default on; nothing leaves the Mac either way).
     private(set) var statsEnabled: Bool = true
-    /// Start of the current warming session, or nil when not warming. In-memory bookkeeping only.
+    /// Start of the current warming period, or nil when not warming. In-memory bookkeeping only.
     @ObservationIgnored private var warmingStartedAt: Date?
 
     // MARK: Engine wiring (nil in previews)
@@ -176,12 +174,14 @@ final class AppModel {
             setUserCoordinate(.init(latitude: lat, longitude: lon))
         }
 
-        // Statistics (local-only). `double`/`integer` return 0 for an unset key — the right
-        // fresh-install default; the collect flag defaults ON. Then start counting immediately if
-        // we're already warming.
+        // Statistics (local-only). `double` returns 0 for an unset key — the right fresh-install
+        // default; the collect flag defaults ON. Stamp the install date once (it drives the sunset
+        // counter). Then start counting immediately if we're already warming.
         warmedSecondsBase = defaults.double(forKey: Self.warmedSecondsKey)
-        warmingSessions = defaults.integer(forKey: Self.warmingSessionsKey)
         statsEnabled = (defaults.object(forKey: Self.statsEnabledKey) as? Bool) ?? true
+        if defaults.object(forKey: Self.installDateKey) == nil {
+            defaults.set(Date().timeIntervalSince1970, forKey: Self.installDateKey)
+        }
         updateWarmingStats()
     }
 
@@ -244,7 +244,7 @@ final class AppModel {
     static let userLatitudeKey = "userLatitude"
     static let userLongitudeKey = "userLongitude"
     static let warmedSecondsKey = "stats.warmedSeconds"
-    static let warmingSessionsKey = "stats.warmingSessions"
+    static let installDateKey = "stats.installDate"
     static let statsEnabledKey = "stats.enabled"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
@@ -356,14 +356,20 @@ final class AppModel {
 
     // MARK: ── Statistics (local-only) ───────────────────────────────────────
 
-    /// Live total warmed time = the persisted base + any in-flight session's elapsed.
+    /// Live total warmed time = the persisted base + any in-flight period's elapsed.
     var totalWarmedSeconds: Double {
         warmedSecondsBase + (warmingStartedAt.map { max(0, Date().timeIntervalSince($0)) } ?? 0)
     }
 
-    /// Mean seconds per warming session (0 with no sessions).
-    var averageWarmedSeconds: Double {
-        warmingSessions > 0 ? totalWarmedSeconds / Double(warmingSessions) : 0
+    /// Number of sunsets since first launch — a day counter (one sunset ≈ one local day). Computed
+    /// from the stored install date, so it needs no live tracking and survives the app being asleep.
+    var sunsetCount: Int {
+        let ti = UserDefaults.standard.double(forKey: Self.installDateKey)
+        guard ti > 0 else { return 0 }
+        let cal = Calendar.current
+        return max(0, cal.dateComponents([.day],
+                                         from: cal.startOfDay(for: Date(timeIntervalSince1970: ti)),
+                                         to: cal.startOfDay(for: Date())).day ?? 0)
     }
 
     func setStatsEnabled(_ on: Bool) {
@@ -373,12 +379,11 @@ final class AppModel {
     }
 
     func resetStatistics() {
-        flushWarmingSession()  // close the open session cleanly first
+        flushWarmingSession()  // close the open warming run cleanly first
         warmedSecondsBase = 0
-        warmingSessions = 0
         warmingStartedAt = nil
         persistStats()
-        updateWarmingStats()   // re-open a session immediately if still warming (no dead 0s gap)
+        updateWarmingStats()   // re-open a run immediately if still warming (no dead 0s gap)
     }
 
     /// Edge-detect the warming phase on each state tick and accrue time (only while `statsEnabled`).
@@ -393,8 +398,7 @@ final class AppModel {
                 warmedSecondsBase += max(0, now.timeIntervalSince(start))   // accrue since last tick
                 warmingStartedAt = now
             } else {
-                warmingStartedAt = now                                      // new session
-                warmingSessions += 1
+                warmingStartedAt = now                                      // begin a new warming run
             }
             persistStats()
         } else if let start = warmingStartedAt {
@@ -412,9 +416,7 @@ final class AppModel {
     }
 
     private func persistStats() {
-        let d = UserDefaults.standard
-        d.set(warmedSecondsBase, forKey: Self.warmedSecondsKey)
-        d.set(warmingSessions, forKey: Self.warmingSessionsKey)
+        UserDefaults.standard.set(warmedSecondsBase, forKey: Self.warmedSecondsKey)
     }
 
     // MARK: ── Derived display helpers ───────────────────────────────────────
