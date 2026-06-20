@@ -1159,4 +1159,76 @@ public push (now a Session 7→11 wave).
 
 ---
 
+## §32 — Session 12 (2026-06-20): onboarding UX rework + the Schedule-toggle finalist, in Liquid Glass
+
+A pure **app-layer/design** session by the lead; founder dogfooding loop (explore → build → relaunch →
+react) with **heavy parallel Claude subagents** (a 4-family / 20-concept design gallery for the Schedule
+toggle, then a 3-agent UX panel for the onboarding flow). Lead held synthesis + all builds + verification.
+
+**KEY INFRA CORRECTION (cost one round-trip).** The founder dogfoods the **Release build** at
+`abendrot-build/build/Release/Build/Products/Release/Abendrot.app` (opened via a NEW dev **"Relaunch (latest
+build)"** menu item), NOT the Xcode Debug DerivedData build. Rebuilding Debug all session left the founder
+on a stale binary ("you didn't see my changes — old onboarding flow"). **Build Release to that exact path**
+(`-configuration Release -derivedDataPath build/Release CODE_SIGNING_ALLOWED=NO`) and relaunch THAT. For a
+true fresh onboarding run: the dev **"Reset onboarding + ALL settings"** button, or `defaults delete
+app.abendrot.Abendrot`.
+
+**Schedule toggle — explored, picked, shipped.** 4 parallel design agents → **20 concepts in 4 families**
+(native segmented · sky/horizon · choice-cards · tactile) → an evaluation gallery
+(`brand/explorations/schedule-toggle/index.html`, auto-sizing iframes + spec + inspiration brief). Founder
+picked **A3.1 "Living glyph"** (D2 "rotary dial" was the bold alt; both refined as finalists). A3.1 ships as
+`ModeControl`: a larger Liquid-Glass segmented control whose chosen sun glyph animates **once and settles**
+(Sunset → disc dips below a clipped horizon; Always-on → 8 rays bloom + a core settle, no infinite spin),
+then a **native-glass refactor** — `.glassSurface(.frost)` track + hairline rim + native hover (was a flat fill).
+
+**Warmth ticker + blue-light metric.** S11's "gas-price" Kelvin ticker kept; **`BlueLightReductionLabel`
+extracted as a reusable view** (popover ticker + onboarding); moon icon dropped (founder). Honesty unchanged
+(≈X% vs the 6500 K white point from `rgbGain.blue`, capped 0.95, an estimate — not a melanopic dose).
+
+**Slider glitch fixes (visible jank the founder hit):** (1) the Kelvin number + blue-light % used
+`.contentTransition(.numericText)` + an implicit `.animation` that **re-fired every drag tick** → glitchy
+digit-roll; now gated on `isPressing` (instant during a drag). (2) the thumb press spring was bouncy →
+**throbbed** on rapid clicks; now `.spring(response:.2, dampingFraction:.86)`. (3) added **tap-glide + 1:1
+drag** (a `disablesAnimations` transaction for drag moves). NOTE: a **concurrent** founder/linter **dial-tick
+haptic** also landed in `WarmSlider` (a `model:` param + detent ticks) — in flight, left intact.
+
+**Onboarding — the big rework (MODE-FIRST), via a 3-agent UX panel** (research · flow-designer · critic):
+- **Reordered:** welcome → **"When should it warm?"** → **"How warm should it get?"** → all set. The mode is
+  applied **LIVE**: Always-on warms now; Sunset eases to **neutral in daylight** + a **concrete sunset-time**
+  line ("It's daytime … warmth eases in around your local sunset: Today's sunset ≈ 8:47 PM") — kills the
+  "is it broken?" read.
+- **Warmth step = a labeled "preview of your evening"** that force-warms (Always-on override) regardless of
+  mode/time so everyone sees the bloom; "Looks right" **restores the chosen mode** (Sunset eases back to
+  neutral — expected, because labeled a preview). This **fixes the daytime-Sunset "where'd my warmth go?"
+  cliff** the old warmth-first order created.
+- **Fixed the labeling bug** the critic caught: old "Set your **maximum**" copy moved `globalWarmth.strength`
+  (pinned 1.0), not `warmestPoint` — now honestly "How warm should it get?". **Always-on defaults to MAX
+  warmth** in the mode step (founder).
+- **Sounds** wired (warm-on chime + per-mode ticks, pref-gated; `playSoftModeTone` made internal).
+- **City picker** opens **upward** in onboarding (`opensUpward`) and shows **Auto + 3 cities** — the
+  `ScrollView` was proposed only the field's height inside the floating overlay and **collapsed to ~0**;
+  swapped to a plain `VStack` capped at 3.
+- **Window drags from anywhere** (transparent `WindowDraggableBackground` → `window.performDrag` only on
+  fall-through clicks, slider-safe; `isMovableByWindowBackground` stays off), and the **chrome now matches
+  Settings** — a normal **frosted** window (`FrostBackground`, OS-rounded, integrated traffic lights) instead
+  of a clear floating glass card (which left the traffic lights detached / a "double border").
+- **Dev reset is now a TRUE fresh-install:** "Reset onboarding + ALL settings" wipes the whole `UserDefaults`
+  domain (was only the onboarding flag — the flag re-trigger always worked; the gap was persisted settings).
+  `"Manage…" → "Manage ›"` also landed.
+
+**Verification.** **Release BUILD SUCCEEDED** (non-masked) to `build/Release/...` after each change; founder
+verified visually via screenshots; auto-relaunched the Release binary each time. No new app-target FILES
+(new types live in existing files) → **no `xcodegen` needed**. **`swift test` NOT re-run** this session.
+
+**⚠️ STATE AT CLEAR (read carefully).** HEAD is **`c814beb`** (the docs' `f5326bb` was passed by concurrent
+commits during the session). A **large uncommitted WIP** sits on top and is a **MIX**: this session's
+**app-layer UX** (`ModeControl`/`Components`/`OnboardingView`/`OnboardingWindowController`/`SettingsView`/
+`AppModel`/`AbendrotApp` + `brand/explorations/schedule-toggle/`) **AND concurrent ENGINE work I did not make
+or verify** — WarmthKit `ScheduleResolver` / `TimeZoneCoordinates` / `WarmthEngine` / DDC edits, **`WarmthReducer.swift`
+DELETED**, new **`OneShotPlayer.swift`** + **`SunsetTimeTests.swift`**. Next session, FIRST: `git -C
+abendrot-build status`/diff, **re-run `swift test`** (engine + tests changed — do NOT trust the old 107/22),
+review the engine diff (esp. the `WarmthReducer` deletion) BEFORE committing. Nothing pushed.
+
+---
+
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
