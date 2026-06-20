@@ -928,16 +928,25 @@ Resume pass. Reconciled the repo against the docs first (evidence over assumptio
   `applyPersistedState()` (fresh install keeps hold). Cleared the `SettingsView` + now-satisfied
   `HotkeyService` TODOs. Separate-lane code-review: **APPROVE-WITH-NITS** (0 blocking; both one-line nits
   applied). Commit `9adf15f`.
-- **Scoped the other two §4 stubs honestly — NOT built (founder decisions).** Per-app exclusions is a
-  **no-op engine stub** (`WarmthEngine.setExcludedApps` just stores the set; needs an `NSWorkspace`
-  frontmost-app observer + suspend/resume-while-excluded + persistence, not merely a picker).
-  Reveal-during-captures is **overlay-only** (gamma/DDC warm the real framebuffer, so a `sharingType`
-  flip can't reveal those) **and** auto-suspend is **out of scope for v1.0 per the frozen contract §10**.
+- **Per-app exclusions — BUILT this session (founder greenlit it as in-scope for 1.0).** Dispatched to a
+  background executor (opus) against a precise spec, then reviewed + independently re-verified in a
+  separate lane (**APPROVE-WITH-NITS**, all nits applied incl. a change-gate test). While an excluded app
+  is frontmost the engine suspends warmth (true colour) across all displays, **composing with** (not
+  clobbering) hold-to-reveal. The membership check is **engine-owned** (new `setFrontmostApp` + a
+  change-gated `isExcludedAppFrontmost` folded into `engineOn`) → resolves contract **open-Q3**; the app
+  layer is a thin `NSWorkspace→engine` bridge (`FrontmostAppMonitor`, mirrors `HotkeyService`). The set
+  persists (§25.B) and drives a native "Add app…" `NSOpenPanel` picker in Settings → Advanced. Frozen
+  `WarmthState` untouched. **101 tests / 22 suites** (6 new). Commit `7548e17`. Known minor edge (founder
+  review): opening the popover over an excluded app leaves warmth suspended (arguably correct — that app
+  is still the real foreground).
+- **Reveal-during-captures — deferred (NOT built).** Overlay-only (gamma/DDC warm the real framebuffer,
+  so a `sharingType` flip can't reveal those) **and** auto-suspend is **out of scope for v1.0 per frozen
+  contract §10**. Founder call whether the narrow overlay-only manual toggle is worth shipping at all.
 - **Nothing pushed** — public gate held.
 
 **Still open (next session):** founder visual sign-off on the now-fresh combined build (incl. the new
-Hold/Toggle picker); §25.J final look (founder-owned); §25.K hardware matrix; the two remaining stubs are
-now founder calls (exclusions = real engine work; captures = likely drop per §10); then the gated push.
+Hold/Toggle picker **and** the exclusions picker); §25.J final look (founder-owned); §25.K hardware
+matrix; reveal-during-captures is the last §4 stub (likely drop per §10); then the gated public push.
 
 ---
 
