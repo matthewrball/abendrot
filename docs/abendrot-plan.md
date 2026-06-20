@@ -983,7 +983,8 @@ TimeZoneCoordinates.current()`), persisted; new public `ScheduleResolver.sunsetT
 timezone-coord error (LA representative coord = 27 min early for an SF user, validated by a standalone NOAA
 probe vs the app); founder accepts the early-warming bias as desirable. The genuine going-forward gap is
 huge single-time-zone countries (China = up to ~2h); a manual override covers it. Frozen `WarmthState`
-untouched. (Autocomplete is a first cut: Return-selects; ↑/↓/Esc nav not yet wired.)
+untouched. (Autocomplete now has full ↑/↓/Enter/Esc keyboard nav + a compact 3-row dropdown sized so it
+doesn't clip on a small Settings window; Settings also opens taller by default.)
 
 **Two founder-reported bug fixes.**
 - **Settings window wouldn't reopen** after close: the gear used SwiftUI `openSettings()`, routed through a
@@ -997,8 +998,8 @@ untouched. (Autocomplete is a first cut: Return-selects; ↑/↓/Esc nav not yet
   shutdown). *Founder to verify on hardware.*
 
 **Still open:** founder visual sign-off on the combined build; **reveal-during-captures** options (overlay-
-only — gamma/DDC can't be hidden from captures; pending founder steer); autocomplete keyboard nav (↑/↓/Esc —
-offered); Kelvin-readout font (recommend keep the New York serif — the deliberate brand accent, §5.1);
+only — gamma/DDC can't be hidden from captures; pending founder steer); Kelvin-readout font (recommend keep
+the New York serif — the deliberate brand accent, §5.1);
 **§25.K hardware matrix** (binding before 1.0; now incl. the catch-up re-assert + Sunset-timing checks);
 then the **gated public push**.
 
