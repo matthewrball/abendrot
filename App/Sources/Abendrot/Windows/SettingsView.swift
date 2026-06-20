@@ -275,7 +275,7 @@ private struct GeneralTab: View {
                     .foregroundStyle(Theme.Color.textFaint)
             }
             HStack {
-                Text("Soft confirmation tone").font(Theme.Typography.ui(13))
+                Text("Sounds").font(Theme.Typography.ui(13))
                 Spacer()
                 Toggle("", isOn: $softTone).labelsHidden()
             }
