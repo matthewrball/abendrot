@@ -35,9 +35,6 @@ final class AppModel {
     /// "Per-app exclusions" row opens Settings → Advanced).
     var settingsTab: SettingsTab = .general
 
-    /// Whether the onboarding "3 clicks to warmth" flow should be shown.
-    var showOnboarding: Bool = false
-
     /// Whether the menu-bar icon is shown (Settings → General). When false the app
     /// keeps running and is reachable via the global hotkey + relaunch (plan §4.3).
     var showInMenuBar: Bool = true
@@ -191,6 +188,15 @@ final class AppModel {
         lastWarmSunsetDay = defaults.double(forKey: Self.lastWarmSunsetDayKey)
         statsEnabled = (defaults.object(forKey: Self.statsEnabledKey) as? Bool) ?? true
         updateWarmingStats()
+
+        // First run: no completion flag yet → present onboarding once, here on the main actor (this runs
+        // after `engine.start()`). Presented imperatively rather than via a Scene `.onChange`, which has
+        // no prior art on `MenuBarExtra` and isn't guaranteed to fire on a cold launch where the menu is
+        // never clicked. The completion key is written when the window closes (finished OR dismissed —
+        // see OnboardingWindowController), so onboarding never shows twice.
+        if defaults.object(forKey: Self.hasCompletedOnboardingKey) == nil {
+            OnboardingWindowController.show(model: self)
+        }
     }
 
     /// Neutral-reset + tear down. Call on app quit.
@@ -271,6 +277,7 @@ final class AppModel {
     static let warmSunsetCountKey = "stats.warmSunsetCount"
     static let lastWarmSunsetDayKey = "stats.lastWarmSunsetDay"
     static let statsEnabledKey = "stats.enabled"
+    static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
         // Optimistic UI so the Kelvin readout updates immediately, then persist + tell the engine.
@@ -464,6 +471,13 @@ final class AppModel {
         state.globalWarmth.kelvin(warmestPoint: state.warmestPoint)
     }
 
+    /// True when the screen is actually being warmed right now — drives the menu-bar icon's amber
+    /// "active" state. Mirrors the `warmingNow` stats signal (minus the analytics-only `statsEnabled`
+    /// gate): enabled, the schedule says warm now, and not mid-reveal.
+    var isWarmingActive: Bool {
+        state.isEnabled && state.isScheduleActiveNow && !state.isRevealing
+    }
+
     /// The phase the status readout is in. Lets the popover header render the Kelvin number as its
     /// own `Text` (so it can animate with a sliding-digit transition) while the non-warming phases
     /// stay plain text.
@@ -482,7 +496,7 @@ final class AppModel {
         case .off:       return "Off"
         case .revealing: return "True color"
         case .idle:      return "Idle"
-        case .warming:   return "Warming · \(globalKelvin.value)K"
+        case .warming:   return "Warming · \(globalKelvin.displayValue)K"
         }
     }
 
@@ -504,6 +518,15 @@ final class AppModel {
         if case .supported = cap { return true }
         return false
     }
+}
+
+// MARK: - Kelvin display rounding
+
+extension Kelvin {
+    /// Display-only: rounded to the nearest 10K so readouts read cleanly (e.g. 2826K → 2830K). The engine
+    /// keeps the exact `value` (persistence, schedule, gamma math all use it); this only changes what the
+    /// UI shows — and it stops the readout jittering by 1s as the slider drags. (Founder.)
+    var displayValue: Int { ((value + 5) / 10) * 10 }
 }
 
 // MARK: - ConfirmationChime

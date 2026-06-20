@@ -25,11 +25,14 @@ struct AbendrotApp: App {
         MenuBarExtra {
             PopoverView(model: model)
         } label: {
-            // Provisional template glyph; the real icon + amber-active glow are
-            // deferred to brand-lock (§5.5 / §21.4). TODO(brand-lock).
-            Image(nsImage: MenuBarGlyph.image())
+            // "One Ripple" sunset-arc glyph: a monochrome template at rest, ember-amber filled while
+            // warming (chosen 2026-06-20 from the menu-bar icon lab). Reactive via @Observable model.
+            Image(nsImage: model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template())
         }
         .menuBarExtraStyle(.window)
+        // (First-run onboarding is presented imperatively from `AppModel.applyPersistedState()`, not via
+        // a Scene `.onChange` here — that has no prior art on `MenuBarExtra` and isn't guaranteed to fire
+        // on a cold launch where the menu is never clicked.)
         // Replace AppKit's default About panel: the standard "About Abendrot" menu item
         // (and any caller of `orderFrontStandardAboutPanel`) opens our branded glass
         // `AboutWindowController` instead. `model` is in scope from the App body.
@@ -38,6 +41,20 @@ struct AbendrotApp: App {
                 Button("About Abendrot") {
                     AboutWindowController.show(model: model)
                 }
+            }
+        }
+
+        // TODO(pre-release): REMOVE before shipping — a DEV-ONLY menu-bar item to replay the onboarding
+        // flow on demand for testing (founder request, Session 11). Deliberately a SEPARATE menu-bar item
+        // (default `.menu` style → a small ✨ pull-down) so it stays OUT of the main popover and doesn't
+        // clutter the UI under test. Delete this whole scene to remove. NOT gated behind `#if DEBUG`
+        // because the founder dogfoods the Release build.
+        MenuBarExtra("Replay onboarding", systemImage: "sparkles") {
+            Button("Replay onboarding") {
+                OnboardingWindowController.show(model: model)
+            }
+            Button("Reset onboarding flag (next launch shows it)") {
+                UserDefaults.standard.removeObject(forKey: AppModel.hasCompletedOnboardingKey)
             }
         }
 
