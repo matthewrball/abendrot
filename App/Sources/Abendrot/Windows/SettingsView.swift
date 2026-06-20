@@ -357,7 +357,8 @@ private struct ScheduleTab: View {
 
 // MARK: - CityAutocomplete
 
-private struct CityAutocomplete: View {
+// Internal (not private) so onboarding step 3 reuses the exact same liquid-glass city picker.
+struct CityAutocomplete: View {
     @Bindable var model: AppModel
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -375,17 +376,21 @@ private struct CityAutocomplete: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            searchField
-                .zIndex(2)
-
-            if isOpen {
-                dropdown
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-                    .zIndex(1)
+        searchField
+            // Float the dropdown BELOW the field as an overlay instead of pushing layout down. This keeps
+            // a height-constrained host (the onboarding card) from clipping content/button below, and it's
+            // the right behaviour anywhere (a menu should float over content, not shove it). The offset ≈
+            // the field's height; `zIndex` lifts the whole picker above sibling content while open.
+            .overlay(alignment: .topLeading) {
+                if isOpen {
+                    dropdown
+                        .frame(maxWidth: .infinity)
+                        .offset(y: 44)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                }
             }
-        }
-        .onAppear { syncQueryToSelection() }
+            .zIndex(isOpen ? 10 : 0)
+            .onAppear { syncQueryToSelection() }
         .onChange(of: model.userCoordinate) { _, _ in
             if !fieldFocused { syncQueryToSelection() }
         }
@@ -578,12 +583,10 @@ private struct CityAutocomplete: View {
 
     private var selectionText: String {
         if let selectedCity { return selectedCity.name }
-        return "Auto — \(timeZoneCityName)"
-    }
-
-    private var timeZoneCityName: String {
-        let raw = TimeZone.current.identifier.split(separator: "/").last.map(String.init) ?? TimeZone.current.identifier
-        return raw.replacingOccurrences(of: "_", with: " ")
+        // Show the neutral "Auto (from time zone)" by default — NOT the derived representative city, which
+        // can read as wrong (e.g. "Los Angeles" to an SF user) and overstates precision. Users opt in to a
+        // city for accuracy. Matches the dropdown's own "Auto (from time zone)" row.
+        return "Auto (from time zone)"
     }
 
     private var filteredCities: [MajorCities.City] {
@@ -695,55 +698,29 @@ private struct DisplaysTab: View {
 private struct DisplayConfigRow: View {
     let display: DisplayState
     @Bindable var model: AppModel
-    @State private var showAdvanced = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(display.name)
-                        .font(Theme.Typography.ui(13, weight: .medium))
-                        .foregroundStyle(Theme.Color.textPrimary)
-                    Text(statusLine)
-                        .font(Theme.Typography.ui(11.5))
-                        .foregroundStyle(statusColor)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer()
-                Button {
-                    withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
-                        showAdvanced.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Text("Advanced").font(Theme.Typography.ui(11))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .semibold))
-                            .rotationEffect(.degrees(showAdvanced ? 180 : 0))
-                    }
-                    .foregroundStyle(Theme.Color.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(showAdvanced
-                    ? "Hide advanced options for \(display.name)"
-                    : "Show advanced options for \(display.name)")
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(display.name)
+                    .font(Theme.Typography.ui(13, weight: .medium))
+                    .foregroundStyle(Theme.Color.textPrimary)
+                Text(statusLine)
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(statusColor)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if showAdvanced {
-                VStack(alignment: .leading, spacing: 14) {
-                    WarmingMethodPicker(display: display, model: model)
-                    DividerLine()
-                    PerDisplayWarmthControl(display: display, model: model)
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-            }
+            // The warming-method picker + per-display warmth show INLINE — no "Advanced" disclosure. This
+            // tab exists to configure each display, so its controls shouldn't hide behind a chevron.
+            DividerLine()
+            WarmingMethodPicker(display: display, model: model)
+            PerDisplayWarmthControl(display: display, model: model)
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 11)
         .padding(.horizontal, 12)
         .background(Theme.Color.line.opacity(0.4),
                     in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
-        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: showAdvanced)
     }
 
     /// A display can be *truly* warmed when a real white-point path is available — gamma or hardware
@@ -1174,12 +1151,12 @@ private struct MaximumWarmthControl: View {
                     .font(Theme.Typography.ui(13.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.textPrimary)
                 Spacer()
-                Text("\(model.state.warmestPoint.value) K")
+                Text("\(model.state.warmestPoint.displayValue) K")
                     .font(Theme.Typography.serif(14))
                     .monospacedDigit()
                     .foregroundStyle(Theme.Color.accentHighlight)
-                    .contentTransition(.numericText(value: Double(model.state.warmestPoint.value)))
-                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.warmestPoint.value)
+                    .contentTransition(.numericText(value: Double(model.state.warmestPoint.displayValue)))
+                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.warmestPoint.displayValue)
             }
             Text("The warmest your slider can reach. 1900 K already removes blue light entirely.")
                 .font(Theme.Typography.ui(11.5))
