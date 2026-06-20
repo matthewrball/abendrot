@@ -395,11 +395,6 @@ private struct WarmingMethodPicker: View {
                 )
             }
 
-            Text(choiceBinding.wrappedValue.description)
-                .font(Theme.Typography.ui(11))
-                .foregroundStyle(Theme.Color.textFaint)
-                .fixedSize(horizontal: false, vertical: true)
-
             if let note = unavailableNote {
                 Text(note)
                     .font(Theme.Typography.ui(11))
@@ -481,17 +476,6 @@ private enum WarmingMethodChoice: String, CaseIterable, Identifiable {
         case .standard: return "Standard"
         case .screenTint: return "Screen tint"
         case .hardwareControl: return "Hardware control"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .standard:
-            return "Warm the whole display through macOS — truly removes blue light."
-        case .screenTint:
-            return "Lay a warm tint over the screen. Works everywhere, but it’s a tint, not true warming."
-        case .hardwareControl:
-            return "Adjust the monitor’s own colour over the cable. Only some external monitors support this."
         }
     }
 
