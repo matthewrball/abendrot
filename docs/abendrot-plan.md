@@ -1100,6 +1100,63 @@ M5 Air + LG UltraFine, (b) the muted off-tone, (c) the warm-sunset counter after
 matrix (now incl. per-display exclusion across monitors); analytics wiring (if greenlit); onboarding pass;
 then the gated public push (Session 7→10 wave).
 
+## 31. Execution Log — Session 11 (2026-06-20): onboarding wired + living-glyph / Kelvin-ticker / audio wave (reconciled + verified)
+
+A resume session that opened by **catching the repo well ahead of its own docs** (the recurring trap,
+now bitten on the *record* not the build). HANDOFF/LAUNCH/RESUME-PROMPT all described HEAD `4bf1b9d`
+with a clean tree; reality was **4 undocumented commits past `4bf1b9d` _plus_ a large uncommitted WIP**
+(424 insertions across 7 app files) — a prior session had kept dogfooding and ended without updating the
+handoff. Per "read the code before believing the handoff," this session reconciled, verified, and
+committed rather than building on the stale assumption.
+
+**The 4 already-committed (03:35) but un-logged changes:**
+- `4e4ab83` **feat(onboarding): first-run "3 clicks to warmth" WIRED** (Do-next #5) — a real
+  `OnboardingWindowController` + a reactive menu-bar glyph + Kelvin rounding (`AbendrotApp`,
+  `OnboardingView` +240, `SunsetArcGlyph` reworked).
+- `fd42eb5` **polish(settings): inline per-display controls + floating city picker + "Auto (from time
+  zone)".** ⚠️ This **re-introduces the inline per-display method controls that §30 had *reverted*** (the
+  founder preferred label-above in S10, then evidently swung back) — a genuine back-and-forth, flagged
+  here so the two notes don't read as a contradiction. Founder owns the final call.
+- `ebb05d4` polish(popover): large invisible corner hit-targets for the gear + advanced chevron (Quit
+  kept a small precise target); dev-replay pill removed from the popover.
+- `45e286c` polish(about): looser section spacing, window 560→640.
+
+**The uncommitted WIP — verified green here, then committed as `cb81a32`** (`feat(ui)`):
+- **`ModeControl` → the "A3 living glyph" finalist** (design source `brand/explorations/schedule-toggle/`,
+  variation A3.1): Sunset / Always-on as a larger Liquid-Glass segmented control whose **selected glyph
+  animates once and HOLDS** (the sun dips below a horizon; the rays bloom and settle — never loops),
+  sliding `matchedGeometryEffect` pill, hover, **compact + full sizes**; every spring resolves instantly
+  under Reduce Motion. The plain `BrandSegmentedControl` is kept (still used by the other small pickers).
+- **`WarmSlider` → a "gas-price" Kelvin ticker** (42pt serif, tabular, lit-sign glow) above the slider +
+  **1:1 finger-tracking drag** (a `disablesAnimations` transaction mid-drag, glide-on-tap). New **shared
+  `BlueLightReductionLabel`** ("≈X% less blue light", from `rgbGain(for:).blue` attenuation vs the 6500 K
+  white point, capped 0.95) — phrased as an **estimate, not a measured melanopic dose** (§13-careful).
+- **Audio (`AppModel`):** a soft **per-mode selection tick** on a real Schedule switch (`playSoftModeTone`
+  — quieter, pitched-up Glass, a distinct note per mode) + a synthesized **`SwooshSound`** on advanced-panel
+  expand (`toggleAdvanced`); `setScheduleMode` gains **`userInitiated`** so the launch-time restore stays
+  silent; `ConfirmationChime.play` gains a per-play `volume`. All gated by the existing "Soft confirmation
+  tone" pref. (Pure synthesis — no audio assets.)
+- **Onboarding** wired to the same tones + the blue-light metric + an **upward-opening** city picker;
+  popover **"Manage…" → "Manage ›"**.
+- Design sources committed as `f5326bb` (`brand`): `schedule-toggle/` (the finalist labs) + the menu-bar
+  glyph labs.
+
+**Verification (this session).** `xcodegen generate` → **Release BUILD SUCCEEDED** (non-masked: literal
+`** BUILD SUCCEEDED **` + a Universal arm64+x86_64 binary, mtime postdates HEAD) + **107 WarmthKit tests /
+22 suites** (unchanged — the wave is purely app-layer). Pre-checked the obvious compile risks before the
+build (the redesigned `ModeControl` still defines `BrandSegmentedControl`; `Theme.Motion.warm` exists as
+*both* a bare `Animation` and a `warm(reduceMotion:)` func, so `Theme.Motion.warm.delay(_:)` is valid;
+`rgbGain(for:)` is public). **Auto-relaunched** the fresh binary (single instance). HEAD now `f5326bb`;
+**nothing pushed** (public gate held).
+
+**Still open (Session 12):** founder **hardware + visual sign-off** on `f5326bb` — now also the **new
+living-glyph mode control**, the **Kelvin ticker + "≈% less blue light" label**, the **two new sounds**
+(mode tick + expand swoosh), and the **first-run onboarding flow** — on top of the still-unverified S9–S10
+items ((a) per-display exclusion on the M5 Air + LG UltraFine, (b) the muted off-tone, (c) the warm-sunset
+counter, (d) the built-in catch-up re-assert). Then: resolve the **inline-vs-label-above per-display**
+direction (founder); §25.J final look; §25.K hardware matrix; analytics wiring (if greenlit); the gated
+public push (now a Session 7→11 wave).
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
