@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import WarmthCore
 import DisplayServices
 import HardwareDDC
@@ -359,22 +360,47 @@ public actor WarmthEngine {
 
     /// The app-side NSWorkspace bridge reports the frontmost app's bundle id here (nil if none /
     /// unresolvable). The engine owns the membership check so suspend-while-excluded is unit-testable
-    /// (resolves contract open-Q3). Suspends warmth across all displays while an excluded app is
-    /// frontmost — independent of hold-to-reveal, so the two compose. Change-gated.
-    public func setFrontmostApp(_ bundleID: String?) async {
+    /// (resolves contract open-Q3). Suspends warmth while an excluded app is frontmost — independent of
+    /// hold-to-reveal, so the two compose. Change-gated.
+    ///
+    /// `onDisplays` (additive, Session 9) refines suspend to a MULTI-MONITOR setup: it is the set of
+    /// `CGDirectDisplayID`s the frontmost app's on-screen windows occupy, computed permission-free by
+    /// the app-side bridge (`CGWindowListCopyWindowInfo` bounds + owner PID — no Screen Recording, no
+    /// Accessibility). When the frontmost app is excluded, only THOSE displays go true-colour and the
+    /// rest stay warm. `nil` (the default, and the legacy behaviour) means "all displays" — so a caller
+    /// that can't or doesn't compute the set, and every existing test, suspends everywhere as before.
+    public func setFrontmostApp(_ bundleID: String?, onDisplays displayIDs: Set<CGDirectDisplayID>? = nil) async {
         box.frontmostBundleID = bundleID
+        box.frontmostDisplayIDs = displayIDs
         // Publish-on-change only (deliberately unlike setExcludedApps): the frontmost id isn't part of
         // the published WarmthState, so when suspend doesn't flip there is nothing new to publish.
         if recomputeExcludedSuspend() { await reapply(); publish() }
     }
 
-    /// Recompute whether the current frontmost app is in the exclusion set. Returns true if the
-    /// suspend state flipped (so the caller can reapply only on change). Pure over box fields.
+    /// Recompute whether (and where) the current frontmost app suspends warmth. Returns true if the
+    /// suspend state flipped — either the whole-app flag OR the per-display target set changed — so the
+    /// caller can reapply only on change. Pure over box fields.
     private func recomputeExcludedSuspend() -> Bool {
-        let now = box.frontmostBundleID.map { box.excludedApps.contains($0) } ?? false
-        guard now != box.isExcludedAppFrontmost else { return false }
-        box.isExcludedAppFrontmost = now
+        let excluded = box.frontmostBundleID.map { box.excludedApps.contains($0) } ?? false
+        // The displays to suspend: when an excluded app is frontmost, the set it reported (nil = all
+        // displays, the single-display / unresolved fallback). When nothing excluded is frontmost, no
+        // display is suspended.
+        let newDisplays: Set<CGDirectDisplayID>? = excluded ? box.frontmostDisplayIDs : Set()
+        guard excluded != box.isExcludedAppFrontmost || newDisplays != box.suspendedDisplayIDs else {
+            return false
+        }
+        box.isExcludedAppFrontmost = excluded
+        box.suspendedDisplayIDs = newDisplays
         return true
+    }
+
+    /// Whether a given display is currently suspended by an excluded frontmost app. `nil`
+    /// `suspendedDisplayIDs` means "all displays" (the whole-app / fallback path); a set means only
+    /// those `CGDirectDisplayID`s. An empty set suspends nothing.
+    private func isDisplaySuspendedByExclusion(_ id: DisplayIdentity) -> Bool {
+        guard box.isExcludedAppFrontmost else { return false }
+        guard let suspended = box.suspendedDisplayIDs else { return true }   // nil = all displays
+        return suspended.contains(id.currentDisplayID)
     }
 
     // MARK: ── Safety ────────────────────────────────────────────────────────────
@@ -672,7 +698,10 @@ public actor WarmthEngine {
         )
         box.value.isScheduleActiveNow = decision.isActiveNow
 
-        let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing && !box.isExcludedAppFrontmost
+        // Global gates (master enable, schedule, hold-to-reveal). The excluded-app suspend is applied
+        // PER DISPLAY below, so on a multi-monitor setup only the display(s) the excluded app occupies
+        // go true-colour while the rest stay warm.
+        let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing
         let warmestPoint = box.value.warmestPoint
 
         // Snapshot the work set by VALUE before any await. The engine is an actor, so each await is
@@ -692,9 +721,12 @@ public actor WarmthEngine {
                 override: display.preferredMethod,
                 privateAPIsEnabled: privateOn
             )
+            // This display is on only when the global gates pass AND it is not currently suspended by
+            // an excluded frontmost app sitting on it (per-display, so other monitors stay warm).
+            let displayOn = engineOn && !isDisplaySuspendedByExclusion(id)
             // A display uses its OWN warmth only when overridden ("Custom warmth"); otherwise it
             // follows the global/schedule target. (Replaces the old max-boost model.)
-            let effective = engineOn ? (display.warmthOverridden ? display.warmth : decision.target) : .off
+            let effective = displayOn ? (display.warmthOverridden ? display.warmth : decision.target) : .off
 
             // Clean up a layer we are LEAVING this pass (user disabled DDC, capability changed) so a
             // display can't stay warm on two layers at once.
@@ -842,9 +874,18 @@ private struct WarmthStateBox {
     /// The frontmost app's bundle id reported by the app-side `FrontmostAppMonitor` (nil = none /
     /// unresolvable). Engine-private — not part of the published surface.
     var frontmostBundleID: String? = nil
-    /// Derived: whether `frontmostBundleID` is in `excludedApps`. When true the engine suspends
-    /// warmth across all displays (true colour), independent of (and composing with) hold-to-reveal.
+    /// The `CGDirectDisplayID`s the frontmost app's on-screen windows occupy, computed permission-free
+    /// by the app-side bridge. `nil` = "all displays" (single-display / unresolved fallback). Only
+    /// consulted when `frontmostBundleID` is excluded. Engine-private.
+    var frontmostDisplayIDs: Set<CGDirectDisplayID>? = nil
+    /// Derived: whether `frontmostBundleID` is in `excludedApps`. When true the engine suspends warmth
+    /// on the excluded app's display(s) (`suspendedDisplayIDs`), independent of (and composing with)
+    /// hold-to-reveal.
     var isExcludedAppFrontmost: Bool = false
+    /// Derived: the `CGDirectDisplayID`s to suspend while an excluded app is frontmost. `nil` = all
+    /// displays (whole-app suspend / single-display fallback, == legacy behaviour); a set = only those
+    /// monitors. Empty set suspends nothing. Engine-private.
+    var suspendedDisplayIDs: Set<CGDirectDisplayID>? = nil
 }
 
 // MARK: - NoopBackend (test-support neutral layer)
