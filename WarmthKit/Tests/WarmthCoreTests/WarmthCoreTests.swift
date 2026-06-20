@@ -246,6 +246,32 @@ struct ScheduleResolverTests {
         #expect(night.target == warmth)               // deep night → full configured warmth (factor 1)
     }
 
+    @Test("sunsetTime finds evening sunset and returns nil for polar day")
+    func sunsetTime() {
+        var losAngeles = Calendar(identifier: .gregorian)
+        losAngeles.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let summerDate = losAngeles.date(from: DateComponents(year: 2026, month: 6, day: 21, hour: 12))!
+        let sunset = ScheduleResolver.sunsetTime(
+            forCoordinate: .init(latitude: 34.05, longitude: -118.24),
+            on: summerDate,
+            calendar: losAngeles
+        )
+        #expect(sunset != nil)
+        if let sunset {
+            let hour = losAngeles.component(.hour, from: sunset)
+            #expect(hour >= 19 && hour <= 21)
+        }
+
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let polarDate = utc.date(from: DateComponents(year: 2026, month: 6, day: 21, hour: 12))!
+        #expect(ScheduleResolver.sunsetTime(
+            forCoordinate: .init(latitude: 80, longitude: 0),
+            on: polarDate,
+            calendar: utc
+        ) == nil)
+    }
+
     @Test("TimeZoneCoordinates: known identifier hits the table; unknown uses the UTC-offset longitude")
     func timeZoneCoordinates() {
         let ny = TimeZoneCoordinates.coordinate(forIdentifier: "America/New_York", secondsFromGMT: -5 * 3600)

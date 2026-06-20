@@ -46,6 +46,9 @@ final class AppModel {
     /// mirrored into the engine via `setExcludedApps`. Persisted; restored in `applyPersistedState()`.
     var excludedApps: Set<String> = []
 
+    /// Manual Sunset location override. nil = Auto from system time zone; no permission or network.
+    var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
+
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
@@ -150,6 +153,11 @@ final class AppModel {
         if let arr = defaults.array(forKey: Self.excludedAppsKey) as? [String] {
             setExcludedApps(Set(arr))
         }
+
+        if let lat = defaults.object(forKey: Self.userLatitudeKey) as? Double,
+           let lon = defaults.object(forKey: Self.userLongitudeKey) as? Double {
+            setUserCoordinate(.init(latitude: lat, longitude: lon))
+        }
     }
 
     /// Neutral-reset + tear down. Call on app quit.
@@ -207,6 +215,8 @@ final class AppModel {
     static let scheduleModeKey = "scheduleMode"
     static let revealModeKey = "revealMode"
     static let excludedAppsKey = "excludedApps"
+    static let userLatitudeKey = "userLatitude"
+    static let userLongitudeKey = "userLongitude"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
         // Optimistic UI so the Kelvin readout updates immediately, then persist + tell the engine.
@@ -283,6 +293,19 @@ final class AppModel {
         // Persist a sorted [String] (stable, plist-native) so the set survives relaunch (§25.B).
         UserDefaults.standard.set(bundleIDs.sorted(), forKey: Self.excludedAppsKey)
         Task { await engine?.setExcludedApps(bundleIDs) }
+    }
+
+    func setUserCoordinate(_ coordinate: TimeZoneCoordinates.Coordinate?) {
+        userCoordinate = coordinate
+        let defaults = UserDefaults.standard
+        if let c = coordinate {
+            defaults.set(c.latitude, forKey: Self.userLatitudeKey)
+            defaults.set(c.longitude, forKey: Self.userLongitudeKey)
+        } else {
+            defaults.removeObject(forKey: Self.userLatitudeKey)
+            defaults.removeObject(forKey: Self.userLongitudeKey)
+        }
+        Task { await engine?.setUserCoordinate(coordinate) }
     }
 
     /// Add one bundle id to the exclusion set (Advanced → Excluded apps "Add app…").

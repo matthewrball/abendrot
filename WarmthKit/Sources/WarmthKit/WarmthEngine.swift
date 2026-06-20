@@ -247,6 +247,14 @@ public actor WarmthEngine {
         publish()
     }
 
+    /// Manual location override for Sunset mode. `nil` = derive the coordinate from the system time zone
+    /// (the default). Set = use this exact coordinate for the solar sunset calc. No permission, no network.
+    public func setUserCoordinate(_ coordinate: TimeZoneCoordinates.Coordinate?) async {
+        box.userCoordinate = coordinate
+        await reapply()
+        publish()
+    }
+
     public func setWarmestPoint(_ kelvin: Kelvin) async {
         box.value.warmestPoint = kelvin
         await reapply()
@@ -624,7 +632,7 @@ public actor WarmthEngine {
         // fresh each pass so it tracks travel / DST. Live mode only: hermetic tests pass nil so the
         // fixed-window degrade stays deterministic (the solar ramp is unit-tested in WarmthCore).
         let solarCoordinate: TimeZoneCoordinates.Coordinate? =
-            injectedDisplays == nil ? TimeZoneCoordinates.current() : nil
+            injectedDisplays == nil ? (box.userCoordinate ?? TimeZoneCoordinates.current()) : nil
 
         let decision = ScheduleResolver.resolveWithDegrade(
             mode: box.value.scheduleMode,
@@ -803,6 +811,7 @@ public actor WarmthEngine {
 private struct WarmthStateBox {
     var value: WarmthState
     var excludedApps: Set<String> = []
+    var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
     /// The frontmost app's bundle id reported by the app-side `FrontmostAppMonitor` (nil = none /
     /// unresolvable). Engine-private — not part of the published surface.
     var frontmostBundleID: String? = nil

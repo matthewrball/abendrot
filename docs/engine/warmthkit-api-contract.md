@@ -253,6 +253,7 @@ public actor WarmthEngine {
     public func setEnabled(_ enabled: Bool) async
     public func setWarmth(_ level: WarmthLevel) async
     public func setScheduleMode(_ mode: ScheduleMode) async
+    public func setUserCoordinate(_ coordinate: TimeZoneCoordinates.Coordinate?) async  // additive: manual Sunset location override; nil = time-zone default
     public func setWarmestPoint(_ kelvin: Kelvin) async        // the "maximum warmth" the slider maps to
 
     // ── Reveal True Color (signature feature) ─────────────────────────────────

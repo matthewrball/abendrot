@@ -249,7 +249,51 @@ private struct ScheduleTab: View {
             Text("Sunset warms automatically around your local sunset — easing in beforehand and holding through the night — using your time zone to estimate sunrise and sunset. No location permission required. Always on keeps warmth on around the clock.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Location")
+                    .font(Theme.Typography.ui(13.5))
+                    .foregroundStyle(Theme.Color.textPrimary)
+                Text("Used to estimate your sunset. No location permission required.")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                // ponytail: curated cities only; add raw lat/long if uncovered locations matter.
+                Picker("Location", selection: locationSelection) {
+                    Text("Auto (from time zone)").tag(nil as TimeZoneCoordinates.Coordinate?)
+                    ForEach(MajorCities.all) { city in
+                        Text(city.name).tag(Optional(city.coordinate))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 260, alignment: .leading)
+                Text(sunsetReadout)
+                    .font(Theme.Typography.ui(11))
+                    .foregroundStyle(Theme.Color.textFaint)
+            }
         }
+    }
+
+    private var locationSelection: Binding<TimeZoneCoordinates.Coordinate?> {
+        Binding(
+            get: {
+                guard let coordinate = model.userCoordinate,
+                      MajorCities.all.contains(where: { $0.coordinate == coordinate }) else { return nil }
+                return coordinate
+            },
+            set: { model.setUserCoordinate($0) }
+        )
+    }
+
+    private var sunsetReadout: String {
+        let coordinate = model.userCoordinate ?? TimeZoneCoordinates.current()
+        guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coordinate, on: Date()) else {
+            return "Today's sunset: —"
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        formatter.timeZone = .current
+        return "Today's sunset ≈ \(formatter.string(from: sunset))"
     }
 }
 

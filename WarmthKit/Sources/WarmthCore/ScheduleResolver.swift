@@ -110,6 +110,26 @@ public enum ScheduleResolver {
     /// sunset horizon. At and below this (sun has set → all night) warmth is the configured level.
     public static let rampFullElevation = -0.833
 
+    /// Today's sunset (sun crossing the -0.833° refraction horizon, descending) for `coordinate`, in the
+    /// given calendar/time zone. Returns nil when the sun doesn't cross that horizon that day (polar day/night).
+    /// Scans the day at 1-minute resolution using the same `solarElevationDegrees` model Sunset mode uses.
+    public static func sunsetTime(
+        forCoordinate coordinate: TimeZoneCoordinates.Coordinate,
+        on date: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        let startOfDay = calendar.startOfDay(for: date)
+        func elevation(_ minute: Int) -> Double {
+            solarElevationDegrees(at: startOfDay.addingTimeInterval(Double(minute) * 60),
+                                  latitude: coordinate.latitude, longitude: coordinate.longitude)
+        }
+        let noon = (0..<1440).max(by: { elevation($0) < elevation($1) }) ?? 720
+        for minute in noon..<1440 where elevation(minute) <= rampFullElevation {
+            return startOfDay.addingTimeInterval(Double(minute) * 60)
+        }
+        return nil
+    }
+
     /// A graded, sunset-aware decision driven by the sun's real position: warmth eases from 0 (sun
     /// at `rampStart`) up to `configuredWarmth` (sun at/below `rampFull` = sunset → night), and back
     /// down through the same band at sunrise. Makes Sunset mode "dim up to sunset, then full warm
