@@ -290,6 +290,9 @@ private struct CityAutocomplete: View {
     @State private var hoveredID: String?
     @State private var highlightedID: String?
 
+    /// Sentinel id for the pinned "Auto (from time zone)" row so it joins the keyboard highlight cycle.
+    private let autoID = "__auto__"
+
     private let popularCityNames = [
         "San Francisco", "Seattle", "New York", "London", "Paris", "Tokyo", "Sydney", "São Paulo"
     ]
@@ -337,6 +340,20 @@ private struct CityAutocomplete: View {
                     if fieldFocused { isOpen = true }
                     highlightedID = filteredCities.first?.id
                 }
+                .onKeyPress(.downArrow) {
+                    if isOpen { moveHighlight(by: 1) } else { open() }
+                    return .handled
+                }
+                .onKeyPress(.upArrow) {
+                    if isOpen { moveHighlight(by: -1) } else { open() }
+                    return .handled
+                }
+                .onKeyPress(.escape) {
+                    guard isOpen || fieldFocused else { return .ignored }
+                    fieldFocused = false
+                    close()
+                    return .handled
+                }
 
             Button {
                 if selectedCity == nil {
@@ -362,9 +379,11 @@ private struct CityAutocomplete: View {
 
     private var dropdown: some View {
         VStack(spacing: 4) {
-            cityRow(title: "Auto (from time zone)", systemImage: "globe", selected: selectedCity == nil) {
+            cityRow(title: "Auto (from time zone)", systemImage: "globe",
+                    selected: selectedCity == nil, highlighted: highlightedID == autoID) {
                 selectAuto()
             }
+            .onHover { if $0 { highlightedID = autoID } }
 
             if filteredCities.isEmpty {
                 Text("No cities found")
@@ -549,11 +568,27 @@ private struct CityAutocomplete: View {
     }
 
     private func selectHighlightedOrFirst() {
-        if let highlightedID, let city = filteredCities.first(where: { $0.id == highlightedID }) {
+        if highlightedID == autoID {
+            selectAuto()
+        } else if let highlightedID, let city = filteredCities.first(where: { $0.id == highlightedID }) {
             select(city)
         } else if let city = filteredCities.first {
             select(city)
         }
+    }
+
+    /// The keyboard-navigable rows in order: the Auto sentinel, then the filtered cities.
+    private var navigableIDs: [String] {
+        [autoID] + filteredCities.map(\.id)
+    }
+
+    /// Move the highlight up/down the navigable rows, clamped at the ends. From no selection, ↓ lands on
+    /// the first row and ↑ on the last.
+    private func moveHighlight(by delta: Int) {
+        let ids = navigableIDs
+        guard !ids.isEmpty else { return }
+        let current = highlightedID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
+        highlightedID = ids[max(0, min(ids.count - 1, current + delta))]
     }
 }
 
