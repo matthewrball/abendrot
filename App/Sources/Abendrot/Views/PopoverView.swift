@@ -61,6 +61,30 @@ struct PopoverView: View {
         }
         .padding(20)
         .frame(width: 330)
+        // Big corner hit targets (founder): the whole TOP-RIGHT corner opens Settings; the whole
+        // BOTTOM-RIGHT corner toggles the advanced expansion. Overlays pinned to the card's actual
+        // corners (added after `.padding(20)`, so they reach the real edges, over the padding) and they
+        // keep the header/footer rows at their natural height. The visible glyphs live in `header`/
+        // `footer`. The Quit ⎋ (bottom-LEFT) is deliberately NOT enlarged — an intentional, hard-to-undo
+        // action we must not invite by accident.
+        .overlay(alignment: .topTrailing) {
+            Button { SettingsWindowController.show(model: model) } label: {
+                Color.clear.frame(width: 96, height: 52).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
+                    model.isAdvancedExpanded.toggle()
+                }
+            } label: {
+                Color.clear.frame(width: 104, height: 56).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
+        }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.isAdvancedExpanded)
         .glassSurface(.popover)
     }
@@ -75,18 +99,13 @@ struct PopoverView: View {
                 .font(Theme.Typography.serif(15))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
-            // Settings (top-right). Open the programmatic glass window DIRECTLY rather than via
-            // SwiftUI's `openSettings()` — that routes through a hidden 1×1 Settings-scene window which
-            // lingers after the glass window closes, so a second open found it already present and never
-            // re-fired the launch (Settings wouldn't reopen). Direct call is reliable every time.
-            Button {
-                SettingsWindowController.show(model: model)
-            } label: {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(Theme.Color.textMuted)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
+            // Settings indicator (top-right). The whole top-right CORNER is the hit target — an overlay
+            // on the card (see `body`) that reaches the card edges and opens Settings DIRECTLY via
+            // `SettingsWindowController` (not SwiftUI `openSettings()`, which routes through a hidden 1×1
+            // scene window that lingers and breaks reopen). This is just the visual glyph.
+            Image(systemName: "gearshape")
+                .foregroundStyle(Theme.Color.textMuted)
+                .accessibilityHidden(true)
         }
     }
 
@@ -122,6 +141,7 @@ struct PopoverView: View {
                     get: { ScheduleModeOption(model.state.scheduleMode) },
                     set: { model.setScheduleMode($0.toScheduleMode()) }
                 ),
+                compact: true,
                 onChange: { _ in }
             )
             // One-line subtitle describing the selected mode — fixes "Sunset" reading as
@@ -182,18 +202,13 @@ struct PopoverView: View {
 
             Spacer()
 
-            // Advanced disclosure (bottom-right) — a chevron that rotates 180° when open.
-            Button {
-                withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
-                    model.isAdvancedExpanded.toggle()
-                }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .rotationEffect(.degrees(model.isAdvancedExpanded ? 180 : 0))
-                    .foregroundStyle(Theme.Color.textMuted)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
+            // Advanced disclosure indicator (bottom-right). The whole bottom-right CORNER is the hit
+            // target — an overlay on the card (see `body`); this is just the visual chevron, rotating
+            // 180° when open.
+            Image(systemName: "chevron.down")
+                .rotationEffect(.degrees(model.isAdvancedExpanded ? 180 : 0))
+                .foregroundStyle(Theme.Color.textMuted)
+                .accessibilityHidden(true)
         }
     }
 
