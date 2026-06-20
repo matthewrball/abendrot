@@ -117,9 +117,25 @@ private struct TabHeader: View {
     }
 }
 
-private struct SidebarBranding: View {
-    @State private var hoveringByline = false
+/// "Built by Matthew Ball" → matthewball.me. The name is always underlined so it reads as a link, and
+/// it brightens on hover (same hue) for a clear, colour-preserving affordance. Shared by the Settings
+/// sidebar footer and the About page so the two stay congruent.
+private struct BylineLink: View {
+    @State private var hovering = false
+    var body: some View {
+        Link(destination: URL(string: "https://matthewball.me/")!) {
+            (Text("Built by ") + Text("Matthew Ball").underline())
+                .font(Theme.Typography.ui(11))
+                .foregroundStyle(Theme.Color.textMuted)
+                .opacity(hovering ? 1 : 0.85)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
 
+private struct SidebarBranding: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             AppIconView()
@@ -127,17 +143,7 @@ private struct SidebarBranding: View {
             Text("Abendrot")
                 .font(Theme.Typography.serif(15))
                 .foregroundStyle(Theme.Color.textPrimary)
-            // Underlined name marks it as a link; resting state is slightly dimmed and brightens on
-            // hover (same hue) for a clear, colour-preserving hover affordance.
-            Link(destination: URL(string: "https://matthewball.me/")!) {
-                (Text("Built by ") + Text("Matthew Ball").underline())
-                    .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textMuted)
-                    .opacity(hoveringByline ? 1 : 0.85)
-                    .animation(.easeOut(duration: 0.12), value: hoveringByline)
-            }
-            .buttonStyle(.plain)
-            .onHover { hoveringByline = $0 }
+            BylineLink()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 10)
@@ -829,9 +835,7 @@ private struct AboutTab: View {
                     Text("Abendrot")
                         .font(Theme.Typography.serif(24))
                         .foregroundStyle(Theme.Color.textPrimary)
-                    Text("Soften into the evening.")
-                        .font(Theme.Typography.ui(12.5))
-                        .foregroundStyle(Theme.Color.textMuted)
+                    BylineLink()
                 }
             }
 
@@ -840,10 +844,6 @@ private struct AboutTab: View {
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
-            Link("Built by Matthew Ball", destination: URL(string: "https://matthewball.me/")!)
-                .font(Theme.Typography.ui(11))
-                .foregroundStyle(Theme.Color.textMuted)
-
             // What makes it different (the marketing angle).
             VStack(alignment: .leading, spacing: 8) {
                 aboutPoint("Every display", "Real warmth on built-in and external monitors — including buttonless Apple displays — where Night Shift and f.lux quietly give up.")
