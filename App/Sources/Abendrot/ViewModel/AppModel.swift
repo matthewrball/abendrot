@@ -218,8 +218,8 @@ final class AppModel {
         guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
         // A fresh, retained COPY each time: the shared named NSSound won't restart if it's mid-play
         // (so a quick on→off would drop one), and a local copy would deallocate before its async
-        // playback finishes (silent / cut off). "Pop" is softer than "Tink" (founder didn't like Tink).
-        guard let sound = NSSound(named: "Pop")?.copy() as? NSSound else { return }
+        // playback finishes (silent / cut off). "Glass" is the gentlest/most pleasant system chime.
+        guard let sound = NSSound(named: "Glass")?.copy() as? NSSound else { return }
         sound.volume = 0.5
         confirmationSound = sound
         sound.play()
