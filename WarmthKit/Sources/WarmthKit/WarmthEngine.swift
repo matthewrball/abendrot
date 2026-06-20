@@ -72,6 +72,13 @@ public actor WarmthEngine {
     /// backend only when the resolved warmth actually changes, so an idle tick costs ~nothing.
     private var rampTask: Task<Void, Never>?
     private let rampTickInterval: Duration = .seconds(60)
+
+    /// Short post-launch / wake / reconfiguration re-assert burst. Some panels (notably the built-in,
+    /// whose gamma macOS rewrites as True Tone / auto-brightness / Night Shift settle, and displays that
+    /// enumerate a beat late) come up un-warmed and would otherwise wait up to a full 60s ramp tick to be
+    /// re-asserted. The burst re-applies at ~1/3/6/12s so warmth lands within seconds. `reapply` re-writes
+    /// the backend each pass, so it overcomes an external reset; re-applying the same value is imperceptible.
+    private var catchUpTask: Task<Void, Never>?
     /// Debounce policy (the timing arithmetic is pure / unit-tested in `ReconfigurationDebounce`).
     private let rebaselineDebounceWindow: Duration = .milliseconds(400)
 
@@ -197,6 +204,7 @@ public actor WarmthEngine {
         await recoverStaleDisplays()
         await reapply()
         publish()
+        scheduleCatchUpReasserts()
     }
 
     /// Neutral-reset every display via every active layer, then tear down. Called on quit.
@@ -205,6 +213,8 @@ public actor WarmthEngine {
         rebaselineTask = nil
         rampTask?.cancel()
         rampTask = nil
+        catchUpTask?.cancel()
+        catchUpTask = nil
         reconfigurationObserver.stop()
         await wakeObserver.stop()
         nightShiftFollower.stop()
@@ -503,6 +513,23 @@ public actor WarmthEngine {
         await rebuildDisplayRows(for: currentDisplays())
         await recoverStaleDisplays()
         await reapply()
+        scheduleCatchUpReasserts()
+    }
+
+    /// Fire a short re-assert burst at ~1/3/6/12s after launch / wake / reconfiguration. Live mode only
+    /// (hermetic tests drive reapply explicitly). Re-applying the same warmth is imperceptible; the point
+    /// is to re-assert a panel macOS reset (built-in True Tone / ambient) or one that enumerated late,
+    /// rather than waiting for the next 60s ramp tick.
+    private func scheduleCatchUpReasserts() {
+        guard injectedDisplays == nil else { return }
+        catchUpTask?.cancel()
+        catchUpTask = Task { [weak self] in
+            for interval in [Duration.seconds(1), .seconds(2), .seconds(3), .seconds(6)] {
+                try? await Task.sleep(for: interval)
+                if Task.isCancelled { return }
+                await self?.reapply()
+            }
+        }
     }
 
     /// (Re)build the `DisplayState` rows for `identities` WITHOUT applying — so launch-time recovery
