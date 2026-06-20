@@ -413,7 +413,7 @@ private struct CityAutocomplete: View {
                 .scrollIndicators(.hidden)
                 // Keep the dropdown short so it fits a compact Settings window (the search does the
                 // narrowing); extra matches scroll. (Founder: don't need a long list with good autocomplete.)
-                .frame(maxHeight: min(CGFloat(filteredCities.count), 5) * 35)
+                .frame(maxHeight: min(CGFloat(filteredCities.count), 3) * 35)
             }
         }
         .padding(6)
@@ -532,7 +532,7 @@ private struct CityAutocomplete: View {
                 result.append(city)
             }
         }
-        return Array(result.prefix(4))
+        return Array(result.prefix(3))
     }
 
     private func normalized(_ value: String) -> String {
