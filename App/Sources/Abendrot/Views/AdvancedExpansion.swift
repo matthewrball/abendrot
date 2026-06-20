@@ -33,17 +33,25 @@ struct AdvancedExpansion: View {
                 DividerLine()
             }
 
-            // Per-app exclusions + screenshot-exempt — entry points only for this
-            // structural pass; full pickers live in Settings → Advanced/Privacy.
-            HStack {
-                Label("Per-app exclusions", systemImage: "app.badge.checkmark")
-                    .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.textMuted)
-                Spacer()
-                Text("Settings →")
-                    .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textFaint)
+            // Per-app exclusions — the popover is the quick surface; the full picker lives in
+            // Settings → Advanced. This row opens it there directly (deep-links the tab).
+            Button {
+                model.settingsTab = .advanced
+                SettingsWindowController.show(model: model)
+            } label: {
+                HStack {
+                    Label("Per-app exclusions", systemImage: "app.badge.checkmark")
+                        .font(Theme.Typography.ui(12))
+                        .foregroundStyle(Theme.Color.textMuted)
+                    Spacer()
+                    Text("Manage…")
+                        .font(Theme.Typography.ui(11))
+                        .foregroundStyle(Theme.Color.accent)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .pointerStyle(.link)
 
             HStack {
                 Label("Reveal during captures", systemImage: "camera.viewfinder")

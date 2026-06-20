@@ -44,12 +44,11 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 // marked TODO and wired in a later milestone.
 struct SettingsView: View {
     @Bindable var model: AppModel
-    @State private var selection: SettingsTab = .general
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
             VStack(spacing: 0) {
-                List(SettingsTab.allCases, selection: $selection) { tab in
+                List(SettingsTab.allCases, selection: $model.settingsTab) { tab in
                     Label(tab.title, systemImage: tab.icon)
                         .tag(tab)
                 }
@@ -76,7 +75,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var tabBody: some View {
-        switch selection {
+        switch model.settingsTab {
         case .general: GeneralTab(model: model)
         case .schedule: ScheduleTab(model: model)
         case .displays: DisplaysTab(model: model)
@@ -131,6 +130,7 @@ private struct BylineLink: View {
                 .animation(.easeOut(duration: 0.12), value: hovering)
         }
         .buttonStyle(.plain)
+        .pointerStyle(.link)
         .onHover { hovering = $0 }
     }
 }
@@ -309,16 +309,6 @@ private struct DisplaysTab: View {
                     DisplayConfigRow(display: display, model: model)
                 }
             }
-            DividerLine()
-            Button(role: .destructive) {
-                model.setEnabled(false)
-                model.restoreAllDisplays()
-            } label: {
-                Label("Restore all displays to neutral", systemImage: "arrow.counterclockwise")
-            }
-            Text("Restore every display to true color. Disable warming.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textFaint)
         }
     }
 }
@@ -368,9 +358,9 @@ private struct DisplayConfigRow: View {
 
             if showAdvanced {
                 VStack(alignment: .leading, spacing: 14) {
-                    PerDisplayWarmthControl(display: display, model: model)
-                    DividerLine()
                     WarmingMethodPicker(display: display, model: model)
+                    DividerLine()
+                    PerDisplayWarmthControl(display: display, model: model)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
@@ -657,6 +647,19 @@ private struct AdvancedTab: View {
 
             DividerLine()
             ExcludedAppsControl(model: model)
+
+            DividerLine()
+            // Emergency reset, relocated from the Displays page (founder): the forceful gamma/DDC
+            // restore kept as a quiet safety net without cluttering the main Displays view.
+            Button(role: .destructive) {
+                model.setEnabled(false)
+                model.restoreAllDisplays()
+            } label: {
+                Label("Restore all displays to neutral", systemImage: "arrow.counterclockwise")
+            }
+            Text("Restore every display to true color. Disable warming.")
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textFaint)
         }
     }
 }

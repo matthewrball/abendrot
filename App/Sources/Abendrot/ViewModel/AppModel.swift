@@ -29,6 +29,10 @@ final class AppModel {
     /// UI mode for the menu-bar popover (left-click = simple, ⌥/right = advanced).
     var isAdvancedExpanded: Bool = false
 
+    /// Which Settings tab is selected — bound to the sidebar so the popover can deep-link (e.g. the
+    /// "Per-app exclusions" row opens Settings → Advanced).
+    var settingsTab: SettingsTab = .general
+
     /// Whether the onboarding "3 clicks to warmth" flow should be shown.
     var showOnboarding: Bool = false
 
