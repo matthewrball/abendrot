@@ -67,6 +67,8 @@ final class AppModel {
     @ObservationIgnored private var warmingStartedAt: Date?
     /// Start-of-day (timeIntervalSince1970) of the last counted warm sunset — de-dupes per day.
     @ObservationIgnored private var lastWarmSunsetDay: Double = 0
+    /// Retains the confirmation tone across its async playback (a local one would deallocate → silent).
+    @ObservationIgnored private var confirmationSound: NSSound?
 
     // MARK: Engine wiring (nil in previews)
 
@@ -214,9 +216,13 @@ final class AppModel {
     /// The key is owned by that tab's `@AppStorage("softConfirmationTone")`.
     private func playSoftConfirmationTone() {
         guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        guard let tone = NSSound(named: "Tink") else { return }
-        tone.volume = 0.6
-        tone.play()
+        // A fresh, retained COPY each time: the shared named NSSound won't restart if it's mid-play
+        // (so a quick on→off would drop one), and a local copy would deallocate before its async
+        // playback finishes (silent / cut off). "Pop" is softer than "Tink" (founder didn't like Tink).
+        guard let sound = NSSound(named: "Pop")?.copy() as? NSSound else { return }
+        sound.volume = 0.5
+        confirmationSound = sound
+        sound.play()
     }
 
     func setGlobalWarmth(_ strength: Double) {
