@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import AppKit
+import AVFoundation
 import WarmthKit
 
 // MARK: - AppModel
@@ -68,7 +69,7 @@ final class AppModel {
     /// Start-of-day (timeIntervalSince1970) of the last counted warm sunset — de-dupes per day.
     @ObservationIgnored private var lastWarmSunsetDay: Double = 0
     /// Retains the confirmation tone across its async playback (a local one would deallocate → silent).
-    @ObservationIgnored private var confirmationSound: NSSound?
+    @ObservationIgnored private var confirmationPlayer: AVAudioPlayer?
 
     // MARK: Engine wiring (nil in previews)
 
@@ -209,20 +210,23 @@ final class AppModel {
         UserDefaults.standard.set(enabled, forKey: Self.isEnabledKey)
         Task { await engine?.setEnabled(enabled) }
         // Tone only on a real user toggle (not the launch-time restore, which passes userInitiated: false).
-        if userInitiated, changed { playSoftConfirmationTone() }
+        if userInitiated, changed { playSoftConfirmationTone(warming: enabled) }
     }
 
-    /// A subtle tick when the user toggles warming, if "Soft confirmation tone" is on (General tab).
-    /// The key is owned by that tab's `@AppStorage("softConfirmationTone")`.
-    private func playSoftConfirmationTone() {
+    /// A pleasant chime when the user toggles warming, if "Soft confirmation tone" is on (General tab;
+    /// key owned by that tab's `@AppStorage("softConfirmationTone")`). ON plays the bright system "Glass"
+    /// chime; OFF plays the SAME chime at a lower playback rate — a deeper, muted/dampened version of it
+    /// (founder: muted timbre, not quieter). Fresh, retained player each time so overlapping toggles each
+    /// finish (a local player would deallocate before its async playback ends).
+    private func playSoftConfirmationTone(warming: Bool) {
         guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        // A fresh, retained COPY each time: the shared named NSSound won't restart if it's mid-play
-        // (so a quick on→off would drop one), and a local copy would deallocate before its async
-        // playback finishes (silent / cut off). "Glass" is the gentlest/most pleasant system chime.
-        guard let sound = NSSound(named: "Glass")?.copy() as? NSSound else { return }
-        sound.volume = 0.5
-        confirmationSound = sound
-        sound.play()
+        let url = URL(fileURLWithPath: "/System/Library/Sounds/Glass.aiff")
+        guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
+        player.enableRate = true
+        player.rate = warming ? 1.0 : 0.78   // off = a lower, muted glass (timbre, not volume)
+        player.volume = 0.5
+        confirmationPlayer = player
+        player.play()
     }
 
     func setGlobalWarmth(_ strength: Double) {
@@ -372,11 +376,6 @@ final class AppModel {
         Task { await engine?.restoreAllDisplays() }
     }
 
-    func setPrivateAPIsEnabled(_ enabled: Bool) {
-        state.privateAPIsEnabled = enabled
-        Task { await engine?.setPrivateAPIsEnabled(enabled) }
-    }
-
     // MARK: ── Statistics (local-only) ───────────────────────────────────────
 
     /// Live total warmed time = the persisted base + any in-flight period's elapsed.
@@ -394,10 +393,12 @@ final class AppModel {
         flushWarmingSession()  // close the open warming run cleanly first
         warmedSecondsBase = 0
         warmSunsetCount = 0
-        lastWarmSunsetDay = 0
+        // Mark today's sunset as already accounted-for so a reset done in the EVENING reads 0, not 1:
+        // updateWarmingStats() below would otherwise immediately re-count today. Next count = tomorrow.
+        lastWarmSunsetDay = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
         warmingStartedAt = nil
         persistStats()
-        updateWarmingStats()   // re-open a run / re-count today's sunset immediately if applicable
+        updateWarmingStats()   // re-open the warming run immediately if still warming
     }
 
     /// Edge-detect actual warming on each state tick and accrue time (only while `statsEnabled`).

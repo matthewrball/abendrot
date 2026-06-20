@@ -69,6 +69,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(model.settingsTab == .about ? 0 : 1)
                     .offset(x: model.settingsTab == .about ? -200 : 0)
+                    .accessibilityHidden(model.settingsTab == .about)   // off-screen: leave the focus order
                     .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.settingsTab)
             }
             .navigationSplitViewColumnWidth(min: 172, ideal: 180)

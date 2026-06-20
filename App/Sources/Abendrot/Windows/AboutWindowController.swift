@@ -25,17 +25,12 @@ final class AboutWindowController: NSWindowController, NSWindowDelegate {
 
     /// Open (or re-focus) the About window for the given model.
     ///
-    /// Mirrors `SettingsWindowController.show`:
-    ///  1. Dismiss the `MenuBarExtra(.window)` dropdown if it's the key window (SwiftUI only
-    ///     auto-dismisses it on app-deactivate / outside-click — not when a same-app window becomes
-    ///     key), guarding against closing the About window itself on the re-focus path.
-    ///  2. Open / raise About on the NEXT main-actor turn, so the dropdown teardown settles before
-    ///     we front the window; `orderFrontRegardless` in `focus()` forces it up for this `.accessory`
-    ///     agent app.
+    /// Unlike `SettingsWindowController.show`, About is invoked ONLY from the app menu
+    /// (`CommandGroup(replacing: .appInfo)`), never from the MenuBarExtra dropdown — so there is no
+    /// transient dropdown to dismiss here. (Closing the key window the way Settings does would wrongly
+    /// close the Settings window if About is opened while Settings is open.) Open on the NEXT main-actor
+    /// turn; `orderFrontRegardless` in `focus()` fronts it for this `.accessory` agent app.
     static func show(model: AppModel) {
-        if let dropdown = NSApp.keyWindow, dropdown !== shared?.window {
-            dropdown.close()
-        }
         Task { @MainActor in
             if let existing = shared {
                 existing.focus()
@@ -324,9 +319,7 @@ private struct BuiltBySignature: View {
 
 // MARK: - Footer link row
 
-/// On-brand links in a glass-pill row: GitHub + abendrot.app. GitHub prefers the bundled `github` asset
-/// (added by the lead session) and falls back to an SF Symbol if that asset isn't present yet, so this
-/// compiles and renders cleanly either way.
+/// On-brand links in a glass-pill row: abendrot.app + GitHub (the bundled `github` mark asset).
 private struct AboutFooterLinks: View {
     var body: some View {
         HStack(spacing: 10) {
@@ -337,7 +330,7 @@ private struct AboutFooterLinks: View {
             )
             AboutPillLink(
                 title: "GitHub",
-                icon: .githubAssetOrSymbol,
+                icon: .asset("github"),
                 url: "https://github.com/matthewrball/abendrot"
             )
         }
@@ -345,17 +338,10 @@ private struct AboutFooterLinks: View {
     }
 }
 
-/// How a pill link draws its leading icon: a bundled asset, an SF Symbol, or "the github asset if it
-/// exists at runtime, otherwise an SF Symbol". The runtime check keeps the build safe while the lead
-/// session adds the `github` image asset.
+/// How a pill link draws its leading icon: a bundled image asset or an SF Symbol.
 private enum AboutLinkIcon {
     case asset(String)
     case symbol(String)
-
-    /// The github mark if its asset is bundled, else a code-brackets SF Symbol fallback.
-    static var githubAssetOrSymbol: AboutLinkIcon {
-        NSImage(named: "github") != nil ? .asset("github") : .symbol("chevron.left.forwardslash.chevron.right")
-    }
 
     @ViewBuilder
     func view() -> some View {
