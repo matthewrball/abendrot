@@ -317,8 +317,12 @@ private struct DisplayConfigRow: View {
             }
 
             if showAdvanced {
-                WarmingMethodPicker(display: display, model: model)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                VStack(alignment: .leading, spacing: 14) {
+                    PerDisplayWarmthControl(display: display, model: model)
+                    DividerLine()
+                    WarmingMethodPicker(display: display, model: model)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
         .padding(.vertical, 9)
@@ -354,6 +358,61 @@ private struct DisplayConfigRow: View {
     private func isSupported<T>(_ cap: Capability<T>) -> Bool {
         if case .supported = cap { return true }
         return false
+    }
+}
+
+// MARK: - Per-display override + custom warmth (Settings superset of the popover quick control)
+
+/// The Settings → Displays version of the menu-bar popover's per-display "Override" control. Same
+/// wiring (`setWarmthOverride` / `setWarmth`, `display.warmthOverridden` / `display.warmth`) for
+/// experience congruency, in the roomier Settings layout. Settings is the superset — custom warmth
+/// AND warming method; the popover stays the quick, override-only version.
+private struct PerDisplayWarmthControl: View {
+    let display: DisplayState
+    @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Override")
+                        .font(Theme.Typography.ui(11.5, weight: .medium))
+                        .foregroundStyle(Theme.Color.textMuted)
+                    Text(display.warmthOverridden ? "Custom warmth for this display" : "Follows the global warmth")
+                        .font(Theme.Typography.ui(11))
+                        .foregroundStyle(Theme.Color.textFaint)
+                }
+                Spacer()
+                Toggle("", isOn: overrideBinding)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(Theme.Color.accent)
+                    .accessibilityLabel("Override warmth for \(display.name)")
+            }
+            if display.warmthOverridden {
+                VStack(spacing: 6) {
+                    WarmSlider(strength: warmthBinding)
+                    HStack {
+                        Text("Softer")
+                        Spacer()
+                        Text("Warmer")
+                    }
+                    .font(Theme.Typography.ui(10.5))
+                    .foregroundStyle(Theme.Color.textFaint)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: display.warmthOverridden)
+    }
+
+    private var overrideBinding: Binding<Bool> {
+        Binding(get: { display.warmthOverridden }, set: { model.setWarmthOverride($0, for: display.id) })
+    }
+
+    private var warmthBinding: Binding<Double> {
+        Binding(get: { display.warmth.strength }, set: { model.setWarmth($0, for: display.id) })
     }
 }
 
