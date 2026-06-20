@@ -44,6 +44,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 // marked TODO and wired in a later milestone.
 struct SettingsView: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
@@ -55,9 +56,18 @@ struct SettingsView: View {
                 .scrollContentBackground(.hidden)
 
                 Spacer(minLength: 12)
-                SidebarBranding()
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
+                // Hide the sidebar branding on About (it duplicates the About-page header): slide it
+                // out to the leading edge + fade, and back when leaving About (founder). Scoped in a
+                // Group so the sidebar list's selection isn't swept into the same animation.
+                Group {
+                    if model.settingsTab != .about {
+                        SidebarBranding()
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 14)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                }
+                .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.settingsTab)
             }
             .navigationSplitViewColumnWidth(min: 172, ideal: 180)
             .toolbar(removing: .sidebarToggle)
@@ -135,6 +145,31 @@ private struct BylineLink: View {
     }
 }
 
+/// A small labelled hyperlink (icon + underlined text) in the app's accent, brightening on hover with
+/// a link cursor. Used for the About page's GitHub / website links.
+private struct AboutLink: View {
+    let title: String
+    let systemImage: String
+    let url: String
+    @State private var hovering = false
+    var body: some View {
+        Link(destination: URL(string: url)!) {
+            Label {
+                Text(title).underline()
+            } icon: {
+                Image(systemName: systemImage)
+            }
+            .font(Theme.Typography.ui(12, weight: .medium))
+            .foregroundStyle(Theme.Color.accent)
+            .opacity(hovering ? 1 : 0.85)
+            .animation(.easeOut(duration: 0.12), value: hovering)
+        }
+        .buttonStyle(.plain)
+        .pointerStyle(.link)
+        .onHover { hovering = $0 }
+    }
+}
+
 private struct SidebarBranding: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -157,6 +192,7 @@ private struct SidebarBranding: View {
 
 private struct GeneralTab: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("softConfirmationTone") private var softTone = false
     @State private var launchAtLoginError: String?
@@ -186,6 +222,12 @@ private struct GeneralTab: View {
             DividerLine()
 
             VStack(alignment: .leading, spacing: 9) {
+                // Mirror the popover's master control: an enable/disable toggle above the warmth
+                // slider (founder — Settings should turn warming on/off, not just adjust the level).
+                Toggle("Warm my displays", isOn: Binding(
+                    get: { model.state.isEnabled },
+                    set: { model.setEnabled($0) }
+                ))
                 HStack {
                     Text("Default warmth")
                         .font(Theme.Typography.ui(13.5))
@@ -194,6 +236,8 @@ private struct GeneralTab: View {
                         .font(Theme.Typography.serif(14))
                         .monospacedDigit()
                         .foregroundStyle(Theme.Color.accentHighlight)
+                        .contentTransition(.numericText(value: Double(model.globalKelvin.value)))
+                        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.globalKelvin.value)
                 }
                 WarmSlider(
                     strength: Binding(
@@ -201,6 +245,8 @@ private struct GeneralTab: View {
                         set: { model.setGlobalWarmth($0) }
                     )
                 )
+                .disabled(!model.state.isEnabled)
+                .opacity(model.state.isEnabled ? 1 : 0.45)
             }
         }
         .toggleStyle(.switch)
@@ -765,30 +811,35 @@ private struct WarmingMethodPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Warming method")
-                .font(Theme.Typography.ui(11.5, weight: .medium))
-                .foregroundStyle(Theme.Color.textMuted)
-
-            if availableChoices.count == 1, let choice = availableChoices.first {
-                Text(choice.label)
-                    .font(Theme.Typography.ui(12, weight: .bold))
-                    .foregroundStyle(Theme.Color.groundIndigo)
-                    .lineLimit(1)
-                    .padding(.vertical, 7)
-                    .padding(.horizontal, 16)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Theme.Gradient.sunset)
-                            .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
+            // Inline with the title (founder), mirroring the Override row: label left, the brand
+            // switcher right at a constrained width — not a full-width control below the label.
+            HStack(spacing: 10) {
+                Text("Warming method")
+                    .font(Theme.Typography.ui(11.5, weight: .medium))
+                    .foregroundStyle(Theme.Color.textMuted)
+                Spacer(minLength: 12)
+                if availableChoices.count == 1, let choice = availableChoices.first {
+                    Text(choice.label)
+                        .font(Theme.Typography.ui(12, weight: .bold))
+                        .foregroundStyle(Theme.Color.groundIndigo)
+                        .lineLimit(1)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 16)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Theme.Gradient.sunset)
+                                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
+                        )
+                        .accessibilityLabel("Warming method: \(choice.label)")
+                } else {
+                    BrandSegmentedControl(
+                        options: availableChoices,
+                        selection: choiceBinding,
+                        label: \.label,
+                        onChange: { _ in }
                     )
-                    .accessibilityLabel("Warming method: \(choice.label)")
-            } else {
-                BrandSegmentedControl(
-                    options: availableChoices,
-                    selection: choiceBinding,
-                    label: \.label,
-                    onChange: { _ in }
-                )
+                    .frame(width: CGFloat(availableChoices.count) * 110)
+                }
             }
 
             if let note = unavailableNote {
@@ -846,7 +897,7 @@ private struct WarmingMethodPicker: View {
     private var unavailableNote: String? {
         let priv = model.state.privateAPIsEnabled
         if !priv {
-            return "Advanced warming methods are turned off in Advanced, so only a screen tint is available."
+            return "Advanced warming isn’t available on this Mac, so only a screen tint is possible."
         }
         if !isSupported(display.capabilities.gamma), !isSupported(display.capabilities.hardware) {
             return "This display can’t be truly warmed on this Mac — only a screen tint is available."
@@ -890,14 +941,14 @@ private struct AdvancedTab: View {
     @Bindable var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: "Advanced", subtitle: "Power controls for warming and compatibility.")
+            TabHeader(title: "Advanced", subtitle: "Maximum warmth, the reveal shortcut, and per-app exclusions.")
 
             MaximumWarmthControl(model: model)
             DividerLine()
 
             // Reveal True Color hotkey — moved here from the former Shortcuts tab, tucked under
             // Maximum warmth (founder). Click the field to rebind; default ⌥⌘T.
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Reveal True Color").font(Theme.Typography.ui(13.5))
                     Spacer()
@@ -907,18 +958,18 @@ private struct AdvancedTab: View {
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textMuted)
 
-                // Hold vs Toggle (§3 locked: ship both, default hold). `HotkeyService.mode` already
-                // honours this live in handleKeyDown/Up — this only surfaces + persists the choice.
-                Picker("Reveal behaviour", selection: Binding(
-                    get: { model.revealMode },
-                    set: { model.setRevealMode($0) }
-                )) {
-                    Text("Hold").tag(RevealMode.hold)
-                    Text("Toggle").tag(RevealMode.toggle)
+                // Hold vs Toggle (§3 locked: ship both, default hold). On-brand liquid-glass switcher
+                // (BrandSegmentedControl) to match the per-display method picker and the popover Mode
+                // control, replacing the native segmented Picker (founder: more liquid glass).
+                HStack {
+                    BrandSegmentedControl(
+                        options: RevealMode.allCases,
+                        selection: Binding(get: { model.revealMode }, set: { model.setRevealMode($0) }),
+                        label: { $0 == .hold ? "Hold" : "Toggle" }
+                    )
+                    .frame(width: 200)
+                    Spacer()
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 200, alignment: .leading)
                 .padding(.top, 2)
 
                 Text(model.revealMode == .hold
@@ -927,21 +978,11 @@ private struct AdvancedTab: View {
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textMuted)
             }
-            DividerLine()
-
-            // The private-API kill switch, in plain language. On = Abendrot can truly warm displays
-            // (gamma / hardware) and follow Night Shift; off = the simplest, most compatible tint-only
-            // mode everywhere. (§26 de-jargon — was "Enable private-API paths (DDC + Night Shift follow)".)
-            Toggle("Use advanced warming methods", isOn: Binding(
-                get: { model.state.privateAPIsEnabled },
-                set: { model.setPrivateAPIsEnabled($0) }
-            ))
-            .toggleStyle(.switch)
-            .tint(Theme.Color.accent)
-            Text("Lets Abendrot truly warm your displays — removing blue light — and follow your Night Shift schedule. Turn this off to use the simplest, most compatible mode: a warm tint over every display.")
-                .font(Theme.Typography.ui(12))
-                .foregroundStyle(Theme.Color.textMuted)
-
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                    .fill(Theme.Color.line.opacity(0.4))
+            )
             DividerLine()
             ExcludedAppsControl(model: model)
 
@@ -1075,6 +1116,7 @@ private struct ExcludedAppRow: View {
 /// reads "right = warmer", matching the main warmth slider.
 private struct MaximumWarmthControl: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Derived (not separately persisted) from the actual warmest point on appear, so the toggle can
     // never disagree with the value. The warmest point itself is what persists (via AppModel).
     @State private var expanded = false
@@ -1092,6 +1134,8 @@ private struct MaximumWarmthControl: View {
                     .font(Theme.Typography.serif(14))
                     .monospacedDigit()
                     .foregroundStyle(Theme.Color.accentHighlight)
+                    .contentTransition(.numericText(value: Double(model.state.warmestPoint.value)))
+                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.warmestPoint.value)
             }
             Text("The warmest your slider can reach. 1900 K already removes blue light entirely.")
                 .font(Theme.Typography.ui(11.5))
@@ -1149,6 +1193,7 @@ private struct PrivacyTab: View {
             TabHeader(title: "Privacy", subtitle: "Local-first. No account, no telemetry by default.")
             privacyPoint("No Accessibility permission", "Hold-to-reveal uses a Carbon global hotkey — no Accessibility access required.")
             privacyPoint("No Screen Recording", "Display capabilities are classified, never measured by screen capture.")
+            privacyPoint("No Location data", "Your sunset is computed from your time zone — or a city you pick yourself — never your GPS. Abendrot never asks for Location access.")
             privacyPoint("No Sandbox surprises", "Warmth applies locally; nothing about your displays leaves the machine.")
             privacyPoint("Manual reveal during captures", "Auto screenshot/recording suspend is out of scope for v1.0; reveal true colour manually with the hotkey.")
         }
@@ -1211,6 +1256,12 @@ private struct AboutTab: View {
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textFaint)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            DividerLine()
+            HStack(spacing: 18) {
+                AboutLink(title: "GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: "https://github.com/matthewrball/abendrot")
+                AboutLink(title: "abendrot.app", systemImage: "globe", url: "https://abendrot.app")
             }
         }
     }

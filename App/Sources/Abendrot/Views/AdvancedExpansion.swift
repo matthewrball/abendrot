@@ -3,8 +3,9 @@ import WarmthKit
 
 // MARK: - AdvancedExpansion
 //
-// The "liquid expansion" power rows (plan §4.4, §21.3): the per-display "Override" rows, plus
-// per-app exclusions + reveal-during-captures entry points.
+// The "liquid expansion" power rows (plan §4.4, §21.3): the per-display "Override" rows, plus the
+// per-app exclusions deep-link. (Reveal-during-captures dropped for v1.0 — gamma/DDC screenshots are
+// already un-tinted at scanout, so the only capturable case is overlay-only; revisit post-launch.)
 //
 // Per-display "Custom warmth" lives here now (a simple toggle + slider, no jargon), surfaced only
 // when the user expands the popover — a lone screen shows no per-display row (nothing to
@@ -36,8 +37,7 @@ struct AdvancedExpansion: View {
             // Per-app exclusions — the popover is the quick surface; the full picker lives in
             // Settings → Advanced. This row opens it there directly (deep-links the tab).
             Button {
-                model.settingsTab = .advanced
-                SettingsWindowController.show(model: model)
+                SettingsWindowController.show(model: model, tab: .advanced)
             } label: {
                 HStack {
                     Label("Per-app exclusions", systemImage: "app.badge.checkmark")
@@ -52,18 +52,6 @@ struct AdvancedExpansion: View {
             }
             .buttonStyle(.plain)
             .pointerStyle(.link)
-
-            HStack {
-                Label("Reveal during captures", systemImage: "camera.viewfinder")
-                    .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.textMuted)
-                Spacer()
-                // Manual reveal-during-captures (auto-suspend is OUT of scope for v1.0,
-                // contract §10). This is a placeholder hook; wiring lands in Settings → Privacy.
-                Text("Manual")
-                    .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textFaint)
-            }
         }
     }
 }

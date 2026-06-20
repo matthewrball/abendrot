@@ -4,7 +4,10 @@ import KeyboardShortcuts
 
 // MARK: - RevealMode
 
-public enum RevealMode: String, Sendable, Codable { case hold, toggle }
+public enum RevealMode: String, Sendable, Codable, CaseIterable, Identifiable {
+    case hold, toggle
+    public var id: String { rawValue }
+}
 
 // MARK: - HotkeyService
 
