@@ -118,6 +118,15 @@ public enum ScheduleResolver {
         on date: Date,
         calendar: Calendar = .current
     ) -> Date? {
+        // Anchor the 24h scan to the COORDINATE's own local day, not the user's. With the caller's
+        // default `.current` calendar, a far-timezone city's solar noon lands late in the user-local
+        // window and the descending sunset crossing falls past minute 1440 → the loop never finds it
+        // → nil (e.g. Tokyo when the Mac is in the US). An approximate longitude-derived time zone
+        // (15°/hour, zero permission/network) puts the city's noon near the middle of the window.
+        var calendar = calendar
+        if let tz = TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) {
+            calendar.timeZone = tz
+        }
         let startOfDay = calendar.startOfDay(for: date)
         func elevation(_ minute: Int) -> Double {
             solarElevationDegrees(at: startOfDay.addingTimeInterval(Double(minute) * 60),

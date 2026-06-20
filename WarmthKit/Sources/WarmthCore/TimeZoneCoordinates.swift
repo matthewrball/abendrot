@@ -33,6 +33,15 @@ public enum TimeZoneCoordinates {
         return Coordinate(latitude: 0, longitude: min(180, max(-180, lon)))
     }
 
+    /// An APPROXIMATE time zone for a longitude (Earth turns 15°/hour → 1 hour per 15°), rounded to
+    /// the nearest whole hour. Zero permission, zero network — consistent with Abendrot's no-CoreLocation
+    /// approach. Used to anchor a coordinate's solar day to *its own* local midnight (so a far-away city's
+    /// sunset can be computed/displayed in that city's clock rather than the user's). Returns nil only if
+    /// `TimeZone(secondsFromGMT:)` rejects the offset, which it won't for any |longitude| ≤ 180.
+    public static func approximateTimeZone(forLongitude longitude: Double) -> TimeZone? {
+        TimeZone(secondsFromGMT: Int((longitude / 15.0).rounded()) * 3600)
+    }
+
     /// Convenience for the live engine: the current system zone's coordinate. (Reads `TimeZone`
     /// only — no permission, no IO.)
     public static func current(_ timeZone: TimeZone = .current) -> Coordinate {

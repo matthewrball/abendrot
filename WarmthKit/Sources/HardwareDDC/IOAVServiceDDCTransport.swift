@@ -5,19 +5,22 @@ import Logging
 
 // MARK: - IOAVServiceDDCTransport
 
-/// The real `DDCTransport`: an **actor** so every I²C transaction for a given service is
-/// serialized (concurrent transactions on one bus physically corrupt each other) and the
-/// inter-transaction sleeps live in one place. Holds the per-display native-gain snapshot cache
-/// and resolves/caches a `DDCBus` per display.
+/// The hardware DDC layer (`IOAVServiceWriteI2C` VCP gain): an **actor** so every I²C transaction
+/// for a given service is serialized (concurrent transactions on one bus physically corrupt each
+/// other) and the inter-transaction sleeps live in one place. Conforms to `WarmthBackend` directly
+/// (Kelvin→RGB gain folded into `apply`); the engine drives it behind `LayerResolver`. Opt-in PER
+/// display; not a default in v1.0. Holds the per-display native-gain snapshot cache and
+/// resolves/caches a `DDCBus` per display.
 ///
-/// Safety machinery, all here so the backend stays thin:
+/// Safety machinery, all here:
 /// - **native snapshot** on first contact (read VCP 0x16/0x18/0x1A + 0x14), persisted so a relaunch
 ///   can restore even though the process that read it is gone;
 /// - **relative warming** — `newGain = clamp(round(native * multiplier), 0, max)`;
 /// - **write-then-read verify** with retry/backoff (reads fail ~30% on Apple Silicon);
 /// - **restore** to the snapshotted native gain + preset;
 /// - clean degrade to typed capability errors when the service/symbols are unavailable.
-public actor IOAVServiceDDCTransport: DDCTransport {
+public actor IOAVServiceDDCTransport: WarmthBackend {
+    public nonisolated let method: DisplayMethod = .hardware
     private let provider: any DDCBusProvider
     private let store: any DDCSnapshotStore
     private let timing: DDCTiming
@@ -41,7 +44,28 @@ public actor IOAVServiceDDCTransport: DDCTransport {
         self.timing = timing
     }
 
-    // MARK: DDCTransport
+    // MARK: WarmthBackend
+
+    public func classify(_ identity: DisplayIdentity) async -> Capability<Void> {
+        switch await probeRGBGainSupport(for: identity) {
+        case .supported:               return .supported(())
+        case let .unsupported(reason): return .unsupported(reason: reason)
+        case let .unknown(reason):     return .unknown(reason: reason)
+        }
+    }
+
+    public func apply(_ kelvin: Kelvin, to identity: DisplayIdentity) async throws {
+        // The Kelvin→RGB gain (red anchored ≈1.0, cooler channels attenuated) becomes the
+        // per-channel multiplier applied relative to the panel's NATIVE gain, so a 6500K (identity)
+        // target restores native and warmer targets pull blue/green down.
+        try await writeRGBGain(rgbGain(for: kelvin), to: identity)
+    }
+
+    public func reset(_ identity: DisplayIdentity) async throws {
+        try await restoreNativeGain(for: identity)
+    }
+
+    // MARK: DDC transactions
 
     public func writeRGBGain(_ gain: RGBGain, to identity: DisplayIdentity) async throws {
         let key = identity.persistentKey

@@ -102,7 +102,7 @@ public actor WarmthEngine {
             configuration: configuration,
             overlay: OverlayBackend(),
             gamma: GammaBackend(),
-            ddc: DDCBackend(transport: transport),
+            ddc: transport,
             snapshotStore: store,
             nightShiftFollower: SystemNightShiftStateFollower(),
             injectedDisplays: nil
