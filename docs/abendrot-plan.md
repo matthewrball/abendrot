@@ -948,6 +948,60 @@ Resume pass. Reconciled the repo against the docs first (evidence over assumptio
 Hold/Toggle picker **and** the exclusions picker); §25.J final look (founder-owned); §25.K hardware
 matrix; reveal-during-captures is the last §4 stub (likely drop per §10); then the gated public push.
 
+## 29. Execution Log — Session 9 (cont., 2026-06-19): founder dogfooding wave
+
+A long live-dogfooding pass on top of §28. Every change executed, verified (Release **BUILD SUCCEEDED**
++ **102/22 WarmthKit tests** throughout, non-masked), and committed locally; **nothing pushed** (public
+gate held). Heavy execution dispatched to **codex (gpt-5.5 xhigh)** per the founder's directive, with
+design/engine judgment kept in the lead session and separate-lane reviews on the substantive batches
+(APPROVE / APPROVE-WITH-NITS, all applied). Build-repo `7bff1f6`→`c7da422`.
+
+**UI review batch.** Per-display **warming-method picker** de-cluttered: dropped "Automatic" (redundant)
+→ **Standard / Screen tint** (+ Hardware control where DDC-capable), on the **brand liquid-glass segmented
+switcher** (generalized `ModeControl` → reusable `BrandSegmentedControl`); Advanced disclosure centered;
+the per-method description line removed (redundant with the subtitle). **Subtitle honesty:** per-display
+status now reflects the chosen method (Screen tint no longer reads "Truly warmed"; text+colour
+single-sourced). **Tint-slider fix:** overlay `veilAlpha` scales into the 0.5 cap instead of clamping
+early, so the warm half of the slider is perceptually distinct (2625K ≠ 1900K). **§25.J / tint-only:**
+concise summary + hover tooltip instead of truncated text + a warning glyph on the popover tint-only rows.
+
+**Congruency + Settings.** Per-display **Override + custom-warmth** added to Settings → Displays → Advanced
+(mirrors the popover; Settings = superset), then **Override moved below the warming method** (founder).
+Settings **sidebar non-collapsible** + a **branding footer** (icon + Abendrot + "Built by Matthew Ball" →
+matthewball.me, shared `BylineLink`: underline + hover + link cursor); same byline on **About** (replacing
+the "Soften into the evening" tagline — kept as the onboarding CTA + brand-voice line, never a Top-3
+marketing tagline). Popover **"Per-app exclusions"** row → **"Manage…"** deep-links to Settings → Advanced
+(`AppModel.settingsTab` bound to the sidebar). **Restore** now disables Abendrot (`setEnabled(false)` +
+neutral so the ramp can't re-warm) and was **relocated** from Displays to Advanced (declutter; keeps the
+forceful DDC/emergency reset).
+
+**Manual location override for Sunset (founder, no permission).** Settings → Schedule **"Location"** — Auto
+(from time zone) by default, or a **96-city liquid-glass autocomplete** (glass search field + dropdown,
+prefix-then-contains diacritic-insensitive filter, sunset-accent selection) — with a live **"Today's sunset
+≈ X:XX PM"** readout. Engine: `setUserCoordinate` folds into the solar reapply (`box.userCoordinate ??
+TimeZoneCoordinates.current()`), persisted; new public `ScheduleResolver.sunsetTime`. Motivated by the
+timezone-coord error (LA representative coord = 27 min early for an SF user, validated by a standalone NOAA
+probe vs the app); founder accepts the early-warming bias as desirable. The genuine going-forward gap is
+huge single-time-zone countries (China = up to ~2h); a manual override covers it. Frozen `WarmthState`
+untouched. (Autocomplete is a first cut: Return-selects; ↑/↓/Esc nav not yet wired.)
+
+**Two founder-reported bug fixes.**
+- **Settings window wouldn't reopen** after close: the gear used SwiftUI `openSettings()`, routed through a
+  hidden 1×1 Settings-scene window that LINGERED → a second open found it present, `onAppear` never re-fired
+  → no window (+ popover flicker). Fix: the gear calls `SettingsWindowController.show()` directly; the ⌘,
+  bridge closes its host window after launch.
+- **Built-in warms late** (up to 60s): only the 60s ramp tick re-asserted, so a built-in macOS resets (True
+  Tone / ambient settling after login/wake) or that enumerates late waited a full tick. Fix: a **catch-up
+  re-assert burst** at ~1/3/6/12s after start / wake / reconfiguration (`reapply` re-writes the backend each
+  pass — confirmed no skip-if-unchanged — so it overcomes an external reset; live-mode-guarded, cancelled on
+  shutdown). *Founder to verify on hardware.*
+
+**Still open:** founder visual sign-off on the combined build; **reveal-during-captures** options (overlay-
+only — gamma/DDC can't be hidden from captures; pending founder steer); autocomplete keyboard nav (↑/↓/Esc —
+offered); Kelvin-readout font (recommend keep the New York serif — the deliberate brand accent, §5.1);
+**§25.K hardware matrix** (binding before 1.0; now incl. the catch-up re-assert + Sunset-timing checks);
+then the **gated public push**.
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
