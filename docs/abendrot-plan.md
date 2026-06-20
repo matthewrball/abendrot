@@ -909,6 +909,36 @@ copy verified compliant, all 3 nits applied):
 wire the per-app-exclusions + reveal-during-captures stubs + the Hold/Toggle reveal-mode picker; then
 the gated public push.
 
+## 28. Execution Log — Session 9 (2026-06-19): fresh sign-off build + Hold/Toggle picker
+
+Resume pass. Reconciled the repo against the docs first (evidence over assumptions): build repo on
+`build`, HEAD `0861299`, tree clean except `.omc/state/*` orchestration churn; no remote; the umbrella's
+`test-incompatibility-notice.rtf` is just the founder's saved §25.J preview command, not new direction.
+
+- **⚠️ The Release build was STALE — rebuilt.** `build/Release/.../Abendrot.app` was dated **Jun 18
+  02:17**, which *predates the entire Session-8 wave* (de-jargon, Mode↔Displays swap, real-Sunset ramp,
+  §25.J notice, slider-drag fix, About rebuild, Sunset subtitle). So the founder's #1 "visual sign-off"
+  would have been on a binary missing the very things to sign off on. Rebuilt fresh from HEAD: `xcodegen
+  generate` → Release **BUILD SUCCEEDED** (verified non-masked; real `Ld` for both arm64 + x86_64), **95/21
+  WarmthKit tests green**. The sign-off build now genuinely contains all of Session 7+8.
+- **Wired the Hold/Toggle reveal-mode picker (§3 locked "ship both, default hold") — the one clean §4
+  stub.** Backing behaviour already existed and is live: `HotkeyService.mode` drives hold vs toggle in
+  `handleKeyDown/Up`. Added only the surface: a segmented picker in Settings → Advanced (under the reveal
+  rebind), `AppModel.revealMode` + `setRevealMode`, and `UserDefaults` persistence restored in
+  `applyPersistedState()` (fresh install keeps hold). Cleared the `SettingsView` + now-satisfied
+  `HotkeyService` TODOs. Separate-lane code-review: **APPROVE-WITH-NITS** (0 blocking; both one-line nits
+  applied). Commit `9adf15f`.
+- **Scoped the other two §4 stubs honestly — NOT built (founder decisions).** Per-app exclusions is a
+  **no-op engine stub** (`WarmthEngine.setExcludedApps` just stores the set; needs an `NSWorkspace`
+  frontmost-app observer + suspend/resume-while-excluded + persistence, not merely a picker).
+  Reveal-during-captures is **overlay-only** (gamma/DDC warm the real framebuffer, so a `sharingType`
+  flip can't reveal those) **and** auto-suspend is **out of scope for v1.0 per the frozen contract §10**.
+- **Nothing pushed** — public gate held.
+
+**Still open (next session):** founder visual sign-off on the now-fresh combined build (incl. the new
+Hold/Toggle picker); §25.J final look (founder-owned); §25.K hardware matrix; the two remaining stubs are
+now founder calls (exclusions = real engine work; captures = likely drop per §10); then the gated push.
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
