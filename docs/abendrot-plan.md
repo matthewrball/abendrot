@@ -1003,6 +1003,103 @@ the New York serif — the deliberate brand accent, §5.1);
 **§25.K hardware matrix** (binding before 1.0; now incl. the catch-up re-assert + Sunset-timing checks);
 then the **gated public push**.
 
+## 30. Execution Log — Session 10 (2026-06-19/20): Settings polish wave, Statistics, rich About panel, per-display exclusion
+
+A long live founder-dogfooding session driven almost entirely from screenshots. **11 build-repo commits**
+(`6089530`→`4bf1b9d`); every change verified **Release BUILD SUCCEEDED (non-masked) + 107 WarmthKit tests /
+22 suites** (was 102 → +5 from the new per-display exclusion suite); **nothing pushed** (public gate held).
+Heavy execution dispatched to **Claude subagents (Agent tool) + a Workflow** this session (not codex):
+the rich About panel → a `designer` agent; per-display exclusion → an `opus` general agent with an
+investigation-first permission gate; the casing audit → an `Explore` agent; the separate-lane review → a
+6-dimension **Workflow** with adversarial verification. Design taste, the hardest engine logic, and **all
+builds/verification** stayed in the lead session. **Founder directive added:** auto-relaunch the app
+(`killall Abendrot 2>/dev/null; open …/Release/Abendrot.app`) after every rebuild — folded into the build
+protocol.
+
+**Opened by catching a STALE build again** (the on-disk binary predated the last code commit) → clean
+rebuild from HEAD; this is now a recurring trap, so every build verifies the binary timestamp.
+
+**Settings UI dogfooding wave (the bulk).**
+- **Settings-open / grey-toggle bug FIXED (founder, Medium).** Clicking the popover gear / ⌘, / the advanced
+  **"Manage…"** deep-link opened a Settings window but left the **MenuBarExtra(.window) dropdown lingering**
+  behind it — SwiftUI only auto-dismisses that dropdown on app-deactivate / outside-click, NOT when another
+  same-app window becomes key, so it resigned key and its `.switch` master toggle **desaturated to grey**
+  (warming still ON; the slider/rows were still rendered, proving it). Fix: `SettingsWindowController.show`
+  now dismisses the dropdown (close the key window, guarding the Settings window itself), DEFERS the open one
+  main-actor turn, and `orderFrontRegardless()` fronts it for the `.accessory` agent. Also **balanced the
+  `AppActivationPolicy` enter/leave** (enter only on construction, not on every re-focus) so repeated re-opens
+  don't strand the app `.regular`. Separate-lane review (code-reviewer agent) APPROVE-WITH-NITS; nits applied.
+- **General tab → popover-congruent + reordered (founder).** "Warm my displays" master toggle + the popover's
+  exact `WarmSlider` (Warmth label, inline animated Kelvin + ⓘ, Softer/Warmer) moved **above** the three
+  behaviour toggles; those three (Launch at login / Show in menu bar / Soft confirmation tone) now sit
+  **far-right** (label left, switch trailing) to match the master toggle / standard macOS layout.
+- **Removed the redundant "Use advanced warming methods" toggle** — the per-display method picker supersedes
+  it; `state.privateAPIsEnabled` defaults true and auto-disables on denylisted OS regardless. Advanced
+  subtitle rewritten (no longer compatibility-framed).
+- **Reveal True Color → liquid-glass keyboard-shortcut field** (mirrors the Schedule Location input: keyboard
+  icon + "Click to record") + a **Hold/Toggle `BrandSegmentedControl`** (replaced the native segmented Picker).
+  `RevealMode` gained `CaseIterable, Identifiable`.
+- **Animated (numericText) Kelvin readouts** in Settings (Default + Maximum warmth). **Section headings
+  standardized to 13.5 semibold** (Location, Excluded apps, Maximum warmth now match Reveal True Color). App-
+  wide **casing audit** (Explore agent) → ~95% already sentence-case; Privacy titles sentence-cased; "Reveal
+  True Color" + "Sunset" kept as deliberate feature/mode names.
+- **Privacy:** new **"No Location data"** point. **Reverted** the inline per-display method picker (founder
+  preferred label-above). **Fixed duplicate Softer/Warmer** on the per-display Override (compact `WarmSlider`).
+- **About tab:** GitHub + abendrot.app links (website first), real **GitHub mark** (new template SVG asset).
+  **Sidebar branding slides out** (offset+opacity, symmetric in/out) on the About tab; `accessibilityHidden`
+  off-screen.
+
+**Statistics tab — NEW (local-only).** Live **total time Abendrot has warmed your Mac** (`AppModel` edge-
+detects actual warming on each engine state tick and accrues, persisted, flushed on shutdown) + a **"Warm
+sunset counter"** (counts real local sunsets that pass while in **Sunset mode + enabled**, once per day, via
+the new public `ScheduleResolver.sunsetTime`) + **Reset** + a **collect toggle** (off = stop counting; stored
+locally, never sent). **Accrual gate** = `isEnabled && isScheduleActiveNow && !isRevealing` — counts Always-on
+(24/7) + Sunset (evenings/nights), NOT daytime Sunset (ramp applies 0). No engine/`WarmthState` change.
+
+**Rich "About Abendrot" panel — NEW (designer subagent).** The bare standard `orderFrontStandardAboutPanel`
+replaced by a custom **`AboutWindowController`** (mirrors `SettingsWindowController`'s programmatic glass
+window), wired via `.commands { CommandGroup(replacing: .appInfo) { … } }` so the app-menu "About Abendrot"
+opens it. Amphetamine-style layout in Abendrot's brand: icon halo, serif wordmark, version+copyright, the
+reused §13-safe mission, a true "free & open source, forever — no ads/IAP/paywall" promise, the live warmed-
+time stat, the byline, and GitHub/website glass-pill links. §13-clean (input fact only, no health claim).
+
+**Per-display app exclusion — multi-monitor (opus subagent + lead).** While an excluded app is frontmost,
+suspend warmth **ONLY on the display(s) its FOCUSED window occupies**, leaving other monitors warm. **Verified
+permission-free** (cited: Apple DTS/Quinn forum 126860, WWDC19-701, macOS 26 reports, PRIVACY.md): reading
+another app's window **bounds + owner PID** via `CGWindowListCopyWindowInfo(.optionOnScreenOnly|…)` needs **NO
+Screen Recording and NO Accessibility** — only window *title* + pixel *capture* are TCC-gated, and the code
+touches neither. `setFrontmostApp` gained an **additive** optional `onDisplays:` param (default nil = legacy
+whole-app suspend / safe fallback); engine suspend generalized from a global bool to a **per-display set**,
+gated per display in `reapply`; `WarmthState` frozen/untouched; **5 new hermetic tests**. Frozen contract doc
+(`docs/engine/warmthkit-api-contract.md`) updated for the additive param. **Founder follow-up bug FIXED:** a
+stray same-app window on another monitor suspended that monitor too → now resolve only the **frontmost
+(z-order, layer-0)** window's display, not every window the app has open (a window spanning two monitors still
+suspends both — correct). Pure CGWindowList helpers marked `nonisolated`.
+
+**Soft confirmation tone — WIRED (was a dead toggle).** Plays a chime when the user toggles warming (gated to
+real toggles, never the launch restore, via a `userInitiated` param). Iterated on founder taste: Tink → Pop →
+**Glass**, and the OFF cue is now a **real pitch-shifted Glass** (~5 semitones lower = deeper/dampened) via a
+small reusable `AVAudioEngine + AVAudioUnitTimePitch` graph (`ConfirmationChime`). Note: `AVAudioPlayer.rate`
+only time-stretches (preserves pitch) so it was imperceptible — pitch shifting required the engine graph.
+
+**Separate-lane review (Workflow).** 6 dimensions (stats correctness, window lifecycle, concurrency, SwiftUI,
+§13 compliance, over-engineering) × per-finding adversarial verification. **9 confirmed, 1 refuted, 3 nits.**
+Applied 7 + added the missing **MIT LICENSE** to the build repo (the UI asserts "MIT-licensed"); skipped 2 as
+over-engineering (sound-array, timezone day-key nit); the §13 "nit" was a false alarm (input fact, no claim).
+
+**Decisions / answers (no code).** Reveal-during-captures **DROPPED for 1.0** (gamma/DDC screenshots are
+already un-tinted at scanout; the overlay-only case isn't worth capture-detection complexity) — popover row
+removed. Kelvin font: **KEEP** New York serif. Mode toggle: **KEEP** on the popover (light, transparent, not
+clutter). Privacy section: **KEEP** — it becomes the home for the analytics opt-in. **Analytics (founder wants
+it):** recommend **Aptabase** (already in the plan) or **TelemetryDeck** — anonymous, no PII, opt-in, **OFF by
+default** (load-bearing for the "zero telemetry by default" positioning); Phase-10, founder-gated.
+
+**Still open (Session 11):** founder hardware sign-off on `4bf1b9d` — esp. (a) per-display exclusion on the
+M5 Air + LG UltraFine, (b) the muted off-tone, (c) the warm-sunset counter after a real sunset, (d) the
+**Session-9 built-in catch-up re-assert** (still unverified on hardware); §25.J final look; §25.K hardware
+matrix (now incl. per-display exclusion across monitors); analytics wiring (if greenlit); onboarding pass;
+then the gated public push (Session 7→10 wave).
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
