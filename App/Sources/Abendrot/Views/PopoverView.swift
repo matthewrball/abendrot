@@ -77,7 +77,7 @@ struct PopoverView: View {
         .overlay(alignment: .bottomTrailing) {
             Button {
                 withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
-                    model.isAdvancedExpanded.toggle()
+                    model.toggleAdvanced()
                 }
             } label: {
                 Color.clear.frame(width: 104, height: 56).contentShape(Rectangle())

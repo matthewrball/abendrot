@@ -113,6 +113,9 @@ struct OnboardingView: View {
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.accentHighlight)
 
+            // Same science-backed accent metric as the popover ticker (instant updates here).
+            BlueLightReductionLabel(kelvin: model.globalKelvin, animated: false)
+
             // Bind STRAIGHT to the engine so dragging warms the screen live (mirrors the popover's global
             // slider). Sets the nightly warmth STRENGTH within the warmest-point ceiling (default 1900K);
             // power users can push the ceiling lower later via Settings → Advanced.
@@ -124,10 +127,10 @@ struct OnboardingView: View {
             PrimaryButton(title: "Looks right") { advance() }   // warmth is already applied live
         }
         // The live preview is only visible while warming is ON; a fresh install starts disabled, so turn
-        // it on here (silently — userInitiated: false, no confirmation tone) when the user reaches this
+        // it on here — now WITH the warm-on confirmation tone (gated by the sound pref) — when the user reaches this
         // step. (NOTE: in daytime Sunset mode the schedule still gates the screen to neutral; the live
         // preview shows in the evening/at night or in Always-on mode.)
-        .onAppear { model.setEnabled(true, userInitiated: false) }
+        .onAppear { model.setEnabled(true, userInitiated: true) }
     }
 
     // MARK: Step 3 — confirm schedule
@@ -138,7 +141,8 @@ struct OnboardingView: View {
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            ModeControl(selection: $scheduleOption) { _ in }
+            // Tick the mode tone on each toggle (same as the popover), gated by the sound pref.
+            ModeControl(selection: $scheduleOption) { option in model.playSoftModeTone(option.toScheduleMode()) }
 
             if scheduleOption == .followSunset {
                 VStack(alignment: .leading, spacing: 11) {
@@ -146,7 +150,7 @@ struct OnboardingView: View {
                     // Sunset needs a location to time the sunset. Reuse the Settings liquid-glass city
                     // picker — "Auto (from time zone)" is pre-selected, so the user can simply continue.
                     VStack(alignment: .leading, spacing: 6) {
-                        CityAutocomplete(model: model)
+                        CityAutocomplete(model: model, opensUpward: true)
                         Text(sunsetReadout)
                             .font(Theme.Typography.ui(11))
                             .foregroundStyle(Theme.Color.textFaint)
@@ -155,7 +159,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
             } else {
-                Text("Warmth stays on around the clock. Change it anytime in Settings.")
+                Text("Warmth stays on around the clock.")
                     .font(Theme.Typography.ui(12.5))
                     .foregroundStyle(Theme.Color.textMuted)
                     .multilineTextAlignment(.center)
@@ -163,7 +167,7 @@ struct OnboardingView: View {
             }
 
             PrimaryButton(title: scheduleOption == .followSunset ? "Soften into the evening" : "Start warming") {
-                model.setScheduleMode(scheduleOption.toScheduleMode())
+                model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)   // toggle already ticked
                 model.setEnabled(true, userInitiated: false)
                 advance()   // → the closing "You're all set" screen
             }

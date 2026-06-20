@@ -37,9 +37,9 @@ struct WarmSlider: View {
     private var thumbSize: CGFloat { compact ? 15 : 20 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 6 : 9) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 12) {
             if !compact {
-                warmthHeaderRow
+                warmthTicker
             }
 
             gradientSlider
@@ -52,38 +52,56 @@ struct WarmSlider: View {
             .font(Theme.Typography.ui(11.5))
             .foregroundStyle(Theme.Color.textMuted)
         }
-        .overlay(alignment: .topTrailing) {
+        .overlay(alignment: .topLeading) {
             if showKelvinInfo, kelvin != nil {
                 kelvinTooltip
-                    .offset(y: 24)
-                    .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+                    .offset(y: 88)
+                    .transition(.scale(scale: 0.9, anchor: .topLeading).combined(with: .opacity))
                     .zIndex(1)
             }
         }
         .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showKelvinInfo)
     }
 
-    // MARK: Warmth header (label + inline Kelvin + info tooltip)
+    // MARK: Warmth ticker (big "gas-price" Kelvin readout + info tooltip, above the slider)
 
-    private var warmthHeaderRow: some View {
-        HStack(spacing: 6) {
-            Text("Warmth")
-                .font(Theme.Typography.ui(13, weight: .medium))
-                .foregroundStyle(Theme.Color.textMuted)
-            Spacer()
+    private var warmthTicker: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
+                Text("Warmth".uppercased())
+                    .font(Theme.Typography.ui(11, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.Color.textFaint)
+                if kelvin != nil {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(showKelvinInfo ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                        .onHover { showKelvinInfo = $0 }
+                        .accessibilityLabel("What is Kelvin?")
+                        .accessibilityHint(kelvinInfoText)
+                }
+            }
             if let kelvin {
-                Text("\(kelvin.displayValue)K")
-                    .font(Theme.Typography.serif(13))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.Color.accentHighlight)
-                    .contentTransition(.numericText(value: Double(kelvin.displayValue)))
-                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin.displayValue)
-                Image(systemName: "info.circle")
-                    .font(.system(size: 11))
-                    .foregroundStyle(showKelvinInfo ? Theme.Color.accentHighlight : Theme.Color.textFaint)
-                    .onHover { showKelvinInfo = $0 }
-                    .accessibilityLabel("What is Kelvin?")
-                    .accessibilityHint(kelvinInfoText)
+                // Big lit "price-board" numerals — tabular so the value ticks cleanly as you drag.
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(kelvin.displayValue.formatted(.number))
+                        .font(Theme.Typography.serif(42))
+                        .monospacedDigit()
+                        .contentTransition(isPressing ? .identity : .numericText(value: Double(kelvin.displayValue)))
+                    Text("K")
+                        .font(Theme.Typography.serif(23))
+                        .foregroundStyle(Theme.Color.accentHighlight.opacity(0.7))
+                }
+                .foregroundStyle(Theme.Color.accentHighlight)
+                .shadow(color: Theme.Color.accent.opacity(0.35), radius: 12, y: 1)   // lit-sign glow
+                // Instant while dragging (rapid changes otherwise glitch the digit-roll); smooth roll otherwise.
+                .animation(isPressing ? nil : Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin.displayValue)
+                .accessibilityElement()
+                .accessibilityLabel("Warmth \(kelvin.displayValue) Kelvin")
+
+                // Accent metric: estimated blue-light reduction (instant during a live drag).
+                BlueLightReductionLabel(kelvin: kelvin, animated: !isPressing)
+                    .padding(.top, 3)
             }
         }
     }
@@ -129,17 +147,27 @@ struct WarmSlider: View {
 
                 glassThumb(pressed: isPressing)
                     .frame(width: thumbSize, height: thumbSize)
-                    .scaleEffect(isPressing ? 1.14 : 1.0)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.62), value: isPressing)
+                    .scaleEffect(isPressing ? 1.12 : 1.0)
+                    // Snappy, well-damped press feedback — settles fast so rapid clicks don't throb.
+                    .animation(.spring(response: 0.2, dampingFraction: 0.86), value: isPressing)
                     .offset(x: thumbX)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            // Thumb + fill glide to a tapped position; during an actual drag the per-update transaction
+            // (below) disables this so the thumb tracks the finger 1:1 — no lag, no jitter.
+            .animation(reduceMotion ? nil : .smooth(duration: 0.16), value: strength)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .updating($isPressing) { _, state, _ in state = true }
                     .onChanged { value in
-                        strength = Double((value.location.x - thumbSize / 2) / usable).clamped01
+                        let target = Double((value.location.x - thumbSize / 2) / usable).clamped01
+                        if abs(value.translation.width) > 2 {
+                            var tx = Transaction(); tx.disablesAnimations = true   // drag: follow finger 1:1
+                            withTransaction(tx) { strength = target }
+                        } else {
+                            strength = target                                       // tap: glide there
+                        }
                     }
             )
         }
@@ -173,6 +201,44 @@ struct WarmSlider: View {
 
 private extension Double {
     var clamped01: Double { Swift.min(1, Swift.max(0, self)) }
+}
+
+// MARK: - BlueLightReductionLabel
+//
+// The "≈X% less blue light" accent metric, shared by the Warmth ticker and onboarding. Sound basis:
+// the EXACT attenuation the app applies to the blue channel vs the neutral 6500K white point —
+// `rgbGain(for:).blue` is 1.0 at 6500K and falls toward 0 as it warms, so (1 − blueGain) is the
+// fraction of blue-channel light removed. Capped at 0.95 to acknowledge residual blue (backlight /
+// panel leakage) — never a claim of total elimination. An estimate of emitted blue vs the standard
+// white point, NOT a measured melanopic/circadian dose (that needs the panel's spectrum, which we
+// don't have).
+struct BlueLightReductionLabel: View {
+    let kelvin: Kelvin
+    /// When false (e.g. live-dragging), the value updates instantly instead of rolling — rapid
+    /// changes otherwise glitch the numericText transition.
+    var animated: Bool = true
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var percent: Int {
+        let reduction = min(0.95, max(0, 1 - rgbGain(for: kelvin).blue))
+        return Int((reduction * 100).rounded())
+    }
+
+    private var infoText: String {
+        "Estimated reduction in your display's blue-channel light versus its standard 6500 K white point. Warmer settings emit less short-wavelength (blue) light. This is an estimate from the colour shift applied — not a measured melanopic dose."
+    }
+
+    var body: some View {
+        Text("≈\(percent)% less blue light")
+            .font(Theme.Typography.ui(11.5, weight: .semibold))
+            .foregroundStyle(Theme.Color.accentHighlight.opacity(0.85))
+            .contentTransition(animated ? .numericText(value: Double(percent)) : .identity)
+            .animation(animated ? Theme.Motion.warm(reduceMotion: reduceMotion) : nil, value: percent)
+            .help(infoText)
+            .accessibilityElement()
+            .accessibilityLabel("Approximately \(percent) percent less blue light")
+    }
 }
 
 // MARK: - DisplayRow (simple popover)

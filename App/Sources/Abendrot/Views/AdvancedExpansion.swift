@@ -44,9 +44,15 @@ struct AdvancedExpansion: View {
                         .font(Theme.Typography.ui(12))
                         .foregroundStyle(Theme.Color.textMuted)
                     Spacer()
-                    Text("Manage…")
-                        .font(Theme.Typography.ui(11))
-                        .foregroundStyle(Theme.Color.accent)
+                    // "Manage" + a chevron — signals "opens the full settings" (navigation),
+                    // clearer than the "…" which conventionally means a dialog/needs-more-input.
+                    HStack(spacing: 3) {
+                        Text("Manage")
+                            .font(Theme.Typography.ui(11))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.Color.accent)
                 }
                 .contentShape(Rectangle())
             }

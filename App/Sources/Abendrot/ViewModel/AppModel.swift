@@ -69,6 +69,10 @@ final class AppModel {
     /// (deeper, dampened) on warming-OFF. Built lazily on first toggle; nil if the sound file is missing.
     @ObservationIgnored private lazy var confirmationChime: ConfirmationChime? = ConfirmationChime()
 
+    /// Warm, synthesized "swoosh" played when the advanced popover panel expands. Built lazily on first
+    /// expand; nil only if the audio buffer can't be allocated. See `toggleAdvanced()`.
+    @ObservationIgnored private lazy var expandSwoosh: SwooshSound? = SwooshSound()
+
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
@@ -142,7 +146,7 @@ final class AppModel {
         // §25.B exists to kill.
         if let data = defaults.data(forKey: Self.scheduleModeKey) {
             if let mode = try? JSONDecoder().decode(ScheduleMode.self, from: data) {
-                setScheduleMode(mode)
+                setScheduleMode(mode, userInitiated: false)   // restore must not tick
             } else {
                 defaults.removeObject(forKey: Self.scheduleModeKey)
             }
@@ -233,6 +237,31 @@ final class AppModel {
         confirmationChime?.play(pitchCents: warming ? 0 : -500)
     }
 
+    /// A soft tick when the user switches Schedule mode (Sunset · Always on), gated by the SAME
+    /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the Glass graph but
+    /// QUIETER and pitched UP into a light "selection" tick — not the warming bloom — and each mode
+    /// gets its OWN note (Always-on brighter/higher, Sunset lower), so you hear WHICH mode you picked:
+    /// a choice, not an on/off.
+    /// Internal (not private) so onboarding can play the same mode tick when its picker is toggled.
+    func playSoftModeTone(_ mode: ScheduleMode) {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        // ponytail: taste-tune these three by ear — sound is sensory. Cents are vs. the Glass
+        // fundamental; both sit ABOVE the warming tones (0 / -500) so they read as a lighter tick, and
+        // a major third apart from each other.
+        let cents: Float = ScheduleModeOption(mode) == .alwaysOn ? 700 : 300
+        confirmationChime?.play(pitchCents: cents, volume: 0.22)   // ~0.11 effective vs the 0.5 master
+    }
+
+    /// Flip the popover's advanced panel. Plays the warm swoosh on EXPAND only (collapse stays silent),
+    /// gated by the SAME "Soft confirmation tone" pref as the chimes. The caller wraps this in
+    /// `withAnimation` so the panel still animates; the swoosh is just a side effect of the flip.
+    func toggleAdvanced() {
+        isAdvancedExpanded.toggle()
+        if isAdvancedExpanded, UserDefaults.standard.bool(forKey: "softConfirmationTone") {
+            expandSwoosh?.play(volume: 0.28)   // ponytail: quiet by ear; tune with the synth knobs below
+        }
+    }
+
     func setGlobalWarmth(_ strength: Double) {
         let level = WarmthLevel(strength: strength)
         state.globalWarmth = level
@@ -241,7 +270,10 @@ final class AppModel {
         Task { await engine?.setWarmth(level) }
     }
 
-    func setScheduleMode(_ mode: ScheduleMode) {
+    func setScheduleMode(_ mode: ScheduleMode, userInitiated: Bool = true) {
+        // Compare at the UI grain (Sunset · Always on): the dormant cases (.solar/.custom/...) all read
+        // as Sunset, so re-selecting one is not a user-visible change and must not tick.
+        let changed = ScheduleModeOption(mode) != ScheduleModeOption(state.scheduleMode)
         state.scheduleMode = mode
         // ScheduleMode carries associated values (.solar/.custom) → encode as Codable JSON,
         // not a bare string (§25.B).
@@ -249,6 +281,8 @@ final class AppModel {
             UserDefaults.standard.set(data, forKey: Self.scheduleModeKey)
         }
         Task { await engine?.setScheduleMode(mode) }
+        // Tick only on a real user-initiated switch (not the launch-time restore, userInitiated: false).
+        if userInitiated, changed { playSoftModeTone(mode) }
     }
 
     // MARK: ── Persistence (§25.B) ───────────────────────────────────────────
@@ -556,8 +590,9 @@ private final class ConfirmationChime {
         engine.mainMixerNode.outputVolume = 0.5
     }
 
-    func play(pitchCents: Float) {
+    func play(pitchCents: Float, volume: Float = 1.0) {
         pitch.pitch = pitchCents
+        player.volume = volume              // per-play loudness; warming = 1.0, mode tick = quieter
         if !engine.isRunning { try? engine.start() }
         guard engine.isRunning else { return }
         player.stop()                       // reset if a prior chime is still scheduled (rapid re-toggle)
@@ -567,6 +602,68 @@ private final class ConfirmationChime {
         idleTask?.cancel()
         idleTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(3))
+            guard let self, !self.player.isPlaying else { return }
+            self.engine.stop()
+        }
+    }
+}
+
+/// An airy, light "swoosh" for expanding the advanced popover panel — no audio asset; rendered once
+/// into a buffer. Recipe: white noise HIGH-PASSED (cutoff sweeps ≈1500→4200 Hz so only the "air" is
+/// kept — no mid body, which read as hard), then gently low-passed (~7.5 kHz ceiling) so it shimmers
+/// like frosted glass instead of hissing, on a soft clickless raised-cosine envelope over ~0.3 s. Same
+/// lazy main-actor engine pattern as `ConfirmationChime`; the engine idles itself after the one-shot.
+@MainActor
+private final class SwooshSound {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let buffer: AVAudioPCMBuffer
+    private var idleTask: Task<Void, Never>?
+
+    init?() {
+        let sampleRate = 44_100.0
+        let duration = 0.32
+        let frames = AVAudioFrameCount(sampleRate * duration)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+              let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
+              let out = buf.floatChannelData?[0] else { return nil }
+        buf.frameLength = frames
+        buffer = buf
+
+        // ponytail: taste-tune by ear — "airy & light like frosted glass" = high-passed AIR (no mid
+        // body/resonance — that read as "hard"), softly smoothed so it shimmers not hisses, and quiet.
+        // Raise hpEnd for airier/thinner; lower fcLP for a softer/darker top; raise duration for slower.
+        let hpStart = 1500.0, hpEnd = 4200.0   // high-pass cutoff sweeps UP → airy "opening", no body
+        let fcLP = 7500.0                       // soft ceiling → frosted-glass smooth, not gritty
+        let aLP = 1.0 - exp(-2.0 * Double.pi * fcLP / sampleRate)
+        var lpHP = 0.0, lpOut = 0.0
+        let n = Int(frames)
+        for i in 0..<n {
+            let t = Double(i) / Double(n)
+            let fcHP = hpStart + (hpEnd - hpStart) * t
+            let aHP = 1.0 - exp(-2.0 * Double.pi * fcHP / sampleRate)
+            let white = Double.random(in: -1...1)
+            lpHP += aHP * (white - lpHP)            // low-pass at the HP cutoff…
+            let hp = white - lpHP                   // …subtracted → one-pole high-pass: keep only the air
+            lpOut += aLP * (hp - lpOut)             // gentle top smoothing → frosted, not fizzy
+            let env = pow(sin(Double.pi * t), 1.4)  // soft raised cosine (tapered = lighter); 0 at ends
+            out[i] = Float(max(-1.0, min(1.0, lpOut * env * 0.5)))   // low internal gain → headroom, no clip
+        }
+
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+    }
+
+    func play(volume: Float) {
+        player.volume = volume
+        if !engine.isRunning { try? engine.start() }
+        guard engine.isRunning else { return }
+        player.stop()                       // restart cleanly on a rapid re-expand
+        player.scheduleBuffer(buffer, at: nil)
+        player.play()
+        idleTask?.cancel()
+        idleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
             guard let self, !self.player.isPlaying else { return }
             self.engine.stop()
         }

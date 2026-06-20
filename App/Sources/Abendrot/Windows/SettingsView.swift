@@ -360,6 +360,9 @@ private struct ScheduleTab: View {
 // Internal (not private) so onboarding step 3 reuses the exact same liquid-glass city picker.
 struct CityAutocomplete: View {
     @Bindable var model: AppModel
+    /// Onboarding sits this field near the card's bottom, so the dropdown must open UPWARD there or it's
+    /// clipped by the card edge and overlaps the primary button. Settings has room below (default).
+    var opensUpward: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var fieldFocused: Bool
@@ -381,12 +384,12 @@ struct CityAutocomplete: View {
             // a height-constrained host (the onboarding card) from clipping content/button below, and it's
             // the right behaviour anywhere (a menu should float over content, not shove it). The offset ≈
             // the field's height; `zIndex` lifts the whole picker above sibling content while open.
-            .overlay(alignment: .topLeading) {
+            .overlay(alignment: opensUpward ? .bottomLeading : .topLeading) {
                 if isOpen {
                     dropdown
                         .frame(maxWidth: .infinity)
-                        .offset(y: 44)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                        .offset(y: opensUpward ? -44 : 44)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: opensUpward ? .bottom : .top)))
                 }
             }
             .zIndex(isOpen ? 10 : 0)
