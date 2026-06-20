@@ -36,6 +36,11 @@ final class AppModel {
     /// keeps running and is reachable via the global hotkey + relaunch (plan §4.3).
     var showInMenuBar: Bool = true
 
+    /// Reveal-True-Color behaviour: hold (default) vs toggle (§3 locked — ship both). Mirrors
+    /// `HotkeyService.mode`; surfaced here so the Settings picker can bind and previews (no live
+    /// service) still render. Persisted; restored in `applyPersistedState()`.
+    var revealMode: RevealMode = .hold
+
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
@@ -123,6 +128,12 @@ final class AppModel {
         if let enabled = defaults.object(forKey: Self.isEnabledKey) as? Bool {
             setEnabled(enabled)
         }
+
+        // Reveal behaviour (hold vs toggle, §3). A fresh install keeps the default hold.
+        if let raw = defaults.string(forKey: Self.revealModeKey),
+           let mode = RevealMode(rawValue: raw) {
+            setRevealMode(mode)
+        }
     }
 
     /// Neutral-reset + tear down. Call on app quit.
@@ -177,6 +188,7 @@ final class AppModel {
     static let isEnabledKey = "isEnabled"
     static let globalWarmthStrengthKey = "globalWarmthStrength"
     static let scheduleModeKey = "scheduleMode"
+    static let revealModeKey = "revealMode"
 
     func setWarmestPoint(_ kelvin: Kelvin) {
         // Optimistic UI so the Kelvin readout updates immediately, then persist + tell the engine.
@@ -195,6 +207,16 @@ final class AppModel {
     func endReveal() {
         state.isRevealing = false
         Task { await engine?.endReveal() }
+    }
+
+    /// Switch the reveal behaviour between hold and toggle (§3). `HotkeyService.mode` already honours
+    /// this live in `handleKeyDown/Up`; this surfaces + persists the choice. The service call is a
+    /// no-op in previews (no live hotkey), but the observed `revealMode` still updates so the picker
+    /// tracks the selection.
+    func setRevealMode(_ mode: RevealMode) {
+        revealMode = mode
+        hotkeyService?.mode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Self.revealModeKey)
     }
 
     // MARK: ── Per-display intents ───────────────────────────────────────────

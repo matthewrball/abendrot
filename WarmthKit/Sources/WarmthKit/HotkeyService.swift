@@ -45,7 +45,8 @@ public final class HotkeyService {
         KeyboardShortcuts.onKeyUp(for: .revealTrueColor) { [weak self] in
             self?.handleKeyUp()
         }
-        // TODO(settings): expose a KeyboardShortcuts.Recorder + Hold/Toggle picker so users can rebind.
+        // The rebind UI (`RevealShortcutRecorder`) and the Hold/Toggle picker both live in the app
+        // target (Settings → Advanced); `mode` is read live per keypress, so they need no re-install.
     }
 
     // MARK: Key handling

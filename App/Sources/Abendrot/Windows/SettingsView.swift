@@ -466,10 +466,29 @@ private struct AdvancedTab: View {
                     Spacer()
                     RevealShortcutRecorder()
                 }
-                Text("Click the field and press a key combination to rebind (default ⌥⌘T). Hold the shortcut to reveal true colour; release to ease warmth back.")
+                Text("Click the field and press a key combination to rebind (default ⌥⌘T).")
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textMuted)
-                // TODO(settings): a Hold/Toggle reveal-mode picker (RevealMode on HotkeyService).
+
+                // Hold vs Toggle (§3 locked: ship both, default hold). `HotkeyService.mode` already
+                // honours this live in handleKeyDown/Up — this only surfaces + persists the choice.
+                Picker("Reveal behaviour", selection: Binding(
+                    get: { model.revealMode },
+                    set: { model.setRevealMode($0) }
+                )) {
+                    Text("Hold").tag(RevealMode.hold)
+                    Text("Toggle").tag(RevealMode.toggle)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 200, alignment: .leading)
+                .padding(.top, 2)
+
+                Text(model.revealMode == .hold
+                     ? "Hold the shortcut to reveal true colour; release to ease warmth back."
+                     : "Press the shortcut to reveal true colour; press again to ease it back.")
+                    .font(Theme.Typography.ui(12))
+                    .foregroundStyle(Theme.Color.textMuted)
             }
             DividerLine()
 
