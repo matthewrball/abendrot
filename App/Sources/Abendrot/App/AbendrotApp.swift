@@ -48,10 +48,25 @@ private struct SettingsLauncher: View {
     var body: some View {
         Color.clear
             .frame(width: 1, height: 1)
+            .background(SettingsHostWindowDismisser())
             .onAppear {
                 SettingsWindowController.show(model: model)
             }
     }
+}
+
+// The SwiftUI `Settings` scene exists only so ⌘, resolves; it hosts the 1×1 launcher above that opens
+// the real glass window. Without this, that invisible host window LINGERS after the glass window closes,
+// so a second ⌘, finds it already open and `onAppear` never re-fires → Settings won't reopen. Closing the
+// host right after it appears makes each ⌘, recreate it and re-trigger the launch. (The popover gear calls
+// `SettingsWindowController.show` directly and doesn't go through this scene at all.)
+private struct SettingsHostWindowDismisser: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { [weak view] in view?.window?.close() }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 // MARK: - AppDelegate

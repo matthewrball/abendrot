@@ -18,7 +18,6 @@ import WarmthKit
 struct PopoverView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -76,9 +75,12 @@ struct PopoverView: View {
                 .font(Theme.Typography.serif(15))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
-            // Settings (top-right).
+            // Settings (top-right). Open the programmatic glass window DIRECTLY rather than via
+            // SwiftUI's `openSettings()` — that routes through a hidden 1×1 Settings-scene window which
+            // lingers after the glass window closes, so a second open found it already present and never
+            // re-fired the launch (Settings wouldn't reopen). Direct call is reliable every time.
             Button {
-                openSettings()
+                SettingsWindowController.show(model: model)
             } label: {
                 Image(systemName: "gearshape")
                     .foregroundStyle(Theme.Color.textMuted)
