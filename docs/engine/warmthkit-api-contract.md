@@ -278,10 +278,15 @@ public actor WarmthEngine {
     /// membership check; changing the set re-evaluates suspend immediately. (Additive, Session 8.)
     public func setExcludedApps(_ bundleIDs: Set<String>) async
     /// The app-side NSWorkspace bridge (`FrontmostAppMonitor`) reports the frontmost app's bundle id
-    /// here (nil = none / unresolvable). While that app is in the exclusion set the engine suspends
-    /// warmth across all displays — independent of hold-to-reveal, so the two **compose** (warmth is
-    /// off if reveal is active OR an excluded app is frontmost). (Additive, Session 8.)
-    public func setFrontmostApp(_ bundleID: String?) async
+    /// here (nil = none / unresolvable), plus — for the per-display refinement — the set of displays
+    /// that app's FOCUSED window occupies (`onDisplays`; nil = all displays = legacy whole-app suspend /
+    /// single-display / unresolvable). While that app is in the exclusion set the engine suspends warmth
+    /// on those display(s) ONLY — independent of hold-to-reveal, so the two **compose** (warmth is off if
+    /// reveal is active OR an excluded app is frontmost on that display). The display set is resolved
+    /// permission-free from `CGWindowListCopyWindowInfo` metadata (window bounds + owner PID — no Screen
+    /// Recording, no Accessibility). (Additive: `onDisplays` defaults `nil` = the original behaviour.
+    /// Session 8; per-display `onDisplays` added Session 9.)
+    public func setFrontmostApp(_ bundleID: String?, onDisplays: Set<CGDirectDisplayID>? = nil) async
 
     // ── Safety ────────────────────────────────────────────────────────────────
     /// Emergency "Restore Displays": neutral gamma + overlay teardown + DDC native-state restore
@@ -411,6 +416,11 @@ need a contract version bump + a note to Lanes B and D.
 - **Session 8:** `WarmthEngine.setFrontmostApp(_:)` — the frontmost-app input that drives
   suspend-while-excluded (resolves open-Q3, below). Suspend composes with hold-to-reveal: warmth is
   off if reveal is active OR an excluded app is frontmost. No existing signature changed.
+- **Session 9:** `setFrontmostApp(_:onDisplays:)` — **additive** optional `onDisplays` param (default
+  `nil` = prior whole-Mac behaviour). On multi-monitor, suspend warmth only on the display(s) the
+  excluded app's focused window occupies; other monitors stay warm. The display set is resolved
+  permission-free (CGWindowList bounds + owner PID; no Screen Recording / Accessibility). Engine suspend
+  generalized from a global bool to a per-display set; `WarmthState` unchanged.
 
 **Open questions to resolve during M0–M1 (won't change the public surface):**
 1. Exact `warmestPoint` default and the slider's strength→Kelvin curve shape (perceptual vs linear).
