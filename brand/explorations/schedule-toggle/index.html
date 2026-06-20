@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abendrot · Schedule toggle — exploration</title>
+<style>
+:root{
+  --accent:#FD9228; --accent-hl:#FFC061; --accent-deep:#C2310A; --accent-rim:#FFE0B8;
+  --accent-press:#E2740F; --ink-on-cream:#9C4310;
+  --indigo:#160A12; --plum:#221019; --twilight:#341320; --twilight-2:#45192A;
+  --text:#F3EADF; --muted:rgba(243,234,223,.60); --faint:rgba(243,234,223,.38); --cream:#F7ECD9;
+  --line:rgba(255,240,230,.10); --line-strong:rgba(255,240,230,.16);
+  --reveal:#FFFFFF;
+  --sunset:linear-gradient(180deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --sunset-h:linear-gradient(90deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --sky:linear-gradient(180deg,#160A12 0%,#2A0F16 34%,#6A100F 60%,#C2310A 80%,#FB7C0E 92%,#FD9228 100%);
+  --glass-tint:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+  --glass-inset:inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 0 0 .5px rgba(255,255,255,.22);
+  --glow-accent:0 0 24px -6px rgba(253,146,40,.9);
+  --glow-soft:0 0 36px -10px rgba(253,146,40,.7);
+  --ease-warm:cubic-bezier(.22,.61,.36,1); --ease-standard:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.11s; --dur-base:.14s; --dur-reveal:.22s;
+  --r-card:22px; --r-control:12px; --r-pill:999px;
+}
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+  background:
+    radial-gradient(900px 520px at 80% -14%, rgba(253,146,40,.10), transparent 60%),
+    linear-gradient(168deg,#2A1119 0%, var(--plum) 46%, var(--indigo) 100%);
+  background-attachment:fixed; min-height:100vh;
+}
+.serif{font-family:ui-serif,"New York","Iowan Old Style",Georgia,serif;}
+:focus-visible{outline:3px solid var(--accent-hl); outline-offset:3px; border-radius:8px;}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important; animation:none!important;} }
+
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px;}
+
+/* ---------- header ---------- */
+header{padding:64px 0 8px;}
+.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-hl);font-weight:600;margin:0 0 14px;}
+h1.title{font-family:ui-serif,"New York",Georgia,serif;font-weight:600;letter-spacing:-.03em;line-height:1.02;
+  font-size:clamp(34px,5vw,54px);margin:0;
+  background:linear-gradient(180deg,var(--accent-rim) 0%,var(--accent-hl) 60%,var(--accent) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;}
+.lede{max-width:74ch;color:var(--muted);font-size:15.5px;line-height:1.6;margin:18px 0 0;}
+.lede b{color:var(--text);font-weight:600;}
+
+/* ---------- intro cards ---------- */
+.intro{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;margin:34px 0 8px;}
+@media(max-width:840px){.intro{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:16px;padding:20px 22px;
+  background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(0,0,0,.06));}
+.card h3{margin:0 0 12px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600;}
+.card ol{margin:0;padding-left:20px;}
+.card ol li{font-size:13.5px;line-height:1.5;margin:0 0 9px;color:var(--text);}
+.card ol li span{color:var(--muted);}
+.card.note p{margin:0 0 11px;font-size:13.5px;line-height:1.62;color:var(--muted);}
+.card.note p:last-child{margin-bottom:0}
+.card.note b{color:var(--text);font-weight:600;}
+.pick{display:inline-block;font-weight:600;color:var(--accent-hl);}
+
+/* ---------- contents / legend ---------- */
+.toc{margin:30px 0 6px;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(0,0,0,.05));}
+.toc-grid{display:grid;grid-template-columns:repeat(4,1fr);}
+@media(max-width:840px){.toc-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.toc-grid{grid-template-columns:1fr}}
+.toc-col{padding:18px 20px;border-right:1px solid var(--line);}
+.toc-col:last-child{border-right:none}
+.toc-col a.fam-link{display:block;font-size:13px;font-weight:700;letter-spacing:-.01em;color:var(--text);text-decoration:none;margin:0 0 4px;}
+.toc-col a.fam-link:hover{color:var(--accent-hl)}
+.toc-col .fam-kind{font-size:11px;color:var(--faint);margin:0 0 12px;}
+.toc-col ul{list-style:none;margin:0;padding:0;}
+.toc-col ul li{font-size:12px;line-height:1.45;color:var(--muted);margin:0 0 5px;}
+.toc-col ul li b{color:var(--text);font-weight:600;}
+
+/* ---------- how to read ---------- */
+.howto{margin:22px 0 0;font-size:13px;color:var(--faint);line-height:1.6;}
+.howto kbd{font-family:ui-monospace,monospace;background:var(--twilight);border:1px solid var(--line-strong);
+  border-radius:5px;padding:1px 6px;font-size:11.5px;color:var(--text);}
+
+/* ---------- baseline ---------- */
+.section-head{margin:64px 0 14px;}
+.section-head .n{font-family:ui-serif,Georgia,serif;font-size:13px;color:var(--accent);letter-spacing:.02em;}
+.section-head h2{font-size:clamp(21px,2.6vw,28px);font-weight:600;margin:5px 0 0;letter-spacing:-.02em;}
+.section-head p{margin:8px 0 0;color:var(--muted);font-size:13.5px;line-height:1.55;max-width:78ch;}
+.section-head .fam-char{display:inline-block;margin-top:10px;font-size:12px;color:var(--accent-hl);
+  border:1px solid var(--line-strong);border-radius:999px;padding:4px 12px;}
+
+.baseline-stage{border:1px solid var(--line);border-radius:18px;padding:26px;
+  background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(0,0,0,.06));}
+.bpanel{max-width:520px;}
+.bpanel .pt{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:3px;}
+.bpanel .ps{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.bpanel .pd{color:var(--muted);font-size:12.5px;line-height:1.55;margin:16px 0 0;}
+
+/* baseline control — faithful rebuild of the shipping BrandSegmentedControl */
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:999px;position:relative;
+  background:rgba(255,240,230,.05);box-shadow:inset 0 0 0 .5px var(--line-strong);}
+.seg button{appearance:none;border:0;background:transparent;cursor:pointer;position:relative;z-index:2;
+  font:inherit;font-size:12px;font-weight:500;color:var(--muted);padding:7px 22px;border-radius:999px;
+  transition:color var(--dur-base) var(--ease-warm);min-width:96px;}
+.seg button[aria-pressed="true"]{color:var(--indigo);font-weight:700;}
+.seg .thumb{position:absolute;z-index:1;top:3px;bottom:3px;border-radius:999px;background:var(--sunset);
+  box-shadow:0 1.5px 5px rgba(194,49,10,.45);
+  transition:transform var(--dur-base) var(--ease-warm), width var(--dur-base) var(--ease-warm);}
+.seg .thumb::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,.04) 42%,transparent 70%);
+  mix-blend-mode:soft-light;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.16);}
+.baseline-tag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:16px;}
+
+/* ---------- family frames ---------- */
+.frame{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:rgba(0,0,0,.10);
+  box-shadow:0 18px 50px rgba(0,0,0,.30);}
+.frame iframe{display:block;width:100%;border:0;background:transparent;}
+.frame-bar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(255,255,255,.03),transparent);}
+.frame-bar .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:var(--glow-accent);flex:0 0 auto;}
+.frame-bar .lbl{font-size:12.5px;font-weight:600;color:var(--text);}
+.frame-bar .open{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line-strong);
+  border-radius:8px;padding:4px 11px;transition:color var(--dur-base),border-color var(--dur-base);}
+.frame-bar .open:hover{color:var(--accent-hl);border-color:var(--accent-hl);}
+
+/* ---------- motion notes / footer ---------- */
+.notes{margin-top:30px;border:1px solid var(--line);border-radius:16px;padding:22px 24px;
+  background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(0,0,0,.05));}
+.notes h3{margin:0 0 14px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600;}
+.notes ul{margin:0;padding-left:20px;}
+.notes li{font-size:13.5px;line-height:1.6;color:var(--muted);margin:0 0 10px;}
+.notes li b{color:var(--text);font-weight:600;}
+.notes li .lens{color:var(--accent-hl);font-weight:600;}
+footer{margin:54px 0 90px;padding-top:26px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px;line-height:1.6;}
+footer b{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Abendrot · Settings → Schedule</p>
+    <h1 class="title">The either-or, reimagined.</h1>
+    <p class="lede">One control, twenty ways. We're replacing the small ember pill that picks
+    <b>Sunset</b> vs <b>Always&nbsp;on</b> with something <b>bigger, more custom, more artful</b> — biased toward
+    <b>Apple Liquid Glass</b> and <b>macOS-native</b> idioms so it still belongs in Tahoe Settings. Every concept below is
+    live (click it), sits in the real Schedule context, and uses the exact app palette. Pick directions to pursue;
+    we'll port the winner to SwiftUI.</p>
+
+    <div class="intro">
+      <div class="card">
+        <h3>Where to look first — research picks</h3>
+        <ol>
+          <li><b>Choice tiles</b> <span>(Family C) — two glass cards that <i>show</i> the choice. Strongest all-rounder; mirrors macOS's own picker.</span></li>
+          <li><b>Big segmented, lit-glass thumb</b> <span>(A1) — the baseline grown up. Safe, unmistakably native.</span></li>
+          <li><b>Sky / sun-track toggle</b> <span>(B3 / B-family) — a glassy sun slides horizon→noon; the metaphor IS the control.</span></li>
+        </ol>
+      </div>
+      <div class="card note">
+        <h3>The key insight</h3>
+        <p>macOS's own <b>Appearance → Auto</b> already ships this exact either-or — "follow the sun" vs "stay put" — as three
+        preview <b>tiles</b>, and ties Auto to sunset/sunrise.</p>
+        <p>So the <b>tile-as-mini-scene</b> idiom (Family C) is both maximally <b>native</b> and maximally <b>on-theme</b>.
+        Selection moment to aim for: a matched-geometry slide + a Liquid-Glass ember bloom on the warm ease. Avoid Dribbble
+        clichés (stars, clouds, ticking clock hands).</p>
+      </div>
+    </div>
+
+    <nav class="toc">
+      <div class="toc-grid">
+        <div class="toc-col">
+          <a class="fam-link" href="#famA">Family A</a>
+          <p class="fam-kind">Native segmented &amp; switch · safest</p>
+          <ul>
+            <li><b>A1</b> Sliding ember</li>
+            <li><b>A2</b> Sun switch</li>
+            <li><b>A3</b> Living glyph</li>
+            <li><b>A4</b> Settings popover</li>
+            <li><b>A5</b> Horizon track</li>
+          </ul>
+        </div>
+        <div class="toc-col">
+          <a class="fam-link" href="#famC">Family C</a>
+          <p class="fam-kind">Choice cards · strongest all-rounder</p>
+          <ul>
+            <li><b>C1</b> Appearance tiles</li>
+            <li><b>C2</b> Sheened pick</li>
+            <li><b>C3</b> Compact duo</li>
+            <li><b>C4</b> Live preview tiles</li>
+            <li><b>C5</b> Horizon expand</li>
+          </ul>
+        </div>
+        <div class="toc-col">
+          <a class="fam-link" href="#famB">Family B</a>
+          <p class="fam-kind">Sky &amp; horizon · on-theme</p>
+          <ul>
+            <li><b>B1</b> Horizon panel</li>
+            <li><b>B2</b> Sun's arc</li>
+            <li><b>B3</b> Dawn / dusk slider</li>
+            <li><b>B4</b> Horizon diptych</li>
+            <li><b>B5</b> Cinematic porthole</li>
+          </ul>
+        </div>
+        <div class="toc-col">
+          <a class="fam-link" href="#famD">Family D</a>
+          <p class="fam-kind">Tactile glass · boldest</p>
+          <ul>
+            <li><b>D1</b> Glass sun switch</li>
+            <li><b>D2</b> Rotary ember dial</li>
+            <li><b>D3</b> Glass rocker</li>
+            <li><b>D4</b> Sun-on-a-track</li>
+            <li><b>D5</b> Horizon crank</li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <p class="howto">Each family loads in its own live frame below — <b>click any control to toggle it.</b> Keyboard works
+    (<kbd>Tab</kbd> then <kbd>↵</kbd>/<kbd>Space</kbd>/arrows). Full-screen any family via <b>Open ↗</b>. Reduced-motion is
+    honored. Frames auto-size; if one looks clipped, reload.</p>
+  </header>
+
+  <!-- ============ BASELINE ============ -->
+  <div class="section-head">
+    <span class="n">00</span>
+    <h2>Baseline — what ships today</h2>
+    <p>The current control: a small ember-gradient segmented pill with a matched-geometry slide. Tasteful, but generic and
+    easy to miss. This is the bar to clear — it's rebuilt faithfully here (live) for side-by-side comparison.</p>
+  </div>
+  <div class="baseline-stage">
+    <div class="baseline-tag">Current · BrandSegmentedControl</div>
+    <div class="bpanel">
+      <div class="pt">Schedule</div>
+      <div class="ps">When Abendrot warms your displays.</div>
+      <div class="seg" id="baseSeg" role="group" aria-label="Schedule mode">
+        <span class="thumb" id="baseThumb"></span>
+        <button type="button" aria-pressed="true">Sunset</button>
+        <button type="button" aria-pressed="false">Always on</button>
+      </div>
+      <p class="pd">Sunset warms automatically around your local sunset — easing in beforehand and holding through the night —
+      using your time zone to estimate sunrise and sunset. No location permission required. Always on keeps warmth on around
+      the clock.</p>
+    </div>
+  </div>
+
+  <!-- ============ FAMILY A ============ -->
+  <div class="section-head" id="famA">
+    <span class="n">A</span>
+    <h2>Native Liquid Glass — segmented &amp; switch</h2>
+    <p>The idioms a Mac user already trusts — the segmented control and the switch — rendered in larger, lit Liquid Glass.
+    The lowest-risk path: feels native first, expressive second.</p>
+    <span class="fam-char">Safest · most native</span>
+  </div>
+  <div class="frame">
+    <div class="frame-bar"><span class="dot"></span><span class="lbl">Family A · 5 concepts</span>
+      <a class="open" href="family-a-segmented.html" target="_blank" rel="noopener">Open ↗</a></div>
+    <iframe src="family-a-segmented.html" title="Family A — segmented & switch" style="height:2955px" loading="lazy"></iframe>
+  </div>
+
+  <!-- ============ FAMILY C ============ -->
+  <div class="section-head" id="famC">
+    <span class="n">C</span>
+    <h2>Choice cards — two glass tiles</h2>
+    <p>Present the either-or as two large, premium glass cards you deliberately pick between — exactly how macOS shows
+    Light/Dark/Auto appearance. Bigger, more legible, <i>shows</i> the choice. Research's strongest all-rounder.</p>
+    <span class="fam-char">Strongest all-rounder</span>
+  </div>
+  <div class="frame">
+    <div class="frame-bar"><span class="dot"></span><span class="lbl">Family C · 5 concepts</span>
+      <a class="open" href="family-c-cards.html" target="_blank" rel="noopener">Open ↗</a></div>
+    <iframe src="family-c-cards.html" title="Family C — choice cards" style="height:2840px" loading="lazy"></iframe>
+  </div>
+
+  <!-- ============ FAMILY B ============ -->
+  <div class="section-head" id="famB">
+    <span class="n">B</span>
+    <h2>Sky &amp; horizon — the metaphor is the control</h2>
+    <p>The control becomes a little sky: a sun that dips to the horizon (Sunset) vs. one that holds high and steady
+    (Always on), rendered behind translucent glass so it stays elegant, not a toy. On-theme delight.</p>
+    <span class="fam-char">On-theme · expressive</span>
+  </div>
+  <div class="frame">
+    <div class="frame-bar"><span class="dot"></span><span class="lbl">Family B · 5 concepts</span>
+      <a class="open" href="family-b-horizon.html" target="_blank" rel="noopener">Open ↗</a></div>
+    <iframe src="family-b-horizon.html" title="Family B — sky & horizon" style="height:2470px" loading="lazy"></iframe>
+  </div>
+
+  <!-- ============ FAMILY D ============ -->
+  <div class="section-head" id="famD">
+    <span class="n">D</span>
+    <h2>Tactile glass mechanisms — the showpiece</h2>
+    <p>A single satisfying, physical-feeling control: a chunky glass switch, knob, dial, or sun-on-a-track that snaps between
+    states with springy motion. The most distinctive — still glass, so it stays Apple, not kitsch.</p>
+    <span class="fam-char">Boldest · most distinctive</span>
+  </div>
+  <div class="frame">
+    <div class="frame-bar"><span class="dot"></span><span class="lbl">Family D · 5 concepts</span>
+      <a class="open" href="family-d-tactile.html" target="_blank" rel="noopener">Open ↗</a></div>
+    <iframe src="family-d-tactile.html" title="Family D — tactile glass mechanisms" style="height:2332px" loading="lazy"></iframe>
+  </div>
+
+  <!-- ============ MOTION NOTES ============ -->
+  <div class="section-head">
+    <span class="n">★</span>
+    <h2>Motion &amp; finish notes</h2>
+    <p>A quick pass through the <i>design-motion-principles</i> lenses (Emil Kowalski · timing/easing/naturalness; Jakub
+    Krehel · interaction feedback; Jhey Tompkins · creative craft) — things to sanity-check before we commit.</p>
+  </div>
+  <div class="notes">
+    <h3>Flags &amp; feel-checks</h3>
+    <ul>
+      <li><span class="lens">Emil ·</span> <b>A3 "Living glyph"</b> runs a slow 14s infinite sun rotation while "Always on"
+      is selected. Ambient continuous motion is usually a smell — it's slow and reads as "holds steady," and it's killed under
+      reduced-motion, but consider swapping for a one-shot bloom-then-settle.</li>
+      <li><span class="lens">Jakub ·</span> <b>B5 "Cinematic porthole"</b> and <b>D4/D5</b> drag the sun with pointer events +
+      rAF easing. Logic is verified headlessly, but the <i>drag feel</i> (momentum, snap-to-nearer-end) needs a real
+      hands-on check — that's where these win or lose.</li>
+      <li><span class="lens">Emil ·</span> Selection should resolve in <b>~140ms on the warm ease</b> (the app's signature).
+      Watch that the bolder concepts (B/D) don't over-animate — the choice must feel <i>instant and certain</i>, with the
+      delight as garnish, not a gate.</li>
+      <li><span class="lens">Jhey ·</span> The Liquid-Glass <b>ember bloom at the touch point</b> on selection is the
+      signature moment worth standardizing across whichever direction wins.</li>
+      <li><span class="lens">All ·</span> Every concept keeps selected text as dark <b>--indigo</b> on the gold fill (contrast
+      verified), real radio/switch/slider semantics, focus rings, and a reduced-motion path. The native floor is solid.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p><b>Files</b> · <code>brand/explorations/schedule-toggle/</code> — <code>family-a-segmented.html</code>,
+    <code>family-b-horizon.html</code>, <code>family-c-cards.html</code>, <code>family-d-tactile.html</code>,
+    <code>inspiration.md</code> (full research brief), <code>_SPEC.md</code> (shared build contract).</p>
+    <p><b>Next</b> · Mark the concepts worth pursuing (or mix-and-match — e.g. C's tile layout with A1's slide, or B3's sky
+    skin on a native switch). The chosen direction gets refined and ported to SwiftUI (<code>ModeControl.swift</code>).
+    Everything here is gradients + shapes + springs, so it rebuilds natively with no raster assets.</p>
+  </footer>
+</div>
+
+<script>
+  // Auto-size each family iframe from the height it posts (works regardless of file:// origin).
+  addEventListener('message', function(e){
+    var d = e.data; if(!d || d.type!=='iframeHeight' || !d.name) return;
+    var f = Array.prototype.find.call(document.querySelectorAll('iframe'), function(fr){
+      return fr.getAttribute('src') === d.name || fr.getAttribute('src').split('/').pop() === d.name;
+    });
+    if(f && d.h){ var nh = d.h + 'px'; if(f.style.height !== nh) f.style.height = nh; }
+  });
+
+  // Baseline control — faithful rebuild of the shipping segmented slide.
+  (function(){
+    var seg = document.getElementById('baseSeg');
+    var thumb = document.getElementById('baseThumb');
+    var btns = seg.querySelectorAll('button');
+    function place(){
+      var sel = seg.querySelector('button[aria-pressed="true"]') || btns[0];
+      thumb.style.width = sel.offsetWidth + 'px';
+      thumb.style.transform = 'translateX(' + (sel.offsetLeft - 3) + 'px)';
+    }
+    btns.forEach(function(b){
+      b.addEventListener('click', function(){
+        btns.forEach(function(x){ x.setAttribute('aria-pressed', x===b ? 'true':'false'); });
+        place();
+      });
+    });
+    addEventListener('load', place); addEventListener('resize', place); setTimeout(place, 50);
+  })();
+</script>
+</body>
+</html>

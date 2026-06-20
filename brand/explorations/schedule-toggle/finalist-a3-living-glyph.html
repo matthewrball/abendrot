@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abendrot · Schedule Toggle — Finalist A3 · Living Glyph</title>
+<style>
+:root{
+  /* Accent ramp (golden sun core → deep ember) */
+  --accent:#FD9228; --accent-hl:#FFC061; --accent-deep:#C2310A; --accent-rim:#FFE0B8;
+  --accent-press:#E2740F; --ink-on-cream:#9C4310;
+  /* Twilight grounds (warm near-blacks — NEVER pure #000) */
+  --indigo:#160A12; --plum:#221019; --twilight:#341320; --twilight-2:#45192A;
+  /* Text (warm off-white, never #fff) */
+  --text:#F3EADF; --muted:rgba(243,234,223,.60); --faint:rgba(243,234,223,.38); --cream:#F7ECD9;
+  /* Lines / dividers */
+  --line:rgba(255,240,230,.10); --line-strong:rgba(255,240,230,.16);
+  /* RESERVED — Reveal-True-Color veil only; do not reuse for chrome */
+  --reveal:#FFFFFF;
+  /* Sunset gradients */
+  --sunset:linear-gradient(180deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%); /* control fill */
+  --sunset-h:linear-gradient(90deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --sky:linear-gradient(180deg,#160A12 0%,#2A0F16 34%,#6A100F 60%,#C2310A 80%,#FB7C0E 92%,#FD9228 100%); /* the icon's sky→sun ramp */
+  /* Glass + glow (liquid-glass recipe) */
+  --glass-tint:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+  --glass-inset:inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 0 0 .5px rgba(255,255,255,.22);
+  --glow-accent:0 0 24px -6px rgba(253,146,40,.9);
+  --glow-soft:0 0 36px -10px rgba(253,146,40,.7);
+  /* Motion — the brand's signature warm ease */
+  --ease-warm:cubic-bezier(.22,.61,.36,1); --ease-standard:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.11s; --dur-base:.14s; --dur-reveal:.22s;
+  /* Radius */
+  --r-card:22px; --r-control:12px; --r-pill:999px;
+}
+
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+  background:
+    radial-gradient(900px 520px at 80% -14%, rgba(253,146,40,.10), transparent 60%),
+    linear-gradient(168deg,#2A1119 0%, var(--plum) 46%, var(--indigo) 100%);
+  background-attachment:fixed; min-height:100vh; padding:34px 0 64px;
+}
+/* warm keyboard focus ring (mirror the shipping app) */
+:focus-visible{outline:3px solid var(--accent-hl); outline-offset:3px; border-radius:8px;}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important;} }
+
+/* ── shared chrome (from spec, verbatim) ───────────────────────────── */
+.wrap{max-width:920px;margin:0 auto;padding:0 28px;}
+.hd{max-width:920px;margin:0 auto 26px;padding:0 28px;}
+.hd h1{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-.02em;}
+.hd p{margin:0;color:var(--muted);font-size:13px;}
+.concept{margin:0 0 30px; padding:22px; border:1px solid var(--line); border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.018), rgba(0,0,0,.06));}
+.ctag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-hl);
+  margin-bottom:16px;}
+.panel{max-width:520px;}
+.ptitle{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:3px;}
+.psub{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.pdesc{color:var(--muted);font-size:12.5px;line-height:1.55;margin:16px 0 0;}
+.cnote{margin-top:16px;font-size:12px;color:var(--faint);font-style:italic;}
+/* page title + per-family heading you add at top of <body> */
+.fam{max-width:920px;margin:30px auto 18px;padding:0 28px;}
+.fam h2{font-size:15px;font-weight:600;margin:0;color:var(--text);}
+.fam p{margin:4px 0 0;color:var(--muted);font-size:12.5px;max-width:70ch;}
+
+/* ── liquid-glass helpers (from spec, verbatim) ────────────────────── */
+.glass{
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+}
+.frost{
+  background:linear-gradient(150deg,rgba(58,21,33,.80),rgba(36,16,25,.90));
+  -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.45);
+}
+.sheen::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.05) 40%,transparent 70%);
+  mix-blend-mode:soft-light;}
+
+/* reset for native-button elements used as segments */
+button{font-family:inherit;color:inherit;border:0;background:none;padding:0;margin:0;cursor:pointer;}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FINALIST A3 · LIVING GLYPH
+   A premium macOS-Tahoe Liquid-Glass segmented control whose chosen
+   segment comes alive — one-shot, then HOLDS. No ambient looping.
+
+   Shared finalist tokens (tuned bigger + more finished than the gallery A3)
+   ═══════════════════════════════════════════════════════════════════ */
+.fa3{
+  /* selection chrome resolves fast on the warm ease (~140ms);
+     glyph flourish is a separate one-shot that settles (set per-glyph) */
+  --sel-ease:var(--ease-warm);
+  --sel-dur:.16s;
+}
+
+/* The control shell — clear liquid glass track, generous + crisp */
+.fa3 .grp{
+  position:relative; display:grid; grid-template-columns:1fr 1fr; gap:8px;
+  width:100%; max-width:480px; padding:8px; border-radius:22px;
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(18px) saturate(190%); backdrop-filter:blur(18px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 14px 36px rgba(0,0,0,.38);
+  isolation:isolate;
+}
+
+/* Each segment */
+.fa3 .seg{
+  position:relative; overflow:hidden;
+  display:flex; flex-direction:column; align-items:center; gap:11px;
+  padding:20px 14px 16px; border-radius:16px; color:var(--muted);
+  transition:color var(--dur-base) var(--ease-standard),
+             background var(--dur-reveal) var(--ease-standard),
+             box-shadow var(--dur-reveal) var(--ease-standard),
+             transform var(--dur-fast) var(--ease-warm);
+}
+.fa3 .seg .stage{position:relative; width:46px; height:46px; flex:none;}
+.fa3 .seg .stage svg{display:block; width:46px; height:46px; overflow:visible;}
+.fa3 .seg .lab{font-size:14.5px; font-weight:600; letter-spacing:-.01em; line-height:1;
+  transition:font-weight var(--dur-base) var(--ease-standard);}
+.fa3 .seg .sub{font-size:11px; line-height:1; color:inherit; opacity:.72; font-weight:500;}
+
+/* Hover (unselected) — gentle glass lift */
+.fa3 .seg:not([aria-pressed="true"]):hover{color:var(--text); background:rgba(255,255,255,.055);}
+.fa3 .seg:not([aria-pressed="true"]):hover .stage{transform:translateY(-1px);}
+.fa3 .seg .stage{transition:transform var(--dur-base) var(--ease-warm);}
+.fa3 .seg:active{transform:scale(.985);}
+
+/* SELECTED — lit glass: sunset fill + specular sheen + hairline rim + soft ember glow */
+.fa3 .seg[aria-pressed="true"]{
+  color:var(--indigo);
+  background:var(--sunset);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.48),
+    inset 0 0 0 .5px rgba(255,255,255,.30),   /* hairline rim */
+    0 2px 8px rgba(194,49,10,.42),
+    var(--glow-soft);                          /* soft ember glow */
+}
+.fa3 .seg[aria-pressed="true"] .lab{font-weight:700;}
+/* specular top sheen — reads as wet glass, not flat paint */
+.fa3 .seg[aria-pressed="true"]::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.36) 0%,rgba(255,255,255,.06) 42%,transparent 72%);
+  mix-blend-mode:soft-light;
+}
+
+/* ── GLYPH MOTION — one-shot flourishes that SETTLE (no infinite loops) ──
+   The .bloom class is toggled by JS on the *newly selected* segment so the
+   flourish re-fires on each pick and plays exactly once (animation-fill:both
+   holds the resolved frame). Resting selected/idle states are static. */
+
+/* Sunset glyph: sun disc + horizon lines (shared horizon idea, drawn here) */
+.fa3 .g-sunset .sun-disc{transform-origin:23px 19px;}
+.fa3 .g-sunset .ray-s{transform-origin:23px 19px; opacity:0;}
+.fa3 .g-sunset .horizon{stroke-dasharray:1;} /* overridden per-variation if needed */
+
+/* Resting SELECTED Sunset (no animation pending) → disc has dipped, sits low + warm */
+.fa3 .seg[data-glyph="sunset"][aria-pressed="true"] .sun-disc{transform:translateY(11px);}
+.fa3 .seg[data-glyph="sunset"][aria-pressed="true"] .ray-s{opacity:.5;}
+/* unselected sunset → disc rests high (full sun, pre-dip) */
+.fa3 .seg[data-glyph="sunset"]:not([aria-pressed="true"]) .sun-disc{transform:none;}
+
+/* One-shot: the dip. disc slides below the horizon, glow eases in, faint dusk rays settle */
+.fa3 .seg[data-glyph="sunset"].bloom .sun-disc{animation:fa3-dip .46s var(--ease-warm) both;}
+.fa3 .seg[data-glyph="sunset"].bloom .ray-s{animation:fa3-rayfade .42s var(--ease-standard) both;}
+@keyframes fa3-dip{
+  0%{transform:translateY(-3px);}
+  60%{transform:translateY(12.5px);}
+  100%{transform:translateY(11px);}            /* settles, holds */
+}
+@keyframes fa3-rayfade{ from{opacity:0;} to{opacity:.5;} }
+
+/* Always-on glyph: sun disc + 8 rays */
+.fa3 .g-always .sun-core{transform-origin:23px 23px;}
+.fa3 .g-always .ray{transform-origin:23px 23px;}
+/* Resting SELECTED Always-on → full bloomed sun, holding still */
+.fa3 .seg[data-glyph="always"][aria-pressed="true"] .ray{opacity:1; transform:none;}
+.fa3 .seg[data-glyph="always"][aria-pressed="true"] .sun-core{transform:none;}
+/* unselected always-on → rays tucked in, dim (latent) */
+.fa3 .seg[data-glyph="always"]:not([aria-pressed="true"]) .ray{opacity:.4; transform:scale(.62);}
+
+/* One-shot bloom: rays scale 0.6→1 + fade in with a subtle stagger; core gives one gentle settle pulse — then HOLDS */
+.fa3 .seg[data-glyph="always"].bloom .ray{animation:fa3-bloom .4s var(--ease-warm) both;}
+.fa3 .seg[data-glyph="always"].bloom .sun-core{animation:fa3-settle .44s var(--ease-warm) both;}
+/* stagger the eight rays so warmth "blooms" outward, then settles */
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(1){animation-delay:.00s}
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(2){animation-delay:.03s}
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(3){animation-delay:.06s}
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(4){animation-delay:.09s}
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(5){animation-delay:.04s}
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(6){animation-delay:.07s}
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(7){animation-delay:.05s}
+.fa3 .seg[data-glyph="always"].bloom .ray:nth-child(8){animation-delay:.08s}
+@keyframes fa3-bloom{
+  0%{opacity:.25; transform:scale(.6);}
+  70%{opacity:1; transform:scale(1.06);}
+  100%{opacity:1; transform:scale(1);}         /* settles, holds — warmth holds steady */
+}
+@keyframes fa3-settle{
+  0%{transform:scale(.86);}
+  55%{transform:scale(1.07);}
+  100%{transform:scale(1);}                     /* single gentle settle, no spin */
+}
+.fa3 .seg:active .stage{transform:scale(.92); transition:transform var(--dur-fast) var(--ease-warm);}
+
+/* Reduced motion: snap to final state, no glyph animation (belt-and-braces;
+   global rule already nukes animation, these keep resting frames correct) */
+@media (prefers-reduced-motion: reduce){
+  .fa3 .seg.bloom .sun-disc,.fa3 .seg.bloom .ray-s,
+  .fa3 .seg.bloom .ray,.fa3 .seg.bloom .sun-core{animation:none!important;}
+}
+
+/* ── VARIATION-SPECIFIC OVERRIDES ──────────────────────────────────── */
+
+/* A3.2 — Rays draw-in (stroke dash) instead of scale-in; icon-above-label */
+.fa3-2 .g-always .ray{opacity:1;}                                  /* dash hides them, not opacity */
+.fa3-2 .seg[data-glyph="always"]:not([aria-pressed="true"]) .ray{opacity:1; transform:none;
+  stroke-dashoffset:9;}
+.fa3-2 .seg[data-glyph="always"][aria-pressed="true"] .ray{stroke-dashoffset:0;}
+.fa3-2 .g-always .ray{stroke-dasharray:9;}
+.fa3-2 .seg[data-glyph="always"].bloom .ray{animation:fa3-draw .42s var(--ease-warm) both;}
+@keyframes fa3-draw{ from{stroke-dashoffset:9;} to{stroke-dashoffset:0;} }
+
+/* A3.3 — Icon BESIDE label (horizontal segments), slightly tighter height */
+.fa3-3 .seg{flex-direction:row; gap:13px; padding:17px 16px; justify-content:center;}
+.fa3-3 .seg .txt{display:flex; flex-direction:column; gap:3px; align-items:flex-start;}
+.fa3-3 .seg .stage{width:38px; height:38px;}
+.fa3-3 .seg .stage svg{width:38px; height:38px;}
+
+/* A3.4 — Denser / LARGER showcase size: bigger glyphs, more air, sub-labels */
+.fa3-4 .grp{max-width:560px; gap:10px; padding:10px; border-radius:26px;}
+.fa3-4 .seg{padding:26px 16px 20px; gap:13px; border-radius:20px;}
+.fa3-4 .seg .stage{width:58px; height:58px;}
+.fa3-4 .seg .stage svg{width:58px; height:58px;}
+.fa3-4 .seg .lab{font-size:16px;}
+</style>
+</head>
+<body>
+
+<div class="fam">
+  <h2>Finalist A3 — Living Glyph</h2>
+  <p>A premium macOS-Tahoe Liquid-Glass segmented control: pick <em>Sunset</em> and the sun dips below a
+  horizon; pick <em>Always on</em> and the rays bloom out and <em>settle</em> — warmth holding steady. The
+  flourish is a one-shot that resolves and holds (no perpetual motion). Lead version first, then three
+  micro-variations exploring glyph treatment, layout, and size.</p>
+</div>
+
+<div class="hd">
+  <h1>Settings</h1>
+  <p>Schedule · in-context mocks (each control sits in the real Settings → Schedule layout)</p>
+</div>
+
+<div class="wrap">
+
+  <!-- ════════════════════════ A3.1 — LEAD ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A3.1 · Living glyph — rays scale-in (lead)</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="fa3 fa3-1">
+        <div class="grp" role="radiogroup" aria-label="Schedule" data-sel="0">
+          <button type="button" class="seg" role="radio" aria-pressed="true" data-i="0" data-glyph="sunset">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-sunset">
+                <defs><clipPath id="clipS1"><rect x="0" y="0" width="46" height="31"/></clipPath></defs>
+                <!-- faint dusk rays above the dipping sun -->
+                <g class="ray-s" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                  <path d="M23 3.5v3.6M11.6 8.4l2.2 2.2M34.4 8.4l-2.2 2.2"/>
+                </g>
+                <g clip-path="url(#clipS1)">
+                  <circle class="sun-disc" cx="23" cy="19" r="8.4" fill="currentColor"/>
+                </g>
+                <!-- shared horizon line (+ a fainter second line for ground) -->
+                <path class="horizon" d="M5 31h36" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                <path d="M11 37h24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".42"/>
+              </svg>
+            </span>
+            <span class="lab">Sunset</span>
+          </button>
+          <button type="button" class="seg" role="radio" aria-pressed="false" data-i="1" data-glyph="always">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-always">
+                <g stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+                  <path class="ray" d="M23 4v4.6"/>
+                  <path class="ray" d="M23 37.4V42"/>
+                  <path class="ray" d="M4 23h4.6"/>
+                  <path class="ray" d="M37.4 23H42"/>
+                  <path class="ray" d="M9.6 9.6l3.25 3.25"/>
+                  <path class="ray" d="M33.15 33.15 36.4 36.4"/>
+                  <path class="ray" d="M36.4 9.6l-3.25 3.25"/>
+                  <path class="ray" d="M12.85 33.15 9.6 36.4"/>
+                </g>
+                <circle class="sun-core" cx="23" cy="23" r="8" fill="currentColor"/>
+              </svg>
+            </span>
+            <span class="lab">Always on</span>
+          </button>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the trusted segmented control, larger and finished in lit Liquid Glass — choose Sunset and the sun dips below a horizon; choose Always on and the rays bloom out and settle, warmth holding steady (a one-shot, never a loop).</div>
+  </section>
+
+  <!-- ════════════════════════ A3.2 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A3.2 · Rays draw-in along their length</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="fa3 fa3-2">
+        <div class="grp" role="radiogroup" aria-label="Schedule" data-sel="0">
+          <button type="button" class="seg" role="radio" aria-pressed="true" data-i="0" data-glyph="sunset">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-sunset">
+                <defs><clipPath id="clipS2"><rect x="0" y="0" width="46" height="31"/></clipPath></defs>
+                <g class="ray-s" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                  <path d="M23 3.5v3.6M11.6 8.4l2.2 2.2M34.4 8.4l-2.2 2.2"/>
+                </g>
+                <g clip-path="url(#clipS2)">
+                  <circle class="sun-disc" cx="23" cy="19" r="8.4" fill="currentColor"/>
+                </g>
+                <path class="horizon" d="M5 31h36" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                <path d="M11 37h24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".42"/>
+              </svg>
+            </span>
+            <span class="lab">Sunset</span>
+          </button>
+          <button type="button" class="seg" role="radio" aria-pressed="false" data-i="1" data-glyph="always">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-always">
+                <g stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+                  <path class="ray" d="M23 4v4.6"/>
+                  <path class="ray" d="M23 37.4V42"/>
+                  <path class="ray" d="M4 23h4.6"/>
+                  <path class="ray" d="M37.4 23H42"/>
+                  <path class="ray" d="M9.6 9.6l3.25 3.25"/>
+                  <path class="ray" d="M33.15 33.15 36.4 36.4"/>
+                  <path class="ray" d="M36.4 9.6l-3.25 3.25"/>
+                  <path class="ray" d="M12.85 33.15 9.6 36.4"/>
+                </g>
+                <circle class="sun-core" cx="23" cy="23" r="8" fill="currentColor"/>
+              </svg>
+            </span>
+            <span class="lab">Always on</span>
+          </button>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: same control, but the Always-on rays <em>draw</em> outward along their length (stroke-dash) instead of scaling — a crisper, more deliberate bloom that still settles and holds.</div>
+  </section>
+
+  <!-- ════════════════════════ A3.3 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A3.3 · Icon beside label (horizontal)</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="fa3 fa3-3">
+        <div class="grp" role="radiogroup" aria-label="Schedule" data-sel="0">
+          <button type="button" class="seg" role="radio" aria-pressed="true" data-i="0" data-glyph="sunset">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-sunset">
+                <defs><clipPath id="clipS3"><rect x="0" y="0" width="46" height="31"/></clipPath></defs>
+                <g class="ray-s" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                  <path d="M23 3.5v3.6M11.6 8.4l2.2 2.2M34.4 8.4l-2.2 2.2"/>
+                </g>
+                <g clip-path="url(#clipS3)">
+                  <circle class="sun-disc" cx="23" cy="19" r="8.4" fill="currentColor"/>
+                </g>
+                <path class="horizon" d="M5 31h36" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                <path d="M11 37h24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".42"/>
+              </svg>
+            </span>
+            <span class="txt"><span class="lab">Sunset</span><span class="sub">eases in at dusk</span></span>
+          </button>
+          <button type="button" class="seg" role="radio" aria-pressed="false" data-i="1" data-glyph="always">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-always">
+                <g stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+                  <path class="ray" d="M23 4v4.6"/>
+                  <path class="ray" d="M23 37.4V42"/>
+                  <path class="ray" d="M4 23h4.6"/>
+                  <path class="ray" d="M37.4 23H42"/>
+                  <path class="ray" d="M9.6 9.6l3.25 3.25"/>
+                  <path class="ray" d="M33.15 33.15 36.4 36.4"/>
+                  <path class="ray" d="M36.4 9.6l-3.25 3.25"/>
+                  <path class="ray" d="M12.85 33.15 9.6 36.4"/>
+                </g>
+                <circle class="sun-core" cx="23" cy="23" r="8" fill="currentColor"/>
+              </svg>
+            </span>
+            <span class="txt"><span class="lab">Always on</span><span class="sub">steady, all day</span></span>
+          </button>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the same living glyph laid out icon-beside-label with a small sub-line, for a more descriptive, System-Settings-row feel — same one-shot bloom that settles.</div>
+  </section>
+
+  <!-- ════════════════════════ A3.4 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A3.4 · Showcase size — larger glyphs</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="fa3 fa3-4">
+        <div class="grp" role="radiogroup" aria-label="Schedule" data-sel="0">
+          <button type="button" class="seg" role="radio" aria-pressed="true" data-i="0" data-glyph="sunset">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-sunset">
+                <defs><clipPath id="clipS4"><rect x="0" y="0" width="46" height="31"/></clipPath></defs>
+                <g class="ray-s" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                  <path d="M23 3.5v3.6M11.6 8.4l2.2 2.2M34.4 8.4l-2.2 2.2"/>
+                </g>
+                <g clip-path="url(#clipS4)">
+                  <circle class="sun-disc" cx="23" cy="19" r="8.4" fill="currentColor"/>
+                </g>
+                <path class="horizon" d="M5 31h36" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                <path d="M11 37h24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".42"/>
+              </svg>
+            </span>
+            <span class="lab">Sunset</span>
+          </button>
+          <button type="button" class="seg" role="radio" aria-pressed="false" data-i="1" data-glyph="always">
+            <span class="stage" aria-hidden="true">
+              <svg viewBox="0 0 46 46" fill="none" class="g-always">
+                <g stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+                  <path class="ray" d="M23 4v4.6"/>
+                  <path class="ray" d="M23 37.4V42"/>
+                  <path class="ray" d="M4 23h4.6"/>
+                  <path class="ray" d="M37.4 23H42"/>
+                  <path class="ray" d="M9.6 9.6l3.25 3.25"/>
+                  <path class="ray" d="M33.15 33.15 36.4 36.4"/>
+                  <path class="ray" d="M36.4 9.6l-3.25 3.25"/>
+                  <path class="ray" d="M12.85 33.15 9.6 36.4"/>
+                </g>
+                <circle class="sun-core" cx="23" cy="23" r="8" fill="currentColor"/>
+              </svg>
+            </span>
+            <span class="lab">Always on</span>
+          </button>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the lead direction scaled up into a showcase-sized control — bigger glyphs and more generous padding for when the Schedule choice is the hero of the pane.</div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── Living-glyph radiogroups (A3.1–A3.4) ──────────────────────────
+     Real radiogroup semantics + full keyboard. On selection we toggle a
+     one-shot `.bloom` class on the newly chosen segment so the flourish
+     re-fires each pick and plays exactly once, then holds. */
+  function wire(root){
+    var segs = Array.prototype.slice.call(root.querySelectorAll('[role="radio"]'));
+
+    function fireBloom(seg){
+      if(reduce) return;                 /* reduced motion: no glyph animation */
+      seg.classList.remove('bloom');
+      /* force reflow so re-selecting the same control restarts the one-shot */
+      void seg.offsetWidth;
+      seg.classList.add('bloom');
+    }
+
+    function select(i, animate){
+      root.setAttribute('data-sel', String(i));
+      segs.forEach(function(s, k){
+        var on = k===i;
+        s.setAttribute('aria-pressed', on ? 'true':'false');
+        s.tabIndex = on ? 0 : -1;
+        if(!on) s.classList.remove('bloom');
+      });
+      if(animate) fireBloom(segs[i]);
+    }
+
+    segs.forEach(function(s, i){
+      s.tabIndex = s.getAttribute('aria-pressed')==='true' ? 0 : -1;
+      s.addEventListener('click', function(){ select(i, true); });
+      s.addEventListener('keydown', function(e){
+        var n=null;
+        if(e.key==='ArrowRight'||e.key==='ArrowDown') n=(i+1)%segs.length;
+        else if(e.key==='ArrowLeft'||e.key==='ArrowUp') n=(i-1+segs.length)%segs.length;
+        else if(e.key===' '||e.key==='Enter'){ e.preventDefault(); select(i, true); return; }
+        if(n!==null){ e.preventDefault(); select(n, true); segs[n].focus(); }
+      });
+    });
+  }
+  document.querySelectorAll('.fa3 .grp').forEach(wire);
+})();
+</script>
+
+<script>
+  function reportH(){ try{ var b=document.body, kids=b.children, max=0; for(var i=0;i<kids.length;i++){ var el=kids[i]; if(el.tagName==='SCRIPT'||el.tagName==='STYLE') continue; var r=el.getBoundingClientRect(), mb=parseFloat(getComputedStyle(el).marginBottom)||0, bottom=r.bottom+window.scrollY+mb; if(bottom>max) max=bottom; } var pad=parseFloat(getComputedStyle(b).paddingBottom)||0; parent.postMessage({type:'iframeHeight', name:location.pathname.split('/').pop(), h:Math.ceil(max+pad)}, '*'); }catch(e){} }
+  addEventListener('load', reportH); addEventListener('resize', reportH);
+  if (window.ResizeObserver) new ResizeObserver(reportH).observe(document.body);
+  setTimeout(reportH, 400);
+</script>
+</body>
+</html>

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abendrot · Schedule Toggle — Family A (Native Liquid Glass)</title>
+<style>
+:root{
+  /* Accent ramp (golden sun core → deep ember) */
+  --accent:#FD9228; --accent-hl:#FFC061; --accent-deep:#C2310A; --accent-rim:#FFE0B8;
+  --accent-press:#E2740F; --ink-on-cream:#9C4310;
+  /* Twilight grounds (warm near-blacks — NEVER pure #000) */
+  --indigo:#160A12; --plum:#221019; --twilight:#341320; --twilight-2:#45192A;
+  /* Text (warm off-white, never #fff) */
+  --text:#F3EADF; --muted:rgba(243,234,223,.60); --faint:rgba(243,234,223,.38); --cream:#F7ECD9;
+  /* Lines / dividers */
+  --line:rgba(255,240,230,.10); --line-strong:rgba(255,240,230,.16);
+  /* RESERVED — Reveal-True-Color veil only; do not reuse for chrome */
+  --reveal:#FFFFFF;
+  /* Sunset gradients */
+  --sunset:linear-gradient(180deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%); /* control fill */
+  --sunset-h:linear-gradient(90deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --sky:linear-gradient(180deg,#160A12 0%,#2A0F16 34%,#6A100F 60%,#C2310A 80%,#FB7C0E 92%,#FD9228 100%); /* the icon's sky→sun ramp */
+  /* Glass + glow (liquid-glass recipe) */
+  --glass-tint:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+  --glass-inset:inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 0 0 .5px rgba(255,255,255,.22);
+  --glow-accent:0 0 24px -6px rgba(253,146,40,.9);
+  --glow-soft:0 0 36px -10px rgba(253,146,40,.7);
+  /* Motion — the brand's signature warm ease */
+  --ease-warm:cubic-bezier(.22,.61,.36,1); --ease-standard:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.11s; --dur-base:.14s; --dur-reveal:.22s;
+  /* Radius */
+  --r-card:22px; --r-control:12px; --r-pill:999px;
+}
+
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+  background:
+    radial-gradient(900px 520px at 80% -14%, rgba(253,146,40,.10), transparent 60%),
+    linear-gradient(168deg,#2A1119 0%, var(--plum) 46%, var(--indigo) 100%);
+  background-attachment:fixed; min-height:100vh; padding:34px 0 64px;
+}
+/* warm keyboard focus ring (mirror the shipping app) */
+:focus-visible{outline:3px solid var(--accent-hl); outline-offset:3px; border-radius:8px;}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important;} }
+
+/* ── shared chrome (from spec, verbatim) ───────────────────────────── */
+.wrap{max-width:920px;margin:0 auto;padding:0 28px;}
+.hd{max-width:920px;margin:0 auto 26px;padding:0 28px;}
+.hd h1{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-.02em;}
+.hd p{margin:0;color:var(--muted);font-size:13px;}
+.concept{margin:0 0 30px; padding:22px; border:1px solid var(--line); border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.018), rgba(0,0,0,.06));}
+.ctag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-hl);
+  margin-bottom:16px;}
+.panel{max-width:520px;}
+.ptitle{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:3px;}
+.psub{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.pdesc{color:var(--muted);font-size:12.5px;line-height:1.55;margin:16px 0 0;}
+.cnote{margin-top:16px;font-size:12px;color:var(--faint);font-style:italic;}
+/* page title + per-family heading you add at top of <body> */
+.fam{max-width:920px;margin:30px auto 18px;padding:0 28px;}
+.fam h2{font-size:15px;font-weight:600;margin:0;color:var(--text);}
+.fam p{margin:4px 0 0;color:var(--muted);font-size:12.5px;max-width:70ch;}
+
+/* ── liquid-glass helpers (from spec, verbatim) ────────────────────── */
+.glass{
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+}
+.frost{
+  background:linear-gradient(150deg,rgba(58,21,33,.80),rgba(36,16,25,.90));
+  -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.45);
+}
+.sheen::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.05) 40%,transparent 70%);
+  mix-blend-mode:soft-light;}
+
+/* reset for native-button elements used as segments */
+button{font-family:inherit;color:inherit;border:0;background:none;padding:0;margin:0;cursor:pointer;}
+
+/* ═══════════════════════════════════════════════════════════════════
+   A1 · SLIDING EMBER — larger glass segmented control, sliding ember pill
+   ═══════════════════════════════════════════════════════════════════ */
+.a1{
+  position:relative; display:grid; grid-template-columns:1fr 1fr; gap:0;
+  width:100%; max-width:420px; height:60px; padding:5px; border-radius:16px;
+  /* clear glass track */
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 10px 28px rgba(0,0,0,.34);
+  isolation:isolate;
+}
+/* sliding liquid-glass ember pill */
+.a1 .pill{
+  position:absolute; top:5px; left:5px; z-index:0;
+  width:calc(50% - 5px); height:calc(100% - 10px); border-radius:12px;
+  background:var(--sunset);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.45),
+    inset 0 0 0 .5px rgba(255,255,255,.30),
+    0 2px 6px rgba(194,49,10,.45),
+    var(--glow-soft);
+  transition:transform .42s var(--ease-warm), box-shadow var(--dur-base) var(--ease-standard);
+}
+.a1[data-sel="1"] .pill{ transform:translateX(calc(100% + 0px)); }
+/* specular sheen over the pill so it reads as wet glass */
+.a1 .pill::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.40) 0%,rgba(255,255,255,.06) 42%,transparent 72%);
+  mix-blend-mode:soft-light;}
+.a1 .seg{
+  position:relative; z-index:1; display:flex; align-items:center; justify-content:center; gap:9px;
+  border-radius:12px; height:100%; font-size:14px; font-weight:600; color:var(--muted);
+  transition:color var(--dur-base) var(--ease-standard);
+}
+.a1 .seg .ic{width:19px;height:19px;display:block;flex:none;transition:transform var(--dur-base) var(--ease-warm);}
+.a1 .seg[aria-pressed="true"]{color:var(--indigo); font-weight:700;}
+.a1 .seg:not([aria-pressed="true"]):hover{color:var(--text);}
+.a1 .seg:not([aria-pressed="true"]):hover .ic{transform:translateY(-1px);}
+.a1 .seg:active .ic{transform:scale(.9);}
+
+/* ═══════════════════════════════════════════════════════════════════
+   A2 · SUN SWITCH — wide macOS switch; knob is a glowing sun, dusk→steady
+   ═══════════════════════════════════════════════════════════════════ */
+.a2-row{display:flex;align-items:center;gap:18px;width:100%;max-width:460px;}
+.a2-end{display:flex;flex-direction:column;gap:1px;flex:none;width:74px;}
+.a2-end.r{text-align:right;align-items:flex-end;}
+.a2-end .lab{font-size:13px;font-weight:600;color:var(--muted);transition:color var(--dur-base) var(--ease-standard);}
+.a2-end .sub{font-size:10.5px;color:var(--faint);}
+.a2-track{
+  position:relative; flex:1; height:62px; border-radius:999px; padding:5px; cursor:pointer;
+  /* clear glass track with a faint dusk→glow wash to telegraph the journey */
+  background:
+    linear-gradient(90deg, rgba(42,15,22,.34) 0%, rgba(253,146,40,.10) 100%),
+    var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), inset 0 2px 6px rgba(0,0,0,.30), 0 8px 22px rgba(0,0,0,.30);
+  display:flex; align-items:center;
+}
+/* tiny horizon line + end markers inside the track */
+.a2-track .horizon{position:absolute;left:18px;right:18px;top:50%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,224,184,.22),transparent);transform:translateY(-.5px);pointer-events:none;}
+.a2-knob{
+  position:relative; z-index:2; width:52px; height:52px; border-radius:999px;
+  background:radial-gradient(circle at 38% 32%, var(--accent-hl) 0%, var(--accent) 46%, var(--accent-press) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 0 0 .5px rgba(255,255,255,.30),
+    0 3px 8px rgba(0,0,0,.40),
+    var(--glow-accent);
+  transition:transform .44s var(--ease-warm), box-shadow var(--dur-base) var(--ease-standard);
+  display:flex;align-items:center;justify-content:center;
+}
+.a2-knob::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.45),transparent 55%);mix-blend-mode:soft-light;}
+/* sun rays etched on the knob — faint at dusk, bright when steady/always-on */
+.a2-knob .rays{width:52px;height:52px;opacity:.35;transition:opacity var(--dur-reveal) var(--ease-standard), transform .44s var(--ease-warm);}
+.a2[data-sel="1"] .a2-track .a2-knob{ transform:translateX(calc(100% - 0px)); }
+.a2[data-sel="1"] .a2-knob .rays{opacity:.9;transform:rotate(45deg);}
+.a2[data-sel="0"] .a2-end.l .lab{color:var(--accent-hl);}
+.a2[data-sel="1"] .a2-end.r .lab{color:var(--accent-hl);}
+.a2-track:hover .a2-knob{box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 0 0 .5px rgba(255,255,255,.30),0 3px 8px rgba(0,0,0,.40),0 0 28px -4px rgba(253,146,40,1);}
+.a2-track:active .a2-knob{transform:translateX(var(--press-x,0)) scale(.96);}
+.a2[data-sel="1"] .a2-track:active .a2-knob{transform:translateX(calc(100% - 0px)) scale(.96);}
+
+/* ═══════════════════════════════════════════════════════════════════
+   A3 · LIVING GLYPH — segmented control; the selected icon animates
+        (sun sinks to the horizon for Sunset; sun holds + radiates for Always on)
+   ═══════════════════════════════════════════════════════════════════ */
+.a3{
+  position:relative; display:grid; grid-template-columns:1fr 1fr; gap:6px;
+  width:100%; max-width:440px; padding:6px; border-radius:18px;
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 10px 28px rgba(0,0,0,.34);
+}
+.a3 .seg{
+  position:relative; overflow:hidden; display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:16px 10px 13px; border-radius:13px; color:var(--muted);
+  transition:color var(--dur-base) var(--ease-standard), background var(--dur-reveal) var(--ease-standard);
+}
+.a3 .seg .stage{position:relative;width:34px;height:34px;}
+.a3 .seg .lab{font-size:13px;font-weight:600;transition:font-weight var(--dur-base);}
+.a3 .seg:not([aria-pressed="true"]):hover{color:var(--text);background:rgba(255,255,255,.05);}
+/* selected segment wears the sunset fill as lit glass */
+.a3 .seg[aria-pressed="true"]{
+  color:var(--indigo);
+  background:var(--sunset);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 0 0 .5px rgba(255,255,255,.30),0 2px 6px rgba(194,49,10,.40),var(--glow-soft);
+}
+.a3 .seg[aria-pressed="true"] .lab{font-weight:700;}
+.a3 .seg[aria-pressed="true"]::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.05) 40%,transparent 70%);mix-blend-mode:soft-light;}
+/* Sunset glyph parts */
+.a3 .sun-disc{transition:transform .5s var(--ease-warm), opacity .4s var(--ease-standard);}
+.a3 .sun-ray{transform-origin:17px 17px;transition:opacity .35s var(--ease-standard), transform .5s var(--ease-warm);}
+/* sunset seg selected: disc sinks below horizon */
+.a3 [data-glyph="sunset"][aria-pressed="true"] .sun-disc{transform:translateY(9px);}
+/* always-on seg selected: rays bloom + slow steady spin */
+.a3 [data-glyph="always"][aria-pressed="true"] .sun-ray{opacity:1;}
+.a3 [data-glyph="always"][aria-pressed="true"] .sun-group{animation:a3spin 14s linear infinite;transform-origin:17px 17px;}
+@keyframes a3spin{to{transform:rotate(360deg);}}
+.a3 .seg:active .stage{transform:scale(.92);transition:transform var(--dur-fast) var(--ease-warm);}
+
+/* ═══════════════════════════════════════════════════════════════════
+   A4 · SETTINGS POPOVER — native menu-style picker; current row expands to options
+   ═══════════════════════════════════════════════════════════════════ */
+.a4{position:relative;width:100%;max-width:380px;}
+/* the resting "current value" row */
+.a4-current{
+  position:relative; display:flex; align-items:center; gap:12px; width:100%;
+  padding:13px 14px; border-radius:13px; text-align:left; cursor:pointer;
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 8px 22px rgba(0,0,0,.30);
+  transition:box-shadow var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-warm);
+}
+.a4-current:hover{box-shadow:var(--glass-inset), 0 8px 22px rgba(0,0,0,.30), var(--glow-soft);}
+.a4-current:active{transform:scale(.99);}
+.a4-swatch{position:relative;flex:none;width:34px;height:34px;border-radius:9px;background:var(--sunset);overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 0 0 .5px rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;color:var(--indigo);}
+.a4-swatch::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.34),transparent 60%);mix-blend-mode:soft-light;}
+.a4-cur-txt{flex:1;min-width:0;}
+.a4-cur-txt .t{font-size:14px;font-weight:600;color:var(--text);line-height:1.2;}
+.a4-cur-txt .d{font-size:11.5px;color:var(--muted);}
+.a4-chev{flex:none;color:var(--muted);transition:transform var(--dur-reveal) var(--ease-warm);}
+.a4[data-open="true"] .a4-chev{transform:rotate(180deg);}
+/* the popover list */
+.a4-pop{
+  position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:10; padding:6px; border-radius:14px;
+  background:linear-gradient(150deg,rgba(58,21,33,.82),rgba(36,16,25,.92));
+  -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 24px 60px rgba(0,0,0,.55);
+  transform-origin:top center;
+  opacity:0; transform:translateY(-6px) scale(.97); pointer-events:none;
+  transition:opacity var(--dur-reveal) var(--ease-warm), transform var(--dur-reveal) var(--ease-warm);
+}
+.a4[data-open="true"] .a4-pop{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+.a4-opt{
+  position:relative; display:flex; align-items:center; gap:11px; width:100%; padding:11px 12px; border-radius:10px;
+  text-align:left; color:var(--text); transition:background var(--dur-fast) var(--ease-standard);
+}
+.a4-opt:hover{background:rgba(255,255,255,.06);}
+.a4-opt .oic{flex:none;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.06);color:var(--accent-hl);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12);transition:all var(--dur-base) var(--ease-standard);}
+.a4-opt .otx{flex:1;}
+.a4-opt .otx .t{font-size:13.5px;font-weight:600;line-height:1.2;}
+.a4-opt .otx .d{font-size:11px;color:var(--muted);}
+.a4-opt .ok{flex:none;color:var(--accent-hl);opacity:0;transform:scale(.6);transition:opacity var(--dur-base) var(--ease-warm),transform var(--dur-base) var(--ease-warm);}
+.a4-opt[aria-checked="true"] .ok{opacity:1;transform:scale(1);}
+.a4-opt[aria-checked="true"] .oic{background:var(--sunset);color:var(--indigo);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 0 0 .5px rgba(255,255,255,.28),var(--glow-soft);}
+
+/* ═══════════════════════════════════════════════════════════════════
+   A5 · HORIZON TRACK — bolder native take; pill is a living dusk-sky scene
+   ═══════════════════════════════════════════════════════════════════ */
+.a5{
+  position:relative; display:grid; grid-template-columns:1fr 1fr; gap:0;
+  width:100%; max-width:440px; height:74px; padding:5px; border-radius:18px;
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 10px 28px rgba(0,0,0,.34);
+  isolation:isolate;
+}
+.a5 .scene{
+  position:absolute; top:5px; left:5px; z-index:0; overflow:hidden;
+  width:calc(50% - 5px); height:calc(100% - 10px); border-radius:14px;
+  background:var(--sunset);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 0 0 .5px rgba(255,255,255,.30),0 2px 8px rgba(194,49,10,.45),var(--glow-soft);
+  transition:transform .46s var(--ease-warm);
+}
+.a5[data-sel="1"] .scene{transform:translateX(calc(100% + 0px));}
+.a5 .scene .skyfill{position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(180deg,#2A0F16 0%,#6A100F 42%,#C2310A 72%,#FB7C0E 100%);
+  opacity:0;transition:opacity .46s var(--ease-warm);}
+.a5[data-sel="0"] .scene .skyfill{opacity:1;}              /* Sunset selected → dusk sky */
+.a5 .scene .sun{position:absolute;left:50%;width:26px;height:26px;border-radius:999px;margin-left:-13px;
+  background:radial-gradient(circle at 38% 34%,#FFF0D8,var(--accent-hl) 50%,var(--accent) 100%);
+  box-shadow:0 0 14px 2px rgba(255,224,184,.65);
+  transition:top .5s var(--ease-warm), box-shadow .46s var(--ease-warm);}
+.a5[data-sel="0"] .scene .sun{top:34px;box-shadow:0 0 18px 4px rgba(253,146,40,.55);}   /* sun dips toward horizon */
+.a5[data-sel="1"] .scene .sun{top:11px;box-shadow:0 0 22px 5px rgba(255,224,184,.8);}    /* sun rides high, steady */
+.a5 .scene .horizon{position:absolute;left:0;right:0;bottom:0;height:34px;border-radius:0 0 14px 14px;
+  background:linear-gradient(180deg,rgba(22,10,18,0),rgba(22,10,18,.55));opacity:0;transition:opacity .46s var(--ease-warm);}
+.a5[data-sel="0"] .scene .horizon{opacity:1;}
+.a5 .scene::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;
+  background:linear-gradient(180deg,rgba(255,255,255,.30) 0%,rgba(255,255,255,.04) 40%,transparent 70%);mix-blend-mode:soft-light;}
+.a5 .seg{
+  position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  border-radius:14px; height:100%; color:var(--muted);
+  transition:color var(--dur-base) var(--ease-standard);
+}
+.a5 .seg .lab{font-size:14px;font-weight:600;}
+.a5 .seg .sub{font-size:10.5px;color:inherit;opacity:.78;}
+.a5 .seg[aria-pressed="true"]{color:var(--indigo);}
+.a5 .seg[aria-pressed="true"] .lab{font-weight:700;}
+.a5 .seg:not([aria-pressed="true"]):hover{color:var(--text);}
+</style>
+</head>
+<body>
+
+<div class="fam">
+  <h2>Family A — Native Liquid Glass: segmented &amp; switch</h2>
+  <p>Take the idioms a Mac user already trusts — the segmented control and the switch — and render them in
+  larger, beautiful Liquid Glass, so the Sunset / Always-on choice feels native to macOS Tahoe Settings,
+  just elevated. Restrained → bold.</p>
+</div>
+
+<div class="hd">
+  <h1>Settings</h1>
+  <p>Schedule · in-context mocks (each control sits in the real Settings → Schedule layout)</p>
+</div>
+
+<div class="wrap">
+
+  <!-- ════════════════════════ A1 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A1 · Sliding ember</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="a1" role="radiogroup" aria-label="Schedule" data-sel="0">
+        <div class="pill" aria-hidden="true"></div>
+        <button type="button" class="seg" role="radio" aria-pressed="true" data-i="0">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="11" r="4" fill="currentColor"/>
+            <path d="M12 3.5v1.6M5.6 6.1l1.1 1.1M18.4 6.1l-1.1 1.1M3.5 13.2h2M18.5 13.2h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M3.5 18.5h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>Sunset</span>
+        </button>
+        <button type="button" class="seg" role="radio" aria-pressed="false" data-i="1">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.4" fill="currentColor"/>
+            <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+              <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>
+            </g>
+          </svg>
+          <span>Always on</span>
+        </button>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the trusted segmented control, scaled up — a sliding Liquid-Glass ember pill carries the sunset fill, specular sheen and ember glow between two glyph-labelled options.</div>
+  </section>
+
+  <!-- ════════════════════════ A2 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A2 · Sun switch</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="a2" data-sel="0">
+        <div class="a2-row">
+          <div class="a2-end l">
+            <span class="lab">Sunset</span>
+            <span class="sub">eases in at dusk</span>
+          </div>
+          <button type="button" class="a2-track" role="switch" aria-checked="false"
+                  aria-label="Schedule: off is Sunset, on is Always on">
+            <span class="horizon" aria-hidden="true"></span>
+            <span class="a2-knob" aria-hidden="true">
+              <svg class="rays" viewBox="0 0 52 52" fill="none">
+                <g stroke="rgba(22,10,18,.55)" stroke-width="2.4" stroke-linecap="round">
+                  <path d="M26 7v5M26 40v5M7 26h5M40 26h5M13 13l3.4 3.4M35.6 35.6 39 39M39 13l-3.4 3.4M16.4 35.6 13 39"/>
+                </g>
+              </svg>
+            </span>
+          </button>
+          <div class="a2-end r">
+            <span class="lab">Always on</span>
+            <span class="sub">steady glow</span>
+          </div>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the macOS switch reframed as the binary — a glowing sun-knob travels a glass track from a dusk end to a steady-glow end, its rays blooming when warmth holds all day.</div>
+  </section>
+
+  <!-- ════════════════════════ A3 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A3 · Living glyph</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="a3" role="radiogroup" aria-label="Schedule" data-sel="0">
+        <button type="button" class="seg" role="radio" aria-pressed="true" data-i="0" data-glyph="sunset">
+          <span class="stage" aria-hidden="true">
+            <svg viewBox="0 0 34 34" fill="none" width="34" height="34">
+              <defs><clipPath id="a3clipA"><rect x="0" y="0" width="34" height="24"/></clipPath></defs>
+              <g clip-path="url(#a3clipA)">
+                <circle class="sun-disc" cx="17" cy="14" r="6.5" fill="currentColor"/>
+              </g>
+              <path d="M3 24h28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M7 28.5h20" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+            </svg>
+          </span>
+          <span class="lab">Sunset</span>
+        </button>
+        <button type="button" class="seg" role="radio" aria-pressed="false" data-i="1" data-glyph="always">
+          <span class="stage" aria-hidden="true">
+            <svg viewBox="0 0 34 34" fill="none" width="34" height="34">
+              <g class="sun-group">
+                <circle cx="17" cy="17" r="6" fill="currentColor"/>
+                <g stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+                  <path class="sun-ray" d="M17 3.5v3.4" opacity=".4"/>
+                  <path class="sun-ray" d="M17 27.1v3.4" opacity=".4"/>
+                  <path class="sun-ray" d="M3.5 17h3.4" opacity=".4"/>
+                  <path class="sun-ray" d="M27.1 17h3.4" opacity=".4"/>
+                  <path class="sun-ray" d="M7.5 7.5l2.4 2.4" opacity=".4"/>
+                  <path class="sun-ray" d="M24.1 24.1l2.4 2.4" opacity=".4"/>
+                  <path class="sun-ray" d="M26.5 7.5l-2.4 2.4" opacity=".4"/>
+                  <path class="sun-ray" d="M9.9 24.1l-2.4 2.4" opacity=".4"/>
+                </g>
+              </g>
+            </svg>
+          </span>
+          <span class="lab">Always on</span>
+        </button>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: same native segmented frame, but the chosen segment comes alive — pick Sunset and the sun sinks below the horizon line; pick Always on and the rays bloom into a steady, slowly-turning sun.</div>
+  </section>
+
+  <!-- ════════════════════════ A4 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A4 · Settings popover</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="a4" data-open="false" data-sel="0">
+        <button type="button" class="a4-current" aria-haspopup="listbox" aria-expanded="false">
+          <span class="a4-swatch" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <circle cx="12" cy="11" r="3.6" fill="currentColor"/>
+              <path d="M4 16.5h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="a4-cur-txt">
+            <span class="t" data-cur-title>Sunset</span>
+            <span class="d" data-cur-desc>Warms around local sunset</span>
+          </span>
+          <svg class="a4-chev" viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="a4-pop" role="listbox" aria-label="Schedule">
+          <button type="button" class="a4-opt" role="option" aria-checked="true" data-i="0"
+                  data-title="Sunset" data-desc="Warms around local sunset">
+            <span class="oic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+                <circle cx="12" cy="11" r="3.6" fill="currentColor"/>
+                <path d="M4 16.5h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="otx"><span class="t">Sunset</span><span class="d">Eases in at dusk, holds through the night</span></span>
+            <svg class="ok" viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+              <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button type="button" class="a4-opt" role="option" aria-checked="false" data-i="1"
+                  data-title="Always on" data-desc="Warmth on around the clock">
+            <span class="oic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+                <circle cx="12" cy="12" r="3.8" fill="currentColor"/>
+                <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                  <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>
+                </g>
+              </svg>
+            </span>
+            <span class="otx"><span class="t">Always on</span><span class="d">Keeps warmth on around the clock</span></span>
+            <svg class="ok" viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+              <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the most System-Settings option — a single glass row shows the current choice and opens a frosted popover of two glass options with live checkmarks, exactly like a native menu/pop-up button.</div>
+  </section>
+
+  <!-- ════════════════════════ A5 ════════════════════════ -->
+  <section class="concept">
+    <div class="ctag">A5 · Horizon track</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="a5" role="radiogroup" aria-label="Schedule" data-sel="0">
+        <div class="scene" aria-hidden="true">
+          <span class="skyfill"></span>
+          <span class="sun"></span>
+          <span class="horizon"></span>
+        </div>
+        <button type="button" class="seg" role="radio" aria-pressed="true" data-i="0">
+          <span class="lab">Sunset</span>
+          <span class="sub">eases in at dusk</span>
+        </button>
+        <button type="button" class="seg" role="radio" aria-pressed="false" data-i="1">
+          <span class="lab">Always on</span>
+          <span class="sub">steady, all day</span>
+        </button>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the boldest native take — the sliding pill becomes a tiny living sky: choose Sunset and a dusk gradient floods in as the sun dips to a horizon; choose Always on and it clears to a high, steady sun.</div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  /* ── A1 + A3 + A5: radiogroup segmented controls ───────────────── */
+  function wireRadioGroup(root){
+    var segs = Array.prototype.slice.call(root.querySelectorAll('[role="radio"]'));
+    function select(i){
+      root.setAttribute('data-sel', String(i));
+      segs.forEach(function(s, k){
+        s.setAttribute('aria-pressed', k===i ? 'true':'false');
+        s.tabIndex = k===i ? 0 : -1;
+      });
+    }
+    segs.forEach(function(s, i){
+      s.tabIndex = s.getAttribute('aria-pressed')==='true' ? 0 : -1;
+      s.addEventListener('click', function(){ select(i); });
+      s.addEventListener('keydown', function(e){
+        var n=null;
+        if(e.key==='ArrowRight'||e.key==='ArrowDown') n=(i+1)%segs.length;
+        else if(e.key==='ArrowLeft'||e.key==='ArrowUp') n=(i-1+segs.length)%segs.length;
+        else if(e.key===' '||e.key==='Enter'){ e.preventDefault(); select(i); return; }
+        if(n!==null){ e.preventDefault(); select(n); segs[n].focus(); }
+      });
+    });
+  }
+  document.querySelectorAll('.a1, .a3, .a5').forEach(wireRadioGroup);
+
+  /* ── A2: switch ────────────────────────────────────────────────── */
+  document.querySelectorAll('.a2').forEach(function(root){
+    var track = root.querySelector('.a2-track');
+    function set(on){
+      root.setAttribute('data-sel', on ? '1':'0');
+      track.setAttribute('aria-checked', on ? 'true':'false');
+    }
+    function toggle(){ set(track.getAttribute('aria-checked')!=='true'); }
+    track.addEventListener('click', toggle);
+    track.addEventListener('keydown', function(e){
+      if(e.key===' '||e.key==='Enter'){ e.preventDefault(); toggle(); }
+      else if(e.key==='ArrowRight') { e.preventDefault(); set(true); }
+      else if(e.key==='ArrowLeft')  { e.preventDefault(); set(false); }
+    });
+  });
+
+  /* ── A4: popover pop-up button ─────────────────────────────────── */
+  document.querySelectorAll('.a4').forEach(function(root){
+    var btn  = root.querySelector('.a4-current');
+    var pop  = root.querySelector('.a4-pop');
+    var opts = Array.prototype.slice.call(root.querySelectorAll('.a4-opt'));
+    var curT = root.querySelector('[data-cur-title]');
+    var curD = root.querySelector('[data-cur-desc]');
+    function open(o){
+      root.setAttribute('data-open', o ? 'true':'false');
+      btn.setAttribute('aria-expanded', o ? 'true':'false');
+      if(o){ var c = opts.find(function(x){return x.getAttribute('aria-checked')==='true';})||opts[0]; setTimeout(function(){c.focus();},10); }
+    }
+    function choose(i){
+      opts.forEach(function(o,k){ o.setAttribute('aria-checked', k===i?'true':'false'); });
+      root.setAttribute('data-sel', String(i));
+      curT.textContent = opts[i].getAttribute('data-title');
+      curD.textContent = opts[i].getAttribute('data-desc');
+    }
+    btn.addEventListener('click', function(){ open(root.getAttribute('data-open')!=='true'); });
+    opts.forEach(function(o,i){
+      o.addEventListener('click', function(){ choose(i); open(false); btn.focus(); });
+      o.addEventListener('keydown', function(e){
+        var n=null;
+        if(e.key==='ArrowDown') n=(i+1)%opts.length;
+        else if(e.key==='ArrowUp') n=(i-1+opts.length)%opts.length;
+        else if(e.key==='Enter'||e.key===' '){ e.preventDefault(); choose(i); open(false); btn.focus(); return; }
+        else if(e.key==='Escape'){ open(false); btn.focus(); return; }
+        if(n!==null){ e.preventDefault(); opts[n].focus(); }
+      });
+    });
+    document.addEventListener('click', function(e){ if(!root.contains(e.target)) open(false); });
+    btn.addEventListener('keydown', function(e){
+      if(e.key==='ArrowDown'||e.key==='Enter'||e.key===' '){ e.preventDefault(); open(true); }
+      else if(e.key==='Escape'){ open(false); }
+    });
+  });
+})();
+</script>
+
+<script>
+  function reportH(){ try{ var b=document.body, kids=b.children, max=0; for(var i=0;i<kids.length;i++){ var el=kids[i]; if(el.tagName==='SCRIPT'||el.tagName==='STYLE') continue; var r=el.getBoundingClientRect(), mb=parseFloat(getComputedStyle(el).marginBottom)||0, bottom=r.bottom+window.scrollY+mb; if(bottom>max) max=bottom; } var pad=parseFloat(getComputedStyle(b).paddingBottom)||0; parent.postMessage({type:'iframeHeight', name:location.pathname.split('/').pop(), h:Math.ceil(max+pad)}, '*'); }catch(e){} }
+  addEventListener('load', reportH); addEventListener('resize', reportH);
+  if (window.ResizeObserver) new ResizeObserver(reportH).observe(document.body);
+  setTimeout(reportH, 400);
+</script>
+</body>
+</html>

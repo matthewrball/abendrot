@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abendrot — Menu-bar icon, app-icon consistent</title>
+<style>
+
+:root{
+  --indigo:#160A12;--plum:#221019;--twilight:#341320;--twilight2:#45192A;
+  --line:rgba(255,240,230,.10);--line2:rgba(255,240,230,.16);
+  --text:#F3EADF;--muted:rgba(243,234,223,.60);--faint:rgba(243,234,223,.38);
+  --accent:#FD9228;--accent2:#FFC061;--accent-deep:#C2310A;--cream:#F7ECD9;
+  --zoom:84px;
+}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;color:var(--text);letter-spacing:-.01em;
+  background:
+    radial-gradient(1100px 720px at 80% -10%,rgba(253,146,40,.13),transparent 60%),
+    radial-gradient(900px 700px at 10% 2%,rgba(120,60,160,.10),transparent 55%),
+    linear-gradient(170deg,#1b0c14 0%,var(--plum) 52%,var(--indigo) 100%);
+  background-attachment:fixed;min-height:100vh;-webkit-font-smoothing:antialiased;padding-bottom:120px;}
+.serif{font-family:ui-serif,"New York",Georgia,serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+header.top{padding:54px 0 8px;text-align:center;}
+.word{font-family:ui-serif,"New York",Georgia,serif;font-size:clamp(34px,5vw,56px);font-weight:600;letter-spacing:-.03em;line-height:1;
+  background:linear-gradient(180deg,#fff 0%,var(--accent2) 64%,var(--accent) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.kicker{margin-top:10px;color:var(--muted);font-size:12.5px;letter-spacing:.13em;text-transform:uppercase;}
+.lead{max-width:70ch;margin:14px auto 0;color:var(--muted);font-size:15px;text-wrap:balance;line-height:1.6;}
+details.research{margin:30px auto 0;max-width:920px;border:.5px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03);}
+details.research>summary{cursor:pointer;padding:16px 20px;font-weight:600;font-size:14.5px;color:var(--accent2);list-style:none;}
+details.research>summary::-webkit-details-marker{display:none}
+details.research>summary::before{content:"▸ ";color:var(--accent)}
+details.research[open]>summary::before{content:"▾ "}
+.research .body{padding:0 22px 20px;color:var(--muted);font-size:13.5px;line-height:1.65;}
+.research .body h2{color:var(--accent2);font-size:15px;margin:18px 0 6px;}
+.research .body code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:5px;font-size:12px;}
+.synth{margin:26px auto 0;max-width:920px;border-radius:16px;padding:20px 22px;
+  background:linear-gradient(140deg,rgba(253,146,40,.12),rgba(253,146,40,.03));border:.5px solid var(--line2);}
+.synth h3{margin:0 0 8px;font-size:15px;color:var(--accent2);}
+.synth .pick{font-size:14px;margin:6px 0;color:var(--text);}
+.synth .pick b{color:var(--accent2);}
+.synth p{color:var(--muted);font-size:13.5px;line-height:1.6;margin:10px 0 0;}
+
+.controls{position:sticky;top:0;z-index:20;margin-top:34px;padding:12px 14px;border-radius:14px;
+  display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center;
+  background:linear-gradient(140deg,rgba(40,20,30,.82),rgba(24,12,18,.88));
+  backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
+  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12),0 12px 30px rgba(0,0,0,.4);}
+.controls label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+.controls input[type=range]{accent-color:var(--accent);width:140px;}
+.controls .walls{display:flex;gap:7px;}
+.controls .walls button{width:26px;height:26px;border-radius:7px;border:1.5px solid transparent;cursor:pointer;padding:0;}
+.controls .walls button.sel{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(255,192,97,.3);}
+
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:24px;}
+@media(max-width:880px){.grid{grid-template-columns:1fr}}
+.card{border-radius:18px;padding:18px 18px 20px;
+  background:linear-gradient(140deg,rgba(255,255,255,.07),rgba(255,255,255,.025) 50%,rgba(255,255,255,.05));
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,.30),inset 0 0 0 .5px rgba(255,255,255,.12),0 16px 40px rgba(0,0,0,.38);}
+.card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.card-h .fam{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);}
+.card-h h3{margin:3px 0 0;font-size:18px;font-weight:600;letter-spacing:-.02em;}
+.score{flex:none;font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;font-variant-numeric:tabular-nums;}
+.score.hi{background:rgba(120,220,150,.16);color:#9be8b4;}
+.score.mid{background:rgba(255,192,97,.16);color:var(--accent2);}
+.score.lo{background:rgba(255,120,120,.14);color:#ff9b9b;}
+.concept{color:var(--muted);font-size:13px;margin:8px 0 14px;line-height:1.5;}
+
+.bars{display:flex;flex-direction:column;gap:9px;}
+.bar{height:30px;border-radius:9px;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 12px;}
+.bar.dark{background:linear-gradient(180deg,rgba(34,22,40,.78),rgba(18,11,20,.88));box-shadow:inset 0 0 0 .5px rgba(255,255,255,.10);}
+.bar.light{background:linear-gradient(180deg,rgba(248,243,233,.92),rgba(236,228,214,.96));box-shadow:inset 0 0 0 .5px rgba(0,0,0,.10);}
+.bar .clock{font-size:12px;font-variant-numeric:tabular-nums;}
+.bar.dark .clock{color:rgba(255,255,255,.82)}.bar.light .clock{color:rgba(30,24,40,.78)}
+.bar .sys{display:flex;opacity:.7}.bar .sys svg{width:14px;height:14px}
+.bar.dark .sys svg{color:rgba(255,255,255,.8)}.bar.light .sys svg{color:rgba(30,24,40,.7)}
+/* the icon host: template tinting via currentColor */
+.ico{width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.ico svg{width:18px;height:18px;display:block;color:inherit}
+.bar.dark .ico.inactive{color:rgba(255,255,255,.92)}
+.bar.light .ico.inactive{color:rgba(28,22,38,.88)}
+.bar.dark .ico.active{color:var(--accent2);filter:drop-shadow(0 0 3px rgba(255,171,92,.85)) drop-shadow(0 0 1.5px rgba(255,171,92,.6))}
+.bar.light .ico.active{color:var(--accent-deep);filter:drop-shadow(0 0 3px rgba(253,146,40,.8))}
+.bartag{font-size:10px;color:var(--faint);align-self:center;margin-right:auto;letter-spacing:.04em}
+
+.zoom{display:flex;gap:12px;margin-top:16px;}
+.zoom figure{margin:0;flex:1;text-align:center;}
+.zoom .stage{height:calc(var(--zoom) + 28px);border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:rgba(10,6,10,.5);box-shadow:inset 0 0 0 .5px var(--line);}
+.zoom .stage.wall{background-size:cover;background-position:center;}
+.zoom .stage svg{width:var(--zoom);height:var(--zoom);display:block}
+.zoom .big.inactive{color:rgba(255,255,255,.9)}
+.zoom .big.active{color:var(--accent);filter:drop-shadow(0 0 10px rgba(253,146,40,.75)) drop-shadow(0 0 4px rgba(253,146,40,.6))}
+.zoom figcaption{font-size:11px;color:var(--muted);margin-top:6px;}
+
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin:16px 0 0;}
+.meta div{display:flex;gap:7px;font-size:12px;}
+.meta dt{color:var(--faint);flex:none;}
+.meta dd{margin:0;color:var(--text);}
+.meta .v-yes{color:#9be8b4}.meta .v-marginal{color:var(--accent2)}.meta .v-no{color:#ff9b9b}
+.treat{font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.5;}
+.treat b{color:var(--accent2);font-weight:600}
+.pc{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;}
+.pc ul{margin:0;padding-left:16px;font-size:11.5px;line-height:1.5;color:var(--muted)}
+.pc .pros li::marker{color:#9be8b4}.pc .cons li::marker{color:#ff9b9b}
+.pc h4{margin:0 0 4px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.rationale{font-size:12.5px;color:var(--faint);margin:12px 0 0;line-height:1.55;border-top:.5px solid var(--line);padding-top:10px;}
+.foot{margin-top:60px;text-align:center;color:var(--muted);font-size:13.5px}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+  <div class="word">Abendrot</div>
+  <div class="kicker">Menu-bar icon · consistent with the app icon · 8 variations</div>
+  <p class="lead">The app icon is a half-sun cresting a horizon with <b>water-reflection ripples</b> below it — these variations bring that DNA into the menu-bar <b>NSImage template</b>. State is app-icon-true: <b>active = the lit scene</b> (solid sun + reflection), inactive = the quiet outline. The hard part is making the reflection survive at true 16px — zoom down and cycle wallpapers to judge.</p>
+</header>
+
+  <section class="synth" id="synth"></section>
+
+  <details class="research">
+    <summary>Research brief · menu-bar template glyphs, active/inactive conventions, tiny-icon survival</summary>
+    <div class="body" id="research-body"></div>
+  </details>
+</div>
+
+<div class="wrap">
+  <div class="controls">
+    <label>Zoom
+      <input type="range" id="zoomRange" min="48" max="160" value="84">
+    </label>
+    <label>Busy wallpaper
+      <span class="walls" id="walls"></span>
+    </label>
+  </div>
+
+  <main class="grid" id="grid"></main>
+
+  <footer class="foot">Abendrot menu-bar icon lab · all marks rendered as monochrome <code>currentColor</code> templates · amber = "warming" active state only.</footer>
+</div>
+
+<script>
+const DATA = {"research":"## Sunset Arc — app-icon-consistent round\nThese 8 variations bring the APP ICON’s defining trait — a half-sun cresting a horizon with HORIZONTAL water-reflection ripples below — into the menu-bar template, so the most-seen surface reads as a sibling of the app icon. All are monochrome NSImage templates (macOS auto-tints for light/dark bars). State mapping is app-icon-true: ACTIVE = the lit/glowing scene (solid sun + reflection), INACTIVE = the quiet outline. The hard constraint is 16px survival of the reflection ripples (gaps die when too small), so variations range from faithful (3 ripples / mirrored dome) to minimal (1 ripple).\n\n- **Ripple-faithful**: 3 ripples / low-sun icon framing.\n- **Reduced**: 2 ripples, 1 ripple, glowing-core.\n- **Mirror**: mirrored inverted sun, mirror+ripple.\n- **State**: water lights up only when warming is active.","icons":[{"id":"appicon-faithful-3ripple","name":"Faithful (3 ripples)","family":"Ripple-faithful","concept":"The most literal menu-bar translation of the app icon: a half-sun dome cresting a full horizon line, sitting optically centered, with THREE horizontal reflection ripples descending below it on the water. Each lower ripple is shorter and more separated than the one above (widest just under the horizon, narrowest at the bottom), recreating the sun-on-water shimmer that is the icon's most ownable trait. Dome r=4.8 (width 9.6u), horizon spans x4-20, and the reflection stack is pushed down with a deliberate 2.2u drop from the horizon so the waterline and the reflection read as two separate groups rather than one blob.","activeTreatment":"The hollow outline dome becomes a SOLID filled half-disc on the exact same footprint (the lit/glowing sun of the app icon), while the horizon line and all three reflection ripples stay identical strokes. Pure hollow-to-solid shape change on a fixed footprint, so the icon never jumps between states and the active state echoes the icon's glowing sun.","rationale":"This is the maximum-fidelity variation, so the whole job is keeping all three ripples alive at 16px. I rasterized at 16px and read the per-row brightness: the result is five cleanly separated bands (dome / horizon / ripple1 / ripple2 / ripple3) with a dark gap between every pair. To get there I shrank the dome to r=4.8 to buy vertical room, raised the horizon to y=8.6, and stretched the ripple pitch to 4.6-4.8u (clear edge-to-edge gaps of 1.47-1.60u, at or above the 1.6u survival floor). The mark spans y2.6-24 (center ~13.3), so it is vertically balanced and not bottom-stuck. The horizon (width 16) stays clearly the widest band while ripple1 (7.2) reads as the start of a distinct, tapering reflection group (5.2 then 2.6 wide) — exactly the app-icon DNA the previous reflection-less arc dropped. Verified on both dark and light menu bars; all template-safety checks pass.","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7.2 8.6 A4.8 4.8 0 0 1 16.8 8.6\"/><line x1=\"4\" y1=\"8.6\" x2=\"20\" y2=\"8.6\"/><line x1=\"8.4\" y1=\"13.2\" x2=\"15.6\" y2=\"13.2\"/><line x1=\"9.6\" y1=\"17.8\" x2=\"14.4\" y2=\"17.8\"/><line x1=\"10.7\" y1=\"22.4\" x2=\"13.3\" y2=\"22.4\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7.2 8.6 A4.8 4.8 0 0 1 16.8 8.6 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"8.6\" x2=\"20\" y2=\"8.6\"/><line x1=\"8.4\" y1=\"13.2\" x2=\"15.6\" y2=\"13.2\"/><line x1=\"9.6\" y1=\"17.8\" x2=\"14.4\" y2=\"17.8\"/><line x1=\"10.7\" y1=\"22.4\" x2=\"13.3\" y2=\"22.4\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"marginal","templateSafe":true,"activeInactiveLegible":"marginal","appIconFidelity":"medium","pros":["All three reflection ripples survive as countable, descending marks at 16px - the staggered-width stack is the strongest idea here and is genuinely the app icon's most ownable trait","Pure currentColor strokes/fill, no gradients/opacity/filters - fully template-safe on light and dark bars","Hollow-to-solid on a fixed footprint means zero positional jump between states; the active state honestly echoes the icon's glowing sun"],"cons":["At true 16px the active/inactive change lives in a ~3x3px cap; hollow vs solid dome is barely perceptible in grayscale, and 4 of the 5 elements are identical between states so most of the mark never signals state","stroke-width 2.4 = 1.6px at 16px is heavy; the bottom ripple (2.6u wide) is barely longer than the round-capped stroke and renders as a dot/blob, and the whole stack reads as 'equalizer/decreasing bars' more than sun-on-water shimmer","Content fills nearly the full 24-unit height (2.6-23.6) and is slightly bottom-heavy (visual center ~13.1 vs 12) - it will render larger/heavier than neighboring menu-bar glyphs and sit a touch low"],"score":5.5,"oneLine":"Faithful to the app icon and the 3-ripple shimmer does survive at 16px, but it's too heavy/tall for a menu bar and the hollow-to-solid active change is too subtle to reliably read in grayscale - close, not yet shippable."}},{"id":"appicon-2ripple","name":"Two Ripples","family":"Reduced","concept":"A half-sun dome cresting a full horizon line, with the sun's on-water reflection rendered as TWO short horizontal ripples stacked below — the upper ripple wider and closer to the horizon, the lower ripple shorter and farther down, fading toward the bottom. It carries the app icon's most ownable trait (the sun-on-water reflection) back into the menu bar, but reduced to just two ripples — the minimum needed to read as a reflection rather than a single stray tick — so the whole stack still survives at 16px.","activeTreatment":"Pure hollow-to-solid on a fixed footprint: inactive is a hollow outlined dome (the \"off/quiet\" sun) above an unchanged horizon and two ripples; active fills the dome into a solid half-disc (the \"lit/glowing\" sun, echoing the warming-on app icon) while the horizon line and both reflection ripples stay byte-identical. The active dome keeps its currentColor stroke and round joins so the filled half-disc renders to the exact same top extent as the hollow outline — the icon never jumps between states (it occupies the identical 16px rows 3–13 in both).","rationale":"This is the deliberate sweet spot between fidelity and 16px clarity. A prior reflection attempt failed because it stacked a dome + two horizon stubs + two ripples into the lower third, crowding into a striped blob that read as bottom-stuck and let the ripples collapse into anonymous dashes. Two Ripples fixes all three: (1) it drops the horizon stubs for one clean full-width horizon line, freeing vertical room; (2) it sits the sun directly ON the horizon (as the app icon does, crest-on-water) and raises the whole composition so the ink is optically centered at exactly row 8.0 of 16, not bottom-stuck; (3) it spaces the two ripples ~4.5 units center-to-center so each gets a clean white gap at 16px AND 22px (verified by rendering — rows 8 and 11 are blank), letting the decreasing-width shimmer (horizon full → ripple medium → ripple short) actually survive. Two ripples is the floor for \"this is a reflection\": one tick reads as a typo, three crowds and dies at 16px, two reads unambiguously as water.","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6.5 10.9 A5.5 5.5 0 0 1 17.5 10.9\"/><line x1=\"3.8\" y1=\"10.9\" x2=\"20.2\" y2=\"10.9\"/><line x1=\"7.8\" y1=\"15.4\" x2=\"16.2\" y2=\"15.4\"/><line x1=\"9.8\" y1=\"19.7\" x2=\"14.2\" y2=\"19.7\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6.5 10.9 A5.5 5.5 0 0 1 17.5 10.9 Z\"/><line x1=\"3.8\" y1=\"10.9\" x2=\"20.2\" y2=\"10.9\" fill=\"none\"/><line x1=\"7.8\" y1=\"15.4\" x2=\"16.2\" y2=\"15.4\" fill=\"none\"/><line x1=\"9.8\" y1=\"19.7\" x2=\"14.2\" y2=\"19.7\" fill=\"none\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"marginal","templateSafe":true,"activeInactiveLegible":"marginal","appIconFidelity":"low","pros":["Footprint is genuinely identical between states (both occupy rows 3-13 at 16px) - zero jump on toggle, horizon + both ripples are byte-identical","Template-safe: single flat currentColor, no gradients/opacity/filters; the active Z-close fills cleanly to the same top extent as the hollow outline","Both ripples technically survive as distinct bands at 16px (upper ~rows 9-11, lower ~rows 12-13) - they don't merge into mush"],"cons":["The silhouette reads as an upward arrow / spinning-top / mushroom, NOT a sunset - the full-width horizon (3.8->20.2) flares wider than the dome into arrowhead 'wings' and the tapering bars below read as a stem","Reflection fidelity is backwards: real on-water reflection is widest at the horizon and narrows with distance, but here ripples are short and the lower one is narrower, reinforcing the stem/arrow illusion - the sun-on-water idea does not communicate without being told","Active vs inactive delta is only +0.03 mean ink: filling the tiny dome interior is the only change while the ink-dominant horizon+ripples stay identical, so the state change is easy to miss in the wild"],"score":4,"oneLine":"Survives at 16px and is template-safe with a perfectly stable footprint, but the over-wide horizon turns the whole mark into an upward-arrow/spinning-top - the sun-on-water reflection it's built around simply doesn't read, so app-icon fidelity is low and the hollow/filled state change is too subtle to rely on."}},{"id":"appicon-1ripple","name":"One Ripple (minimal nod)","family":"Reduced","concept":"A half-sun dome cresting a full horizon line, with exactly ONE short reflection ripple centered below it on the water. The descending hierarchy — dome (13u) wider than horizon-clearance, horizon (16u) widest, single ripple (7u) clearly narrowest — is the most 16px-safe way to still signal the app icon's signature sun-on-water reflection. It carries the icon DNA the previous bare arc dropped (the reflection), reduced to its single most legible element: one bold, well-separated ripple that cannot collapse into the horizon.","activeTreatment":"The hollow outline dome closes into a solid filled half-disc on the identical footprint (path gains a Z and stroke=\"none\", so the sun reads as the glowing/lit body from the app icon), while the horizon and the single ripple stay as crisp strokes (fill=\"none\") rather than filling — preserving them as clean lines. A pure hollow-to-solid shape change in the sun, fixed footprint across states so the icon never jumps.","rationale":"This is the Reduced-family endpoint: cleanest read, lowest fidelity. The brief's hard constraint is that the reflection must survive 16px, where ripple gaps below ~1.6 units fill in and die. Rather than risk multiple stacked ripples merging, this variation commits to ONE ripple with a deliberately generous edge-to-edge gap of 1.7 units (1.13px at 16) — comfortably past the 1.6u floor. Geometry is pixel-grid planned on a 24-box: dome radius 6.5 with base/horizon at y=12 (apex y=5.5), horizon spanning x=4→20, the lone ripple at y=16.5 spanning x=8.5→15.5. The mark fills 13.8 units tall and is optically centered at y≈11, so it reads balanced in the menu-bar slot instead of bottom-stuck like the app icon's low framing would at small size. Stroke 2.8u (1.87px at 16, well above the 1.6u minimum), round caps. INACTIVE and ACTIVE are unmistakably the same mark in pure grayscale, distinguished only by the sun going hollow→solid. It echoes the existing two-tick arc-reflection variation but reduces to a single tick for maximum survivability — the minimal nod.","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"8.5\" y1=\"16.5\" x2=\"15.5\" y2=\"16.5\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\" fill=\"none\"/><line x1=\"8.5\" y1=\"16.5\" x2=\"15.5\" y2=\"16.5\" fill=\"none\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"yes","templateSafe":true,"activeInactiveLegible":"marginal","appIconFidelity":"medium","pros":["Three-tier hierarchy (dome > horizon > ripple) genuinely survives 16px on both light and dark bars — the single ripple stays separated and never collapses into the horizon, which was the design thesis and it holds","Brings back the app icon's signature sun-on-water reflection that bare-arc variants dropped, so it reads as a sibling rather than a generic sunrise; fixed footprint across states means zero jump","Strictly template-safe: one flat currentColor, no gradients/opacity/filters, and the hollow-to-solid sun is a clean state change"],"cons":["Active/inactive delta is fragile: the only difference is the sun filling, but at 16px the hollow dome interior is just ~2px tall, so hollow-vs-solid is hard to call at a glance — horizon and ripple are identical in both states","Dome base sits directly on the horizon line; at 2.8 stroke they nearly fuse into one thick band, eroding the 'cresting the horizon' read and shrinking the already-thin dome interior","A single ripple reads as an underline / second horizon more than as rippling water — the app icon's reflection is MULTIPLE fading ripples, so fidelity is a nod, not a reproduction"],"score":7,"oneLine":"A smart, genuinely 16px-safe reintroduction of the sun-on-water reflection via one bold separated ripple — the most shippable reflection-bearing variant so far — but the active/inactive signal rests entirely on ~2px of sun interior and the dome-on-horizon fusion needs a hair more clearance."}},{"id":"appicon-mirror-dome","name":"Mirrored Sun","family":"Mirror","concept":"The app icon's sun-on-water reflection rendered as a literal mirror: a half-sun dome above the waterline and its inverted mirror-image dome below it, smaller, with a small water-gap between the two flat bases. The two domes meeting back-to-back across the gap ARE the horizon, so no separate horizon line is needed — the strongest, most unmistakable \"reflection\" reading of any variation: sun + its mirror, two domes facing each other across the water.","activeTreatment":"Both half-sun domes become SOLID filled half-discs on the same footprint — the glowing \"lit\" scene echoing the app icon, where the smaller lower dome reads instantly as the bright reflection on water. Inactive is the identical mark as hollow outlines: each dome is a closed half-disc outline (D-shape on top, inverted-D below) so the two-dome mirror structure stays legible even without fill. Pure hollow-to-solid shape change, fixed footprint across states.","rationale":"The previous menu-bar arc dropped the reflection — the icon's single most distinctive trait — so this variation reinstates it in its boldest possible form. A mirrored dome below the horizon is the clearest grayscale signal of \"reflection,\" and by letting the two flat dome-bases define the waterline I remove the third crowded horizontal (a separate horizon stroke) that fused with the domes at 16px in testing, keeping the water-gap open. Verified by rasterizing both states at 16/18/20px on light and dark bars: the 2.2-unit gap survives, domes never merge, and the smaller lower dome unambiguously reads as a reflection rather than a generic full disc. Optically centered (vertical center 11.75, balanced top/bottom/left/right margins) so it doesn't look bottom-stuck like the app icon's low-sun framing would at menu-bar scale.","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.7 11.8 A6.3 6.3 0 0 1 18.3 11.8 Z\"/><path d=\"M8.0 14.0 A4.0 4.0 0 0 0 16.0 14.0 Z\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.7 11.8 A6.3 6.3 0 0 1 18.3 11.8 Z\" stroke=\"none\"/><path d=\"M8.0 14.0 A4.0 4.0 0 0 0 16.0 14.0 Z\" stroke=\"none\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"no","templateSafe":true,"activeInactiveLegible":"yes","appIconFidelity":"low","pros":["Clean template SVG: single flat currentColor, pure fill/stroke (hollow-to-solid) toggle, fixed footprint, no gradients/opacity/filters","Active vs inactive is unmistakable in grayscale (solid filled domes vs hollow outlines)","Active state holds up acceptably at 16px: solid dome + preserved gap + small blob below gives a weak 'big shape over small shape' reflection hint"],"cons":["INACTIVE collapses at 16px: the two domes' flat bases merge into one heavy black bar and the small lower dome fills in, so it reads as a single muddy ring/lozenge with a slot, not sun + mirror","Concept does not echo the app icon: the app icon's signature is a half-sun cresting a horizon with STACKED fading horizontal ripples; an inverted dome below a gap reads as a second sun or a mouth, not water reflection","Lower inverted dome is too small/closed and sits too close to the upper base, so the defining 'gap across the waterline' is the first thing lost as size drops"],"score":4,"oneLine":"Clever literal 'sun + its mirror' idea and a textbook-clean template, but the inactive outline turns to a muddy ringed bar at 16px and the inverted-dome motif doesn't read as the app icon's stacked-ripple water reflection.\""}},{"id":"appicon-mirror-ripple","name":"Mirror + Ripple","family":"Mirror","concept":"A half-sun dome crests a horizon line, and immediately below the waterline its reflection appears as a small mirrored inverted dome (narrower than the sun, so it reads as a reflection rather than a second sun), then ONE short ripple line further down. The sequence sun -> horizon -> mirrored dome -> ripple literally depicts the sun reflecting on water and then rippling outward, carrying the app icon's signature sun-on-water DNA into the menu bar.","activeTreatment":"The lit/glowing scene: the hollow sun dome becomes a SOLID filled half-disc and the hollow mirror dome becomes a SOLID filled inverted half-disc (both close with Z and stroke=\"none\"), echoing the glowing app icon. The horizon line and the single ripple line stay as strokes. Footprint is identical to inactive — a pure hollow-to-solid shape change, no movement.","rationale":"The previous menu-bar arc dropped the reflection entirely; this variation brings the icon's most ownable trait back in the most compact legible way. Rather than a fragile stack of multiple thin ripple lines (which die at 16px), it uses a single bold mirrored dome as the primary reflection cue plus one well-separated ripple — both survive rasterization. Verified by rendering at true 16px with nearest-neighbor magnification: the inactive hollow sun (radius 6.5, 2.6u stroke) keeps a clear dark interior so it reads as an outline, the active solid amber reads as lit, and the mirror dome + ripple stay distinct without filling in. Footprint is optically centered (vertical midpoint ~12.3, height ~15.7u) so it is not bottom-stuck. The narrower mirror dome (radius 3.0 vs 6.5) makes the reflection unmistakable as a reflection, distinguishing this from a generic two-sun mark and from the other reflection families.","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 11 A6.5 6.5 0 0 1 18.5 11\"/><line x1=\"4\" y1=\"11\" x2=\"20\" y2=\"11\"/><path d=\"M9 13.5 A3 3 0 0 0 15 13.5\" stroke-width=\"2.2\"/><line x1=\"9.5\" y1=\"20.2\" x2=\"14.5\" y2=\"20.2\" stroke-width=\"2.2\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 11 A6.5 6.5 0 0 1 18.5 11 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"11\" x2=\"20\" y2=\"11\" fill=\"none\"/><path d=\"M9 13.5 A3 3 0 0 0 15 13.5 Z\" stroke=\"none\"/><line x1=\"9.5\" y1=\"20.2\" x2=\"14.5\" y2=\"20.2\" stroke-width=\"2.2\" fill=\"none\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"no","templateSafe":true,"activeInactiveLegible":"marginal","appIconFidelity":"medium","pros":["Strongest sun-on-water narrative of the concepts at large size: sun -> horizon -> mirrored dome -> ripple genuinely reads as a reflection","Clean template compliance: single flat currentColor, no gradients/opacity/filters; active is a pure hollow-to-solid change with identical footprint","Smaller inverted mirror dome (vs a second sun) is a smart, literal reflection cue at the reference size"],"cons":["Four horizontal bands stacked across ~24 units crammed into 16px: the mirror dome and ripple blur into indistinct gray dashes, killing the reflection at the only size that ships","Horizon line + downward mirror dome merge into a lampshade/mushroom blob below the waterline; the sun-cresting-horizon read is lost at 16px","Active vs inactive is only marginal in grayscale: inactive sun arc is already near-solid, so the fill tell is subtle and the clearest cue (filled mirror dome) is the smallest, first-to-die element"],"score":4,"oneLine":"Most faithful sun-on-water reflection of the lot at large size, but the four-band stack mushes into blobs at 16px and the reflection (its whole point) dies first, so it is not shippable as drawn."}},{"id":"appicon-ripples-active","name":"Water Lights Up (state = ripples)","family":"State","concept":"An app-icon-true half-sun dome cresting a single continuous water horizon, sitting optically centered in the slot. The reflection — Abendrot's signature stack of horizontal ripple lines — is the state switch: it is absent when warming is OFF (calm, dark water) and appears, lit, when warming is ON. Two bold, well-separated ripples carry the icon's reflection DNA: the upper one widest and brightest just under the horizon, the lower one shorter and more separated, fading downward.","activeTreatment":"The hollow dome fills solid on the exact same footprint AND two reflection ripples appear below the horizon (8u-wide upper, 4.5u-wide lower). The warming scene literally lights up the water — the appearing reflection is the on-signal. The horizon line stays identical across states so the mark never jumps; only fill + the presence of ripples change.","rationale":"This is the most poetic and most legible active/inactive for Abendrot specifically: the app is about warming light reaching the display, and the app icon's single most ownable trait is the sun-on-water reflection, so making that reflection BE the on-state ties the menu-bar mark's meaning directly to both the product and the icon. It is also the cleanest grayscale read — INACTIVE is unmistakably quiet (a hollow sun on still water, no ripples) while ACTIVE adds solid fill plus two new high-contrast lines, so the states differ by shape alone with no reliance on color, opacity, or tint. Geometry is tuned to the hard 16px constraint: only two ripples are used (three cannot keep >=1.6u edge gaps within the viewBox), the upper-ripple-to-horizon edge gap is 1.65u and the ripple-to-ripple edge gap is 2.0u, so both reflection lines and their separating gap survive at 16px instead of filling into a blob. The composition is lifted (horizon at y=11.5, dome top y=5.5) so its optical center lands at ~12.6 and it fills ~17 of 24 units vertically and 16 horizontally — adapting the icon's low-sun framing so it reads centered, not bottom-stuck, in the menu-bar slot. Rendered at true 16px both ripples and the dark gap between them remain crisp and the hollow-to-solid+ripples transition is obvious.","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 11.5 A6 6 0 0 1 18 11.5\"/><line x1=\"4\" y1=\"11.5\" x2=\"20\" y2=\"11.5\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 11.5 A6 6 0 0 1 18 11.5 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"11.5\" x2=\"20\" y2=\"11.5\"/><path d=\"M8 15.7 h8\" stroke-width=\"2.3\" fill=\"none\"/><path d=\"M9.75 20 h4.5\" stroke-width=\"2.3\" fill=\"none\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"marginal","templateSafe":true,"activeInactiveLegible":"yes","appIconFidelity":"high","pros":["Dome+horizon and the hollow-vs-filled state switch are rock-solid and instantly legible in pure grayscale at true 16px on both light and dark bars","High app-icon fidelity: half-sun cresting a continuous horizon with horizontal reflection ripples fading downward is a true sibling of the app icon, and reflection-as-on-signal is conceptually right","Cleanly template-safe (one flat currentColor, no gradients/opacity/filters); horizon line is identical across states so the mark never jumps"],"cons":["At 16px the lower ripple (4.5u/~3px) anti-aliases into a faint 3-row smudge (y11-13, alpha down to 50) and the inter-ripple gap collapses, so the signature 'two bold well-separated ripples' read is lost","Upper ripple survives but sits only one faint AA row below the horizon, so reflection separation is tight and can muddy on low-DPI bars","Active state risks reading as one thick smudge under the dome rather than two distinct lit ripples; needs single-ripple simplification or wider/closer two-ripple retune to be fully shippable"],"score":6.5,"oneLine":"Faithful, beautifully state-legible sun-on-water mark whose dome and on/off switch nail 16px, but the lower of its two reflection ripples turns to anti-aliased mush at 16px, so it needs a one- or wider-ripple retune before it's truly shippable."}},{"id":"appicon-bottom-weighted","name":"Low Sun (icon framing)","family":"Ripple-faithful","concept":"The most app-icon-true menu-bar mark: a half-sun dome cresting a horizon with its sun-on-water reflection beneath. Framed like the icon — the sun crests low against generous twilight sky above (apex sits with ~6.5u of empty space over it), the horizon runs just past the dome edges (icon-tight overhang, not a wide bar), and two bold horizontal ripples stack below as the reflection. The topmost ripple is widest and closest to the waterline (brightest); the lower one is shorter and more separated, fading the icon's signature reflection toward the bottom. The whole composition is then nudged up so the heavy dome carries the optical center near the slot's middle (~12.3) instead of looking bottom-stuck at 16px.","activeTreatment":"The hollow dome becomes a SOLID filled half-disc on the identical footprint — the \"lit/glowing\" sun of the app icon — while the horizon line and the two reflection ripples stay exactly the same. Pure hollow-to-solid shape change on the sun; the reflection stack is unchanged, so the footprint never jumps between states. (The gallery additionally tints active amber + adds glow via the host element; the template itself is one flat currentColor.)","rationale":"This variation's job is maximum fidelity to the app-icon COMPOSITION, so every decision defers to the icon: low-cresting half-sun, generous sky overhead, horizon in the lower band, and — critically — the water reflection the previous menu-bar arc dropped, which is the icon's single most ownable trait. The reflection is the hard part at 16px, so it is rendered as exactly TWO bold, well-separated ripples: stroke centers are spaced so every edge-to-edge gap is at the 1.6u hard minimum, which a true-16px raster verified survives as clean white separation (horizon row, gap, 6px ripple, gap, 4px ripple) rather than filling in. Only two ripples (not three) are used precisely so the gaps can stay wide enough to live. The icon's \"low sun\" would read as bottom-stuck if copied literally, so the entire stack is lifted until the visually-heavy dome puts the optical center at ~12.3 — honoring the framing while staying balanced in the slot. Inactive and active are unmistakably the same mark in pure grayscale, separated only by the dome's hollow-vs-solid interior (visible as a clear interior gap at 16px).","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6.8 11.7 A5.2 5.2 0 0 1 17.2 11.7\"/><line x1=\"5.8\" y1=\"11.7\" x2=\"18.2\" y2=\"11.7\"/><path d=\"M8.85 15.9 H15.15\"/><path d=\"M10.1 20 H13.9\" stroke-width=\"2.4\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6.8 11.7 A5.2 5.2 0 0 1 17.2 11.7 Z\" stroke=\"none\"/><line x1=\"5.8\" y1=\"11.7\" x2=\"18.2\" y2=\"11.7\" fill=\"none\"/><path d=\"M8.85 15.9 H15.15\" fill=\"none\"/><path d=\"M10.1 20 H13.9\" stroke-width=\"2.4\" fill=\"none\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"marginal","templateSafe":true,"activeInactiveLegible":"yes","appIconFidelity":"medium","pros":["Hollow dome vs solid half-disc is cleanly legible in grayscale at 16px with an identical footprint, so the active/inactive swap never makes the mark jump","Genuinely the most app-icon-structural framing: half-sun cresting a horizon with a reflection beneath, all in one flat currentColor (no gradients/opacity/filters) so it is fully template-safe","Horizon waterline is the strongest stroke and survives crisply at 16px on both light and dark bars"],"cons":["Ripple-1, the signature topmost reflection stroke (M8.85 15.9 H15.15), breaks into a fuzzy broken cluster at 16px instead of a clean bar — the reflection effectively collapses to a single lower dash, so the icon's defining sun-on-water reflection does not survive at size","The taper is inverted vs the app icon and the brief's own claim: measured ripple-2 (~7.1u) is actually WIDER than ripple-1 (~6.6u), and ripple-2 reads cleaner than ripple-1, so the brightness/width hierarchy points the wrong way","Framing claim is not met: apex sits ~3.2u from the top, not the stated ~6.5u of sky — the dome is high and the composition is bottom-loaded with reflection, the opposite of 'low sun against generous twilight sky'; dome legs also clutter the gap between horizon and ripple-1"],"score":5.5,"oneLine":"Structurally the most icon-true framing and cleanly active/inactive-legible, but the signature stacked reflection collapses at 16px (ripple-1 mushes, taper inverts), so the very thing this variation exists to deliver is the thing that dies at size."}},{"id":"appicon-glow-core","name":"Glowing Core","family":"Reduced","concept":"A half-sun built as two concentric domes — an outer rim arc wrapped around a small inner core arc — floating just above a clean horizon line, with two descending reflection ripples on the water below. The nested rim-around-core literally draws the app icon's brightest trait: a sun whose center is the hottest light source, glowing outward into the twilight. Outer dome radius 6.8u, inner core radius 2.2u, leaving a 2.3u clear ink gap between the two arcs so the concentric \"glow rim\" survives at 16px; the horizon sits 2.6u below the dome base, and two ripples (gaps 3.0u each) carry the sun-on-water DNA without crowding.","activeTreatment":"State is a pure shape change on a fixed footprint: the small inner core arc fills into a SOLID half-disc (the lit core \"switches on\"), while the outer rim stays a hollow ring and the horizon line plus both reflection ripples remain identical. So warming-ON reads as the sun's center igniting — the bright glowing core of the app icon — distinguishable from OFF in pure grayscale (hollow concentric rim vs solid lit core), before the gallery layers amber tint and glow on top.","rationale":"This variation's job is to capture the icon's \"light source\" feel, and the most faithful way to do that is the concentric rim-plus-core: the app icon's sun is visibly brighter at its center than its edge, so a nested inner arc that fills solid when active is the truest possible nod to its glowing core. The hard challenge is keeping two concentric arcs legible at 16px, so I shrank the inner core to radius 2.2u and grew the radial separation to a 2.3u clear ink gap (verified by rendering at true 16px with nearest-neighbour magnification) — the rim reads at small size where a tighter pair would merge into a blob. Floating the dome above its own horizon line (rather than fusing base-to-line) fixes the seed's mushy-mound con, and the two short reflection ripples restore the ownable sun-on-water trait the previous arc had dropped, all while holding the optical center at y=11.9 so the mark sits balanced in the menu-bar slot instead of bottom-stuck.","svgInactive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.2 11.0 A6.8 6.8 0 0 1 18.8 11.0\"/><path d=\"M9.8 11.0 A2.2 2.2 0 0 1 14.2 11.0\" stroke-width=\"2.0\"/><path d=\"M3.5 13.6 H20.5\"/><path d=\"M8.8 16.6 H15.2\" stroke-width=\"2.6\"/><path d=\"M10.3 19.6 H13.7\" stroke-width=\"2.4\"/></svg>","svgActive":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.2 11.0 A6.8 6.8 0 0 1 18.8 11.0\"/><path d=\"M9.8 11.0 A2.2 2.2 0 0 1 14.2 11.0 Z\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.0\"/><path d=\"M3.5 13.6 H20.5\"/><path d=\"M8.8 16.6 H15.2\" stroke-width=\"2.6\"/><path d=\"M10.3 19.6 H13.7\" stroke-width=\"2.4\"/></svg>","templateSafe":true,"verdict":{"readsAt16":"no","templateSafe":true,"activeInactiveLegible":"no","appIconFidelity":"low","pros":["Single flat currentColor, no gradients/opacity/filters - fully template-safe","Concept reads cleanly when large: a glowing-core sun with concentric rim is recognizable at 320px","Fixed footprint between states (only the inner core changes), so no jump/reflow"],"cons":["At true 16px the active and inactive rasters are pixel-identical (luminance maxdiff=0 on BOTH bars; still 0 on light at 22/32/44px) - the hollow-vs-filled core is sub-pixel and rounds away, so grayscale state is undetectable","Concentric rim-around-core collapses at 16px: the 2.3u gap blurs the outer dome and inner core into one muddy striped blob - the 'glow rim' idea is lost","The horizon + two shrinking ripples stack into a lampshade/spinning-top silhouette; the sun-on-water reflection does not read, so app-icon fidelity is weak"],"score":3,"oneLine":"Template-safe and pretty at large sizes, but it dies at 16px: the concentric rim turns to mush and the active core fill produces literally zero pixel change (maxdiff=0) so OFF/ON are indistinguishable in grayscale - not shippable."}}],"synthesis":{"overallNotes":"Findings are grounded in inspected assets: the favicon and the AppIcon iconset at 16px and 128px. First, horizon width is the silent killer; a horizon that flares too far past the dome creates arrow, spinning-top, or lampshade shapes, and the favicon ratio of about 1.3 times the dome width is the antidote rather than a full-slot bar. Second, taper direction matters; the real reflection is widest near the horizon and narrows downward, and bottom-weighted inverted it, so with two ripples the upper must be wider than the lower. Third, the best state vocabulary combines the safe hollow-to-solid dome with the reflection-presence signal from ripples-active, since the dome fill alone is too subtle at 16px where four of five faithful marks scored marginal, while water-lights-up was the only yes on state legibility. Fourth, template safety is a non-issue because every variation is single flat currentColor with no gradients, opacity, or filters, so decide on 16px survival, state legibility, and fidelity alone. Fifth, correct the brief framing: multi-ripple shimmer is a large-size trait and the brand small assets already reduced it to one ripple, so carry the idea of a half-sun cresting a tight horizon with a single reflection beneath rather than countable stacked ripples. Inspected paths: /Users/ball/Documents/abendrot/abendrot-build/landing/public/favicon.svg, /Users/ball/Documents/abendrot/abendrot-build/assets/AppIcon.iconset/icon_16x16.png, and /Users/ball/Documents/abendrot/abendrot-build/assets/AppIcon.iconset/icon_128x128.png.","narrowingGuidance":"RECOMMENDED: ship appicon-1ripple geometry with the appicon-ripples-active state concept. One mark: half-sun dome, a tight horizon about 1.3 times the dome width like the favicon rather than a full-slot bar, and exactly ONE ripple narrower than the horizon with a clear gap. Active state should fill the dome from hollow to solid AND light the single ripple, where off is faint or absent and on is full currentColor. Fixed footprint so it never jumps. KEY DECISION: the fidelity versus survival tension is resolved by the brand own assets; the favicon and the 16px app-icon render both abandon multi-ripple at small size, the favicon has one ripple and the 16px PNG collapses the reflection into a single band, so keep ONE ripple, and three ripples is a 320px idea not a menu-bar idea. RIPPLE LIMIT: one reliably survives at 16px; two only if both are bold, far apart, and the lower is not below three px; three or more is dead and reads as an equalizer, lampshade, or spinning-top. REJECT: glow-core, score 3, because the active fill produces zero pixel change at 16px; both mirror variants, mirror-dome and mirror-ripple at score 4, because an inverted dome reads as a second sun or a mouth never water and is off-brand since the icon uses horizontal shimmer lines, so use ripples never a mirror; and the 2ripple variant at score 4 fails on an over-wide horizon that becomes an upward arrow, which proves horizon width matters as much as ripple count.","topPicks":[{"id":"appicon-1ripple","why":"Shippable winner and the only reflection-bearing mark with an unqualified readsAt16 yes. Three-tier hierarchy of dome then horizon then one bold separated ripple encodes the reflection at 16px without it merging into the horizon. It matches the brand small-size reference: favicon.svg draws exactly ONE ripple, not three, so one ripple is the established small-size vocabulary. Fixable nits: add about one unit of dome-to-horizon clearance, and strengthen the active tell which is only about two px of sun interior today."},{"id":"appicon-ripples-active","why":"Highest fidelity, rated high, and the only variation that nails active and inactive by making the reflection itself the on-signal: calm dark water when off, lit ripples when on. Unmistakable grayscale state change, which is exactly the appicon-1ripple weakness. Dome and horizon and the hollow versus filled switch are solid at 16px. Flaw: it ships two ripples and the lower one near three px mushes; the fix is its own single-ripple simplification. Retune to one lit ripple and it is the strongest overall."},{"id":"appicon-bottom-weighted","why":"Structural reference, not as-is. Best icon-true framing, a half-sun cresting a tight-overhang horizon with reflection beneath, and a clean hollow versus solid state at 16px. Cautionary: the top ripple fuzzes, the taper is inverted with ripple two wider than ripple one which is backwards versus the icon and favicon, and the framing claim does not match the geometry. Use it as the donor of the tight-overhang horizon and optical centering, and take the ripple geometry from appicon-1ripple."}]}};
+
+// Generic outline system glyph (a Wi-Fi-ish chevron arc) for the bar mock.
+const SYS_GLYPH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M8.5 16.05a6 6 0 0 1 7 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>';
+
+// Warm/busy CSS-gradient wallpapers — the hardest case for a warm icon to survive.
+const WALLS = [
+  {id:'W1', css:'linear-gradient(160deg,#ff9a56,#ff6a3d 50%,#c23a1f)'},
+  {id:'W2', css:'linear-gradient(150deg,#f7b267,#f4845f 45%,#c75146 80%,#7a2d3a)'},
+  {id:'W3', css:'repeating-linear-gradient(58deg,#e8a04a 0 14px,#d98438 14px 28px)'},
+  {id:'W4', css:'linear-gradient(165deg,#2a1830,#6a100f 55%,#fb7c0e)'}
+];
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function scoreClass(score){
+  if (score >= 8) return 'hi';
+  if (score >= 6) return 'mid';
+  return 'lo';
+}
+
+// --- Markdown -> basic HTML for the research brief (## -> h2, - bullets -> <li>, rest -> <p>)
+function renderMarkdown(md){
+  const lines = md.split('\n');
+  let html = '';
+  let inList = false;
+  const closeList = () => { if (inList){ html += '</ul>'; inList = false; } };
+
+  const inline = (text) => {
+    let t = escapeHtml(text);
+    // code spans
+    t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // bold
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // italics
+    t = t.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // links [text](url)
+    t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return t;
+  };
+
+  for (let raw of lines){
+    const line = raw.replace(/\s+$/,'');
+    if (line.trim() === ''){ closeList(); continue; }
+    const h2 = line.match(/^#{1,6}\s+(.*)$/);
+    if (h2){ closeList(); html += '<h2>' + inline(h2[1]) + '</h2>'; continue; }
+    const bullet = line.match(/^\s*-\s+(.*)$/);
+    if (bullet){
+      if (!inList){ html += '<ul>'; inList = true; }
+      html += '<li>' + inline(bullet[1]) + '</li>';
+      continue;
+    }
+    closeList();
+    html += '<p>' + inline(line) + '</p>';
+  }
+  closeList();
+  return html;
+}
+
+// --- Synthesis block (top picks + narrowing guidance)
+function renderSynth(){
+  const s = DATA.synthesis;
+  const nameById = {};
+  DATA.icons.forEach(i => { nameById[i.id] = i.name; });
+  let html = '<h3>Synthesis · top picks</h3>';
+  s.topPicks.forEach(p => {
+    const name = nameById[p.id] || p.id;
+    html += '<div class="pick"><b>' + escapeHtml(name) + '</b> — ' + escapeHtml(p.why) + '</div>';
+  });
+  html += '<p><b>Narrowing guidance:</b> ' + escapeHtml(s.narrowingGuidance) + '</p>';
+  document.getElementById('synth').innerHTML = html;
+}
+
+// --- One card
+function renderCard(icon){
+  const v = icon.verdict;
+  const sc = scoreClass(v.score);
+  const tmplClass = icon.templateSafe ? 'v-yes' : 'v-no';
+  const tmplVal = icon.templateSafe ? 'yes' : 'no';
+
+  const pros = (v.pros || []).map(p => '<li>' + escapeHtml(p) + '</li>').join('');
+  const cons = (v.cons || []).map(c => '<li>' + escapeHtml(c) + '</li>').join('');
+
+  const art = document.createElement('article');
+  art.className = 'card';
+  art.innerHTML =
+    '<div class="card-h">' +
+      '<div><div class="fam">' + escapeHtml(icon.family) + '</div><h3>' + escapeHtml(icon.name) + '</h3></div>' +
+      '<span class="score ' + sc + '">' + v.score + '/10</span>' +
+    '</div>' +
+    '<p class="concept">' + escapeHtml(icon.concept) + '</p>' +
+
+    '<div class="bars">' +
+      '<div class="bar dark"><span class="bartag">Dark bar</span>' +
+        '<span class="ico inactive">' + icon.svgInactive + '</span>' +
+        '<span class="ico active">' + icon.svgActive + '</span>' +
+        '<span class="sys">' + SYS_GLYPH + '</span>' +
+        '<span class="clock">9:41 PM</span></div>' +
+      '<div class="bar light"><span class="bartag">Light bar</span>' +
+        '<span class="ico inactive">' + icon.svgInactive + '</span>' +
+        '<span class="ico active">' + icon.svgActive + '</span>' +
+        '<span class="sys">' + SYS_GLYPH + '</span>' +
+        '<span class="clock">9:41 PM</span></div>' +
+    '</div>' +
+
+    '<div class="zoom">' +
+      '<figure><div class="stage"><span class="big inactive">' + icon.svgInactive + '</span></div><figcaption>Inactive</figcaption></figure>' +
+      '<figure><div class="stage"><span class="big active">' + icon.svgActive + '</span></div><figcaption>Active</figcaption></figure>' +
+      '<figure><div class="stage wall"><span class="big active">' + icon.svgActive + '</span></div><figcaption>Active · busy wallpaper</figcaption></figure>' +
+    '</div>' +
+
+    '<dl class="meta">' +
+      '<div><dt>Reads@16</dt><dd class="v-' + escapeHtml(v.readsAt16) + '">' + escapeHtml(v.readsAt16) + '</dd></div>' +
+      '<div><dt>Template-safe</dt><dd class="' + tmplClass + '">' + tmplVal + '</dd></div>' +
+      '<div><dt>Active≠Inactive</dt><dd class="v-' + escapeHtml(v.activeInactiveLegible) + '">' + escapeHtml(v.activeInactiveLegible) + '</dd></div>' +
+      '<div><dt>Family</dt><dd>' + escapeHtml(icon.family) + '</dd></div>' +
+    '</dl>' +
+    '<p class="treat"><b>Active:</b> ' + escapeHtml(icon.activeTreatment) + '</p>' +
+    '<div class="pc">' +
+      '<div><h4>Pros</h4><ul class="pros">' + pros + '</ul></div>' +
+      '<div><h4>Cons</h4><ul class="cons">' + cons + '</ul></div>' +
+    '</div>' +
+    '<p class="rationale">' + escapeHtml(icon.rationale) + '</p>';
+
+  return art;
+}
+
+// --- Grid (sorted by verdict.score desc)
+function renderGrid(){
+  const grid = document.getElementById('grid');
+  const sorted = DATA.icons.slice().sort((a,b) => b.verdict.score - a.verdict.score);
+  const frag = document.createDocumentFragment();
+  sorted.forEach(icon => frag.appendChild(renderCard(icon)));
+  grid.appendChild(frag);
+}
+
+// --- Controls: zoom + wallpaper swatches
+function applyWall(css){
+  document.querySelectorAll('.stage.wall').forEach(el => { el.style.backgroundImage = css; });
+}
+
+function renderControls(){
+  const range = document.getElementById('zoomRange');
+  range.addEventListener('input', () => {
+    document.documentElement.style.setProperty('--zoom', range.value + 'px');
+  });
+
+  const walls = document.getElementById('walls');
+  WALLS.forEach((w, idx) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.title = w.id;
+    b.style.background = w.css;
+    if (idx === 0) b.classList.add('sel');
+    b.addEventListener('click', () => {
+      walls.querySelectorAll('button').forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+      applyWall(w.css);
+    });
+    walls.appendChild(b);
+  });
+}
+
+// --- Boot
+document.getElementById('research-body').innerHTML = renderMarkdown(DATA.research);
+renderSynth();
+renderGrid();
+renderControls();
+applyWall(WALLS[0].css); // default W1
+</script>
+</body>
+</html>

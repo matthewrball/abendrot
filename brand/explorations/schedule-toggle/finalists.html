@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abendrot · Schedule toggle — Finalists (A3 vs D2)</title>
+<style>
+:root{
+  --accent:#FD9228; --accent-hl:#FFC061; --accent-deep:#C2310A; --accent-rim:#FFE0B8;
+  --accent-press:#E2740F; --ink-on-cream:#9C4310;
+  --indigo:#160A12; --plum:#221019; --twilight:#341320; --twilight-2:#45192A;
+  --text:#F3EADF; --muted:rgba(243,234,223,.60); --faint:rgba(243,234,223,.38); --cream:#F7ECD9;
+  --line:rgba(255,240,230,.10); --line-strong:rgba(255,240,230,.16);
+  --sunset:linear-gradient(180deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --glow-soft:0 0 36px -10px rgba(253,146,40,.7);
+  --ease-warm:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box} html,body{margin:0;padding:0} html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+  background:
+    radial-gradient(900px 520px at 80% -14%, rgba(253,146,40,.10), transparent 60%),
+    linear-gradient(168deg,#2A1119 0%, var(--plum) 46%, var(--indigo) 100%);
+  background-attachment:fixed; min-height:100vh;
+}
+:focus-visible{outline:3px solid var(--accent-hl); outline-offset:3px; border-radius:8px;}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important;animation:none!important;} }
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px;}
+
+header{padding:62px 0 8px;}
+.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-hl);font-weight:600;margin:0 0 14px;}
+h1.title{font-family:ui-serif,"New York",Georgia,serif;font-weight:600;letter-spacing:-.03em;line-height:1.02;
+  font-size:clamp(34px,5vw,54px);margin:0;
+  background:linear-gradient(180deg,var(--accent-rim) 0%,var(--accent-hl) 60%,var(--accent) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;}
+.lede{max-width:74ch;color:var(--muted);font-size:15.5px;line-height:1.6;margin:18px 0 0;}
+.lede b{color:var(--text);font-weight:600;}
+.crumb{margin:14px 0 0;font-size:12.5px;color:var(--faint);}
+.crumb a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line-strong);}
+.crumb a:hover{color:var(--accent-hl);}
+
+/* compare cards */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:34px 0 8px;}
+@media(max-width:840px){.compare{grid-template-columns:1fr}}
+.cmp{border:1px solid var(--line);border-radius:16px;padding:22px;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(0,0,0,.06));}
+.cmp::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--sunset);opacity:.8;}
+.cmp h3{margin:0 0 2px;font-size:18px;font-weight:700;letter-spacing:-.02em;}
+.cmp .kind{font-size:12px;color:var(--accent-hl);font-weight:600;margin:0 0 14px;}
+.cmp .row{font-size:13px;line-height:1.5;margin:0 0 10px;color:var(--text);}
+.cmp .row b{color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;display:block;margin-bottom:3px;}
+.cmp .row span{color:var(--muted);}
+.cmp a.jump{display:inline-block;margin-top:6px;font-size:12.5px;color:var(--accent-hl);text-decoration:none;border:1px solid var(--line-strong);border-radius:8px;padding:5px 12px;}
+.cmp a.jump:hover{border-color:var(--accent-hl);}
+
+.section-head{margin:60px 0 14px;}
+.section-head .n{font-family:ui-serif,Georgia,serif;font-size:13px;color:var(--accent);}
+.section-head h2{font-size:clamp(21px,2.6vw,28px);font-weight:600;margin:5px 0 0;letter-spacing:-.02em;}
+.section-head p{margin:8px 0 0;color:var(--muted);font-size:13.5px;line-height:1.55;max-width:80ch;}
+.section-head .tag{display:inline-block;margin-top:10px;font-size:12px;color:var(--accent-hl);border:1px solid var(--line-strong);border-radius:999px;padding:4px 12px;}
+
+.frame{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:rgba(0,0,0,.10);box-shadow:0 18px 50px rgba(0,0,0,.30);}
+.frame-bar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.03),transparent);}
+.frame-bar .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:var(--glow-soft);flex:0 0 auto;}
+.frame-bar .lbl{font-size:12.5px;font-weight:600;}
+.frame-bar .open{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line-strong);border-radius:8px;padding:4px 11px;}
+.frame-bar .open:hover{color:var(--accent-hl);border-color:var(--accent-hl);}
+.frame iframe{display:block;width:100%;border:0;background:transparent;}
+
+/* audit */
+.audit{margin-top:18px;border:1px solid var(--line);border-radius:16px;padding:24px;background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(0,0,0,.05));}
+.audit h3{margin:0 0 4px;font-size:16px;font-weight:700;letter-spacing:-.01em;}
+.audit .sub{margin:0 0 18px;color:var(--muted);font-size:12.5px;}
+.lens{margin:0 0 16px;padding:0 0 0 14px;border-left:2px solid var(--line-strong);}
+.lens h4{margin:0 0 6px;font-size:13px;font-weight:700;color:var(--accent-hl);}
+.lens p{margin:0;font-size:13px;line-height:1.55;color:var(--muted);}
+.lens p b{color:var(--text);font-weight:600;}
+table.sev{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;}
+table.sev th,table.sev td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+table.sev th{color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;}
+table.sev td:first-child{white-space:nowrap;}
+.pill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;}
+.pill.ok{background:rgba(120,200,120,.14);color:#9fd99f;}
+.pill.minor{background:rgba(255,192,97,.16);color:var(--accent-hl);}
+.pill.crit{background:rgba(226,90,40,.18);color:#ff9b73;}
+
+.rec{margin-top:30px;border:1px solid var(--line-strong);border-radius:18px;padding:26px;
+  background:linear-gradient(180deg,rgba(253,146,40,.06),rgba(0,0,0,.05));}
+.rec h3{margin:0 0 12px;font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent-hl);font-weight:700;}
+.rec p{margin:0 0 12px;font-size:14px;line-height:1.62;color:var(--text);}
+.rec p:last-child{margin-bottom:0}
+.rec p b{font-weight:700;} .rec .muted{color:var(--muted);}
+footer{margin:48px 0 90px;padding-top:24px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px;line-height:1.6;}
+footer code{color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Abendrot · Settings → Schedule · Finalists</p>
+    <h1 class="title">A3 vs D2 — head to head.</h1>
+    <p class="lede">The two you flagged, refined into finished, larger versions — each with a couple of micro-variations.
+    Both fixed where they were weak: A3's endless spin is now a <b>one-shot that settles</b>; D2 gets a <b>certain spring snap</b>,
+    labelled detents, and a readout + shortcuts so the binary is unmistakable. Click and keyboard everything. A motion audit
+    sits under each. Pick a winner (or a variation) and I'll port it to SwiftUI.</p>
+    <p class="crumb">← Back to the full <a href="index.html">20-concept gallery</a> · inspiration brief in <a href="inspiration.md">inspiration.md</a></p>
+
+    <div class="compare">
+      <div class="cmp">
+        <h3>A3 · Living glyph</h3>
+        <p class="kind">Native segmented control · the safe pick</p>
+        <div class="row"><b>What it is</b><span>A larger Liquid-Glass segmented control; the chosen segment's sun glyph dips below a horizon (Sunset) or blooms steady rays (Always on), one-shot.</span></div>
+        <div class="row"><b>Strengths</b><span>Instantly reads as "pick one of two." Most native, lowest port risk, fastest to feel certain. Calm.</span></div>
+        <div class="row"><b>Watch-outs</b><span>Less of a "wow" showpiece; flourish re-fires on rapid keyboard arrowing (easy to gate).</span></div>
+        <a class="jump" href="#a3">Jump to A3 ↓</a>
+      </div>
+      <div class="cmp">
+        <h3>D2 · Rotary ember dial</h3>
+        <p class="kind">Tactile instrument · the showpiece</p>
+        <div class="row"><b>What it is</b><span>A big glass knob with two labelled detents and an ember arc; turn/drag/click and the sun snaps Sunset↔Always on with a tactile landing. Readout + shortcuts beneath.</span></div>
+        <div class="row"><b>Strengths</b><span>Distinctive, premium, exactly the "custom / artful" brief. Memorable to operate.</span></div>
+        <div class="row"><b>Watch-outs</b><span>A dial for a binary needs the shortcuts to stay legible; more SwiftUI work; the arc must be ported as a real animatable sweep.</span></div>
+        <a class="jump" href="#d2">Jump to D2 ↓</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== A3 ===================== -->
+  <div class="section-head" id="a3">
+    <span class="n">A3</span>
+    <h2>Living glyph — refined</h2>
+    <p>Lead variation first (rays scale-in), then rays draw-in, icon-beside-label, and a showcase size. The selection chrome
+    resolves in ~140ms on the warm ease; the glyph flourish is a separate one-shot that blooms and <em>holds</em>.</p>
+    <span class="tag">Recommended default for a settings control</span>
+  </div>
+  <div class="frame">
+    <div class="frame-bar"><span class="dot"></span><span class="lbl">A3 · Living glyph · 4 variations</span>
+      <a class="open" href="finalist-a3-living-glyph.html" target="_blank" rel="noopener">Open ↗</a></div>
+    <iframe src="finalist-a3-living-glyph.html" title="Finalist A3 — living glyph" style="height:2500px" loading="lazy"></iframe>
+  </div>
+  <div class="audit">
+    <h3>Motion audit · A3</h3>
+    <p class="sub">Lenses: Emil Kowalski (primary) · Jakub Krehel (secondary) · Jhey Tompkins (selective). macOS utility = restraint first.</p>
+    <div class="lens"><h4>Emil — restraint &amp; speed</h4><p>The <b>functional</b> change (fill + ink) is ~140–220ms warm ease — fast and certain. The decorative flourish runs ~400–460ms but is separable garnish, not the state change, so it's fine. <b>One flag:</b> the flourish re-fires on each keyboard arrow; per "don't animate keyboard-initiated actions," gate it to fire on commit (Enter/Space) only.</p></div>
+    <div class="lens"><h4>Jakub — production polish</h4><p>Lit-glass selected state (sunset fill + specular sheen + hairline rim + ember glow), press scale, hover lift — reads as finished macOS Tahoe glass. Rays bloom from scale .6 (not 0), so no pop. Clean.</p></div>
+    <div class="lens"><h4>Jhey — craft</h4><p>The clip-masked sun dipping below the horizon and the staggered ray bloom are genuinely delightful and on-theme without tipping into gimmick. The infinite spin is gone — good call.</p></div>
+    <table class="sev">
+      <tr><th>Severity</th><th>Item</th></tr>
+      <tr><td><span class="pill ok">PASS</span></td><td>prefers-reduced-motion (global + belt-and-braces), real radiogroup + full keyboard, transform/opacity-only, custom warm-ease curves, --indigo ink contrast.</td></tr>
+      <tr><td><span class="pill minor">MINOR</span></td><td>Glyph flourish re-fires on rapid keyboard arrowing — fire only on commit, or skip glyph anim for keyboard nav.</td></tr>
+      <tr><td><span class="pill minor">NOTE</span></td><td>Flourish &gt;300ms — acceptable as garnish since the functional selection is fast; keep it that way in the SwiftUI port.</td></tr>
+    </table>
+  </div>
+
+  <!-- ===================== D2 ===================== -->
+  <div class="section-head" id="d2">
+    <span class="n">D2</span>
+    <h2>Rotary ember dial — refined</h2>
+    <p>Lead first (conic ember arc), then a tick-ring gauge, then a living-sun face (the built-in bridge to A3). Two labelled
+    detents at the base, a spring snap + glow bloom on landing, drag / tap / full keyboard, and a readout + shortcuts.</p>
+    <span class="tag">The showpiece if Schedule should feel signature</span>
+  </div>
+  <div class="frame">
+    <div class="frame-bar"><span class="dot"></span><span class="lbl">D2 · Rotary ember dial · 3 variations</span>
+      <a class="open" href="finalist-d2-rotary-dial.html" target="_blank" rel="noopener">Open ↗</a></div>
+    <iframe src="finalist-d2-rotary-dial.html" title="Finalist D2 — rotary ember dial" style="height:2050px" loading="lazy"></iframe>
+  </div>
+  <div class="audit">
+    <h3>Motion audit · D2</h3>
+    <p class="sub">Lenses: Emil Kowalski (primary) · Jakub Krehel (secondary) · Jhey Tompkins (selective).</p>
+    <div class="lens"><h4>Emil — restraint &amp; speed</h4><p>The cap rotation + snap run ~420–520ms with an overshoot spring. Emil would trim toward ~380ms — but this is a deliberately tactile instrument set rarely, and the <b>functional</b> readout + shortcuts update instantly, so the long snap is acceptable garnish. Keyboard sets state immediately; the spin is suppressed under reduced-motion.</p></div>
+    <div class="lens"><h4>Jakub — production polish</h4><p>Machined-glass knob (specular, knurled grip, hairline rim, depth shadow), lit detents, glow bloom on landing — premium and finished. <b>One real gap:</b> the lead's ember <b>arc is a discrete conic-gradient swap</b> — it cross-fades rather than sweeping. In SwiftUI, port it as an animatable trimmed arc so the fill genuinely travels.</p></div>
+    <div class="lens"><h4>Jhey — craft</h4><p>The dial is the most distinctive thing in the whole set, and D2.3's living-sun face (dips/blooms inside the knob) is a lovely fusion with A3. Inventive without losing the Apple feel.</p></div>
+    <table class="sev">
+      <tr><th>Severity</th><th>Item</th></tr>
+      <tr><td><span class="pill ok">PASS</span></td><td>prefers-reduced-motion snaps instantly (no vestibular spin), role=switch + aria-checked + shortcuts, drag via Pointer Events with snap-to-nearer-detent, full keyboard incl. Home/End.</td></tr>
+      <tr><td><span class="pill minor">MINOR</span></td><td>Lead arc fill is a conic swap (cross-fades, doesn't sweep) — port as a trimmed/animatable arc in SwiftUI.</td></tr>
+      <tr><td><span class="pill minor">MINOR</span></td><td>D2.2 transitions <code>mask</code> (costly to animate) — fine on Mac GPUs, but prefer D2.1/D2.3 for the build.</td></tr>
+      <tr><td><span class="pill minor">NOTE</span></td><td>420–520ms snap &gt; Emil's 300ms — intentional tactile feel; keep functional state instant.</td></tr>
+    </table>
+  </div>
+
+  <!-- ===================== RECOMMENDATION ===================== -->
+  <div class="rec">
+    <h3>My read</h3>
+    <p>The deciding question is <b>how prominent the Schedule choice should feel.</b> It's a setting users pick once and rarely
+    revisit — for that job, <b>A3.1 wins</b>: instantly legible as a two-way choice, most native, lowest port risk, and the
+    living glyph still gives it a small, on-brand moment of delight. It's the safe, correct default.</p>
+    <p><b>If you want Schedule to be a signature, look-at-this moment</b> — and the founder's brief did lean "custom / artful" —
+    <b>D2.3 (living-sun dial)</b> is the showpiece, and it folds A3's living glyph into the knob face, so you don't fully lose
+    that idea. The segmented shortcuts keep it honest for first-time users and keyboard.</p>
+    <p class="muted">Either ports cleanly to SwiftUI (gradients, shapes, springs — no raster). Tell me the winner (down to the
+    variation) and I'll build it into <code>ModeControl.swift</code> with the audit fixes applied — or I can prototype both in
+    Swift if you want to feel them on real hardware before committing.</p>
+  </div>
+
+  <footer>
+    <p><b>Files</b> · <code>brand/explorations/schedule-toggle/</code> — <code>finalist-a3-living-glyph.html</code>,
+    <code>finalist-d2-rotary-dial.html</code>, this <code>finalists.html</code>, the full <code>index.html</code> gallery,
+    <code>inspiration.md</code>, <code>_SPEC.md</code>.</p>
+    <p><b>Audit lenses</b> · Emil Kowalski (restraint/speed, primary) · Jakub Krehel (production polish, secondary) ·
+    Jhey Tompkins (craft, selective). Both finalists pass accessibility (reduced-motion) and have no critical issues.</p>
+  </footer>
+</div>
+
+<script>
+  // Auto-size each finalist iframe from the content height it posts.
+  addEventListener('message', function(e){
+    var d = e.data; if(!d || d.type!=='iframeHeight' || !d.name) return;
+    var f = Array.prototype.find.call(document.querySelectorAll('iframe'), function(fr){
+      return fr.getAttribute('src') === d.name || fr.getAttribute('src').split('/').pop() === d.name;
+    });
+    if(f && d.h){ var nh = d.h + 'px'; if(f.style.height !== nh) f.style.height = nh; }
+  });
+</script>
+</body>
+</html>

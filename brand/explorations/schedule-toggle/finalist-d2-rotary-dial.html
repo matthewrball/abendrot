@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abendrot · Finalist D2 — Rotary ember dial</title>
+<style>
+:root{
+  /* Accent ramp (golden sun core → deep ember) */
+  --accent:#FD9228; --accent-hl:#FFC061; --accent-deep:#C2310A; --accent-rim:#FFE0B8;
+  --accent-press:#E2740F; --ink-on-cream:#9C4310;
+  /* Twilight grounds (warm near-blacks — NEVER pure #000) */
+  --indigo:#160A12; --plum:#221019; --twilight:#341320; --twilight-2:#45192A;
+  /* Text (warm off-white, never #fff) */
+  --text:#F3EADF; --muted:rgba(243,234,223,.60); --faint:rgba(243,234,223,.38); --cream:#F7ECD9;
+  /* Lines / dividers */
+  --line:rgba(255,240,230,.10); --line-strong:rgba(255,240,230,.16);
+  /* RESERVED — Reveal-True-Color veil only; do not reuse for chrome */
+  --reveal:#FFFFFF;
+  /* Sunset gradients */
+  --sunset:linear-gradient(180deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%); /* control fill */
+  --sunset-h:linear-gradient(90deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --sky:linear-gradient(180deg,#160A12 0%,#2A0F16 34%,#6A100F 60%,#C2310A 80%,#FB7C0E 92%,#FD9228 100%); /* the icon's sky→sun ramp */
+  /* Glass + glow (liquid-glass recipe) */
+  --glass-tint:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+  --glass-inset:inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 0 0 .5px rgba(255,255,255,.22);
+  --glow-accent:0 0 24px -6px rgba(253,146,40,.9);
+  --glow-soft:0 0 36px -10px rgba(253,146,40,.7);
+  /* Motion — the brand's signature warm ease */
+  --ease-warm:cubic-bezier(.22,.61,.36,1); --ease-standard:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.11s; --dur-base:.14s; --dur-reveal:.22s;
+  /* Radius */
+  --r-card:22px; --r-control:12px; --r-pill:999px;
+  /* Finalist springs — built on the warm ease, tuned for a certain detent snap */
+  --spring-snap:cubic-bezier(.34,1.56,.64,1);   /* overshoot for the cap rotation landing */
+  --spring-soft:cubic-bezier(.22,1.2,.36,1);    /* gentle overshoot for arc / glow settle */
+}
+
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+  background:
+    radial-gradient(900px 520px at 80% -14%, rgba(253,146,40,.10), transparent 60%),
+    linear-gradient(168deg,#2A1119 0%, var(--plum) 46%, var(--indigo) 100%);
+  background-attachment:fixed; min-height:100vh; padding:34px 0 64px;
+}
+/* warm keyboard focus ring (mirror the shipping app) */
+:focus-visible{outline:3px solid var(--accent-hl); outline-offset:3px; border-radius:8px;}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important;} }
+
+/* ---------- shared chrome (from spec, verbatim) ---------- */
+.wrap{max-width:920px;margin:0 auto;padding:0 28px;}
+.hd{max-width:920px;margin:0 auto 26px;padding:0 28px;}
+.hd h1{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-.02em;}
+.hd p{margin:0;color:var(--muted);font-size:13px;}
+.concept{margin:0 0 30px; padding:22px; border:1px solid var(--line); border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.018), rgba(0,0,0,.06));}
+.ctag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-hl);
+  margin-bottom:16px;}
+.panel{max-width:520px;}
+.ptitle{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:3px;}
+.psub{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.pdesc{color:var(--muted);font-size:12.5px;line-height:1.55;margin:16px 0 0;}
+.cnote{margin-top:16px;font-size:12px;color:var(--faint);font-style:italic;}
+/* page title + per-family heading you add at top of <body> */
+.fam{max-width:920px;margin:30px auto 18px;padding:0 28px;}
+.fam h2{font-size:15px;font-weight:600;margin:0;color:var(--text);}
+.fam p{margin:4px 0 0;color:var(--muted);font-size:12.5px;max-width:70ch;}
+
+/* ---------- Liquid Glass helpers (from spec, verbatim) ---------- */
+.glass{
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+}
+.frost{
+  background:linear-gradient(150deg,rgba(58,21,33,.80),rgba(36,16,25,.90));
+  -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.45);
+}
+.sheen::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.05) 40%,transparent 70%);
+  mix-blend-mode:soft-light;}
+
+/* Shared screen-reader-only helper */
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+/* ============================================================= */
+/* SHARED DIAL SYSTEM (all variations build on .dl-*)            */
+/* ============================================================= */
+/* Layout: a big knob on the left, a readout + shortcuts on the right.        */
+/* The two detents sit at the BOTTOM of the dial — Sunset lower-left,         */
+/* Always-on lower-right — so a binary choice reads as "tip the sun L or R".  */
+
+.dial-row{display:flex;align-items:center;gap:30px;flex-wrap:wrap;}
+
+/* ---- the knob shell ---- */
+.dl{
+  --size:184px;
+  --lo-ang:-52deg;          /* Sunset detent angle (cap pointer rests here) */
+  --hi-ang:52deg;           /* Always-on detent angle */
+  position:relative;width:var(--size);height:var(--size);border-radius:50%;flex:0 0 auto;
+  cursor:pointer;border:0;padding:0;font-family:inherit;display:block;
+  -webkit-tap-highlight-color:transparent;touch-action:none;
+  background:
+    radial-gradient(120% 120% at 32% 26%, rgba(255,255,255,.14), rgba(255,255,255,.02) 46%, rgba(0,0,0,.10) 100%),
+    var(--glass-tint);
+  -webkit-backdrop-filter:blur(18px) saturate(190%); backdrop-filter:blur(18px) saturate(190%);
+  box-shadow:
+    var(--glass-inset),
+    0 1px 0 rgba(255,255,255,.10) inset,
+    0 20px 50px rgba(0,0,0,.46),
+    0 4px 14px rgba(0,0,0,.34);
+  transition:box-shadow .42s var(--ease-warm), transform .26s var(--spring-soft);
+}
+.dl:hover{box-shadow:
+    var(--glass-inset),
+    0 1px 0 rgba(255,255,255,.10) inset,
+    0 22px 54px rgba(0,0,0,.48),
+    0 4px 14px rgba(0,0,0,.34),
+    var(--glow-soft);}
+.dl:active{transform:scale(.99);}
+
+/* hairline outer rim so it reads as one machined glass slug */
+.dl-rim{position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:6;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16), inset 0 0 0 2px rgba(0,0,0,.16);}
+
+/* the recessed track groove the arc lives in */
+.dl-track{position:absolute;inset:16px;border-radius:50%;pointer-events:none;z-index:1;
+  background:conic-gradient(from 180deg,
+     rgba(0,0,0,.30) 0deg, rgba(255,240,230,.05) 18deg,
+     rgba(255,240,230,.06) 342deg, rgba(0,0,0,.30) 360deg);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 12px));
+          mask:radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 12px));
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.5);}
+
+/* lit ember arc — sweeps from the Sunset detent toward the active angle.
+   We animate --fill (0..1) via JS-set custom prop; conic stop is computed inline. */
+.dl-arc{position:absolute;inset:16px;border-radius:50%;pointer-events:none;z-index:2;
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 12px));
+          mask:radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 12px));
+  /* base (Sunset): a short warm wedge anchored at lower-left ~128deg */
+  background:conic-gradient(from 128deg,
+     var(--accent-press) 0deg, var(--accent) 16deg, var(--accent-hl) 40deg, transparent 40deg);
+  opacity:.5;
+  transition:opacity .42s var(--ease-warm), filter .42s var(--ease-warm);
+  filter:drop-shadow(0 0 0 transparent);}
+.dl[data-on="true"] .dl-arc{
+  opacity:1;
+  background:conic-gradient(from 128deg,
+     var(--accent-press) 0deg, var(--accent) 36deg, var(--accent-hl) 90deg,
+     var(--accent-hl) 104deg, transparent 104deg);
+  filter:drop-shadow(0 0 7px rgba(253,146,40,.6));}
+
+/* the rotating glass cap — bears the grip texture, a pointer, and the sun face */
+.dl-cap{position:absolute;inset:30px;border-radius:50%;pointer-events:none;z-index:3;
+  background:
+    radial-gradient(120% 120% at 38% 30%, rgba(255,255,255,.20), rgba(255,255,255,.04) 52%, rgba(0,0,0,.22) 100%);
+  box-shadow:
+    var(--glass-inset),
+    0 8px 20px rgba(0,0,0,.42),
+    0 2px 5px rgba(0,0,0,.30);
+  transform:rotate(var(--lo-ang));
+  transition:transform .52s var(--spring-snap);
+  will-change:transform;}
+.dl[data-on="true"] .dl-cap{transform:rotate(var(--hi-ang));}
+/* while dragging, JS sets --drag-ang and we follow the finger 1:1 (no spring) */
+.dl[data-dragging="true"] .dl-cap{transform:rotate(var(--drag-ang)) !important;transition:none !important;}
+/* press squish on the cap for grab feedback */
+.dl:active .dl-cap{transform:rotate(var(--lo-ang)) scale(.985);}
+.dl[data-on="true"]:active .dl-cap{transform:rotate(var(--hi-ang)) scale(.985);}
+
+/* knurled grip ring — fine radial ticks around the cap edge, machined-knob feel */
+.dl-knurl{position:absolute;inset:30px;border-radius:50%;pointer-events:none;z-index:4;
+  transform:rotate(var(--lo-ang));
+  transition:transform .52s var(--spring-snap);
+  background:
+    repeating-conic-gradient(from 0deg,
+      rgba(255,255,255,.16) 0deg 1.1deg,
+      rgba(0,0,0,.14) 1.1deg 3deg);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px) calc(100% - 1px), transparent 100%);
+          mask:radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px) calc(100% - 1px), transparent 100%);
+  opacity:.7;mix-blend-mode:soft-light;}
+.dl[data-on="true"] .dl-knurl{transform:rotate(var(--hi-ang));}
+.dl[data-dragging="true"] .dl-knurl{transform:rotate(var(--drag-ang)) !important;transition:none !important;}
+
+/* the pointer notch — a lit ember tab at the top of the cap that aims at the active detent */
+.dl-cap::before{content:"";position:absolute;top:9px;left:50%;width:6px;height:26px;border-radius:3px;
+  transform:translateX(-50%);
+  background:linear-gradient(180deg, var(--accent-rim), var(--accent-hl) 40%, var(--accent));
+  box-shadow:0 0 10px rgba(253,146,40,.8), 0 0 0 .5px rgba(255,255,255,.45) inset;}
+
+/* the sun face at the centre of the cap (plain grip variant uses this) */
+.dl-sun{position:absolute;top:50%;left:50%;width:46px;height:46px;border-radius:50%;z-index:5;
+  transform:translate(-50%,-50%);pointer-events:none;
+  background:radial-gradient(circle at 38% 34%, var(--accent-rim), var(--accent-hl) 30%, var(--accent) 66%, var(--accent-press));
+  box-shadow:0 0 0 .5px rgba(255,255,255,.5) inset, 0 2px 6px rgba(0,0,0,.4);
+  transition:box-shadow .42s var(--ease-warm), filter .42s var(--ease-warm);
+  filter:saturate(.92) brightness(.94);}
+.dl[data-on="false"] .dl-sun{filter:saturate(.78) brightness(.8);}
+.dl[data-on="true"]  .dl-sun{filter:saturate(1.06) brightness(1.08);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.55) inset, 0 2px 6px rgba(0,0,0,.4),
+             0 0 18px 3px rgba(255,192,97,.7), 0 0 34px 8px rgba(253,146,40,.42);}
+
+/* glass specular highlight across the whole dial (wet-glass) */
+.dl-spec{position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:5;
+  background:linear-gradient(162deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.05) 36%, transparent 60%);
+  mix-blend-mode:soft-light;}
+
+/* the two labelled detents at the base of the dial — THE legibility anchor.
+   Each is a small dot + a tiny label so "which way is which" is unmistakable. */
+.dl-detent{position:absolute;z-index:5;pointer-events:none;display:flex;align-items:center;gap:6px;}
+.dl-detent .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;
+  background:rgba(255,240,230,.30);box-shadow:0 0 0 .5px rgba(0,0,0,.35);
+  transition:background .3s var(--ease-warm), box-shadow .3s var(--ease-warm), transform .3s var(--spring-snap);}
+.dl-detent .dl-dt-lab{font-size:10.5px;font-weight:650;letter-spacing:.01em;color:var(--faint);white-space:nowrap;
+  transition:color .3s var(--ease-warm);}
+.dl-detent.lo{left:8px;bottom:24px;}
+.dl-detent.hi{right:8px;bottom:24px;flex-direction:row-reverse;}
+.dl[data-on="false"] .dl-detent.lo .dot,
+.dl[data-on="true"]  .dl-detent.hi .dot{
+  background:var(--accent-hl);box-shadow:0 0 9px rgba(255,192,97,.85);transform:scale(1.15);}
+.dl[data-on="false"] .dl-detent.lo .dl-dt-lab,
+.dl[data-on="true"]  .dl-detent.hi .dl-dt-lab{color:var(--text);}
+
+/* ---- snap feedback: a quick scale pulse + glow bloom on landing (JS adds .snap) ---- */
+.dl.snap{animation:dlSnap .34s var(--ease-warm);}
+@keyframes dlSnap{
+  0%{transform:scale(1);}
+  34%{transform:scale(1.035);}
+  68%{transform:scale(.992);}
+  100%{transform:scale(1);}
+}
+.dl-bloom{position:absolute;top:50%;left:50%;width:60px;height:60px;border-radius:50%;z-index:5;
+  transform:translate(-50%,-50%) scale(.4);pointer-events:none;opacity:0;
+  background:radial-gradient(circle, rgba(255,224,184,.7) 0%, rgba(253,146,40,.25) 40%, transparent 66%);}
+.dl.snap .dl-bloom{animation:dlBloom .5s var(--ease-warm) forwards;}
+@keyframes dlBloom{0%{opacity:.95;transform:translate(-50%,-50%) scale(.4);}100%{opacity:0;transform:translate(-50%,-50%) scale(2.7);}}
+
+/* ---- the readout column ---- */
+.dl-read{flex:1 1 200px;min-width:188px;}
+.dl-read .lab{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:7px;}
+.dl-read .val{font-size:25px;font-weight:700;letter-spacing:-.025em;color:var(--text);
+  display:flex;align-items:center;gap:10px;line-height:1.05;}
+.dl-read .val .vdot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;
+  background:var(--accent);box-shadow:var(--glow-accent);
+  transition:transform .3s var(--spring-snap);}
+.dl.snap ~ .dl-read .val .vdot{transform:scale(1.4);}
+.dl-read .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5;min-height:2.7em;}
+
+/* segmented shortcuts — instant discoverability + keyboard/a11y fallback */
+.dl-seg{display:inline-flex;gap:0;margin-top:14px;padding:3px;border-radius:var(--r-pill);
+  background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 .5px var(--line-strong);}
+.dl-seg button{font-family:inherit;font-size:12px;font-weight:650;color:var(--muted);cursor:pointer;
+  padding:6px 14px;border-radius:var(--r-pill);border:0;background:transparent;letter-spacing:-.01em;
+  transition:color var(--dur-base) var(--ease-warm), background var(--dur-base) var(--ease-warm), box-shadow var(--dur-base) var(--ease-warm);}
+.dl-seg button[aria-pressed="true"]{color:var(--indigo);background:var(--sunset-h);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.45), 0 1px 3px rgba(194,49,10,.4), var(--glow-accent);}
+.dl-seg button:hover{color:var(--text);}
+.dl-seg button[aria-pressed="true"]:hover{color:var(--indigo);}
+
+/* ============================================================= */
+/* D2.2 overrides — tick-ring arc (instead of conic fill)        */
+/* ============================================================= */
+/* Tick-ring arc: a full ring of dim ember ticks, with a lit ring on top that is
+   revealed only across the active wedge. The wedge widens from Sunset to Always on.
+   The lit layer is masked twice — a radial ring AND a conic wedge — composited so
+   only ticks inside the wedge show. The wedge length is driven by --lit (a stop angle). */
+.dl.v-ticks{ --lit:48deg; }                 /* Sunset: a short lit run */
+.dl.v-ticks[data-on="true"]{ --lit:120deg; }/* Always on: a long lit run */
+.dl.v-ticks .dl-arc{display:none;}
+.dl.v-ticks .dl-ticks{position:absolute;inset:16px;border-radius:50%;pointer-events:none;z-index:2;
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 13px) calc(100% - 2px), transparent 100%);
+          mask:radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 13px) calc(100% - 2px), transparent 100%);
+  background:repeating-conic-gradient(from 122deg,
+     rgba(255,240,230,.16) 0deg 1.6deg, transparent 1.6deg 8deg);}
+/* the lit ticks — same ring, gold, but only visible inside the active wedge */
+.dl.v-ticks .dl-ticks-lit{position:absolute;inset:16px;border-radius:50%;pointer-events:none;z-index:2;
+  background:repeating-conic-gradient(from 122deg,
+     var(--accent-hl) 0deg 1.6deg, transparent 1.6deg 8deg);
+  filter:drop-shadow(0 0 5px rgba(253,146,40,.55));
+  /* intersect a radial ring mask with a conic wedge mask so only the active arc lights */
+  -webkit-mask:
+     radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 13px) calc(100% - 2px), transparent 100%),
+     conic-gradient(from 122deg, #000 0deg, #000 var(--lit), transparent var(--lit));
+  -webkit-mask-composite:source-in;
+          mask:
+     radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 13px) calc(100% - 2px), transparent 100%),
+     conic-gradient(from 122deg, #000 0deg, #000 var(--lit), transparent var(--lit));
+          mask-composite:intersect;
+  transition:-webkit-mask .42s var(--ease-warm), mask .42s var(--ease-warm);}
+
+/* ============================================================= */
+/* D2.3 overrides — living-sun face (dips on Sunset, blooms on)  */
+/* ============================================================= */
+.dl.v-living .dl-sun{width:54px;height:54px;overflow:hidden;
+  background:radial-gradient(circle at 38% 30%, var(--accent-rim), var(--accent-hl) 30%, var(--accent) 64%, var(--accent-press));}
+/* a small horizon line the living sun dips beneath when Sunset */
+.dl.v-living .dl-sun::after{content:"";position:absolute;left:-6px;right:-6px;bottom:14px;height:60%;
+  background:linear-gradient(180deg, rgba(22,10,18,0), rgba(22,10,18,.55) 30%, rgba(22,10,18,.82));
+  border-top:1px solid rgba(255,224,184,.4);
+  transform:translateY(var(--horizon-y,0));opacity:var(--horizon-o,.9);
+  transition:transform .5s var(--spring-soft), opacity .42s var(--ease-warm);pointer-events:none;}
+.dl.v-living[data-on="false"] .dl-sun{--horizon-y:0px;--horizon-o:.92;}
+.dl.v-living[data-on="true"]  .dl-sun{--horizon-y:34px;--horizon-o:0;}
+/* the living-sun blooms when raised */
+.dl.v-living[data-on="true"] .dl-sun{filter:saturate(1.1) brightness(1.12);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.55) inset, 0 2px 6px rgba(0,0,0,.4),
+             0 0 22px 4px rgba(255,192,97,.78), 0 0 44px 12px rgba(253,146,40,.5);}
+</style>
+</head>
+<body>
+
+<div class="fam">
+  <h2>Finalist D2 — Rotary ember dial</h2>
+  <p>A tactile Liquid-Glass knob for the Sunset ↔ Always-on choice. Two labelled detents at the base, an
+  ember arc that fills between them, a certain spring-detent snap on landing, and a strong readout +
+  segmented shortcuts beneath so a binary choice is unmistakable. Lead version first, then three
+  micro-variations exploring the arc, the knob face, and the readout.</p>
+</div>
+
+<div class="wrap">
+
+  <!-- ================= D2.1 — LEAD: conic ember arc, plain knurled grip ================= -->
+  <section class="concept">
+    <div class="ctag">D2.1 · Rotary ember dial — conic arc (lead)</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="dial-row">
+          <button type="button" class="dl" id="d21" role="switch" aria-checked="false" data-on="false"
+                  aria-label="Schedule dial: turn left for Sunset, right for Always on. Use arrow keys or drag to turn.">
+            <span class="dl-track"></span>
+            <span class="dl-arc"></span>
+            <span class="dl-knurl"></span>
+            <span class="dl-cap"></span>
+            <span class="dl-sun"></span>
+            <span class="dl-spec"></span>
+            <span class="dl-rim"></span>
+            <span class="dl-bloom"></span>
+            <span class="dl-detent lo"><span class="dot"></span><span class="dl-dt-lab">Sunset</span></span>
+            <span class="dl-detent hi"><span class="dot"></span><span class="dl-dt-lab">Always on</span></span>
+          </button>
+          <div class="dl-read">
+            <div class="lab">Schedule</div>
+            <div class="val"><span class="vdot"></span><span class="dl-valtext">Sunset</span></div>
+            <div class="hint">Warms around local sunset, then holds through the night.</div>
+            <div class="dl-seg" role="group" aria-label="Schedule">
+              <button type="button" class="dl-lo" aria-pressed="true">Sunset</button>
+              <button type="button" class="dl-hi" aria-pressed="false">Always on</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the instrument. A big glass knob with two labelled detents —
+    drag or click and the ember arc fills as the sun snaps from Sunset to Always on, landing with a
+    tactile click.</div>
+  </section>
+
+  <!-- ================= D2.2 — tick-ring arc ================= -->
+  <section class="concept">
+    <div class="ctag">D2.2 · Tick-ring arc</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="dial-row">
+          <button type="button" class="dl v-ticks" id="d22" role="switch" aria-checked="false" data-on="false"
+                  aria-label="Schedule dial: turn left for Sunset, right for Always on. Use arrow keys or drag to turn.">
+            <span class="dl-track"></span>
+            <span class="dl-ticks"></span>
+            <span class="dl-ticks-lit"></span>
+            <span class="dl-knurl"></span>
+            <span class="dl-cap"></span>
+            <span class="dl-sun"></span>
+            <span class="dl-spec"></span>
+            <span class="dl-rim"></span>
+            <span class="dl-bloom"></span>
+            <span class="dl-detent lo"><span class="dot"></span><span class="dl-dt-lab">Sunset</span></span>
+            <span class="dl-detent hi"><span class="dot"></span><span class="dl-dt-lab">Always on</span></span>
+          </button>
+          <div class="dl-read">
+            <div class="lab">Schedule</div>
+            <div class="val"><span class="vdot"></span><span class="dl-valtext">Sunset</span></div>
+            <div class="hint">Warms around local sunset, then holds through the night.</div>
+            <div class="dl-seg" role="group" aria-label="Schedule">
+              <button type="button" class="dl-lo" aria-pressed="true">Sunset</button>
+              <button type="button" class="dl-hi" aria-pressed="false">Always on</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: same dial, but the fill is a ring of fine ember ticks that light
+    up one-by-one as you turn — more "gauge / meter", a touch more technical.</div>
+  </section>
+
+  <!-- ================= D2.3 — living-sun face ================= -->
+  <section class="concept">
+    <div class="ctag">D2.3 · Living-sun face</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="dial-row">
+          <button type="button" class="dl v-living" id="d23" role="switch" aria-checked="false" data-on="false"
+                  aria-label="Schedule dial: turn left for Sunset, right for Always on. Use arrow keys or drag to turn.">
+            <span class="dl-track"></span>
+            <span class="dl-arc"></span>
+            <span class="dl-knurl"></span>
+            <span class="dl-cap"></span>
+            <span class="dl-sun"></span>
+            <span class="dl-spec"></span>
+            <span class="dl-rim"></span>
+            <span class="dl-bloom"></span>
+            <span class="dl-detent lo"><span class="dot"></span><span class="dl-dt-lab">Sunset</span></span>
+            <span class="dl-detent hi"><span class="dot"></span><span class="dl-dt-lab">Always on</span></span>
+          </button>
+          <div class="dl-read">
+            <div class="lab">Schedule</div>
+            <div class="val"><span class="vdot"></span><span class="dl-valtext">Sunset</span></div>
+            <div class="hint">Warms around local sunset, then holds through the night.</div>
+            <div class="dl-seg" role="group" aria-label="Schedule">
+              <button type="button" class="dl-lo" aria-pressed="true">Sunset</button>
+              <button type="button" class="dl-hi" aria-pressed="false">Always on</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: a nod to the living glyph — the centre sun dips beneath a small
+    horizon on Sunset and rises, blooming, on Always on, so the face itself tells the story.</div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* One initializer drives all three dial variations (.dl). */
+  function initDial(id){
+    var dl = document.getElementById(id);
+    if(!dl) return;
+    var row    = dl.closest('.dial-row');
+    var valEl  = row.querySelector('.dl-valtext');
+    var hintEl = row.querySelector('.dl-read .hint');
+    var loBtn  = row.querySelector('.dl-lo');
+    var hiBtn  = row.querySelector('.dl-hi');
+    var bloom  = dl.querySelector('.dl-bloom');
+
+    var LO = -52, HI = 52;     /* detent angles, must match --lo-ang / --hi-ang */
+    var MID = (LO + HI) / 2;
+
+    function render(on){
+      dl.setAttribute('data-on', on ? 'true' : 'false');
+      dl.setAttribute('aria-checked', on ? 'true' : 'false');
+      if(valEl)  valEl.textContent  = on ? 'Always on' : 'Sunset';
+      if(hintEl) hintEl.textContent = on
+        ? 'Keeps warmth on around the clock.'
+        : 'Warms around local sunset, then holds through the night.';
+      if(loBtn) loBtn.setAttribute('aria-pressed', on ? 'false' : 'true');
+      if(hiBtn) hiBtn.setAttribute('aria-pressed', on ? 'true'  : 'false');
+    }
+
+    /* the satisfying landing: scale pulse + glow bloom + arc settle */
+    function fireSnap(){
+      if(reduce) return;
+      dl.classList.remove('snap');
+      void dl.offsetWidth;            /* restart the animation */
+      dl.classList.add('snap');
+    }
+    dl.addEventListener('animationend', function(e){
+      if(e.animationName === 'dlSnap') dl.classList.remove('snap');
+    });
+
+    /* set state; fire snap only when the value actually changes (or forced) */
+    function set(on, opts){
+      var was = dl.getAttribute('data-on') === 'true';
+      render(on);
+      if((on !== was) || (opts && opts.force)) fireSnap();
+    }
+    function toggle(){ set(dl.getAttribute('data-on') !== 'true'); }
+
+    /* ---- drag to turn (Pointer Events): follow the finger, snap to nearer detent ---- */
+    var dragging = false, moved = false, startA = 0, lastAngle = LO;
+
+    function pointerAngle(e){
+      var r = dl.getBoundingClientRect();
+      var cx = r.left + r.width/2, cy = r.top + r.height/2;
+      /* 0deg points up; clockwise positive — matches CSS rotate() */
+      var a = Math.atan2(e.clientX - cx, cy - e.clientY) * 180 / Math.PI;
+      return a;
+    }
+    function clampAngle(a){ return Math.max(LO, Math.min(HI, a)); }
+
+    dl.addEventListener('pointerdown', function(e){
+      dragging = true; moved = false;
+      startA = pointerAngle(e);
+      try{ dl.setPointerCapture(e.pointerId); }catch(_){}
+    });
+    dl.addEventListener('pointermove', function(e){
+      if(!dragging) return;
+      var a = pointerAngle(e);
+      if(Math.abs(a - startA) > 2) moved = true;
+      if(!moved) return;
+      lastAngle = clampAngle(a);    /* always track target so release snaps correctly */
+      if(reduce) return;            /* reduced-motion: skip the live rotation only */
+      dl.setAttribute('data-dragging','true');
+      dl.style.setProperty('--drag-ang', lastAngle + 'deg');
+    });
+    function endDrag(e){
+      if(!dragging) return;
+      dragging = false;
+      try{ dl.releasePointerCapture(e.pointerId); }catch(_){}
+      dl.removeAttribute('data-dragging');
+      dl.style.removeProperty('--drag-ang');
+      if(moved){
+        set(lastAngle >= MID, {force:true});   /* snap to nearer detent */
+      } else {
+        /* a tap (no drag): tap on the right half = Always on, left = Sunset */
+        var r = dl.getBoundingClientRect();
+        var on = (e.clientX - r.left) > r.width/2;
+        set(on);
+      }
+    }
+    dl.addEventListener('pointerup', endDrag);
+    dl.addEventListener('pointercancel', endDrag);
+
+    /* ---- keyboard ---- */
+    dl.addEventListener('keydown', function(e){
+      if(e.key===' '||e.key==='Enter'){ e.preventDefault(); toggle(); }
+      else if(e.key==='ArrowRight'||e.key==='ArrowUp'){ e.preventDefault(); set(true); }
+      else if(e.key==='ArrowLeft' ||e.key==='ArrowDown'){ e.preventDefault(); set(false); }
+      else if(e.key==='Home'){ e.preventDefault(); set(false); }
+      else if(e.key==='End'){ e.preventDefault(); set(true); }
+    });
+
+    /* ---- segmented shortcuts ---- */
+    if(loBtn) loBtn.addEventListener('click', function(e){ e.stopPropagation(); set(false); });
+    if(hiBtn) hiBtn.addEventListener('click', function(e){ e.stopPropagation(); set(true); });
+
+    render(false);
+  }
+
+  initDial('d21');
+  initDial('d22');
+  initDial('d23');
+})();
+</script>
+
+<script>
+  function reportH(){ try{ var b=document.body, kids=b.children, max=0; for(var i=0;i<kids.length;i++){ var el=kids[i]; if(el.tagName==='SCRIPT'||el.tagName==='STYLE') continue; var r=el.getBoundingClientRect(), mb=parseFloat(getComputedStyle(el).marginBottom)||0, bottom=r.bottom+window.scrollY+mb; if(bottom>max) max=bottom; } var pad=parseFloat(getComputedStyle(b).paddingBottom)||0; parent.postMessage({type:'iframeHeight', name:location.pathname.split('/').pop(), h:Math.ceil(max+pad)}, '*'); }catch(e){} }
+  addEventListener('load', reportH); addEventListener('resize', reportH);
+  if (window.ResizeObserver) new ResizeObserver(reportH).observe(document.body);
+  setTimeout(reportH, 400);
+</script>
+</body>
+</html>

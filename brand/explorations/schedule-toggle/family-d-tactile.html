@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abendrot · Family D — Tactile glass mechanisms</title>
+<style>
+:root{
+  /* Accent ramp (golden sun core → deep ember) */
+  --accent:#FD9228; --accent-hl:#FFC061; --accent-deep:#C2310A; --accent-rim:#FFE0B8;
+  --accent-press:#E2740F; --ink-on-cream:#9C4310;
+  /* Twilight grounds (warm near-blacks — NEVER pure #000) */
+  --indigo:#160A12; --plum:#221019; --twilight:#341320; --twilight-2:#45192A;
+  /* Text (warm off-white, never #fff) */
+  --text:#F3EADF; --muted:rgba(243,234,223,.60); --faint:rgba(243,234,223,.38); --cream:#F7ECD9;
+  /* Lines / dividers */
+  --line:rgba(255,240,230,.10); --line-strong:rgba(255,240,230,.16);
+  /* RESERVED — Reveal-True-Color veil only; do not reuse for chrome */
+  --reveal:#FFFFFF;
+  /* Sunset gradients */
+  --sunset:linear-gradient(180deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%); /* control fill */
+  --sunset-h:linear-gradient(90deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --sky:linear-gradient(180deg,#160A12 0%,#2A0F16 34%,#6A100F 60%,#C2310A 80%,#FB7C0E 92%,#FD9228 100%); /* the icon's sky→sun ramp */
+  /* Glass + glow (liquid-glass recipe) */
+  --glass-tint:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+  --glass-inset:inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 0 0 .5px rgba(255,255,255,.22);
+  --glow-accent:0 0 24px -6px rgba(253,146,40,.9);
+  --glow-soft:0 0 36px -10px rgba(253,146,40,.7);
+  /* Motion — the brand's signature warm ease */
+  --ease-warm:cubic-bezier(.22,.61,.36,1); --ease-standard:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.11s; --dur-base:.14s; --dur-reveal:.22s;
+  /* Radius */
+  --r-card:22px; --r-control:12px; --r-pill:999px;
+  /* Family-D springs (built on --ease-warm; bold, tactile snap) */
+  --spring-snap:cubic-bezier(.34,1.56,.64,1);   /* overshoot for knob/sun travel */
+  --spring-soft:cubic-bezier(.22,1.2,.36,1);    /* gentle overshoot for tilt/glow */
+}
+
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+  background:
+    radial-gradient(900px 520px at 80% -14%, rgba(253,146,40,.10), transparent 60%),
+    linear-gradient(168deg,#2A1119 0%, var(--plum) 46%, var(--indigo) 100%);
+  background-attachment:fixed; min-height:100vh; padding:34px 0 64px;
+}
+/* warm keyboard focus ring (mirror the shipping app) */
+:focus-visible{outline:3px solid var(--accent-hl); outline-offset:3px; border-radius:8px;}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important;} }
+
+/* ---------- shared chrome (from spec, verbatim) ---------- */
+.wrap{max-width:920px;margin:0 auto;padding:0 28px;}
+.hd{max-width:920px;margin:0 auto 26px;padding:0 28px;}
+.hd h1{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-.02em;}
+.hd p{margin:0;color:var(--muted);font-size:13px;}
+.concept{margin:0 0 30px; padding:22px; border:1px solid var(--line); border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.018), rgba(0,0,0,.06));}
+.ctag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-hl);
+  margin-bottom:16px;}
+.panel{max-width:520px;}
+.ptitle{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:3px;}
+.psub{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.pdesc{color:var(--muted);font-size:12.5px;line-height:1.55;margin:16px 0 0;}
+.cnote{margin-top:16px;font-size:12px;color:var(--faint);font-style:italic;}
+/* page title + per-family heading you add at top of <body> */
+.fam{max-width:920px;margin:30px auto 18px;padding:0 28px;}
+.fam h2{font-size:15px;font-weight:600;margin:0;color:var(--text);}
+.fam p{margin:4px 0 0;color:var(--muted);font-size:12.5px;max-width:70ch;}
+
+/* ---------- Liquid Glass helpers (from spec, verbatim) ---------- */
+.glass{
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+}
+.frost{
+  background:linear-gradient(150deg,rgba(58,21,33,.80),rgba(36,16,25,.90));
+  -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.45);
+}
+.sheen::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.05) 40%,transparent 70%);
+  mix-blend-mode:soft-light;}
+
+/* Shared screen-reader-only helper */
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+/* Shared end-cap label row used by several mechanisms */
+.ends{display:flex;justify-content:space-between;align-items:center;margin-top:14px;}
+.endlbl{display:flex;flex-direction:column;gap:2px;cursor:pointer;user-select:none;
+  background:none;border:0;padding:4px 2px;font-family:inherit;text-align:left;border-radius:8px;}
+.endlbl.r{text-align:right;align-items:flex-end;}
+.endlbl .t{font-size:13px;font-weight:650;color:var(--muted);letter-spacing:-.01em;
+  transition:color var(--dur-base) var(--ease-warm);}
+.endlbl .s{font-size:11px;color:var(--faint);transition:color var(--dur-base) var(--ease-warm);}
+.endlbl[aria-current="true"] .t{color:var(--text);}
+.endlbl[aria-current="true"] .s{color:var(--muted);}
+.endlbl:hover .t{color:var(--text);}
+
+/* ============================================================= */
+/* D1 — BIG GLASS SWITCH (sun knob travels a warming track)      */
+/* ============================================================= */
+.d1{ --kw:96px; }                       /* knob width */
+.d1-switch{
+  position:relative; width:100%; max-width:430px; height:104px; border-radius:var(--r-pill);
+  padding:8px; cursor:pointer; border:0; display:block; font-family:inherit;
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+  overflow:hidden; isolation:isolate; -webkit-tap-highlight-color:transparent;
+}
+/* warm fill that floods the track behind the glass as we move to "on" */
+.d1-warm{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+  background:var(--sunset-h); opacity:.16;
+  transition:opacity .42s var(--ease-warm);}
+.d1-switch[aria-pressed="true"] .d1-warm{opacity:.62;}
+/* faint dusk gradient on the off side so the track reads as twilight→glow */
+.d1-dusk{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+  background:linear-gradient(90deg, rgba(22,10,18,.55) 0%, rgba(52,19,32,.18) 42%, transparent 70%);
+  opacity:1; transition:opacity .42s var(--ease-warm);}
+.d1-switch[aria-pressed="true"] .d1-dusk{opacity:.18;}
+/* the two captions printed into the track. They live in the central band so the
+   knob (which rests at the far ends) never overlaps the active label. */
+.d1-caps{position:absolute;inset:0;z-index:1;display:flex;align-items:center;
+  justify-content:space-between;padding:0 116px;pointer-events:none;}
+.d1-cap{display:flex;flex-direction:column;line-height:1.15;
+  transition:color var(--dur-base) var(--ease-warm),opacity var(--dur-base) var(--ease-warm);}
+.d1-cap .t{font-size:14px;font-weight:650;letter-spacing:-.01em;}
+.d1-cap .s{font-size:11px;}
+.d1-cap.dusk{align-items:flex-start;}
+.d1-cap.day{align-items:flex-end;text-align:right;}
+/* selected end reads bright + full opacity; the other end recedes (muted, dimmed) */
+.d1-cap.dusk{color:var(--text);} .d1-cap.dusk .s{color:var(--muted);}
+.d1-cap.day{color:var(--text);}  .d1-cap.day .s{color:var(--muted);}
+.d1-switch[aria-pressed="true"]  .d1-cap.dusk{color:var(--muted);opacity:.5;}
+.d1-switch[aria-pressed="true"]  .d1-cap.dusk .s{color:var(--faint);}
+.d1-switch[aria-pressed="false"] .d1-cap.day{color:var(--muted);opacity:.5;}
+.d1-switch[aria-pressed="false"] .d1-cap.day .s{color:var(--faint);}
+/* when ON the selected "Always on" sits on the bright warm fill → dark ink (brand a11y rule) */
+.d1-switch[aria-pressed="true"] .d1-cap.day{color:var(--indigo);}
+.d1-switch[aria-pressed="true"] .d1-cap.day .s{color:rgba(22,10,18,.66);}
+
+/* the glass sun knob */
+.d1-knob{position:absolute;top:8px;left:8px;z-index:3;width:var(--kw);height:88px;border-radius:var(--r-pill);
+  transform:translateX(0);
+  transition:transform .5s var(--spring-snap), box-shadow .42s var(--ease-warm), filter .42s var(--ease-warm);
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(10px) saturate(160%); backdrop-filter:blur(10px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 10px 22px rgba(0,0,0,.42);
+  display:flex;align-items:center;justify-content:center;}
+.d1-switch[aria-pressed="true"] .d1-knob{
+  transform:translateX(calc(430px - var(--kw) - 16px));
+  box-shadow:var(--glass-inset), 0 10px 22px rgba(0,0,0,.42), var(--glow-soft);
+}
+/* press feedback — squish + brighter rim, classic liquid-glass "grab" */
+.d1-switch:active .d1-knob{transform:translateX(var(--press-x,0)) scaleX(1.06) scaleY(.94);}
+.d1-switch[aria-pressed="true"]:active .d1-knob{--press-x:calc(430px - var(--kw) - 16px);}
+.d1-switch:hover .d1-knob{box-shadow:var(--glass-inset), 0 12px 26px rgba(0,0,0,.46), var(--glow-soft);}
+
+/* the sun disc inside the knob */
+.d1-sun{position:relative;width:46px;height:46px;border-radius:50%;
+  background:radial-gradient(circle at 38% 34%, var(--accent-rim) 0%, var(--accent-hl) 26%, var(--accent) 60%, var(--accent-press) 100%);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.45) inset, 0 2px 6px rgba(0,0,0,.35);
+  transition:box-shadow .42s var(--ease-warm), filter .42s var(--ease-warm);
+  filter:saturate(.9) brightness(.96);}
+/* dusk state: sun is cooler / dimmer. on state: sun blazes with a halo */
+.d1-switch[aria-pressed="false"] .d1-sun{filter:saturate(.7) brightness(.78);}
+.d1-switch[aria-pressed="true"]  .d1-sun{
+  filter:saturate(1.05) brightness(1.05);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.5) inset, 0 2px 6px rgba(0,0,0,.35),
+             0 0 18px 2px rgba(255,192,97,.7), 0 0 34px 6px rgba(253,146,40,.45);}
+/* glass specular on the knob */
+.d1-knob::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.4) 0%,rgba(255,255,255,.06) 42%,transparent 72%);
+  mix-blend-mode:soft-light;}
+/* tiny travel rays that streak when the sun moves (pure flourish) */
+.d1-knob::before{content:"";position:absolute;top:50%;left:50%;width:46px;height:46px;border-radius:50%;
+  transform:translate(-50%,-50%);pointer-events:none;opacity:0;
+  background:radial-gradient(circle, rgba(255,224,184,.55) 0%, transparent 60%);
+  transition:opacity .3s var(--ease-warm);}
+.d1-switch:active .d1-knob::before{opacity:.9;}
+
+/* ============================================================= */
+/* D2 — ROTARY GLASS DIAL (two detents, ember-lit needle)        */
+/* ============================================================= */
+.d2{display:flex;align-items:center;gap:26px;flex-wrap:wrap;}
+.d2-dial{position:relative;width:148px;height:148px;border-radius:50%;flex:0 0 auto;
+  cursor:pointer;border:0;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+  transition:box-shadow .42s var(--ease-warm);}
+.d2-dial:hover{box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40), var(--glow-soft);}
+.d2-dial:active{transform:scale(.985);}
+/* ring of detent ticks + a warm arc that lights between them */
+.d2-track{position:absolute;inset:14px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 215deg, rgba(255,240,230,.05) 0deg, rgba(255,240,230,.05) 250deg, transparent 250deg);
+  mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));}
+/* lit ember arc — grows from the sunset detent to the active angle */
+.d2-arc{position:absolute;inset:14px;border-radius:50%;pointer-events:none;
+  mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
+  background:conic-gradient(from 215deg, var(--accent-press) 0deg, var(--accent) 18deg, var(--accent-hl) 36deg, transparent 36deg);
+  opacity:.42; transition:opacity .42s var(--ease-warm), filter .42s var(--ease-warm);}
+.d2-dial[data-on="true"] .d2-arc{opacity:.95;
+  background:conic-gradient(from 215deg, var(--accent-press) 0deg, var(--accent) 60deg, var(--accent-hl) 130deg, transparent 130deg);
+  filter:drop-shadow(0 0 6px rgba(253,146,40,.55));}
+/* the rotating glass cap with a pointer and centre sun */
+.d2-cap{position:absolute;inset:26px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 40% 32%, rgba(255,255,255,.16), rgba(255,255,255,.03) 55%, rgba(0,0,0,.18));
+  box-shadow:var(--glass-inset), 0 6px 16px rgba(0,0,0,.4);
+  transform:rotate(-58deg);
+  transition:transform .55s var(--spring-snap);}
+.d2-dial[data-on="true"] .d2-cap{transform:rotate(58deg);}
+.d2-dial:active .d2-cap{transform:rotate(var(--cap-rot,-58deg)) scale(.97);}
+.d2-dial[data-on="true"]:active .d2-cap{--cap-rot:58deg;}
+/* pointer notch on the cap */
+.d2-cap::before{content:"";position:absolute;top:8px;left:50%;width:5px;height:22px;border-radius:3px;
+  transform:translateX(-50%);
+  background:linear-gradient(180deg, var(--accent-hl), var(--accent));
+  box-shadow:0 0 8px rgba(253,146,40,.7), 0 0 0 .5px rgba(255,255,255,.4) inset;}
+/* centre sun on the cap */
+.d2-cap::after{content:"";position:absolute;top:50%;left:50%;width:30px;height:30px;border-radius:50%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle at 38% 34%, var(--accent-rim), var(--accent-hl) 32%, var(--accent) 70%, var(--accent-press));
+  box-shadow:0 0 0 .5px rgba(255,255,255,.45) inset, 0 1px 4px rgba(0,0,0,.4);}
+/* glass specular over whole dial */
+.d2-spec{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:linear-gradient(165deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.04) 38%, transparent 64%);
+  mix-blend-mode:soft-light;}
+/* the two detent dots */
+.d2-detent{position:absolute;width:7px;height:7px;border-radius:50%;pointer-events:none;
+  background:rgba(255,240,230,.28);box-shadow:0 0 0 .5px rgba(0,0,0,.3);
+  transition:background .3s var(--ease-warm), box-shadow .3s var(--ease-warm);}
+.d2-detent.lo{left:24px;bottom:30px;}     /* ~215° sunset detent */
+.d2-detent.hi{right:24px;bottom:30px;}    /* ~325° always-on detent */
+.d2-dial[data-on="false"] .d2-detent.lo,
+.d2-dial[data-on="true"]  .d2-detent.hi{
+  background:var(--accent-hl);box-shadow:0 0 8px rgba(255,192,97,.8);}
+/* readout next to the dial */
+.d2-read{flex:1 1 180px;min-width:160px;}
+.d2-read .lab{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;}
+.d2-read .val{font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--text);
+  display:flex;align-items:center;gap:9px;}
+.d2-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:var(--glow-accent);}
+.d2-read .hint{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.5;}
+.d2-seg{display:inline-flex;gap:5px;margin-top:12px;}
+.d2-seg button{font-family:inherit;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;
+  padding:5px 11px;border-radius:999px;border:1px solid var(--line-strong);background:rgba(255,255,255,.03);
+  transition:all var(--dur-base) var(--ease-warm);}
+.d2-seg button[aria-current="true"]{color:var(--indigo);background:var(--sunset-h);border-color:transparent;
+  box-shadow:var(--glow-accent);}
+.d2-seg button:hover{color:var(--text);}
+.d2-seg button[aria-current="true"]:hover{color:var(--indigo);}
+
+/* ============================================================= */
+/* D3 — GLASS ROCKER PADDLE (tilts to the chosen side)           */
+/* ============================================================= */
+.d3{perspective:900px;}
+.d3-rocker{position:relative;width:100%;max-width:430px;height:120px;cursor:pointer;border:0;padding:0;
+  font-family:inherit;background:transparent;transform-style:preserve-3d;-webkit-tap-highlight-color:transparent;
+  display:block;}
+/* the well the paddle sits in */
+.d3-well{position:absolute;inset:0;border-radius:24px;
+  background:linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.12));
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.5), inset 0 0 0 .5px rgba(255,255,255,.06);}
+/* the two engraved labels behind the paddle */
+.d3-engrave{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;
+  padding:0 26px;pointer-events:none;z-index:0;}
+.d3-engrave .e{display:flex;flex-direction:column;gap:2px;}
+.d3-engrave .e.r{align-items:flex-end;text-align:right;}
+.d3-engrave .e .t{font-size:13px;font-weight:650;color:var(--faint);letter-spacing:-.01em;
+  transition:color var(--dur-base) var(--ease-warm),text-shadow var(--dur-base) var(--ease-warm);}
+.d3-engrave .e .s{font-size:11px;color:var(--faint);opacity:.7;}
+.d3-rocker[data-on="false"] .e.lo .t{color:var(--accent-hl);text-shadow:0 0 12px rgba(255,192,97,.6);}
+.d3-rocker[data-on="true"]  .e.hi .t{color:var(--accent-hl);text-shadow:0 0 12px rgba(255,192,97,.6);}
+/* the paddle itself */
+.d3-paddle{position:absolute;inset:8px;border-radius:18px;transform-style:preserve-3d;
+  transform:rotateX(0deg) rotateY(-13deg);transform-origin:center;
+  transition:transform .5s var(--spring-soft), box-shadow .42s var(--ease-warm);
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(14px) saturate(180%); backdrop-filter:blur(14px) saturate(180%);
+  box-shadow:var(--glass-inset), 0 14px 30px rgba(0,0,0,.42);}
+.d3-rocker[data-on="true"] .d3-paddle{transform:rotateX(0deg) rotateY(13deg);}
+.d3-rocker:active .d3-paddle{transform:rotateY(var(--rk,-13deg)) scale(.985);}
+.d3-rocker[data-on="true"]:active .d3-paddle{--rk:13deg;}
+/* warm wash that shifts to the lit side of the paddle */
+.d3-wash{position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(120% 140% at 18% 50%, rgba(253,146,40,.55), transparent 55%);
+  opacity:.7;transition:background .5s var(--ease-warm),opacity .42s var(--ease-warm);}
+.d3-rocker[data-on="true"] .d3-wash{
+  background:radial-gradient(120% 140% at 82% 50%, rgba(253,146,40,.55), transparent 55%);}
+/* the sun marker that lives on the paddle face, near the lit edge */
+.d3-mark{position:absolute;top:50%;left:42px;width:40px;height:40px;border-radius:50%;
+  transform:translate(-50%,-50%);
+  transition:left .5s var(--spring-soft), box-shadow .42s var(--ease-warm);
+  background:radial-gradient(circle at 38% 34%, var(--accent-rim), var(--accent-hl) 30%, var(--accent) 66%, var(--accent-press));
+  box-shadow:0 0 0 .5px rgba(255,255,255,.45) inset, 0 2px 6px rgba(0,0,0,.4), 0 0 16px 2px rgba(253,146,40,.55);}
+.d3-rocker[data-on="true"] .d3-mark{left:calc(100% - 42px);}
+/* specular sheen on the paddle */
+.d3-paddle::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(155deg, rgba(255,255,255,.36) 0%, rgba(255,255,255,.05) 40%, transparent 66%);
+  mix-blend-mode:soft-light;}
+/* centre fulcrum line */
+.d3-rocker::after{content:"";position:absolute;top:14px;bottom:14px;left:50%;width:1px;
+  transform:translateX(-50%);background:rgba(255,240,230,.12);pointer-events:none;z-index:2;}
+
+/* ============================================================= */
+/* D4 — SUN-ON-A-TRACK SLIDER (drag/click, snaps with a bloom)   */
+/* ============================================================= */
+.d4-rail{position:relative;width:100%;max-width:440px;height:74px;border-radius:var(--r-pill);
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+  overflow:hidden;touch-action:none;}
+/* the horizon line painted across the rail */
+.d4-horizon{position:absolute;left:18px;right:18px;top:50%;height:2px;transform:translateY(-1px);pointer-events:none;
+  background:linear-gradient(90deg, rgba(255,240,230,.08), rgba(255,224,184,.5) 50%, rgba(255,240,230,.08));
+  z-index:1;}
+/* warm sky fill that grows under the thumb as it moves right */
+.d4-fill{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+  background:var(--sunset-h);
+  clip-path:inset(0 calc(100% - 56px) 0 0 round var(--r-pill));
+  opacity:.5;transition:clip-path .46s var(--spring-soft),opacity .42s var(--ease-warm);}
+.d4-rail[data-dragging="true"] .d4-fill{transition:none;}
+.d4-rail[data-on="true"] .d4-fill{opacity:.78;}
+/* end glyphs */
+.d4-end{position:absolute;top:50%;transform:translateY(-50%);z-index:1;pointer-events:none;
+  font-size:11px;font-weight:650;letter-spacing:.02em;color:var(--muted);
+  display:flex;align-items:center;gap:6px;transition:color var(--dur-base) var(--ease-warm);}
+.d4-end.lo{left:20px;}
+.d4-end.hi{right:20px;}
+.d4-rail[data-on="false"] .d4-end.lo{color:var(--text);}
+.d4-rail[data-on="true"]  .d4-end.hi{color:var(--indigo);}      /* on the warm fill → dark ink */
+.d4-glyph{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+.d4-glyph.dusk{background:radial-gradient(circle at 50% 30%, var(--accent), var(--accent-deep));opacity:.7;}
+.d4-glyph.day{background:radial-gradient(circle at 38% 34%, var(--accent-rim), var(--accent-hl) 40%, var(--accent));
+  box-shadow:0 0 8px rgba(255,192,97,.8);}
+/* the draggable sun thumb */
+.d4-thumb{position:absolute;top:9px;left:9px;width:56px;height:56px;border-radius:50%;z-index:3;
+  transform:translateX(0);
+  transition:transform .5s var(--spring-snap), box-shadow .42s var(--ease-warm);
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(8px) saturate(160%); backdrop-filter:blur(8px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 8px 18px rgba(0,0,0,.42);
+  display:flex;align-items:center;justify-content:center;}
+.d4-rail[data-dragging="true"] .d4-thumb{transition:box-shadow .2s var(--ease-warm);cursor:grabbing;}
+.d4-rail[data-on="true"] .d4-thumb{transform:translateX(calc(440px - 56px - 18px));}
+.d4-thumb::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.4) 0%,rgba(255,255,255,.05) 44%,transparent 72%);
+  mix-blend-mode:soft-light;}
+.d4-disc{width:34px;height:34px;border-radius:50%;
+  background:radial-gradient(circle at 38% 34%, var(--accent-rim), var(--accent-hl) 28%, var(--accent) 62%, var(--accent-press));
+  box-shadow:0 0 0 .5px rgba(255,255,255,.45) inset, 0 2px 5px rgba(0,0,0,.35);
+  transition:box-shadow .42s var(--ease-warm),filter .42s var(--ease-warm);}
+.d4-rail[data-on="true"] .d4-disc{filter:brightness(1.04);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.5) inset, 0 2px 5px rgba(0,0,0,.35), 0 0 16px 2px rgba(255,192,97,.65);}
+/* glow bloom that pulses on snap (JS toggles .bloom) */
+.d4-thumb.bloom::before{content:"";position:absolute;top:50%;left:50%;width:34px;height:34px;border-radius:50%;
+  transform:translate(-50%,-50%);pointer-events:none;
+  background:radial-gradient(circle, rgba(255,192,97,.6) 0%, transparent 60%);
+  animation:d4bloom .46s var(--ease-warm) forwards;}
+@keyframes d4bloom{0%{opacity:.9;transform:translate(-50%,-50%) scale(.6);}100%{opacity:0;transform:translate(-50%,-50%) scale(3.4);}}
+.d4-hint{margin-top:11px;font-size:11.5px;color:var(--faint);}
+
+/* ============================================================= */
+/* D5 — THE HORIZON CRANK (a sun you lift over a horizon — bold) */
+/* ============================================================= */
+.d5-stage{position:relative;width:100%;max-width:440px;height:188px;border-radius:24px;overflow:hidden;
+  cursor:pointer;border:0;padding:0;font-family:inherit;-webkit-tap-highlight-color:transparent;display:block;
+  box-shadow:var(--glass-inset), 0 18px 44px rgba(0,0,0,.46);touch-action:none;}
+/* the sky that crossfades dusk→day */
+.d5-sky{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(180deg,#160A12 0%,#2A0F16 30%,#5A1010 52%,#A8290B 70%,#E2740F 86%,#FD9228 100%);
+  filter:saturate(.85) brightness(.7);
+  transition:filter .55s var(--ease-warm);}
+.d5-stage[data-on="true"] .d5-sky{filter:saturate(1.05) brightness(1.02);}
+/* a soft glass haze layer so the sky reads as material, not flat paint */
+.d5-haze{position:absolute;inset:0;z-index:1;pointer-events:none;
+  -webkit-backdrop-filter:blur(2px) saturate(150%); backdrop-filter:blur(2px) saturate(150%);
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0) 30%);}
+/* the sun that rises/sets */
+.d5-sun{position:absolute;left:50%;z-index:2;width:64px;height:64px;border-radius:50%;
+  transform:translate(-50%,0);
+  bottom:-14px;                       /* dusk: mostly below horizon */
+  transition:bottom .58s var(--spring-soft), box-shadow .5s var(--ease-warm), filter .5s var(--ease-warm);
+  background:radial-gradient(circle at 40% 36%, var(--accent-rim) 0%, var(--accent-hl) 24%, var(--accent) 58%, var(--accent-press) 100%);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.4) inset, 0 0 24px 4px rgba(253,146,40,.5);
+  filter:saturate(.85) brightness(.85);}
+.d5-stage[data-on="true"] .d5-sun{bottom:96px;                 /* always-on: high & blazing */
+  filter:saturate(1.08) brightness(1.08);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.5) inset, 0 0 30px 8px rgba(255,192,97,.7), 0 0 60px 18px rgba(253,146,40,.45);}
+.d5-stage[data-dragging="true"] .d5-sun{transition:box-shadow .3s var(--ease-warm),filter .3s var(--ease-warm);}
+/* the horizon — a frosted glass band the sun rises behind/over */
+.d5-horizon{position:absolute;left:0;right:0;bottom:0;height:62px;z-index:3;pointer-events:none;
+  background:linear-gradient(180deg, rgba(36,16,25,.2), rgba(22,10,18,.86));
+  -webkit-backdrop-filter:blur(8px) saturate(140%); backdrop-filter:blur(8px) saturate(140%);
+  box-shadow:inset 0 1px 0 rgba(255,224,184,.22);}
+/* the readout printed on the horizon band */
+.d5-readout{position:absolute;left:0;right:0;bottom:0;height:62px;z-index:4;pointer-events:none;
+  display:flex;align-items:center;justify-content:space-between;padding:0 22px;}
+.d5-side{display:flex;flex-direction:column;gap:1px;transition:opacity var(--dur-base) var(--ease-warm),color var(--dur-base) var(--ease-warm);}
+.d5-side.r{align-items:flex-end;text-align:right;}
+.d5-side .t{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--text);}
+.d5-side .s{font-size:11px;color:var(--muted);}
+.d5-stage[data-on="false"] .d5-side.hi,
+.d5-stage[data-on="true"]  .d5-side.lo{opacity:.4;}
+.d5-stage[data-on="false"] .d5-side.hi .t,
+.d5-stage[data-on="true"]  .d5-side.lo .t{color:var(--muted);}
+/* the glass grab-handle hint on the sun */
+.d5-grip{position:absolute;left:50%;bottom:8px;z-index:5;transform:translateX(-50%);pointer-events:none;
+  font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
+  display:flex;align-items:center;gap:5px;opacity:.9;transition:opacity var(--dur-base) var(--ease-warm);}
+.d5-stage:hover .d5-grip{opacity:1;color:var(--muted);}
+.d5-stage[data-dragging="true"] .d5-grip{opacity:0;}
+/* outer hairline rim so the stage reads as one glass slab */
+.d5-stage::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:6;
+  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.18);}
+</style>
+</head>
+<body>
+
+<div class="fam">
+  <h2>Family D — Tactile glass mechanisms</h2>
+  <p>The bold, expressive end — still Liquid Glass. One satisfying, physical-feeling control per concept: a
+  chunky switch, dial, rocker, slider, or sun-on-a-horizon that snaps between Sunset and Always on with
+  springy, tactile motion and an ember glow — distinctive, but rendered in glass so it still feels Apple.</p>
+</div>
+
+<div class="wrap">
+
+  <!-- ================= D1 ================= -->
+  <section class="concept d1">
+    <div class="ctag">D1 · Glass sun switch</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <button type="button" class="d1-switch" id="d1" role="switch" aria-checked="false"
+                aria-pressed="false" aria-label="Schedule: Sunset or Always on">
+          <span class="d1-dusk"></span>
+          <span class="d1-warm"></span>
+          <span class="d1-caps">
+            <span class="d1-cap dusk"><span class="t">Sunset</span><span class="s">eases in at dusk</span></span>
+            <span class="d1-cap day"><span class="t">Always on</span><span class="s">steady glow</span></span>
+          </span>
+          <span class="d1-knob"><span class="d1-sun"></span></span>
+        </button>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the most literal idea — flip a big glass switch and the sun
+    glides from dusk to a steady blaze, the whole track warming behind glass.</div>
+  </section>
+
+  <!-- ================= D2 ================= -->
+  <section class="concept d2-wrap">
+    <div class="ctag">D2 · Rotary ember dial</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl d2">
+        <button type="button" class="d2-dial" id="d2" role="switch" aria-checked="false" data-on="false"
+                aria-label="Schedule dial: Sunset or Always on. Use arrow keys to turn.">
+          <span class="d2-track"></span>
+          <span class="d2-arc"></span>
+          <span class="d2-detent lo"></span>
+          <span class="d2-detent hi"></span>
+          <span class="d2-cap"></span>
+          <span class="d2-spec"></span>
+        </button>
+        <div class="d2-read" aria-hidden="true">
+          <div class="lab">Mode</div>
+          <div class="val"><span class="d2-dot"></span><span id="d2-val">Sunset</span></div>
+          <div class="hint" id="d2-hint">Warms around local sunset, holds through the night.</div>
+          <div class="d2-seg" role="group" aria-label="Schedule shortcuts">
+            <button type="button" id="d2-lo" aria-current="true">Sunset</button>
+            <button type="button" id="d2-hi" aria-current="false">Always on</button>
+          </div>
+        </div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: a tactile two-detent knob — twist it and an ember arc fills as
+    the needle snaps from Sunset to Always on, like a physical warmth dial.</div>
+  </section>
+
+  <!-- ================= D3 ================= -->
+  <section class="concept d3-wrap">
+    <div class="ctag">D3 · Glass rocker</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl d3">
+        <button type="button" class="d3-rocker" id="d3" role="switch" aria-checked="false" data-on="false"
+                aria-label="Schedule rocker: tilt to Sunset or Always on">
+          <span class="d3-well"></span>
+          <span class="d3-engrave">
+            <span class="e lo"><span class="t">Sunset</span><span class="s">at dusk</span></span>
+            <span class="e hi r"><span class="t">Always on</span><span class="s">24 / 7</span></span>
+          </span>
+          <span class="d3-paddle">
+            <span class="d3-wash"></span>
+            <span class="d3-mark"></span>
+          </span>
+        </button>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: a two-sided glass paddle that physically tilts to the chosen
+    side, the lit edge catching a specular highlight and a warm wash — press-it-in tactility.</div>
+  </section>
+
+  <!-- ================= D4 ================= -->
+  <section class="concept d4-wrap">
+    <div class="ctag">D4 · Sun-on-a-track</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="d4-rail" id="d4" role="slider" tabindex="0" data-on="false"
+             aria-valuemin="0" aria-valuemax="1" aria-valuenow="0" aria-valuetext="Sunset"
+             aria-label="Schedule: drag the sun. Left is Sunset, right is Always on.">
+          <span class="d4-fill"></span>
+          <span class="d4-horizon"></span>
+          <span class="d4-end lo"><span class="d4-glyph dusk"></span>Sunset</span>
+          <span class="d4-end hi">Always on<span class="d4-glyph day"></span></span>
+          <span class="d4-thumb" id="d4-thumb"><span class="d4-disc"></span></span>
+        </div>
+        <div class="d4-hint" aria-hidden="true">Drag the sun, or tap an end. It snaps to the nearer choice.</div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: grab the glass sun and slide it along a horizon — release and it
+    springs to the nearer end with a glow bloom; the sky warms as it travels.</div>
+  </section>
+
+  <!-- ================= D5 ================= -->
+  <section class="concept d5-wrap">
+    <div class="ctag">D5 · Horizon crank</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <button type="button" class="d5-stage" id="d5" role="switch" aria-checked="false" data-on="false"
+                aria-label="Schedule: lift the sun over the horizon for Always on, or let it set for Sunset">
+          <span class="d5-sky"></span>
+          <span class="d5-haze"></span>
+          <span class="d5-sun" id="d5-sun"></span>
+          <span class="d5-horizon"></span>
+          <span class="d5-readout">
+            <span class="d5-side lo"><span class="t">Sunset</span><span class="s">eases in at dusk</span></span>
+            <span class="d5-side hi r"><span class="t">Always on</span><span class="s">steady glow</span></span>
+          </span>
+          <span class="d5-grip" aria-hidden="true">▲ lift the sun</span>
+        </button>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the boldest — a living horizon you crank; lift the glass sun
+    high for Always on or let it set for Sunset, sky and glow shifting with it.</div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- D1: big glass switch ---------- */
+  (function(){
+    var el = document.getElementById('d1');
+    if(!el) return;
+    function set(on){
+      el.setAttribute('aria-pressed', on ? 'true':'false');
+      el.setAttribute('aria-checked', on ? 'true':'false');
+    }
+    function toggle(){ set(el.getAttribute('aria-pressed') !== 'true'); }
+    el.addEventListener('click', toggle);
+    el.addEventListener('keydown', function(e){
+      if(e.key===' '||e.key==='Enter'){ e.preventDefault(); toggle(); }
+      if(e.key==='ArrowRight'){ e.preventDefault(); set(true); }
+      if(e.key==='ArrowLeft'){ e.preventDefault(); set(false); }
+    });
+  })();
+
+  /* ---------- D2: rotary dial ---------- */
+  (function(){
+    var dial = document.getElementById('d2');
+    if(!dial) return;
+    var val = document.getElementById('d2-val'), hint = document.getElementById('d2-hint');
+    var loBtn = document.getElementById('d2-lo'), hiBtn = document.getElementById('d2-hi');
+    function render(on){
+      dial.setAttribute('data-on', on?'true':'false');
+      dial.setAttribute('aria-checked', on?'true':'false');
+      val.textContent = on ? 'Always on' : 'Sunset';
+      hint.textContent = on ? 'Keeps warmth on around the clock.' : 'Warms around local sunset, holds through the night.';
+      loBtn.setAttribute('aria-current', on?'false':'true');
+      hiBtn.setAttribute('aria-current', on?'true':'false');
+    }
+    function set(on){ render(on); }
+    function toggle(){ set(dial.getAttribute('data-on') !== 'true'); }
+    dial.addEventListener('click', toggle);
+    dial.addEventListener('keydown', function(e){
+      if(e.key===' '||e.key==='Enter'){ e.preventDefault(); toggle(); }
+      if(e.key==='ArrowRight'||e.key==='ArrowUp'){ e.preventDefault(); set(true); }
+      if(e.key==='ArrowLeft'||e.key==='ArrowDown'){ e.preventDefault(); set(false); }
+    });
+    loBtn.addEventListener('click', function(e){ e.stopPropagation(); set(false); });
+    hiBtn.addEventListener('click', function(e){ e.stopPropagation(); set(true); });
+  })();
+
+  /* ---------- D3: rocker ---------- */
+  (function(){
+    var el = document.getElementById('d3');
+    if(!el) return;
+    function set(on){
+      el.setAttribute('data-on', on?'true':'false');
+      el.setAttribute('aria-checked', on?'true':'false');
+    }
+    function toggle(){ set(el.getAttribute('data-on') !== 'true'); }
+    el.addEventListener('click', toggle);
+    el.addEventListener('keydown', function(e){
+      if(e.key===' '||e.key==='Enter'){ e.preventDefault(); toggle(); }
+      if(e.key==='ArrowRight'){ e.preventDefault(); set(true); }
+      if(e.key==='ArrowLeft'){ e.preventDefault(); set(false); }
+    });
+  })();
+
+  /* ---------- D4: sun-on-a-track slider (click + drag) ---------- */
+  (function(){
+    var rail = document.getElementById('d4');
+    if(!rail) return;
+    var thumb = document.getElementById('d4-thumb');
+    var THUMB = 56, PAD = 9;            /* must match CSS */
+    function railW(){ return rail.getBoundingClientRect().width; }
+    function maxX(){ return railW() - THUMB - PAD*2; }      /* travel distance for fill clip uses px below */
+
+    function applyState(on){
+      rail.setAttribute('data-on', on?'true':'false');
+      rail.setAttribute('aria-valuenow', on?'1':'0');
+      rail.setAttribute('aria-valuetext', on?'Always on':'Sunset');
+      // fill clip to the resting thumb edge
+      var inset = on ? 0 : (railW() - (THUMB+PAD));
+      rail.querySelector('.d4-fill').style.clipPath = 'inset(0 '+inset+'px 0 0 round var(--r-pill))';
+    }
+    function bloom(){
+      if(reduce) return;
+      thumb.classList.remove('bloom'); void thumb.offsetWidth; thumb.classList.add('bloom');
+    }
+    function snap(on){
+      thumb.style.transform = '';                  /* hand back to CSS spring */
+      applyState(on);
+      bloom();
+    }
+
+    /* click anywhere = go to nearer end */
+    var dragging=false, moved=false, startX=0;
+    function pointAt(clientX){
+      var r = rail.getBoundingClientRect();
+      var x = clientX - r.left - (THUMB/2);
+      var max = maxX();
+      x = Math.max(0, Math.min(max, x));
+      thumb.style.transform = 'translateX('+x+'px)';
+      // live fill while dragging
+      var inset = (railW() - (THUMB+PAD)) - x;
+      inset = Math.max(0, inset);
+      rail.querySelector('.d4-fill').style.clipPath = 'inset(0 '+inset+'px 0 0 round var(--r-pill))';
+      return x;
+    }
+    function endAt(x){
+      var on = x > maxX()/2;
+      rail.setAttribute('data-dragging','false');
+      snap(on);
+    }
+    rail.addEventListener('pointerdown', function(e){
+      dragging=true; moved=false; startX=e.clientX;
+      rail.setAttribute('data-dragging','true');
+      try{ rail.setPointerCapture(e.pointerId); }catch(_){}
+      pointAt(e.clientX);
+    });
+    rail.addEventListener('pointermove', function(e){
+      if(!dragging) return;
+      if(Math.abs(e.clientX-startX)>3) moved=true;
+      pointAt(e.clientX);
+    });
+    rail.addEventListener('pointerup', function(e){
+      if(!dragging) return; dragging=false;
+      try{ rail.releasePointerCapture(e.pointerId); }catch(_){}
+      if(moved){ endAt(pointAt(e.clientX)); }
+      else {     /* treat as a click → nearer end of where you tapped */
+        endAt(pointAt(e.clientX));
+      }
+    });
+    rail.addEventListener('keydown', function(e){
+      if(e.key===' '||e.key==='Enter'){ e.preventDefault(); snap(rail.getAttribute('data-on')!=='true'); }
+      if(e.key==='ArrowRight'||e.key==='ArrowUp'){ e.preventDefault(); snap(true); }
+      if(e.key==='ArrowLeft'||e.key==='ArrowDown'){ e.preventDefault(); snap(false); }
+      if(e.key==='Home'){ e.preventDefault(); snap(false); }
+      if(e.key==='End'){ e.preventDefault(); snap(true); }
+    });
+    // keep fill aligned to resting state on resize
+    addEventListener('resize', function(){
+      if(rail.getAttribute('data-dragging')==='true') return;
+      applyState(rail.getAttribute('data-on')==='true');
+    });
+    applyState(false);
+  })();
+
+  /* ---------- D5: horizon crank (click + drag-up to raise) ---------- */
+  (function(){
+    var stage = document.getElementById('d5');
+    if(!stage) return;
+    var sun = document.getElementById('d5-sun');
+    function set(on){
+      stage.setAttribute('data-on', on?'true':'false');
+      stage.setAttribute('aria-checked', on?'true':'false');
+    }
+    function toggle(){ set(stage.getAttribute('data-on') !== 'true'); }
+
+    var dragging=false, moved=false, startY=0, LOW=-14, HIGH=96;
+    function liftTo(clientY){
+      var r = stage.getBoundingClientRect();
+      // map pointer y within the stage to a sun bottom value (higher pointer = higher sun)
+      var t = 1 - ((clientY - r.top) / r.height);    // 0 at bottom, 1 at top
+      t = Math.max(0, Math.min(1, t));
+      var b = LOW + t*(HIGH-LOW);
+      sun.style.bottom = b + 'px';
+      return t;
+    }
+    function release(t){
+      sun.style.bottom = '';                 /* back to CSS spring */
+      stage.setAttribute('data-dragging','false');
+      set(t > 0.5);
+    }
+    stage.addEventListener('pointerdown', function(e){
+      // only treat presses on/near the sun as a drag-crank; elsewhere = click toggle
+      dragging=true; moved=false; startY=e.clientY;
+      stage.setAttribute('data-dragging','true');
+      try{ stage.setPointerCapture(e.pointerId); }catch(_){}
+    });
+    stage.addEventListener('pointermove', function(e){
+      if(!dragging) return;
+      if(Math.abs(e.clientY-startY)>3){ moved=true; liftTo(e.clientY); }
+    });
+    stage.addEventListener('pointerup', function(e){
+      if(!dragging) return; dragging=false;
+      try{ stage.releasePointerCapture(e.pointerId); }catch(_){}
+      if(moved){ release(liftTo(e.clientY)); }
+      else { stage.setAttribute('data-dragging','false'); toggle(); }
+    });
+    stage.addEventListener('keydown', function(e){
+      if(e.key===' '||e.key==='Enter'){ e.preventDefault(); toggle(); }
+      if(e.key==='ArrowUp'||e.key==='ArrowRight'){ e.preventDefault(); set(true); }
+      if(e.key==='ArrowDown'||e.key==='ArrowLeft'){ e.preventDefault(); set(false); }
+    });
+  })();
+})();
+</script>
+
+<script>
+  function reportH(){ try{ var b=document.body, kids=b.children, max=0; for(var i=0;i<kids.length;i++){ var el=kids[i]; if(el.tagName==='SCRIPT'||el.tagName==='STYLE') continue; var r=el.getBoundingClientRect(), mb=parseFloat(getComputedStyle(el).marginBottom)||0, bottom=r.bottom+window.scrollY+mb; if(bottom>max) max=bottom; } var pad=parseFloat(getComputedStyle(b).paddingBottom)||0; parent.postMessage({type:'iframeHeight', name:location.pathname.split('/').pop(), h:Math.ceil(max+pad)}, '*'); }catch(e){} }
+  addEventListener('load', reportH); addEventListener('resize', reportH);
+  if (window.ResizeObserver) new ResizeObserver(reportH).observe(document.body);
+  setTimeout(reportH, 400);
+</script>
+</body>
+</html>

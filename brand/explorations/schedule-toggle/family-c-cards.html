@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule Toggle — Family C · Choice cards</title>
+<style>
+:root{
+  /* Accent ramp (golden sun core → deep ember) */
+  --accent:#FD9228; --accent-hl:#FFC061; --accent-deep:#C2310A; --accent-rim:#FFE0B8;
+  --accent-press:#E2740F; --ink-on-cream:#9C4310;
+  /* Twilight grounds (warm near-blacks — NEVER pure #000) */
+  --indigo:#160A12; --plum:#221019; --twilight:#341320; --twilight-2:#45192A;
+  /* Text (warm off-white, never #fff) */
+  --text:#F3EADF; --muted:rgba(243,234,223,.60); --faint:rgba(243,234,223,.38); --cream:#F7ECD9;
+  /* Lines / dividers */
+  --line:rgba(255,240,230,.10); --line-strong:rgba(255,240,230,.16);
+  /* RESERVED — Reveal-True-Color veil only; do not reuse for chrome */
+  --reveal:#FFFFFF;
+  /* Sunset gradients */
+  --sunset:linear-gradient(180deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%); /* control fill */
+  --sunset-h:linear-gradient(90deg,var(--accent-hl) 0%,var(--accent) 52%,var(--accent-press) 100%);
+  --sky:linear-gradient(180deg,#160A12 0%,#2A0F16 34%,#6A100F 60%,#C2310A 80%,#FB7C0E 92%,#FD9228 100%); /* the icon's sky→sun ramp */
+  /* Glass + glow (liquid-glass recipe) */
+  --glass-tint:linear-gradient(140deg,rgba(255,255,255,.11) 0%,rgba(255,255,255,.035) 46%,rgba(255,255,255,.06) 100%);
+  --glass-inset:inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 0 0 .5px rgba(255,255,255,.22);
+  --glow-accent:0 0 24px -6px rgba(253,146,40,.9);
+  --glow-soft:0 0 36px -10px rgba(253,146,40,.7);
+  /* Motion — the brand's signature warm ease */
+  --ease-warm:cubic-bezier(.22,.61,.36,1); --ease-standard:cubic-bezier(.4,0,.2,1);
+  --dur-fast:.11s; --dur-base:.14s; --dur-reveal:.22s;
+  /* Radius */
+  --r-card:22px; --r-control:12px; --r-pill:999px;
+}
+
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,"SF Pro Text",BlinkMacSystemFont,system-ui,sans-serif;
+  color:var(--text); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+  background:
+    radial-gradient(900px 520px at 80% -14%, rgba(253,146,40,.10), transparent 60%),
+    linear-gradient(168deg,#2A1119 0%, var(--plum) 46%, var(--indigo) 100%);
+  background-attachment:fixed; min-height:100vh; padding:34px 0 64px;
+}
+/* warm keyboard focus ring (mirror the shipping app) */
+:focus-visible{outline:3px solid var(--accent-hl); outline-offset:3px; border-radius:8px;}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important;} }
+
+/* ---- Page + panel chrome (from spec, verbatim) ---- */
+.wrap{max-width:920px;margin:0 auto;padding:0 28px;}
+.hd{max-width:920px;margin:0 auto 26px;padding:0 28px;}
+.hd h1{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-.02em;}
+.hd p{margin:0;color:var(--muted);font-size:13px;}
+.concept{margin:0 0 30px; padding:22px; border:1px solid var(--line); border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.018), rgba(0,0,0,.06));}
+.ctag{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-hl);
+  margin-bottom:16px;}
+.panel{max-width:520px;}
+.ptitle{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:3px;}
+.psub{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.pdesc{color:var(--muted);font-size:12.5px;line-height:1.55;margin:16px 0 0;}
+.cnote{margin-top:16px;font-size:12px;color:var(--faint);font-style:italic;}
+/* page title + per-family heading you add at top of <body> */
+.fam{max-width:920px;margin:30px auto 18px;padding:0 28px;}
+.fam h2{font-size:15px;font-weight:600;margin:0;color:var(--text);}
+.fam p{margin:4px 0 0;color:var(--muted);font-size:12.5px;max-width:70ch;}
+
+/* ---- Liquid Glass helpers (from spec, verbatim) ---- */
+.glass{
+  background:var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(190%); backdrop-filter:blur(16px) saturate(190%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.40);
+}
+.frost{
+  background:linear-gradient(150deg,rgba(58,21,33,.80),rgba(36,16,25,.90));
+  -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%);
+  box-shadow:var(--glass-inset), 0 16px 40px rgba(0,0,0,.45);
+}
+.sheen::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.05) 40%,transparent 70%);
+  mix-blend-mode:soft-light;}
+
+/* =====================================================================
+   FAMILY C — shared "choice card" foundation
+   Two equal Liquid-Glass tiles you deliberately pick between, the way
+   macOS Settings shows the Light / Dark appearance tiles.
+   ===================================================================== */
+
+/* The radiogroup row */
+.cards{
+  display:grid; grid-template-columns:1fr 1fr; gap:14px;
+}
+/* A single tile = clear glass by default */
+.card{
+  position:relative; isolation:isolate;
+  border-radius:var(--r-card);
+  padding:16px 16px 15px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+  border:.5px solid var(--line-strong);
+  text-align:left;
+  transition:transform var(--dur-base) var(--ease-warm),
+             box-shadow var(--dur-base) var(--ease-warm),
+             border-color var(--dur-base) var(--ease-warm);
+}
+.card:hover{ transform:translateY(-2px); }
+.card:active{ transform:translateY(0) scale(.992); transition-duration:var(--dur-fast); }
+.card:focus-visible{ outline:3px solid var(--accent-hl); outline-offset:3px; }
+
+/* The warm SELECTED fill that overlays the glass — animated in via opacity
+   so the tile reads as glass that lights up, not a paint swap. */
+.card .fill{
+  content:""; position:absolute; inset:0; border-radius:inherit; z-index:-1;
+  background:var(--sunset);
+  opacity:0; transition:opacity var(--dur-base) var(--ease-warm);
+}
+.card .fill::after{ /* specular wet-glass sheen on the lit fill */
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.05) 40%,transparent 70%);
+  mix-blend-mode:soft-light;
+}
+/* hairline bright rim that appears on the lit tile */
+.card .rim{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:1;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.18), inset 0 1px 1px rgba(255,255,255,.5);
+  opacity:0; transition:opacity var(--dur-base) var(--ease-warm);
+}
+.card[aria-checked="true"]{
+  border-color:transparent;
+  box-shadow:var(--glow-soft), 0 16px 40px rgba(0,0,0,.40);
+}
+.card[aria-checked="true"] .fill{ opacity:1; }
+.card[aria-checked="true"] .rim{ opacity:1; }
+
+/* Card content scaffold */
+.card .scene{ position:relative; z-index:2; }
+.card .ttl{
+  position:relative; z-index:2;
+  font-size:14.5px; font-weight:650; letter-spacing:-.01em; margin:0;
+  color:var(--text);
+  transition:color var(--dur-base) var(--ease-warm);
+}
+.card .desc{
+  position:relative; z-index:2;
+  font-size:11.5px; line-height:1.4; margin:3px 0 0; color:var(--muted);
+  transition:color var(--dur-base) var(--ease-warm);
+}
+/* On the lit tile, text flips to dark ink for contrast on gold (brand rule) */
+.card[aria-checked="true"] .ttl{ color:var(--indigo); }
+.card[aria-checked="true"] .desc{ color:rgba(22,10,18,.74); }
+
+/* the little inline scene chips reused across concepts */
+.chip{
+  position:relative; z-index:2;
+  width:100%; aspect-ratio:16/9; border-radius:14px; overflow:hidden;
+  margin-bottom:13px;
+  border:.5px solid var(--line-strong);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.12);
+}
+
+/* tiny "selected check" badge */
+.check{
+  position:absolute; z-index:3; top:11px; right:11px;
+  width:21px; height:21px; border-radius:50%;
+  display:grid; place-items:center;
+  background:var(--indigo);
+  box-shadow:0 2px 6px rgba(0,0,0,.35);
+  opacity:0; transform:scale(.5);
+  transition:opacity var(--dur-base) var(--ease-warm), transform var(--dur-base) var(--ease-warm);
+}
+.card[aria-checked="true"] .check{ opacity:1; transform:scale(1); }
+.check svg{ width:12px; height:12px; display:block; }
+.check path{
+  stroke:var(--accent-hl); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; fill:none;
+  stroke-dasharray:16; stroke-dashoffset:16;
+  transition:stroke-dashoffset var(--dur-reveal) var(--ease-warm) .04s;
+}
+.card[aria-checked="true"] .check path{ stroke-dashoffset:0; }
+
+/* macOS-style radio dot (used in C1) */
+.radio-row{ position:relative; z-index:2; display:flex; align-items:center; gap:8px; margin-top:12px; }
+.radio{
+  width:16px; height:16px; border-radius:50%; flex:none;
+  border:1.5px solid var(--faint);
+  background:rgba(0,0,0,.18);
+  display:grid; place-items:center;
+  transition:border-color var(--dur-base) var(--ease-warm), background var(--dur-base) var(--ease-warm);
+}
+.radio::after{
+  content:""; width:7px; height:7px; border-radius:50%; background:var(--indigo);
+  transform:scale(0); transition:transform var(--dur-base) var(--ease-warm);
+}
+.card[aria-checked="true"] .radio{ border-color:rgba(22,10,18,.55); background:rgba(255,255,255,.55); }
+.card[aria-checked="true"] .radio::after{ transform:scale(1); }
+.radio-row .rlbl{ font-size:11.5px; font-weight:600; color:var(--muted);
+  transition:color var(--dur-base) var(--ease-warm); }
+.card[aria-checked="true"] .radio-row .rlbl{ color:var(--indigo); }
+
+/* Compact (C3) */
+.cards.compact .card{ padding:15px 16px; }
+.compact-row{ display:flex; align-items:center; gap:11px; }
+.compact-ic{ position:relative; z-index:2; width:34px; height:34px; flex:none; border-radius:11px;
+  display:grid; place-items:center; border:.5px solid var(--line-strong);
+  background:rgba(0,0,0,.16); box-shadow:inset 0 1px 1px rgba(255,255,255,.12);
+  transition:background var(--dur-base) var(--ease-warm), border-color var(--dur-base) var(--ease-warm); }
+.card[aria-checked="true"] .compact-ic{ background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.28); }
+.compact-ic svg{ width:20px; height:20px; display:block; }
+
+/* status caption under each radiogroup */
+.cap{ display:flex; align-items:center; gap:7px; margin-top:14px; font-size:12px; color:var(--muted); }
+.cap .dot{ width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:var(--glow-accent); flex:none; }
+.cap b{ color:var(--text); font-weight:600; }
+
+/* glow-bloom keyframe for the bolder concept */
+@keyframes ember-bloom{
+  0%{ box-shadow:0 0 0 rgba(253,146,40,0), 0 16px 40px rgba(0,0,0,.40); }
+  55%{ box-shadow:0 0 46px -8px rgba(253,146,40,.95), 0 16px 40px rgba(0,0,0,.40); }
+  100%{ box-shadow:var(--glow-soft), 0 16px 40px rgba(0,0,0,.40); }
+}
+
+/* ---- C4 only: the live preview IS the signal, so the selected tile stays
+   glass (macOS appearance-tile behaviour: accent ring + check, not a color
+   flood). Keeping the warm fill off lets the mini-display stay readable. ---- */
+#grp-c4 .card[aria-checked="true"]{
+  border-color:transparent;
+  box-shadow:0 0 0 2px var(--accent), var(--glow-soft), 0 16px 40px rgba(0,0,0,.40);
+}
+#grp-c4 .card[aria-checked="true"] .fill{ opacity:0; }     /* no warm wash over the preview */
+#grp-c4 .card[aria-checked="true"] .rim{ opacity:0; }
+#grp-c4 .card[aria-checked="true"] .ttl{ color:var(--text); }   /* glass bg → keep warm off-white */
+#grp-c4 .card[aria-checked="true"] .desc{ color:var(--muted); }
+/* the check badge wears the accent ring colour instead of dark-on-gold */
+#grp-c4 .card[aria-checked="true"] .check{ background:var(--accent); }
+#grp-c4 .card[aria-checked="true"] .check path{ stroke:var(--indigo); }
+</style>
+</head>
+<body>
+
+<div class="fam">
+  <h2>Family C — Choice cards</h2>
+  <p>Present the either-or as two large, premium side-by-side Liquid-Glass tiles you deliberately pick between — the way macOS Settings shows the Light / Dark appearance tiles. Bigger, more legible and more artful than a pill, and unmistakably native: the chosen card lights up with the warm sunset fill, a specular sheen, an ember glow and a drawn-in check; the other stays clear glass.</p>
+</div>
+
+<div class="hd">
+  <h1>Settings</h1>
+  <p>Schedule · choice-card explorations (restrained → bold)</p>
+</div>
+
+<div class="wrap">
+
+  <!-- ============================================================ C1 -->
+  <section class="concept">
+    <div class="ctag">C1 · Appearance tiles</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="cards" role="radiogroup" aria-label="Schedule" id="grp-c1">
+          <div class="card" role="radio" tabindex="0" aria-checked="true" data-val="sunset">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="chip scene">
+              <svg viewBox="0 0 160 90" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <defs>
+                  <linearGradient id="c1-dusk" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#160A12"/><stop offset=".4" stop-color="#3A0F18"/>
+                    <stop offset=".72" stop-color="#8E1E0C"/><stop offset="1" stop-color="#FB7C0E"/>
+                  </linearGradient>
+                  <radialGradient id="c1-sun" cx="50%" cy="50%" r="50%">
+                    <stop offset="0" stop-color="#FFE0B8"/><stop offset=".55" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient>
+                </defs>
+                <rect width="160" height="90" fill="url(#c1-dusk)"/>
+                <circle cx="80" cy="64" r="20" fill="url(#c1-sun)"/>
+                <rect x="0" y="64" width="160" height="26" fill="#160A12" opacity=".34"/>
+                <line x1="0" y1="64" x2="160" y2="64" stroke="#FFE0B8" stroke-opacity=".55" stroke-width="1.4"/>
+              </svg>
+            </div>
+            <p class="ttl">Sunset</p>
+            <p class="desc">Warms around your local sunset.</p>
+            <div class="radio-row"><span class="radio" aria-hidden="true"></span><span class="rlbl">Selected</span></div>
+          </div>
+
+          <div class="card" role="radio" tabindex="-1" aria-checked="false" data-val="always">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="chip scene">
+              <svg viewBox="0 0 160 90" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <defs>
+                  <linearGradient id="c1-day" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#3A0F18"/><stop offset="1" stop-color="#6A100F"/>
+                  </linearGradient>
+                  <radialGradient id="c1-sun2" cx="50%" cy="42%" r="55%">
+                    <stop offset="0" stop-color="#FFE0B8"/><stop offset=".5" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient>
+                </defs>
+                <rect width="160" height="90" fill="url(#c1-day)"/>
+                <circle cx="80" cy="45" r="22" fill="url(#c1-sun2)"/>
+                <g stroke="#FFE0B8" stroke-opacity=".5" stroke-width="2.2" stroke-linecap="round">
+                  <line x1="80" y1="8" x2="80" y2="16"/><line x1="80" y1="74" x2="80" y2="82"/>
+                  <line x1="117" y1="45" x2="125" y2="45"/><line x1="35" y1="45" x2="43" y2="45"/>
+                  <line x1="106" y1="19" x2="112" y2="13"/><line x1="48" y1="71" x2="54" y2="77"/>
+                  <line x1="106" y1="71" x2="112" y2="77"/><line x1="48" y1="19" x2="54" y2="13"/>
+                </g>
+              </svg>
+            </div>
+            <p class="ttl">Always on</p>
+            <p class="desc">Keeps warmth around the clock.</p>
+            <div class="radio-row"><span class="radio" aria-hidden="true"></span><span class="rlbl">Not selected</span></div>
+          </div>
+        </div>
+        <div class="cap"><span class="dot"></span><span>Warming&nbsp;<b data-cap>around sunset</b></span></div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the literal macOS appearance-tile pattern — scene + title + descriptor + a real radio dot — so it reads as a setting users already know how to use.</div>
+  </section>
+
+  <!-- ============================================================ C2 -->
+  <section class="concept">
+    <div class="ctag">C2 · Sheened pick</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="cards" role="radiogroup" aria-label="Schedule" id="grp-c2">
+          <div class="card" role="radio" tabindex="0" aria-checked="true" data-val="sunset">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="scene" style="margin-bottom:11px">
+              <svg viewBox="0 0 44 30" width="46" height="31" aria-hidden="true">
+                <defs>
+                  <radialGradient id="c2-s" cx="50%" cy="58%" r="60%">
+                    <stop offset="0" stop-color="#FFE0B8"/><stop offset=".55" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient>
+                </defs>
+                <!-- dusk half-dome on a horizon (the icon language) -->
+                <path d="M9 21 a13 13 0 0 1 26 0 Z" fill="url(#c2-s)"/>
+                <line x1="3" y1="21" x2="41" y2="21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" class="hz"/>
+                <path d="M9 21 a13 13 0 0 1 26 0" fill="none" stroke="#FFE0B8" stroke-opacity=".6" stroke-width="1"/>
+              </svg>
+            </div>
+            <p class="ttl">Sunset</p>
+            <p class="desc">Eases in beforehand, holds through the night.</p>
+          </div>
+
+          <div class="card" role="radio" tabindex="-1" aria-checked="false" data-val="always">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="scene" style="margin-bottom:11px">
+              <svg viewBox="0 0 44 30" width="46" height="31" aria-hidden="true">
+                <defs>
+                  <radialGradient id="c2-a" cx="50%" cy="50%" r="55%">
+                    <stop offset="0" stop-color="#FFE0B8"/><stop offset=".5" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient>
+                </defs>
+                <!-- steady full sun -->
+                <circle cx="22" cy="15" r="8.5" fill="url(#c2-a)"/>
+                <g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" class="rays">
+                  <line x1="22" y1="1.5" x2="22" y2="5.5"/><line x1="22" y1="24.5" x2="22" y2="28.5"/>
+                  <line x1="8.5" y1="15" x2="12.5" y2="15"/><line x1="31.5" y1="15" x2="35.5" y2="15"/>
+                  <line x1="12" y1="5" x2="14.8" y2="7.8"/><line x1="29.2" y1="22.2" x2="32" y2="25"/>
+                  <line x1="32" y1="5" x2="29.2" y2="7.8"/><line x1="14.8" y1="22.2" x2="12" y2="25"/>
+                </g>
+              </svg>
+            </div>
+            <p class="ttl">Always on</p>
+            <p class="desc">Holds a steady warmth around the clock.</p>
+          </div>
+        </div>
+        <div class="cap"><span class="dot"></span><span>Warming&nbsp;<b data-cap>around sunset</b></span></div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the premium pick — clear glass until chosen, then the full sunset fill blooms in with a wet specular sheen and a drawn-in check; the icon's horizon-sun vs. steady-sun does the talking.</div>
+  </section>
+
+  <!-- ============================================================ C3 -->
+  <section class="concept">
+    <div class="ctag">C3 · Compact duo</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="cards compact" role="radiogroup" aria-label="Schedule" id="grp-c3">
+          <div class="card" role="radio" tabindex="0" aria-checked="true" data-val="sunset">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true" style="top:50%;transform:translateY(-50%) scale(.5);right:14px"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="compact-row">
+              <span class="compact-ic">
+                <svg viewBox="0 0 44 30" aria-hidden="true">
+                  <defs><radialGradient id="c3-s" cx="50%" cy="58%" r="60%">
+                    <stop offset="0" stop-color="#FFE0B8"/><stop offset=".55" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient></defs>
+                  <path d="M11 21 a11 11 0 0 1 22 0 Z" fill="url(#c3-s)"/>
+                  <line x1="6" y1="21" x2="38" y2="21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <p class="ttl">Sunset</p>
+            </div>
+          </div>
+
+          <div class="card" role="radio" tabindex="-1" aria-checked="false" data-val="always">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true" style="top:50%;transform:translateY(-50%) scale(.5);right:14px"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="compact-row">
+              <span class="compact-ic">
+                <svg viewBox="0 0 44 30" aria-hidden="true">
+                  <defs><radialGradient id="c3-a" cx="50%" cy="50%" r="55%">
+                    <stop offset="0" stop-color="#FFE0B8"/><stop offset=".5" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient></defs>
+                  <circle cx="22" cy="15" r="7.5" fill="url(#c3-a)"/>
+                  <g stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+                    <line x1="22" y1="2.5" x2="22" y2="5.8"/><line x1="22" y1="24.2" x2="22" y2="27.5"/>
+                    <line x1="9.5" y1="15" x2="12.8" y2="15"/><line x1="31.2" y1="15" x2="34.5" y2="15"/>
+                    <line x1="13" y1="6" x2="15.3" y2="8.3"/><line x1="28.7" y1="21.7" x2="31" y2="24"/>
+                    <line x1="31" y1="6" x2="28.7" y2="8.3"/><line x1="15.3" y1="21.7" x2="13" y2="24"/>
+                  </g>
+                </svg>
+              </span>
+              <p class="ttl">Always on</p>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="dot"></span><span>Warming&nbsp;<b data-cap>around sunset</b></span></div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: a tighter two-tile take — icon + label only — for dense Settings layouts, keeping the lit-glass selection language without the descriptor.</div>
+  </section>
+
+  <!-- ============================================================ C4 -->
+  <section class="concept">
+    <div class="ctag">C4 · Live preview tiles</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="cards" role="radiogroup" aria-label="Schedule" id="grp-c4">
+          <div class="card" role="radio" tabindex="0" aria-checked="true" data-val="sunset">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <!-- mini live mock of a WARMED display -->
+            <div class="chip scene" style="aspect-ratio:16/10">
+              <svg viewBox="0 0 160 100" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <!-- neutral day display up top, warm dusk easing in only at the bottom edge -->
+                  <linearGradient id="c4-sunset-wall" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#3A3E4A"/><stop offset=".62" stop-color="#363A45"/>
+                    <stop offset=".82" stop-color="#5A2C1A"/><stop offset="1" stop-color="#84351A"/>
+                  </linearGradient>
+                  <linearGradient id="c4-sunset-win" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#525868"/><stop offset=".7" stop-color="#4C4F5C"/><stop offset="1" stop-color="#6A3A24"/>
+                  </linearGradient>
+                  <linearGradient id="c4-sunset-warmveil" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#FB7C0E" stop-opacity="0"/><stop offset=".66" stop-color="#FB7C0E" stop-opacity="0"/><stop offset="1" stop-color="#FB7C0E" stop-opacity=".4"/>
+                  </linearGradient>
+                </defs>
+                <rect width="160" height="100" fill="url(#c4-sunset-wall)"/>
+                <!-- menubar (cool / neutral by day) -->
+                <rect x="0" y="0" width="160" height="13" fill="#2A2E38" opacity=".92"/>
+                <circle cx="9" cy="6.5" r="2.3" fill="#D7DBE3"/>
+                <rect x="132" y="4.5" width="20" height="4" rx="2" fill="#BFC4CE" opacity=".8"/>
+                <!-- window (neutral top → warm toward the bottom) -->
+                <rect x="20" y="26" width="120" height="52" rx="6" fill="url(#c4-sunset-win)" stroke="#C7CBD4" stroke-opacity=".18"/>
+                <circle cx="28" cy="33" r="2" fill="#9AA0AB"/><circle cx="35" cy="33" r="2" fill="#AEB3BD"/><circle cx="42" cy="33" r="2" fill="#9AA0AB"/>
+                <rect x="28" y="44" width="64" height="4" rx="2" fill="#C2C6CF" opacity=".7"/>
+                <rect x="28" y="53" width="90" height="3.4" rx="1.7" fill="#9FA4AE" opacity=".55"/>
+                <rect x="28" y="61" width="78" height="3.4" rx="1.7" fill="#B98C66" opacity=".55"/>
+                <!-- dock (catching the dusk warmth at the bottom) -->
+                <rect x="44" y="86" width="72" height="9" rx="4.5" fill="#FFC061" opacity=".2"/>
+                <g fill="#F0B070" opacity=".8"><rect x="50" y="88" width="5" height="5" rx="1.4"/><rect x="60" y="88" width="5" height="5" rx="1.4"/><rect x="70" y="88" width="5" height="5" rx="1.4"/><rect x="80" y="88" width="5" height="5" rx="1.4"/><rect x="90" y="88" width="5" height="5" rx="1.4"/><rect x="100" y="88" width="5" height="5" rx="1.4"/></g>
+                <!-- warm veil creeping up = "warms around sunset" -->
+                <rect width="160" height="100" fill="url(#c4-sunset-warmveil)"/>
+              </svg>
+            </div>
+            <p class="ttl">Sunset</p>
+            <p class="desc">Neutral by day, warm at night.</p>
+          </div>
+
+          <div class="card" role="radio" tabindex="-1" aria-checked="false" data-val="always">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <!-- mini live mock of an ALWAYS-WARM display (deeper, steady) -->
+            <div class="chip scene" style="aspect-ratio:16/10">
+              <svg viewBox="0 0 160 100" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <linearGradient id="c4-on-wall" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#6A2A12"/><stop offset="1" stop-color="#3A1408"/>
+                  </linearGradient>
+                  <linearGradient id="c4-on-win" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#955022"/><stop offset="1" stop-color="#6B3216"/>
+                  </linearGradient>
+                </defs>
+                <rect width="160" height="100" fill="url(#c4-on-wall)"/>
+                <rect x="0" y="0" width="160" height="13" fill="#46190A" opacity=".9"/>
+                <circle cx="9" cy="6.5" r="2.3" fill="#FFD08A"/>
+                <rect x="132" y="4.5" width="20" height="4" rx="2" fill="#F0B070" opacity=".85"/>
+                <rect x="20" y="26" width="120" height="52" rx="6" fill="url(#c4-on-win)" stroke="#FFD08A" stroke-opacity=".3"/>
+                <circle cx="28" cy="33" r="2" fill="#FF9A5B"/><circle cx="35" cy="33" r="2" fill="#FFD08A"/><circle cx="42" cy="33" r="2" fill="#E8AC5A"/>
+                <rect x="28" y="44" width="64" height="4" rx="2" fill="#FAD2A0" opacity=".8"/>
+                <rect x="28" y="53" width="90" height="3.4" rx="1.7" fill="#E2B488" opacity=".65"/>
+                <rect x="28" y="61" width="78" height="3.4" rx="1.7" fill="#E2B488" opacity=".55"/>
+                <rect x="44" y="86" width="72" height="9" rx="4.5" fill="#FFD08A" opacity=".26"/>
+                <g fill="#FFD08A" opacity=".9"><rect x="50" y="88" width="5" height="5" rx="1.4"/><rect x="60" y="88" width="5" height="5" rx="1.4"/><rect x="70" y="88" width="5" height="5" rx="1.4"/><rect x="80" y="88" width="5" height="5" rx="1.4"/><rect x="90" y="88" width="5" height="5" rx="1.4"/><rect x="100" y="88" width="5" height="5" rx="1.4"/></g>
+              </svg>
+            </div>
+            <p class="ttl">Always on</p>
+            <p class="desc">Warm every hour of the day.</p>
+          </div>
+        </div>
+        <div class="cap"><span class="dot"></span><span>Warming&nbsp;<b data-cap>around sunset</b></span></div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: each tile is a tiny live mock of the resulting display (warm-at-night vs. always-warm), exactly like the macOS Light/Dark previews — you see what you're choosing.</div>
+  </section>
+
+  <!-- ============================================================ C5 -->
+  <section class="concept">
+    <div class="ctag">C5 · Horizon expand</div>
+    <div class="panel">
+      <div class="ptitle">Schedule</div>
+      <div class="psub">When Abendrot warms your displays.</div>
+
+      <!-- CONTROL ↓↓↓ -->
+      <div class="ctl">
+        <div class="cards bold" role="radiogroup" aria-label="Schedule" id="grp-c5">
+          <div class="card c5" role="radio" tabindex="0" aria-checked="true" data-val="sunset">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="chip scene c5-chip">
+              <svg viewBox="0 0 200 100" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <defs>
+                  <linearGradient id="c5-sky" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#160A12"/><stop offset=".34" stop-color="#2A0F16"/>
+                    <stop offset=".6" stop-color="#6A100F"/><stop offset=".82" stop-color="#C2310A"/>
+                    <stop offset=".93" stop-color="#FB7C0E"/><stop offset="1" stop-color="#FD9228"/>
+                  </linearGradient>
+                  <radialGradient id="c5-sun" cx="50%" cy="50%" r="50%">
+                    <stop offset="0" stop-color="#FFF1DD"/><stop offset=".5" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient>
+                  <radialGradient id="c5-glow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0" stop-color="#FFC061" stop-opacity=".85"/><stop offset="1" stop-color="#FFC061" stop-opacity="0"/>
+                  </radialGradient>
+                </defs>
+                <rect width="200" height="100" fill="url(#c5-sky)"/>
+                <circle class="c5-bloom" cx="100" cy="74" r="40" fill="url(#c5-glow)"/>
+                <circle class="c5-orb" cx="100" cy="74" r="17" fill="url(#c5-sun)"/>
+                <rect x="0" y="74" width="200" height="26" fill="#160A12" opacity=".4"/>
+                <line x1="0" y1="74" x2="200" y2="74" stroke="#FFE0B8" stroke-opacity=".6" stroke-width="1.4"/>
+              </svg>
+            </div>
+            <p class="ttl">Sunset</p>
+            <p class="desc">The sun dips; warmth eases in and holds through the night.</p>
+          </div>
+
+          <div class="card c5" role="radio" tabindex="-1" aria-checked="false" data-val="always">
+            <span class="fill"></span><span class="rim"></span>
+            <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg></span>
+            <div class="chip scene c5-chip">
+              <svg viewBox="0 0 200 100" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <defs>
+                  <linearGradient id="c5-sky2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#3A0F18"/><stop offset=".5" stop-color="#6A100F"/><stop offset="1" stop-color="#9E2207"/>
+                  </linearGradient>
+                  <radialGradient id="c5-sun2" cx="50%" cy="48%" r="52%">
+                    <stop offset="0" stop-color="#FFF1DD"/><stop offset=".5" stop-color="#FFC061"/><stop offset="1" stop-color="#FD9228"/>
+                  </radialGradient>
+                  <radialGradient id="c5-glow2" cx="50%" cy="48%" r="50%">
+                    <stop offset="0" stop-color="#FFC061" stop-opacity=".8"/><stop offset="1" stop-color="#FFC061" stop-opacity="0"/>
+                  </radialGradient>
+                </defs>
+                <rect width="200" height="100" fill="url(#c5-sky2)"/>
+                <circle class="c5-bloom" cx="100" cy="48" r="42" fill="url(#c5-glow2)"/>
+                <g class="c5-orb">
+                  <circle cx="100" cy="48" r="18" fill="url(#c5-sun2)"/>
+                  <g stroke="#FFE0B8" stroke-opacity=".55" stroke-width="2.4" stroke-linecap="round" class="c5-rays">
+                    <line x1="100" y1="14" x2="100" y2="22"/><line x1="100" y1="74" x2="100" y2="82"/>
+                    <line x1="134" y1="48" x2="142" y2="48"/><line x1="58" y1="48" x2="66" y2="48"/>
+                    <line x1="124" y1="24" x2="130" y2="18"/><line x1="70" y1="72" x2="76" y2="78"/>
+                    <line x1="124" y1="72" x2="130" y2="78"/><line x1="70" y1="24" x2="76" y2="18"/>
+                  </g>
+                </g>
+              </svg>
+            </div>
+            <p class="ttl">Always on</p>
+            <p class="desc">A steady sun — the same warmth at every hour.</p>
+          </div>
+        </div>
+        <div class="cap"><span class="dot"></span><span>Warming&nbsp;<b data-cap>around sunset</b></span></div>
+      </div>
+      <!-- CONTROL ↑↑↑ -->
+
+      <p class="pdesc">Sunset warms automatically around your local sunset — easing in beforehand and
+      holding through the night — using your time zone to estimate sunrise and sunset. No location
+      permission required. Always on keeps warmth on around the clock.</p>
+    </div>
+    <div class="cnote">One-line rationale: the bolder take — the chosen card claims more width and its scene comes alive (the sun glow blooms, rays breathe), while the other recedes to a calm sliver of glass.</div>
+  </section>
+
+</div>
+
+<style>
+/* --- C5 bolder behaviours: selected tile expands, scene animates --- */
+.cards.bold{ grid-template-columns:1fr 1fr; align-items:stretch; }
+.cards.bold .card{
+  transition:flex-basis var(--dur-reveal) var(--ease-warm),
+             transform var(--dur-base) var(--ease-warm),
+             box-shadow var(--dur-base) var(--ease-warm),
+             border-color var(--dur-base) var(--ease-warm),
+             opacity var(--dur-base) var(--ease-warm);
+}
+/* asymmetric grid via fr tracks on the group when something is checked */
+#grp-c5{ grid-template-columns:1.34fr .66fr; transition:grid-template-columns var(--dur-reveal) var(--ease-warm); }
+#grp-c5.right{ grid-template-columns:.66fr 1.34fr; }
+#grp-c5 .card[aria-checked="false"]{ opacity:.82; }
+#grp-c5 .card[aria-checked="false"] .desc{ opacity:0; max-height:0; margin-top:0; transition:opacity var(--dur-base) var(--ease-warm), max-height var(--dur-reveal) var(--ease-warm), margin-top var(--dur-reveal) var(--ease-warm); }
+#grp-c5 .card .desc{ max-height:40px; overflow:hidden; }
+.c5-chip{ aspect-ratio:auto; height:88px; }
+/* scene comes alive only on the selected, only when motion is allowed */
+.c5-orb{ transform-box:fill-box; transform-origin:center; }
+.c5-bloom{ transform-box:fill-box; transform-origin:center; opacity:.0; transition:opacity var(--dur-reveal) var(--ease-warm); }
+.card[aria-checked="true"] .c5-bloom{ animation:c5-breathe 3.4s var(--ease-standard) infinite; opacity:1; }
+.card[aria-checked="true"][data-val="sunset"] .c5-orb{ animation:c5-dip 1s var(--ease-warm) 1; }
+.card[aria-checked="true"][data-val="always"] .c5-rays{ animation:c5-spin 26s linear infinite; transform-box:fill-box; transform-origin:100px 48px; }
+@keyframes c5-breathe{ 0%,100%{ transform:scale(1); opacity:.7 } 50%{ transform:scale(1.12); opacity:1 } }
+@keyframes c5-dip{ 0%{ transform:translateY(-14px); opacity:.4 } 100%{ transform:translateY(0); opacity:1 } }
+@keyframes c5-spin{ to{ transform:rotate(360deg) } }
+@media (prefers-reduced-motion: reduce){
+  .card[aria-checked="true"] .c5-bloom{ animation:none; opacity:1 }
+  #grp-c5, #grp-c5.right{ transition:none }
+}
+</style>
+
+<script>
+  /* ---- Shared radiogroup behaviour for every choice-card concept ----
+     Roving tabindex, click + arrow keys + Enter/Space, aria-checked, and
+     the warm "Warming around sunset / around the clock" caption update. */
+  (function(){
+    const groups = document.querySelectorAll('[role="radiogroup"]');
+
+    function setChecked(group, card){
+      const cards = [...group.querySelectorAll('[role="radio"]')];
+      cards.forEach(c=>{
+        const on = c === card;
+        c.setAttribute('aria-checked', on ? 'true' : 'false');
+        c.tabIndex = on ? 0 : -1;
+        const rlbl = c.querySelector('.rlbl');
+        if(rlbl) rlbl.textContent = on ? 'Selected' : 'Not selected';
+      });
+      // C5 asymmetric expansion: shift the wide track to the chosen side
+      if(group.id === 'grp-c5'){
+        const idx = cards.indexOf(card);
+        group.classList.toggle('right', idx === 1);
+      }
+      // caption
+      const cap = group.parentElement.querySelector('[data-cap]');
+      if(cap) cap.textContent = card.dataset.val === 'always' ? 'around the clock' : 'around sunset';
+    }
+
+    groups.forEach(group=>{
+      const cards = [...group.querySelectorAll('[role="radio"]')];
+
+      cards.forEach((card)=>{
+        card.addEventListener('click', ()=>{ setChecked(group, card); card.focus(); });
+        card.addEventListener('keydown', (e)=>{
+          const i = cards.indexOf(card);
+          let next = null;
+          switch(e.key){
+            case 'ArrowRight': case 'ArrowDown': next = cards[(i+1)%cards.length]; break;
+            case 'ArrowLeft':  case 'ArrowUp':   next = cards[(i-1+cards.length)%cards.length]; break;
+            case ' ': case 'Enter': e.preventDefault(); setChecked(group, card); return;
+            default: return;
+          }
+          e.preventDefault();
+          setChecked(group, next);
+          next.focus();
+        });
+      });
+    });
+  })();
+</script>
+
+<script>
+  function reportH(){ try{ var b=document.body, kids=b.children, max=0; for(var i=0;i<kids.length;i++){ var el=kids[i]; if(el.tagName==='SCRIPT'||el.tagName==='STYLE') continue; var r=el.getBoundingClientRect(), mb=parseFloat(getComputedStyle(el).marginBottom)||0, bottom=r.bottom+window.scrollY+mb; if(bottom>max) max=bottom; } var pad=parseFloat(getComputedStyle(b).paddingBottom)||0; parent.postMessage({type:'iframeHeight', name:location.pathname.split('/').pop(), h:Math.ceil(max+pad)}, '*'); }catch(e){} }
+  addEventListener('load', reportH); addEventListener('resize', reportH);
+  if (window.ResizeObserver) new ResizeObserver(reportH).observe(document.body);
+  setTimeout(reportH, 400);
+</script>
+</body>
+</html>
