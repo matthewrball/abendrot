@@ -48,7 +48,7 @@ final class AboutWindowController: NSWindowController, NSWindowDelegate {
 
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 640),
             // `.fullSizeContentView` MUST be present at creation for the glass chrome. No `.resizable`:
             // a fixed card. `.miniaturizable` is omitted so the only traffic light is close (the panel
             // has nothing to minimise to in an agent app).
@@ -109,25 +109,25 @@ private struct AboutView: View {
         ScrollView {
             VStack(spacing: 0) {
                 AboutHeader()
-                    .padding(.top, 44)
+                    .padding(.top, 52)
 
                 VersionLine()
-                    .padding(.top, 18)
+                    .padding(.top, 22)
 
                 MissionCopy()
-                    .padding(.top, 26)
+                    .padding(.top, 38)
                     .padding(.horizontal, 40)
 
                 WarmedTimeStat(model: model)
-                    .padding(.top, 26)
+                    .padding(.top, 38)
                     .padding(.horizontal, 36)
 
                 BuiltBySignature()
-                    .padding(.top, 26)
+                    .padding(.top, 34)
 
                 AboutFooterLinks()
-                    .padding(.top, 18)
-                    .padding(.bottom, 40)
+                    .padding(.top, 24)
+                    .padding(.bottom, 48)
             }
             .frame(maxWidth: .infinity)
             // One signature moment: the card eases up + fades in on open (Reduce-Motion-aware), the
@@ -136,7 +136,7 @@ private struct AboutView: View {
             .offset(y: appeared ? 0 : 10)
         }
         .scrollIndicators(.hidden)
-        .frame(width: 460, height: 560)
+        .frame(width: 460, height: 640)
         // Persistent frosted-ember glass, full-bleed to the window edges (cornerRadius 0 — the window
         // itself supplies the rounded corners). The sunset halo behind the icon lives in AboutHeader.
         .background(AboutFrostBackground())
@@ -261,12 +261,12 @@ private struct WarmedTimeStat: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 18) {
             DividerLine()
                 .padding(.horizontal, 24)
 
             TimelineView(.periodic(from: .now, by: 1)) { _ in
-                VStack(spacing: 5) {
+                VStack(spacing: 6) {
                     Text("Abendrot has warmed your Mac for")
                         .font(Theme.Typography.ui(11))
                         .foregroundStyle(Theme.Color.textMuted)
