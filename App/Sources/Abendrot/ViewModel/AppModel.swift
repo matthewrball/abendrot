@@ -68,8 +68,9 @@ final class AppModel {
     @ObservationIgnored private var warmingStartedAt: Date?
     /// Start-of-day (timeIntervalSince1970) of the last counted warm sunset — de-dupes per day.
     @ObservationIgnored private var lastWarmSunsetDay: Double = 0
-    /// Retains the confirmation tone across its async playback (a local one would deallocate → silent).
-    @ObservationIgnored private var confirmationPlayer: AVAudioPlayer?
+    /// Reusable chime graph: the system "Glass" sound, played bright on warming-ON and PITCHED-DOWN
+    /// (deeper, dampened) on warming-OFF. Built lazily on first toggle; nil if the sound file is missing.
+    @ObservationIgnored private lazy var confirmationChime: ConfirmationChime? = ConfirmationChime()
 
     // MARK: Engine wiring (nil in previews)
 
@@ -220,13 +221,10 @@ final class AppModel {
     /// finish (a local player would deallocate before its async playback ends).
     private func playSoftConfirmationTone(warming: Bool) {
         guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        let url = URL(fileURLWithPath: "/System/Library/Sounds/Glass.aiff")
-        guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
-        player.enableRate = true
-        player.rate = warming ? 1.0 : 0.78   // off = a lower, muted glass (timbre, not volume)
-        player.volume = 0.5
-        confirmationPlayer = player
-        player.play()
+        // ON = the bright Glass chime; OFF = the SAME chime pitched DOWN ~5 semitones — a deeper,
+        // dampened version (founder). (AVAudioPlayer.rate only time-stretches — it PRESERVES pitch — so
+        // it was imperceptible; a real pitch shift needs the AVAudioUnitTimePitch graph below.)
+        confirmationChime?.play(pitchCents: warming ? 0 : -500)
     }
 
     func setGlobalWarmth(_ strength: Double) {
@@ -505,5 +503,49 @@ final class AppModel {
     private static func isSupported<T>(_ cap: Capability<T>) -> Bool {
         if case .supported = cap { return true }
         return false
+    }
+}
+
+// MARK: - ConfirmationChime
+
+/// A tiny reusable AVAudioEngine graph that plays the system "Glass" chime, optionally pitch-shifted.
+/// Built once; `play(pitchCents:)` re-triggers it. 0 cents = the bright Glass (warming ON); a negative
+/// value plays it deeper + dampened (warming OFF). Real pitch shifting (not `AVAudioPlayer.rate`, which
+/// only time-stretches and preserves pitch). Main-actor; the engine idles itself a few seconds after the
+/// (short) chime so its render thread doesn't run forever.
+@MainActor
+private final class ConfirmationChime {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let pitch = AVAudioUnitTimePitch()
+    private let file: AVAudioFile
+    private var idleTask: Task<Void, Never>?
+
+    init?() {
+        guard let f = try? AVAudioFile(forReading: URL(fileURLWithPath: "/System/Library/Sounds/Glass.aiff")) else {
+            return nil
+        }
+        file = f
+        engine.attach(player)
+        engine.attach(pitch)
+        engine.connect(player, to: pitch, format: file.processingFormat)
+        engine.connect(pitch, to: engine.mainMixerNode, format: file.processingFormat)
+        engine.mainMixerNode.outputVolume = 0.5
+    }
+
+    func play(pitchCents: Float) {
+        pitch.pitch = pitchCents
+        if !engine.isRunning { try? engine.start() }
+        guard engine.isRunning else { return }
+        player.stop()                       // reset if a prior chime is still scheduled (rapid re-toggle)
+        player.scheduleFile(file, at: nil)
+        player.play()
+        // Stop the engine shortly after the (sub-2s) chime so the render thread doesn't run indefinitely.
+        idleTask?.cancel()
+        idleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, !self.player.isPlaying else { return }
+            self.engine.stop()
+        }
     }
 }
