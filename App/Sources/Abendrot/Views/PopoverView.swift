@@ -256,6 +256,8 @@ private struct IncompatibilityNotice: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let ink = Theme.Color.groundIndigo
+    private let summary = "This Mac can only tint your displays"
+    private let explanation = "True warming isn’t available on this Mac, so Abendrot can only add a warm colour tint to your displays — a known limitation on some Apple-silicon chips and macOS versions."
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -264,10 +266,12 @@ private struct IncompatibilityNotice: View {
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.accentPress)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("True warming isn’t available on this Mac, so your displays are being tinted rather than truly warmed — a known limitation on some Apple-silicon chips and macOS versions.")
-                        .font(Theme.Typography.ui(11))
+                    Text(summary)
+                        .font(Theme.Typography.ui(11, weight: .semibold))
                         .foregroundStyle(ink)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .help(explanation)
                     HStack(spacing: 6) {
                         Text(SystemInfo.summary)
                             .font(Theme.Typography.ui(10, weight: .medium))

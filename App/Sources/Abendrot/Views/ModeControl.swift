@@ -49,12 +49,32 @@ struct ModeControl: View {
     @Binding var selection: ScheduleModeOption
     var onChange: (ScheduleModeOption) -> Void
 
+    var body: some View {
+        BrandSegmentedControl(
+            options: ScheduleModeOption.allCases,
+            selection: $selection,
+            label: \.label,
+            onChange: onChange
+        )
+    }
+}
+
+// MARK: - BrandSegmentedControl
+
+/// Reusable liquid-glass segmented control for small brand choices. Keeps Mode and Settings'
+/// warming-method picker visually identical without falling back to the system segmented picker.
+struct BrandSegmentedControl<Option: Identifiable & Equatable>: View {
+    let options: [Option]
+    @Binding var selection: Option
+    let label: (Option) -> String
+    var onChange: (Option) -> Void = { _ in }
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pillNamespace
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(ScheduleModeOption.allCases) { option in
+            ForEach(options) { option in
                 segment(option)
             }
         }
@@ -65,9 +85,9 @@ struct ModeControl: View {
 
     // MARK: Segments
 
-    private func segment(_ option: ScheduleModeOption) -> some View {
+    private func segment(_ option: Option) -> some View {
         let isSelected = option == selection
-        return Text(option.label)
+        return Text(label(option))
             .font(Theme.Typography.ui(12, weight: isSelected ? .bold : .medium))
             // Dark ink on the bright gradient (the app's high-contrast convention) — cream/white on
             // the light-gold top of the ramp fails contrast. Muted on the dark track when unselected.
@@ -84,11 +104,11 @@ struct ModeControl: View {
             .contentShape(Capsule(style: .continuous))
             .onTapGesture { select(option) }
             .accessibilityElement()
-            .accessibilityLabel(option.label)
+            .accessibilityLabel(label(option))
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private func select(_ option: ScheduleModeOption) {
+    private func select(_ option: Option) {
         guard option != selection else { return }
         withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) { selection = option }
         onChange(option)

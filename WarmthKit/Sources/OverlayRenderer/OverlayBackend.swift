@@ -24,8 +24,8 @@ enum OverlayVeil {
 /// vanishes when warmth is off (a non-zero alpha at 6500K would tint an "off" screen); rises with
 /// warmth — the red-minus-blue attenuation — and is capped so it stays a legible tint.
 package func veilAlpha(for gain: RGBGain) -> Double {
-    let warmth = max(0, gain.red - gain.blue)
-    return min(OverlayVeil.maxAlpha, warmth)
+    let warmth = max(0, min(1, gain.red - gain.blue))
+    return OverlayVeil.maxAlpha * warmth // Scale into the cap instead of clamping early.
 }
 
 // MARK: - OverlayBackend

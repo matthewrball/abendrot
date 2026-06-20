@@ -16,10 +16,12 @@ struct OverlayVeilTests {
 
     @Test("warmer → more opaque (monotonic), never zero before neutral")
     func monotonicWithWarmth() {
-        let warm = veilAlpha(for: rgbGain(for: Kelvin(2700)))
+        let warmGain = rgbGain(for: Kelvin(2700))
+        let warm = veilAlpha(for: warmGain)
         let mild = veilAlpha(for: rgbGain(for: Kelvin(4000)))
         #expect(warm > mild)
         #expect(mild > 0)
+        #expect(abs(warm - (OverlayVeil.maxAlpha * max(0, min(1, warmGain.red - warmGain.blue)))) < 0.000_001)
     }
 
     @Test("opacity is capped so it never becomes an opaque wash")

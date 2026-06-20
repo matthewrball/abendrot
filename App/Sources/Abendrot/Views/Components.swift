@@ -198,6 +198,7 @@ struct DisplayRow: View {
                     Text(subtitle)
                         .font(Theme.Typography.ui(10.5))
                         .foregroundStyle(tintOnly ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                        .help(tintOnlyExplanation)
                 }
                 Spacer()
                 Text("Override")
@@ -226,8 +227,14 @@ struct DisplayRow: View {
     }
 
     private var subtitle: String {
-        if tintOnly { return "Can only add a colour tint on this display" }
+        if tintOnly { return "Tint only" }
         return display.warmthOverridden ? "Custom warmth" : "Follows global warmth"
+    }
+
+    private var tintOnlyExplanation: String {
+        tintOnly
+            ? "Abendrot can only add a warm colour tint to this display on this Mac — true warming (removing blue light) isn’t available for it."
+            : subtitle
     }
 
     private var overrideBinding: Binding<Bool> {

@@ -47,13 +47,21 @@ struct SettingsView: View {
     @State private var selection: SettingsTab = .general
 
     var body: some View {
-        NavigationSplitView {
-            List(SettingsTab.allCases, selection: $selection) { tab in
-                Label(tab.title, systemImage: tab.icon)
-                    .tag(tab)
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            VStack(spacing: 0) {
+                List(SettingsTab.allCases, selection: $selection) { tab in
+                    Label(tab.title, systemImage: tab.icon)
+                        .tag(tab)
+                }
+                .scrollContentBackground(.hidden)
+
+                Spacer(minLength: 12)
+                SidebarBranding()
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
             }
             .navigationSplitViewColumnWidth(min: 172, ideal: 180)
-            .scrollContentBackground(.hidden)
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             ScrollView {
                 tabBody
@@ -106,6 +114,36 @@ private struct TabHeader: View {
                 .foregroundStyle(Theme.Color.textMuted)
         }
         .padding(.bottom, 20)
+    }
+}
+
+private struct SidebarBranding: View {
+    @State private var hoveringByline = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            AppIconView()
+                .frame(width: 32, height: 32)
+            Text("Abendrot")
+                .font(Theme.Typography.serif(15))
+                .foregroundStyle(Theme.Color.textPrimary)
+            // Underlined name marks it as a link; resting state is slightly dimmed and brightens on
+            // hover (same hue) for a clear, colour-preserving hover affordance.
+            Link(destination: URL(string: "https://matthewball.me/")!) {
+                (Text("Built by ") + Text("Matthew Ball").underline())
+                    .font(Theme.Typography.ui(11))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .opacity(hoveringByline ? 1 : 0.85)
+                    .animation(.easeOut(duration: 0.12), value: hoveringByline)
+            }
+            .buttonStyle(.plain)
+            .onHover { hoveringByline = $0 }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 10)
+        .overlay(alignment: .top) {
+            DividerLine()
+        }
     }
 }
 
@@ -223,11 +261,12 @@ private struct DisplaysTab: View {
             }
             DividerLine()
             Button(role: .destructive) {
+                model.setEnabled(false)
                 model.restoreAllDisplays()
             } label: {
                 Label("Restore all displays to neutral", systemImage: "arrow.counterclockwise")
             }
-            Text("Emergency reset: returns every display to true colour. Always available.")
+            Text("Restore every display to true color. Disable warming.")
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textFaint)
         }
@@ -247,14 +286,14 @@ private struct DisplayConfigRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(display.name)
                         .font(Theme.Typography.ui(13, weight: .medium))
                         .foregroundStyle(Theme.Color.textPrimary)
                     Text(statusLine)
                         .font(Theme.Typography.ui(11.5))
-                        .foregroundStyle(canTrueWarm ? Theme.Color.textMuted : Theme.Color.accentHighlight)
+                        .foregroundStyle(statusColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
@@ -297,11 +336,20 @@ private struct DisplayConfigRow: View {
         return priv && (isSupported(display.capabilities.gamma) || isSupported(display.capabilities.hardware))
     }
 
-    private var statusLine: String {
-        canTrueWarm
-            ? "Truly warmed — removes blue light"
-            : "Can only be tinted on this Mac — true warming isn’t available for this display"
+    // Single source so the copy and its colour can't drift apart (review): incompatibility uses the
+    // warning accent; a user-chosen tint and a true warm both read muted.
+    private var status: (text: String, color: Color) {
+        if !canTrueWarm {
+            return ("Can only be tinted on this Mac — true warming isn’t available for this display", Theme.Color.accentHighlight)
+        }
+        if display.preferredMethod == .overlay {
+            return ("Adding a warm tint — not true warming", Theme.Color.textMuted)
+        }
+        return ("Truly warmed — removes blue light", Theme.Color.textMuted)
     }
+
+    private var statusLine: String { status.text }
+    private var statusColor: Color { status.color }
 
     private func isSupported<T>(_ cap: Capability<T>) -> Bool {
         if case .supported = cap { return true }
@@ -311,11 +359,10 @@ private struct DisplayConfigRow: View {
 
 // MARK: - Warming-method picker (plain-language per-display layer choice)
 
-/// The de-jargoned per-display warming-method control. Plain labels (Codex): **Automatic /
-/// Standard / Screen tint / Hardware control** map onto the engine's `DisplayMethod` override.
+/// The de-jargoned per-display warming-method control. Plain labels (Codex): **Standard /
+/// Screen tint / Hardware control** map onto the engine's `DisplayMethod` override.
 /// Only methods actually usable for this display are offered, so the available options themselves
-/// communicate what the hardware/OS supports (an incompatible display offers only Automatic +
-/// Screen tint). (§26 Settings de-jargon.)
+/// communicate what the hardware/OS supports. (§26 Settings de-jargon.)
 private struct WarmingMethodPicker: View {
     let display: DisplayState
     @Bindable var model: AppModel
@@ -326,13 +373,27 @@ private struct WarmingMethodPicker: View {
                 .font(Theme.Typography.ui(11.5, weight: .medium))
                 .foregroundStyle(Theme.Color.textMuted)
 
-            Picker("Warming method", selection: choiceBinding) {
-                ForEach(availableChoices) { choice in
-                    Text(choice.label).tag(choice)
-                }
+            if availableChoices.count == 1, let choice = availableChoices.first {
+                Text(choice.label)
+                    .font(Theme.Typography.ui(12, weight: .bold))
+                    .foregroundStyle(Theme.Color.groundIndigo)
+                    .lineLimit(1)
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 16)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Theme.Gradient.sunset)
+                            .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
+                    )
+                    .accessibilityLabel("Warming method: \(choice.label)")
+            } else {
+                BrandSegmentedControl(
+                    options: availableChoices,
+                    selection: choiceBinding,
+                    label: \.label,
+                    onChange: { _ in }
+                )
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
 
             Text(choiceBinding.wrappedValue.description)
                 .font(Theme.Typography.ui(11))
@@ -352,7 +413,7 @@ private struct WarmingMethodPicker: View {
     /// The methods offered for this display, in Codex's order, filtered to what's usable right now.
     private var availableChoices: [WarmingMethodChoice] {
         let priv = model.state.privateAPIsEnabled
-        var choices: [WarmingMethodChoice] = [.automatic]
+        var choices: [WarmingMethodChoice] = []
         if priv, isSupported(display.capabilities.gamma) { choices.append(.standard) }
         choices.append(.screenTint)                                     // overlay is always available
         if priv, isSupported(display.capabilities.hardware) { choices.append(.hardwareControl) }
@@ -362,8 +423,17 @@ private struct WarmingMethodPicker: View {
     private var choiceBinding: Binding<WarmingMethodChoice> {
         Binding(
             get: {
-                let current = WarmingMethodChoice(display.preferredMethod)
-                return availableChoices.contains(current) ? current : .automatic
+                switch display.preferredMethod {
+                case .gamma:
+                    if availableChoices.contains(.standard) { return .standard }
+                case .overlay:
+                    if availableChoices.contains(.screenTint) { return .screenTint }
+                case .hardware:
+                    if availableChoices.contains(.hardwareControl) { return .hardwareControl }
+                default:
+                    break
+                }
+                return availableChoices.contains(.standard) ? .standard : .screenTint
             },
             set: { apply($0) }
         )
@@ -400,15 +470,14 @@ private struct WarmingMethodPicker: View {
 }
 
 /// Plain-language names for the per-display warming method (Settings → Displays → Advanced). Maps to
-/// the engine's `DisplayMethod` override: Automatic = best-available (nil), Standard = gamma (the OS
-/// white-point true-warm), Screen tint = overlay, Hardware control = DDC.
+/// the engine's `DisplayMethod` override: Standard = gamma (the OS white-point true-warm), Screen
+/// tint = overlay, Hardware control = DDC.
 private enum WarmingMethodChoice: String, CaseIterable, Identifiable {
-    case automatic, standard, screenTint, hardwareControl
+    case standard, screenTint, hardwareControl
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .automatic: return "Automatic"
         case .standard: return "Standard"
         case .screenTint: return "Screen tint"
         case .hardwareControl: return "Hardware control"
@@ -417,8 +486,6 @@ private enum WarmingMethodChoice: String, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .automatic:
-            return "Let Abendrot pick the best way to warm this display. Recommended."
         case .standard:
             return "Warm the whole display through macOS — truly removes blue light."
         case .screenTint:
@@ -430,19 +497,9 @@ private enum WarmingMethodChoice: String, CaseIterable, Identifiable {
 
     var preferredMethod: DisplayMethod? {
         switch self {
-        case .automatic: return nil
         case .standard: return .gamma
         case .screenTint: return .overlay
         case .hardwareControl: return .hardware
-        }
-    }
-
-    init(_ method: DisplayMethod?) {
-        switch method {
-        case .gamma: self = .standard
-        case .overlay: self = .screenTint
-        case .hardware: self = .hardwareControl
-        default: self = .automatic        // nil or .off → automatic
         }
     }
 }
@@ -740,6 +797,9 @@ private struct AboutTab: View {
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
+            Link("Built by Matthew Ball", destination: URL(string: "https://matthewball.me/")!)
+                .font(Theme.Typography.ui(11))
+                .foregroundStyle(Theme.Color.textMuted)
 
             // What makes it different (the marketing angle).
             VStack(alignment: .leading, spacing: 8) {
