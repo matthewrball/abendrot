@@ -22,6 +22,10 @@ set -euo pipefail
 BUILD="${BUILD:-/Users/ball/Documents/abendrot/abendrot-build}"
 PUBLIC="${PUBLIC:-/Users/ball/Documents/abendrot/abendrot-public}"
 REQUIRED_CHECKS=(test-warmthcore build-app-unsigned)   # the real CI gates (see ci.yml)
+# Legit PUBLIC-ONLY files: tracked in public but NOT produced by sync. Keep this TIGHT — every entry
+# is a conscious "yes, this belongs in public". The allowlist guard fails the publish on anything that
+# is neither in the sync set nor here, so a stray internal file can't ride along via `git add -A`.
+PUBLIC_ONLY=(.gitignore LICENSE CONTRIBUTING.md PRIVACY.md SECURITY.md WarmthKit/Package.resolved assets)
 
 [ -d "$BUILD/.git" ]  || { echo "BUILD is not a git repo: $BUILD" >&2; exit 1; }
 [ -d "$PUBLIC/.git" ] || { echo "PUBLIC is not a git repo: $PUBLIC" >&2; exit 1; }
@@ -56,6 +60,36 @@ leak_scan() {
   echo "✓ leak scan clean (0 hits)"
 }
 
+# Allowlist guard: every file that would be committed must be EITHER produced by sync (the authoritative
+# SYNC_TREES/SYNC_FILES, read straight from the cloned sync-public.sh so there's no extra list to keep in
+# lockstep) OR on PUBLIC_ONLY. Flips leak-prevention from "remove the bad things we named" to "permit only
+# what we expect" — catches any stray (brand/, .omc/, a new top-level file, …) outside the sync set.
+# $1 = path to the (cloned) sync-public.sh.
+assert_only_expected() {
+  local manifest="$1" f e ok
+  local expected=()
+  while IFS= read -r e; do expected+=("$e"); done < <(
+    sed -n '/^SYNC_TREES=(/,/^)/p; /^SYNC_FILES=(/,/^)/p' "$manifest" | grep -oE '"[^"]+"' | tr -d '"')
+  [ "${#expected[@]}" -ge 5 ] \
+    || { echo "guard: could not parse the sync set from $manifest — refusing to publish." >&2; return 1; }
+  local strays=()
+  while IFS= read -r f; do
+    ok=""
+    for e in "${expected[@]}" "${PUBLIC_ONLY[@]}"; do
+      if [[ "$f" == "$e" || "$f" == "$e"/* ]]; then ok=1; break; fi
+    done
+    [ -z "$ok" ] && strays+=("$f")
+  done < <(git_pub ls-files)   # the staged set (run after `git add -A`): reflects sync's deletions + additions
+  if [ "${#strays[@]}" -gt 0 ]; then
+    echo "ERROR: unexpected file(s) in the public tree — not in the sync set or the PUBLIC_ONLY allowlist:" >&2
+    printf '  %s\n' "${strays[@]}" >&2
+    echo "Fix: if it belongs in public, add it to PUBLIC_ONLY in publish.sh; otherwise remove it (or add it" >&2
+    echo "to INTERNAL_ONLY in sync-public.sh so sync strips it)." >&2
+    return 1
+  fi
+  echo "✓ allowlist clean (no files outside the sync set + PUBLIC_ONLY)"
+}
+
 # ---------------------------------------------------------------------------
 # stage: clone committed build HEAD -> sync+scrub+gate -> land on dev -> scan -> guide.
 # ---------------------------------------------------------------------------
@@ -79,6 +113,8 @@ do_stage() {
   BUILD="$clean" PUBLIC="$PUBLIC" bash "$clean/scripts/sync-public.sh"
 
   git_pub add -A
+  echo "== Allowlist guard (only sync-set + PUBLIC_ONLY files may be published) =="
+  assert_only_expected "$clean/scripts/sync-public.sh" || exit 1
   echo "== Independent leak scan =="
   leak_scan || exit 1
 

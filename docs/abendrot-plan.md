@@ -1353,8 +1353,12 @@ caught both on `dev` and kept `main` clean.
 1. **`scripts/publish.sh`** (new, private — NOT synced to public). It: (a) clones the **committed** build HEAD into
    a throwaway dir — never the working tree, so uncommitted WIP/secrets can't ride along (the §34 leak vector);
    (b) runs `sync-public.sh` *from the clone* (rsync → `scrub-planning-tells.py` → hard grep tell/leak gate);
-   (c) checks out public **`dev`** and stages the result; (d) re-runs an independent leak scan; (e) prints the
-   founder-gated commands. It **never commits and never pushes** — both stay founder-gated. Guards: refuses to run
+   (c) checks out public **`dev`** and stages the result; (d) runs an **allowlist guard** — fails the publish
+   if any file outside the sync set + a tight `PUBLIC_ONLY` list (LICENSE, .gitignore, CONTRIBUTING/PRIVACY/
+   SECURITY.md, assets/, WarmthKit/Package.resolved) would be committed, so a stray internal file can't ride
+   along via `git add -A` (the guard reads the sync set straight from the cloned `sync-public.sh`, so there's
+   no extra list to keep in lockstep); (e) re-runs an independent leak scan; (f) prints the founder-gated
+   commands. It **never commits and never pushes** — both stay founder-gated. Guards: refuses to run
    if `dev` is missing or the public tree is dirty.
 2. **Commit + push `dev`** (founder-gated). CI now runs on `dev` — `ci.yml` `on.push.branches: [main, dev]` (PR CI
    already covered PRs). The required gates (`test-warmthcore` + `build-app-unsigned`) run on the staged content
