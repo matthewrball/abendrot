@@ -49,10 +49,7 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            // The closing "all set" step has no step indicator and no back chevron, so its top bar is empty
-            // — skip it there, or the empty slot plus the stack spacing leaves a dead gap above the
-            // checkmark. Numbered steps keep it.
-            if step != .allSet { topBar }
+            topBar
 
             Group {
                 switch step {
@@ -100,22 +97,19 @@ struct OnboardingView: View {
     @ViewBuilder
     private var stepIndicator: some View {
         if let n = step.numberedIndex {
-            Text("Step \(n) of \(OnboardingStep.numberedTotal)")
-                .font(Theme.Typography.ui(11, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Theme.Color.accent)
+            OnboardingStepper(current: n, total: OnboardingStep.numberedTotal)
                 .frame(maxWidth: .infinity)
         }
     }
 
-    // A leading back chevron, shown only on the warmth step, layered over the centered step indicator,
-    // so users can return to step 2 and change their mode. Earlier steps need no back (welcome is the
-    // entry; the mode step's onAppear re-applies the chosen mode on return).
+    // A leading back chevron, shown on the warmth step AND the closing all-set step, layered over the
+    // centered stepper, so users can step back. Earlier steps need no back (welcome is the entry; the
+    // mode step's onAppear re-applies the chosen mode on return).
     @ViewBuilder
     private var topBar: some View {
         ZStack {
             stepIndicator
-            if step == .warmth {
+            if step == .warmth || step == .allSet {
                 HStack {
                     Button { goBack() } label: {
                         Image(systemName: "chevron.left")
@@ -453,6 +447,45 @@ struct PrimaryButton: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - OnboardingStepper
+//
+// A minimal, animated progress indicator that replaces "Step N of 3": a row of small dim capsules, the
+// CURRENT one stretched into a glowing ember pill — the brand's sunset gradient + a specular glass sheen +
+// a soft ember glow, the same Liquid-Glass language as the ModeControl segment and the WarmSlider thumb.
+// The pill morphs/flows between positions on a spring as the step changes, so advancing feels fluid;
+// completed steps read a touch brighter than upcoming ones. Reduce-Motion drops the spring.
+private struct OnboardingStepper: View {
+    let current: Int        // 1-based
+    let total: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(1...total, id: \.self) { i in
+                let active = i == current
+                Capsule(style: .continuous)
+                    .fill(active
+                          ? AnyShapeStyle(Theme.Gradient.sunsetHorizontal)
+                          : AnyShapeStyle(Theme.Color.textFaint.opacity(i < current ? 0.5 : 0.25)))
+                    .overlay {
+                        if active {
+                            // Specular highlight — the liquid-glass sheen (matches the WarmSlider thumb).
+                            Capsule(style: .continuous)
+                                .fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.06), .clear],
+                                                     startPoint: .top, endPoint: .bottom))
+                                .blendMode(.softLight)
+                        }
+                    }
+                    .frame(width: active ? 26 : 7, height: 7)
+                    .shadow(color: active ? Theme.Color.accent.opacity(0.5) : .clear, radius: 6)   // ember glow
+            }
+        }
+        .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.76), value: current)
+        .accessibilityElement()
+        .accessibilityLabel("Step \(current) of \(total)")
     }
 }
 
