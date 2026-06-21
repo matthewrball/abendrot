@@ -77,21 +77,21 @@ struct Status: ParsableCommand {
 // MARK: - get <key>
 
 struct Get: ParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Print one configured setting (warmth, mode, max-warmth, reveal-mode, location, enabled).")
-    @Argument(help: "warmth | mode | max-warmth | reveal-mode | location | enabled") var key: String
+    static let configuration = CommandConfiguration(abstract: "Print one configured setting (warmth, mode, max-warmth, cozy, reveal-mode, location, enabled).")
+    @Argument(help: "warmth | mode | max-warmth | cozy | reveal-mode | location | enabled") var key: String
     @Flag(name: .long, help: "Emit machine-readable JSON.") var json = false
 
     func run() throws {
         if json {
             guard let object = GetReport.jsonObject(forKey: key) else {
-                throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | reveal-mode | location | enabled",
+                throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | cozy | reveal-mode | location | enabled",
                            code: CLIExit.badInput)
             }
             print(object)
             return
         }
         guard let (_, value) = GetReport.value(forKey: key) else {
-            throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | reveal-mode | location | enabled",
+            throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | cozy | reveal-mode | location | enabled",
                        code: CLIExit.badInput)
         }
         print(value)
@@ -110,6 +110,34 @@ struct Off: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Disable warming (isEnabled = false).")
     @Flag(name: .long) var json = false
     func run() throws { try applySettings(SettingsPatch(isEnabled: false), json: json) }
+}
+
+// MARK: - cozy on|off
+
+/// Cozy mode — the expanded-warmth master toggle. `on` drops the warmest-point ceiling to the deepest
+/// candle & ember (~500K); `off` restores the everyday 1900K cap. Sends a `cozy` patch, NOT a raw
+/// `max-warmth` write: the app applies it through `setCozy`, which moves the ceiling AND holds the
+/// on-screen warmth (no jump) — the exact behaviour of the Settings card's toggle.
+struct Cozy: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Turn cozy mode (expanded warmth, ~500K) on or off.")
+    @Argument(help: "on | off") var state: String
+    @Flag(name: .long) var json = false
+
+    func run() throws {
+        guard let on = boolFromOnOff(state) else {
+            throw fail("cozy must be on|off, got \(state)", code: CLIExit.badInput)
+        }
+        try applySettings(SettingsPatch(cozy: on), json: json)
+    }
+}
+
+/// Parse the `on`/`off` verb shared by `cozy`. Returns nil for anything else (caller → exit 2).
+func boolFromOnOff(_ raw: String) -> Bool? {
+    switch raw.lowercased() {
+    case "on": return true
+    case "off": return false
+    default: return nil
+    }
 }
 
 // MARK: - set <subcommand>

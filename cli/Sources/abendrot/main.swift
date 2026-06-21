@@ -6,7 +6,7 @@ import AbendrotControl
 // MARK: - abendrot
 //
 // Root command. BetterDisplay-parity control surface for the Abendrot menu-bar app:
-//   abendrot status [--json] | get <key> | on | off
+//   abendrot status [--json] | get <key> | on | off | cozy on|off
 //   abendrot set warmth <0..1 | --kelvin K> | mode <…> | max-warmth <K> | reveal-mode <…> | location …
 //   abendrot exclude add|remove <bundle-id> | list
 //   abendrot reveal [--hold <seconds>]
@@ -20,7 +20,7 @@ struct Abendrot: ParsableCommand {
         abstract: "Control the Abendrot screen-warmth app from the terminal or an AI assistant.",
         version: cliVersion,
         subcommands: [
-            Status.self, Get.self, On.self, Off.self,
+            Status.self, Get.self, On.self, Off.self, Cozy.self,
             SetCommand.self, Exclude.self, Reveal.self,
         ]
     )

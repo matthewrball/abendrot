@@ -82,6 +82,30 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(ControlScheduleMode(rawValue: "sunset"), .sunset)
     }
 
+    // MARK: cozy on|off parsing (case-insensitive; rejects anything else)
+
+    func testCozyOnOffParsing() {
+        XCTAssertEqual(boolFromOnOff("on"), true)
+        XCTAssertEqual(boolFromOnOff("off"), false)
+        XCTAssertEqual(boolFromOnOff("ON"), true)
+        XCTAssertEqual(boolFromOnOff("Off"), false)
+        // Anything else is rejected → the command throws exit 2.
+        XCTAssertNil(boolFromOnOff("maybe"))
+        XCTAssertNil(boolFromOnOff("true"))
+        XCTAssertNil(boolFromOnOff(""))
+    }
+
+    func testCozyPatchCarriesOnlyCozy() {
+        // `cozy on` must send a cozy-only patch (the app routes it through setCozy) — not a raw
+        // max-warmth write, so the screen warmth is held rather than left to drift.
+        let on = SettingsPatch(cozy: true)
+        XCTAssertEqual(on.cozy, true)
+        XCTAssertNil(on.warmestPointKelvin)
+        XCTAssertFalse(on.isEmpty)
+        let off = SettingsPatch(cozy: false)
+        XCTAssertEqual(off.cozy, false)
+    }
+
     // MARK: exclude bundle-id validation (reject empty / whitespace / shapeless)
 
     func testValidatedBundleIDAcceptsRealIDs() throws {
@@ -115,6 +139,23 @@ final class abendrotTests: XCTestCase {
         let mode = GetReport.jsonObject(forKey: "mode")
         XCTAssertNotNil(mode)
         XCTAssertTrue(mode!.hasPrefix("{\"mode\":\""), "got \(mode!)")
+    }
+
+    func testCozyDerivationRuleMatchesCeiling() {
+        // The CLI `get cozy` / status surfacing derive cozy from the persisted ceiling via the shared
+        // schema helper — on exactly when the warmest point sits below the everyday 1900K cap.
+        XCTAssertTrue(ControlStateSnapshot.isCozy(warmestPointKelvin: 500))
+        XCTAssertTrue(ControlStateSnapshot.isCozy(warmestPointKelvin: 1899))
+        XCTAssertFalse(ControlStateSnapshot.isCozy(warmestPointKelvin: 1900))
+        XCTAssertFalse(ControlStateSnapshot.isCozy(warmestPointKelvin: 2700))
+    }
+
+    func testGetReportJSONObjectCozyIsQuotedOnOff() {
+        // `get cozy --json` keeps the simple {key:value} shape, value quoted as a string ("on"/"off").
+        let cozy = GetReport.jsonObject(forKey: "cozy")
+        XCTAssertNotNil(cozy)
+        XCTAssertTrue(cozy!.hasPrefix("{\"cozy\":\""), "got \(cozy!)")
+        XCTAssertTrue(cozy!.contains("on") || cozy!.contains("off"), "got \(cozy!)")
     }
 
     // MARK: get-value resolver

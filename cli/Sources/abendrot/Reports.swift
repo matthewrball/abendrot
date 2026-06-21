@@ -55,6 +55,7 @@ enum StatusReport {
         lines.append("Enabled:  \(snapshot.isEnabled ? "yes" : "no")")
         lines.append("Mode:     \(snapshot.scheduleMode.rawValue)\(snapshot.isScheduleActiveNow ? " (warming now)" : "")")
         lines.append("Warmth:   \(String(format: "%.2f", snapshot.globalWarmthStrength)) (~\(snapshot.globalKelvin)K, max \(snapshot.warmestPointKelvin)K)")
+        lines.append("Cozy:     \(snapshot.cozy ? "on" : "off")")
         lines.append("Reveal:   \(snapshot.revealMode)\(snapshot.isRevealing ? " (revealing now)" : "")")
         if !snapshot.excludedApps.isEmpty {
             lines.append("Excluded: \(snapshot.excludedApps.joined(separator: ", "))")
@@ -94,6 +95,7 @@ enum StatusReport {
         } else {
             lines.append("Warmth:   (default, max \(maxWarmth)K)")
         }
+        lines.append("Cozy:     \(ControlStateSnapshot.isCozy(warmestPointKelvin: maxWarmth) ? "on" : "off")")
         let excluded = Control.configuredExcludedApps()
         if !excluded.isEmpty { lines.append("Excluded: \(excluded.joined(separator: ", "))") }
         return lines.joined(separator: "\n")
@@ -113,7 +115,10 @@ enum StatusReport {
         if let strength = Control.configuredDouble(PreferenceKey.globalWarmthStrength) {
             fields["globalWarmthStrength"] = strength
         }
-        fields["warmestPointKelvin"] = Control.configuredInt(PreferenceKey.warmestPointKelvin) ?? Kelvin.everydayWarmest.value
+        let maxWarmth = Control.configuredInt(PreferenceKey.warmestPointKelvin) ?? Kelvin.everydayWarmest.value
+        fields["warmestPointKelvin"] = maxWarmth
+        // Mirror the running snapshot's derived field so `status --json` carries `cozy` either way.
+        fields["cozy"] = ControlStateSnapshot.isCozy(warmestPointKelvin: maxWarmth)
         if let revealMode = Control.configuredString(PreferenceKey.revealMode) {
             fields["revealMode"] = revealMode
         }
@@ -139,6 +144,10 @@ enum GetReport {
         case "max-warmth":
             let k = Control.configuredInt(PreferenceKey.warmestPointKelvin) ?? Kelvin.everydayWarmest.value
             return ("max-warmth", String(k))
+        case "cozy":
+            // Cozy is derived from the persisted ceiling — on exactly when it sits below 1900K.
+            let k = Control.configuredInt(PreferenceKey.warmestPointKelvin) ?? Kelvin.everydayWarmest.value
+            return ("cozy", ControlStateSnapshot.isCozy(warmestPointKelvin: k) ? "on" : "off")
         case "reveal-mode":
             return ("reveal-mode", Control.configuredString(PreferenceKey.revealMode) ?? "hold")
         case "location":
