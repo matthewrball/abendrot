@@ -308,6 +308,24 @@ GENERIC_VOCAB = [
     (re.compile(r"\bdogfood\b"), "test"),
 ]
 
+# 1c) "Session N" dev-cadence refs in comments. These are the internal sprint numbers
+#     ("Session 9", "Session 11"); the public mirror must carry none. Two precise shapes,
+#     applied in this order so neither leaves dangling punctuation:
+#       - ", Session N" embedded in a larger paren -> drop just the clause, keep the paren:
+#           "(additive, Session 9)"               -> "(additive)"
+#           "(multi-monitor refinement, Session 9)" -> "(multi-monitor refinement)"
+#       - "(Session N)" as a standalone paren group -> drop the whole group (and its leading
+#         space), so the surrounding text — and any trailing ":" — reads cleanly:
+#           "Dev relaunch (Session 11)"           -> "Dev relaunch"
+#           "**Per-display refinement (Session 9):**" -> "**Per-display refinement:**"
+#     Both anchor on the literal word "Session" + digits, so no Swift identifier or code is
+#     touched; the comma form requires a preceding comma and the group form requires the
+#     "(" to sit immediately before "Session", so the two never overlap.
+SESSION_REFS = [
+    (re.compile(r",\s*Session\s+[0-9]+"), ""),     # ", Session N" clause inside a paren
+    (re.compile(r"\s*\(Session\s+[0-9]+\)"), ""),  # standalone "(Session N)" group
+]
+
 # ---------------------------------------------------------------------------
 # 2) Blunt removal of any remaining single-line parenthetical that contains a
 #    section ref, plus stray inline tokens. Run AFTER the explicit pass. The
@@ -351,6 +369,8 @@ def scrub(text: str, suffix: str = "") -> str:
     for old, new in EXPLICIT:
         text = text.replace(old, new)
     for pat, repl in GENERIC_VOCAB:
+        text = pat.sub(repl, text)
+    for pat, repl in SESSION_REFS:
         text = pat.sub(repl, text)
     text = PAREN_WITH_SECTION.sub("", text)
     text = INLINE_SECTION.sub("", text)

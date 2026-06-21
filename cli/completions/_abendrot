@@ -51,9 +51,10 @@ _abendrot() {
     command)
         local -ar subcommands=(
             'status:Show live app state (enabled, mode, warmth, per-display method).'
-            'get:Print one configured setting (warmth, mode, max-warmth, reveal-mode, location, enabled).'
+            'get:Print one configured setting (warmth, mode, max-warmth, cozy, reveal-mode, location, enabled).'
             'on:Enable warming (isEnabled = true).'
             'off:Disable warming (isEnabled = false).'
+            'cozy:Turn cozy mode (expanded warmth, ~500K) on or off.'
             'set:Change a setting.'
             'exclude:Manage the per-app warmth-exclusion list.'
             'reveal:Momentary true-color peek (live-only; requires a running app).'
@@ -63,7 +64,7 @@ _abendrot() {
         ;;
     arg)
         case "${words[1]}" in
-        status|get|on|off|set|exclude|reveal|help)
+        status|get|on|off|cozy|set|exclude|reveal|help)
             "_abendrot_${words[1]}" && ret=0
             ;;
         esac
@@ -88,7 +89,7 @@ _abendrot_status() {
 _abendrot_get() {
     local -i ret=1
     local -ar arg_specs=(
-        ':key:'
+        ':key:(warmth mode max-warmth cozy reveal-mode location enabled)'
         '--json[Emit machine-readable JSON.]'
         '--version[Show the version.]'
         '(-h --help)'{-h,--help}'[Show help information.]'
@@ -113,6 +114,19 @@ _abendrot_on() {
 _abendrot_off() {
     local -i ret=1
     local -ar arg_specs=(
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_cozy() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':state:(on off)'
         '--json'
         '--version[Show the version.]'
         '(-h --help)'{-h,--help}'[Show help information.]'

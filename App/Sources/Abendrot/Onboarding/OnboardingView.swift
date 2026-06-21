@@ -38,6 +38,9 @@ struct OnboardingView: View {
 
     @State private var step: OnboardingStep = .welcome
     @State private var scheduleOption: ScheduleModeOption = .followSunset
+    // The warmth step primes to the warmest only the first time it appears; re-entries (back chevron, or
+    // re-reaching it via the schedule step's "Continue") keep the strength the user has already dialed.
+    @State private var hasPrimedWarmthPreview = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -198,7 +201,13 @@ struct OnboardingView: View {
         // on (from step 2), so this is a silent override; the "Looks right" button restores the real mode.
         .onAppear {
             model.setScheduleMode(.alwaysOn, userInitiated: false)
-            model.setGlobalWarmth(1.0)
+            // Prime to the warmest only on the FIRST appearance — with the back chevron a user can leave
+            // and return (and "Continue" on the schedule step re-enters here), and re-slamming 1.0 would
+            // discard a strength they already dialed in. Keep their value on re-entry.
+            if !hasPrimedWarmthPreview {
+                model.setGlobalWarmth(1.0)
+                hasPrimedWarmthPreview = true
+            }
             model.setEnabled(true, userInitiated: false)
         }
     }

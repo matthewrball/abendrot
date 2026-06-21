@@ -66,9 +66,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let current = win.frame
         guard abs(current.height - target) > 1 else { return }
         var f = current
-        f.origin.y = current.maxY - target   // keep the top edge fixed
         f.size.height = target
-        win.setFrame(f, display: true, animate: ctrl.hasFitContent)
+        if ctrl.hasFitContent {
+            f.origin.y = current.maxY - target              // later fits: keep the TOP edge fixed (grows/shrinks downward)
+            win.setFrame(f, display: true, animate: true)
+        } else {
+            win.setFrame(f, display: true, animate: false)  // first fit (on open): size to content…
+            win.center()                                    // …then center on the main display
+        }
         ctrl.hasFitContent = true
     }
 

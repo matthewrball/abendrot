@@ -46,4 +46,21 @@ public enum ControlValidation {
         }
         return string
     }
+
+    /// A manual-location override must be a finite, in-range lat/lon pair. Rejects non-finite values
+    /// (NaN/±inf) and anything outside −90…90 / −180…180 — defense in depth so a malformed control
+    /// notification can't push a junk coordinate (e.g. 1e308) that traps the timezone/solar math
+    /// downstream. Returns the validated pair (callers build the engine's Coordinate from it).
+    public static func validatedCoordinate(lat: Double, lon: Double) throws -> (lat: Double, lon: Double) {
+        guard lat.isFinite, lon.isFinite else {
+            throw ControlError.badInput("coordinate must be finite, got lat \(lat), lon \(lon)")
+        }
+        guard (-90.0...90.0).contains(lat) else {
+            throw ControlError.badInput("latitude must be −90…90, got \(lat)")
+        }
+        guard (-180.0...180.0).contains(lon) else {
+            throw ControlError.badInput("longitude must be −180…180, got \(lon)")
+        }
+        return (lat, lon)
+    }
 }
