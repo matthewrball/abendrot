@@ -375,9 +375,9 @@ Items I deliberately did **not** state as fact because they're outside `evidence
 >
 > **Status (updated 2026-06-21):** the v1 CLI is **shipped and open-source** — `abendrot` is in the public
 > repo (`github.com/matthewrball/abendrot`, CI green) and buildable from source today. A **signed
-> one-command install** (Homebrew cask, notarized DMG) lands with **v1.0**; the **official Abendrot MCP
-> server is roadmap ("MCP coming"), not yet shipped** — never claim it exists. So: list the CLI as a real,
-> available feature; keep the *signed install* and the *MCP server* labeled as coming.
+> one-command install** (Homebrew cask, notarized DMG) lands with **v1.0**. So: list the CLI as a real,
+> available feature, with the signed install as the only "coming soon" note. **Do NOT market an MCP server
+> or any other unshipped/forthcoming feature in public copy — leave it off entirely** (founder directive, 2026-06-21).
 >
 > **Trust boundary to state honestly when relevant:** the CLI talks to the *running app* as the **same
 > macOS user, in your local session** — visual state only. No network listener, no privileged helper, no
@@ -411,8 +411,7 @@ can run a shell command (Claude Code, Codex, Cursor, a CI step, a shell script) 
 example, an assistant can run `abendrot set warmth 0.8` to warm your screen, `abendrot reveal --hold 10`
 for a momentary true-color peek, or `abendrot status --json` to read the live state back. It runs as the
 same macOS user in your local session and changes visual state only — there is no network listener and no
-privileged helper; the assistant can only do what you could do yourself at the same terminal. *(An
-official Abendrot MCP server is on the roadmap — "MCP coming" — but today the integration is the CLI.)*
+privileged helper; the assistant can only do what you could do yourself at the same terminal.
 
 **Q. Does Abendrot have a CLI?**
 A. Yes. `abendrot` is a first-class command-line interface to the app. Core commands:
@@ -454,4 +453,4 @@ because the whole engine is open source, you can read exactly what each command 
 This lane is capability-only by construction. Before publishing any dev-lane asset, still run it through
 the §8 checklist — the relevant lines are the **banned-phrase sweep** (no health verbs sneaking into a
 "set warmth" sentence) and **Guardrail 3** (keep these capability sentences out of adjacency with any
-sleep/melatonin finding). The MCP server stays labeled **roadmap** until it ships.
+sleep/melatonin finding). Do NOT mention an MCP server or any other unshipped/forthcoming feature in public copy — leave it off.

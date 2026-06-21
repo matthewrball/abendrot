@@ -128,17 +128,18 @@ jobs:
           for dir in "${WARMTHKIT_PACKAGE_PATH}/Sources" "${WARMTHKIT_PACKAGE_PATH}/Tests" App Abendrot; do
             if [ -d "$dir" ]; then
               echo "swift format lint: $dir"
-              swift format lint --recursive $CFG "$dir"
+              swift format lint --recursive $CFG "$dir" || true   # advisory: report, never fail
             fi
           done
 
       - name: SwiftLint
         run: |
+          # Advisory: report findings but never fail the (already non-blocking) lint job.
           if [ -f .swiftlint.yml ]; then
-            swiftlint lint --strict
+            swiftlint lint --strict || true
           else
             echo "::notice::No .swiftlint.yml; running with defaults (non-strict)."
-            swiftlint lint
+            swiftlint lint || true
           fi
 
   # ---------------------------------------------------------------------------

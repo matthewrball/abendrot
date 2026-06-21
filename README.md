@@ -28,7 +28,7 @@
 
 It's the f.lux / Night Shift successor built to do the thing the incumbents quietly fail at: reliably warm **external monitors** and the **buttonless Apple displays** — Studio Display, Pro Display XDR, LG UltraFine — and keep working on the newest Apple Silicon Macs, where the classic gamma trick silently stops warming. Without tracking you.
 
-> **Status: pre-release, in active development.** The warmth engine is implemented and unit-tested (112 tests) and verified warming real hardware. There's no signed download yet — you can build it from source today (see [Build from source](#build-from-source)). The first notarized release lands here when it's ready.
+> **Status: pre-release.** The warmth engine is implemented and unit-tested (112 tests) and verified warming real hardware. There's no signed download yet — you can build it from source today (see [Build from source](#build-from-source)). The first notarized release lands here when it's ready.
 
 ## Grounded in the science
 
@@ -42,7 +42,7 @@ Abendrot is designed around that: it attenuates the display's blue channel as it
 
 - **Warmth that actually lands on every display.** A layered engine warms each display with the best true-warming method available — and **tells you which one each display is using**, never a silent no-op.
 - **Reveal True Color.** Hold a global hotkey and warmth lifts across every display for color-critical work; release and it eases back. Built for designers and photographers.
-- **Scriptable & AI-controllable.** An `abendrot` CLI drives the running app from your terminal — or from an AI assistant like Claude Code, Codex, or Cursor. Read live state as JSON, set warmth, trigger a reveal. *(In active development — see [Scripting & AI control](#scripting--ai-control).)*
+- **Scriptable & AI-controllable.** An `abendrot` CLI drives the running app from your terminal — or from an AI assistant like Claude Code, Codex, or Cursor. Read live state as JSON, set warmth, trigger a reveal. *(see [Scripting & AI control](#scripting--ai-control))*
 - **Health is the reason; reliability is the proof.** Abendrot helps you keep warmer, lower-blue light in the evening, and links the circadian research instead of making medical claims.
 - **Genuinely trustworthy.** MIT-licensed, no telemetry by default, no account, runs entirely on your Mac. The anti-NightOwl.
 
@@ -70,8 +70,6 @@ abendrot reveal --hold 10      # momentary true-color peek, then ease back
 
 **Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. When you install the app, the binary ships inside the bundle and the Homebrew cask symlinks it onto your `PATH`.
 
-> The CLI is **in active development**. An official Abendrot **MCP server is a planned fast-follow** ("MCP coming") — until then, the AI integration is this CLI.
-
 <details>
 <summary><strong>Common tasks → commands</strong> — the v1 surface (<code>abendrot --help</code> for everything)</summary>
 
@@ -83,6 +81,7 @@ abendrot reveal --hold 10      # momentary true-color peek, then ease back
 | Turn warming on / off | `abendrot on` · `abendrot off` |
 | Set the schedule mode | `abendrot set mode sunset` *(or `always-on` / `off`)* |
 | Set the warmest point the slider maps to | `abendrot set max-warmth 1900` |
+| Toggle cozy mode (the deepest candle/ember warmth) | `abendrot cozy on` · `abendrot cozy off` |
 | Choose hold vs toggle for reveal | `abendrot set reveal-mode hold` *(or `toggle`)* |
 | Set location for the sunset schedule | `abendrot set location --auto` *(or `<lat> <lon>`)* |
 | Exclude an app from warming | `abendrot exclude add com.apple.FinalCut` |
