@@ -1360,9 +1360,9 @@ caught both on `dev` and kept `main` clean.
    no extra list to keep in lockstep); (e) re-runs an independent leak scan; (f) prints the founder-gated
    commands. It **never commits and never pushes** — both stay founder-gated. Guards: refuses to run
    if `dev` is missing or the public tree is dirty.
-2. **Commit + push `dev`** (founder-gated). CI now runs on `dev` — `ci.yml` `on.push.branches: [main, dev]` (PR CI
-   already covered PRs). The required gates (`test-warmthcore` + `build-app-unsigned`) run on the staged content
-   before `main` ever sees it.
+2. **Commit + push `dev`** (founder-gated). CI runs on `dev` — `ci.yml` `on.push.branches: [dev]` (PR CI already
+   covered PRs; `main` is intentionally excluded — see Outcome). The required gates (`test-warmthcore` +
+   `build-app-unsigned`) run on the staged content before `main` ever sees it.
 3. **Verify:** CI green on `dev` + a final manual leak scan
    (`grep -rInE '/Users/|/home/|abendrot-(build|public)|§|\bfounder\b' abendrot-public/{App,WarmthKit,cli,scripts,README.md,AGENTS.md}` → 0).
 4. **Promote:** `scripts/publish.sh promote` — verifies `origin/dev`'s CI is green (the two required
@@ -1385,6 +1385,16 @@ short-form sprint tag `S13` (in `AppModel.swift`, from the §34 review-findings 
 gate rejected it. Added `S1N` rules to `scrub-planning-tells.py`'s `SESSION_REFS`, mirroring the long-form
 "Session N" handling and anchored on `", "` / `"("` / the literal `the` so no code token is touched (verified: an
 old-vs-new scrub diff over the whole synced tree changes exactly that one comment line).
+
+**Shipped end-to-end (the first staged publish).** Public `main` = `dev` = **`ca400f2`**: `publish.sh stage`
+clean-cloned committed build HEAD `c7a14a4` (leaving a concurrent lane's uncommitted WIP behind — the leak
+vector, demonstrably closed), CI went green on `dev` (`test-warmthcore` + `build-app-unsigned`), then
+`publish.sh promote` ff'd `main` — **branch protection accepted the green-SHA ff**, proving the CLI flow
+survives enforcement. Also landed this session: the **allowlist guard** (above); `brand/` added to sync
+`INTERNAL_ONLY`; **`.omc/`+`.baton/` gitignored** in the public repo; `WarmthKit/Package.resolved` moved into
+the sync set (was a frozen public-only copy); and `ci.yml` trimmed to **`on.push.branches: [dev]`** — since
+`main` only ever ff's a green `dev` SHA and checks attach to the SHA, re-running CI on the promote push was
+pure duplication (a fresh direct push to `main` is still rejected — no checks on that SHA).
 
 **Invariants (unchanged, reinforced):** the build repo is NEVER pushed; the scrub+gate are never weakened; publish
 sources only from the committed HEAD; `backup/s13-public-91ba48d` stays as the safety net.
