@@ -95,6 +95,87 @@ if [ -f "$APPCAST_PATH" ] && grep -q "<sparkle:version>$BUILD</sparkle:version>"
   echo "         Bump CFBundleVersion before releasing (Sparkle compares builds)." >&2
 fi
 
+# --- 2.5 Embed + sign the `abendrot` CLI helper (inside-out) ----------------
+# The CLI ships INSIDE the app bundle (one download, always version-matched). Order
+# is load-bearing (plan §2.4): build the helper, copy it in, then sign the HELPER
+# FIRST — with its own unique identifier (app.abendrot.Abendrot.cli), the hardened
+# runtime, and a secure timestamp — so that when the containing .app is signed later
+# (at export / Developer-ID time) the nested Mach-O is already correctly signed. We
+# do NOT use `codesign --deep`: nested code is signed explicitly, inside-out, and the
+# helper never inherits app-only entitlements.
+#
+# DEVIATION FROM plan §2.4 / spec §5 path (Contents/MacOS/abendrot), with reason:
+# the app's own executable is `Abendrot` (CFBundleExecutable), and the macOS default
+# APFS volume is CASE-INSENSITIVE, so `Contents/MacOS/abendrot` COLLIDES with
+# `Contents/MacOS/Abendrot` — copying the helper there OVERWRITES the app binary. We
+# therefore embed at `Contents/Helpers/abendrot` (the conventional location for
+# bundled command-line helpers; nested signed code is valid anywhere in the bundle).
+# The cask `binary` stanza points at this path. (If the app is ever renamed so no
+# case-collision exists, MacOS/ can be restored.)
+#
+# SIGNING IS GUARDED behind the SAME "no Developer ID" condition the rest of the
+# pipeline uses (Mode B = deferred): when ASC_API_KEY_ID is unset OR --unsigned is
+# passed, we EMBED the helper but SKIP codesign, leaving a clear note. This keeps
+# the structure exercised end-to-end locally (the binary really is embedded) while
+# never attempting to sign without an identity.
+CLI_PKG="$REPO_ROOT/cli"
+CLI_SIGN_ID="app.abendrot.Abendrot.cli"     # unique helper identifier (NOT the app's id)
+DEVELOPER_ID_APP="${DEVELOPER_ID_APP:-Developer ID Application}"  # Mode A signing identity
+
+embed_cli_helper() {
+  local app="$1"
+  [ -d "$CLI_PKG" ] || { echo "release: NOTE — no cli/ package at '$CLI_PKG'; skipping helper embed." >&2; return 0; }
+
+  echo "release: building abendrot CLI helper (swift build -c release)..."
+  ( cd "$CLI_PKG" && swift build -c release ) || {
+    echo "release: WARNING — CLI helper build failed; shipping app WITHOUT the embedded helper." >&2
+    return 0
+  }
+  local cli_bin="$CLI_PKG/.build/release/abendrot"
+  [ -x "$cli_bin" ] || { echo "release: WARNING — built CLI not found at '$cli_bin'." >&2; return 0; }
+
+  # Contents/Helpers/ (NOT Contents/MacOS/) — avoids the case-insensitive collision
+  # with the app's own `Abendrot` executable (see the DEVIATION note above).
+  local helpers_dir="$app/Contents/Helpers"
+  local dest="$helpers_dir/abendrot"
+  mkdir -p "$helpers_dir"
+  echo "release: embedding helper -> $dest"
+  cp "$cli_bin" "$dest"
+  chmod 755 "$dest"
+
+  # Sign the helper FIRST, inside-out — ONLY when a Developer ID identity is
+  # configured (Mode A) and this is a SIGNED build. Otherwise leave it unsigned
+  # (Mode B dev/dogfood) with a clear note; the app's own export step is likewise
+  # unsigned today.
+  if [ "$UNSIGNED" = "true" ] || [ -z "${ASC_API_KEY_ID:-}" ]; then
+    echo "release: NOTE — helper EMBEDDED but UNSIGNED (Mode B / --unsigned; signing deferred)." >&2
+    echo "         At Mode A, the helper is signed inside-out with id '$CLI_SIGN_ID'," >&2
+    echo "         --options runtime, --timestamp, BEFORE the containing .app is signed." >&2
+    return 0
+  fi
+
+  echo "release: signing helper FIRST (id=$CLI_SIGN_ID, hardened runtime, timestamp)..."
+  codesign --force \
+    --sign "$DEVELOPER_ID_APP" \
+    --identifier "$CLI_SIGN_ID" \
+    --options runtime \
+    --timestamp \
+    "$dest" || { echo "release: ABORT — helper codesign failed." >&2; exit 5; }
+
+  # Verify the helper signature strictly (plan §2.4 verification additions). The
+  # app-level --deep --strict verify + helper spctl run AFTER the app is signed
+  # (at export/notarize time); these guarded checks document the contract here.
+  codesign --verify --strict --verbose=2 "$dest" \
+    || { echo "release: ABORT — helper signature failed --verify --strict." >&2; exit 5; }
+  echo "release: helper signed + verified. (App is signed inside-out AFTER this, at export.)"
+  # NOTE: after the .app is signed at export, also run (Mode A):
+  #   codesign --verify --deep --strict "$app"
+  #   spctl -a -vvv --type execute "$dest"
+  # These live with the export/notarize step (the app must be signed first).
+}
+
+embed_cli_helper "$APP"
+
 # --- 3. Build the DMG -------------------------------------------------------
 DMG_OUT="$REPO_ROOT/release-scratch/${APP_DISPLAY_NAME}-${VERSION}.dmg"
 mkdir -p "$(dirname "$DMG_OUT")"
