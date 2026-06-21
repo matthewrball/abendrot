@@ -38,9 +38,10 @@ struct OnboardingView: View {
 
     @State private var step: OnboardingStep = .welcome
     @State private var scheduleOption: ScheduleModeOption = .followSunset
-    // The warmth step primes to the warmest only the first time it appears; re-entries (back chevron, or
-    // re-reaching it via the schedule step's "Continue") keep the strength the user has already dialed.
-    @State private var hasPrimedWarmthPreview = false
+    // Warmth defaults to the warmest ONCE (first time the schedule step appears), so a return visit doesn't
+    // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
+    // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
+    @State private var hasInitializedWarmth = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -201,12 +202,12 @@ struct OnboardingView: View {
         // on (from step 2), so this is a silent override; the "Looks right" button restores the real mode.
         .onAppear {
             model.setScheduleMode(.alwaysOn, userInitiated: false)
-            // Prime to the warmest only on the FIRST appearance — with the back chevron a user can leave
-            // and return (and "Continue" on the schedule step re-enters here), and re-slamming 1.0 would
-            // discard a strength they already dialed in. Keep their value on re-entry.
-            if !hasPrimedWarmthPreview {
+            // Re-prime to the warmest "preview of your evening" on EVERY entry for Sunset — showing the peak
+            // the evening ramp climbs to is this step's whole job. EXCEPTION: for Always-on the slider sets
+            // the user's REAL everyday warmth, so re-slamming 1.0 on back-nav would discard what they dialed
+            // — keep it.
+            if scheduleOption != .alwaysOn {
                 model.setGlobalWarmth(1.0)
-                hasPrimedWarmthPreview = true
             }
             model.setEnabled(true, userInitiated: false)
         }
@@ -272,8 +273,13 @@ struct OnboardingView: View {
         .onAppear {
             // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
             // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
+            // ONCE only — on a return visit (back from the warmth step) we must NOT re-slam 1.0, or an
+            // Always-on user's dialed warmth would be lost the moment they step back to change the mode.
             model.setEnabled(true, userInitiated: true)
-            model.setGlobalWarmth(1.0)
+            if !hasInitializedWarmth {
+                model.setGlobalWarmth(1.0)
+                hasInitializedWarmth = true
+            }
             model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         }
     }
