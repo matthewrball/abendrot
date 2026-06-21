@@ -1237,9 +1237,7 @@ struct CozyModeControl: View {
                 Text("Cozy mode")
                     .font(Theme.Typography.ui(14, weight: .semibold))
                     .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
-                Text(isCozy
-                     ? "On — candle & ember glow."
-                     : "The warmest candle & ember glow.")
+                Text("The warmest candle & ember glow.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.82) : Theme.Color.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1280,30 +1278,17 @@ struct CozyModeControl: View {
         if keepsSliderInPlace {
             // Onboarding: just flip the warmest point. The slider thumb stays exactly where it is (no jump,
             // no enablement animation) — toggling deepens/lightens the warmth in place, so the only motion
-            // is the fireball thumb + "Warmest" label crossfading (founder: keep it smooth, minimal).
+            // is the fireball thumb + "Warmest" label crossfading (founder: keep it smooth, minimal). This
+            // path deliberately does NOT preserve warmth, so it stays a bare `setWarmestPoint` rather than
+            // `setCozy` (which re-pins the screen for the Settings/CLI "unlock headroom" behaviour).
             model.setWarmestPoint(isCozy ? Kelvin.everydayWarmest : Kelvin.warmestSupported)
             return
         }
         // Settings: the richer behaviour — preserve the user's warmth and just unlock headroom, animated.
+        // The actual ceiling + warmth move lives in `model.setCozy`, the ONE path the CLI shares, so the
+        // card, onboarding's "Looks right", and `abendrot cozy on|off` can never drift.
         withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
-            if isCozy {
-                // Turning OFF: restore the everyday 1900K ceiling, keeping the screen where it is — a
-                // deeper-than-everyday pick is pulled up to exactly 1900K (the new cap).
-                let restore = Kelvin(max(model.globalKelvin.value, Kelvin.everydayWarmest.value))
-                model.setWarmestPoint(Kelvin.everydayWarmest)
-                model.setGlobalWarmthToKelvin(restore)
-            } else {
-                // Turning ON: unlock the deepest candle & ember (~500K). In Always-on, warm to that
-                // maximum right away; in Sunset, keep the user's current warmth exactly where it is and
-                // just hand them the headroom to push it warmer (founder). Engine reapplies live.
-                let current = model.globalKelvin
-                model.setWarmestPoint(Kelvin.warmestSupported)
-                if ScheduleModeOption(model.state.scheduleMode) == .alwaysOn {
-                    model.setGlobalWarmth(1.0)
-                } else {
-                    model.setGlobalWarmthToKelvin(current)
-                }
-            }
+            model.setCozy(!isCozy)
         }
     }
 }

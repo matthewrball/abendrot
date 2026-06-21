@@ -52,14 +52,13 @@ struct OnboardingView: View {
                 case .allSet: allSetStep
                 }
             }
-            .frame(maxHeight: .infinity)   // step content fills + centers, so the card height is stable
             .transition(.opacity)
         }
         .padding(24)
-        .frame(width: 320, height: 520)    // fixed card: steps don't resize the window (tall enough for
-                                           // step 3's science card + location picker). The picker dropdown
-                                           // floats, so it needn't fit in-flow. Mirror this height in
-                                           // OnboardingWindowController's contentRect.
+        .frame(width: 320)                 // fixed WIDTH; the height hugs each step/mode's content and the
+        .fixedSize(horizontal: false, vertical: true)   // window self-sizes to it (top edge fixed — see
+                                           // OnboardingWindowController.fitContentHeight), so Always-on
+                                           // compresses and the heading + switcher stay put at the top.
         // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
         // miss. `performDrag` only fires for clicks that fall THROUGH to this background, so interactive
         // controls (slider, buttons, mode control, city picker) keep their own drags. (This is why we keep
@@ -69,6 +68,12 @@ struct OnboardingView: View {
         // corners and the traffic-light buttons sit cleanly in the transparent title bar — no detached
         // floating-card border.
         .background(FrostBackground())
+        // Report the natural content height so the window hugs each step/mode (top edge fixed): Always-on
+        // compresses, Sunset grows, the heading stays put. Mirrors the self-sizing Settings window.
+        .background(GeometryReader { proxy in
+            Color.clear.preference(key: OnboardingHeightKey.self, value: proxy.size.height)
+        })
+        .onPreferenceChange(OnboardingHeightKey.self) { OnboardingWindowController.fitContentHeight($0) }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
 
@@ -206,24 +211,35 @@ struct OnboardingView: View {
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            if scheduleOption == .followSunset {
-                Text(model.isWarmingActive
-                     ? "The sun has set — your screen is warming now."
-                     : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
-                    .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(Theme.Color.textMuted)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
+            // A FIXED-HEIGHT subtitle slot under the heading, crossfading the Sunset status line and the
+            // Always-on description, so the switcher below NEVER moves when toggling modes (founder: the
+            // switcher must stay put). Both modes fill the same slot.
+            ZStack {
+                if scheduleOption == .followSunset {
+                    Text(model.isWarmingActive
+                         ? "The sun has set — your screen is warming now."
+                         : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
+                        .transition(.opacity)
+                } else {
+                    Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
+                        .transition(.opacity)
+                }
             }
+            .font(Theme.Typography.ui(11.5))
+            .foregroundStyle(Theme.Color.textMuted)
+            .multilineTextAlignment(.center)
+            .frame(height: 40)
+            .frame(maxWidth: .infinity)
 
             // Apply the mode LIVE on each toggle so the user feels the difference immediately: Always-on
             // warms the screen now; Sunset (in daylight) eases back to neutral. `setScheduleMode` also
-            // plays the soft mode tick (gated by the sound pref).
+            // plays the soft mode tick (gated by the sound pref). The switcher sits at a CONSTANT y — the
+            // heading + fixed subtitle slot above it never change height.
             ModeControl(selection: $scheduleOption) { option in
                 model.setScheduleMode(option.toScheduleMode())
             }
 
+            // Sunset-only detail BELOW the switcher; its presence/absence can't move the switcher above it.
             if scheduleOption == .followSunset {
                 VStack(alignment: .leading, spacing: 11) {
                     sunsetScienceCard
@@ -236,12 +252,6 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
-            } else {
-                Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
-                    .font(Theme.Typography.ui(12.5))
-                    .foregroundStyle(Theme.Color.textMuted)
-                    .multilineTextAlignment(.center)
-                    .transition(.opacity)
             }
 
             PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
@@ -294,7 +304,7 @@ struct OnboardingView: View {
             Label("Why we recommend Sunset", systemImage: "moon.stars.fill")
                 .font(Theme.Typography.ui(11.5, weight: .semibold))
                 .foregroundStyle(Theme.Color.accentHighlight)
-            Text("An international expert consensus recommends keeping evening light low in blue in the hours before bed. Sunset eases your screen off blue automatically as evening falls.")
+            Text("International expert consensus recommends keeping evening light low in blue in the hours before bed. Sunset eases your screen off blue automatically as evening falls.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -398,6 +408,15 @@ private struct WindowDraggableBackground: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
+}
+
+// MARK: - OnboardingHeightKey
+
+/// The onboarding card's natural content height, so the window can hug each step/mode — see
+/// `OnboardingWindowController.fitContentHeight`.
+private struct OnboardingHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 // MARK: - Preview

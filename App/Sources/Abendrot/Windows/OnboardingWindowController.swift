@@ -22,6 +22,30 @@ import SwiftUI
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private static var shared: OnboardingWindowController?
+    /// First fit (on open) is instant; later fits (step / mode changes) animate.
+    private var hasFitContent = false
+
+    /// Resize the window so it hugs `contentHeight` — the onboarding card's natural height for the current
+    /// step/mode (measured in OnboardingView). Keeps the width + TOP edge fixed (grows/shrinks downward), so
+    /// the heading + switcher never move and Always-on compresses. First fit (open) is instant; later fits
+    /// animate. Mirrors `SettingsWindowController.fitDetailContentHeight`.
+    static func fitContentHeight(_ contentHeight: CGFloat) {
+        guard contentHeight > 1, let ctrl = shared, let win = ctrl.window else { return }
+        let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
+        let target = contentHeight + titlebar
+        let current = win.frame
+        guard abs(current.height - target) > 1 else { return }
+        var f = current
+        f.size.height = target
+        if ctrl.hasFitContent {
+            f.origin.y = current.maxY - target              // later fits: keep the TOP edge fixed (heading stays put)
+            win.setFrame(f, display: true, animate: true)
+        } else {
+            win.setFrame(f, display: true, animate: false)  // first fit (on open): size to content…
+            win.center()                                    // …then center on the main display
+        }
+        ctrl.hasFitContent = true
+    }
 
     /// Open (or re-focus) the onboarding window for the given model.
     static func show(model: AppModel) {
@@ -42,7 +66,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 360),
             // `.fullSizeContentView` MUST be present at creation for the glass chrome. A fixed card:
             // no `.resizable`/`.miniaturizable` — the only traffic light is close.
             styleMask: [.titled, .closable, .fullSizeContentView],
