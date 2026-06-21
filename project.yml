@@ -52,6 +52,10 @@ targets:
       # Link only the umbrella product — the app talks to WarmthEngine, never backends.
       - package: WarmthKit
         product: WarmthKit
+      # The shared control-surface schema (preference keys, notification name, message/snapshot
+      # DTOs) the app uses to observe + apply CLI/AI control messages and write state.json.
+      - package: WarmthKit
+        product: AbendrotControl
     info:
       path: App/Resources/Info.plist
       properties:

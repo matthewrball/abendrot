@@ -3,6 +3,7 @@ import Observation
 import AppKit
 import AVFoundation
 import WarmthKit
+import AbendrotControl
 
 // MARK: - AppModel
 //
@@ -85,6 +86,23 @@ final class AppModel {
     private var frontmostMonitor: FrontmostAppMonitor?
     private var observationTask: Task<Void, Never>?
 
+    // MARK: Control surface (CLI / AI — plan §2)
+
+    /// Regenerated once per app launch. Lets the CLI tell "this is the same running instance" apart
+    /// from a relaunch even if the pid is reused. Written into every `ControlStateSnapshot`.
+    @ObservationIgnored private let appLaunchID = UUID().uuidString
+
+    /// The `requestID` of the last control message this app applied. The CLI polls
+    /// `state.json.lastAppliedRequestID` to confirm its own command landed (the live ack).
+    @ObservationIgnored private(set) var lastAppliedRequestID: String?
+
+    /// Distributed-notification observer token for `settingsChanged` (CLI/AI control). Registered in
+    /// `start()`, removed in `shutdown()`.
+    @ObservationIgnored private var controlObserver: NSObjectProtocol?
+
+    /// Pending reveal auto-end task from a `reveal` control action (cancelled if superseded).
+    @ObservationIgnored private var controlRevealTask: Task<Void, Never>?
+
     // MARK: Init
 
     /// Live initializer — owns a real engine. Call `start()` from the App entry.
@@ -118,6 +136,28 @@ final class AppModel {
             for await snapshot in await engine.stateUpdates() {
                 self?.state = snapshot
                 self?.updateWarmingStats()
+                // Publish the live control snapshot every tick so `abendrot status` always reflects
+                // current runtime truth (ponytail: small atomic write per tick; add a coalescing
+                // throttle only if it ever measurably janks).
+                self?.writeControlSnapshot()
+            }
+        }
+        // Observe CLI/AI control messages (plan §2.2). The CLI posts with `deliverImmediately: true`,
+        // so a command applies even when the app is idle. Same login session only — never
+        // postToAllSessions. Torn down in `shutdown()`. The block runs on `.main`; under Swift 6 the
+        // block isn't statically MainActor-isolated, so hop with `assumeIsolated` (it really is main).
+        controlObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(AbendrotControl.settingsChangedNotification),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            // Decode HERE, off-actor: `ControlMessage.from(userInfo:)` is pure value work and the
+            // non-Sendable `Notification`/`userInfo` never crosses the actor hop — only the decoded
+            // `ControlMessage` (a Sendable value, or nil for the raw-`defaults` fallback) does. This
+            // satisfies Swift 6 strict concurrency without an `@unchecked` escape hatch.
+            let decoded = ControlMessage.from(userInfo: note.userInfo)
+            MainActor.assumeIsolated {
+                self?.handleControlMessage(decoded)
             }
         }
         // Start the engine, THEN replay persisted user state (§25.B) in the same task so the
@@ -126,6 +166,9 @@ final class AppModel {
         Task { [weak self] in
             await engine.start()
             self?.applyPersistedState()
+            // Write an initial snapshot so the CLI sees a live app immediately, before the first
+            // engine state tick (a healthy idle app may not emit one for a while).
+            self?.writeControlSnapshot()
         }
     }
 
@@ -134,60 +177,15 @@ final class AppModel {
     /// after `engine.start()`. Only keys explicitly written before are restored — a fresh install
     /// keeps the engine's defaults. (§25.B persistence.)
     private func applyPersistedState() {
+        // Restore the reloadable user settings (warmth, mode, enabled, …) through the shared path
+        // the CLI/AI control surface also uses, so launch and a live reload converge identically.
+        reloadUserSettingsFromDisk()
+
+        // ── Launch-only tail (NEVER reload these) ────────────────────────────────────────────────
+        // Everything below is a cold-launch-only side effect. It lives ONLY here, never in
+        // `reloadUserSettingsFromDisk()`, so a settings reload triggered by a CLI notification can
+        // never re-pop onboarding or double-count the stats (plan §2.2 / acceptance criterion).
         let defaults = UserDefaults.standard
-
-        // Warmest point (the slider's warmest end / hybrid expanded-range pick). Clamp on read:
-        // only restore a sane, warm ceiling (500…3400K). `Kelvin.init` already floors at 500; the
-        // upper clamp guards against any future writer persisting a non-warm value that would
-        // neuter warming. The only writer today is the Maximum-warmth control.
-        if let saved = defaults.object(forKey: Self.warmestPointKey) as? Int,
-           saved <= Kelvin.ceilingCoolBound.value {
-            setWarmestPoint(Kelvin(saved))
-        }
-
-        // Schedule mode (Codable JSON — carries associated values). If the blob is ever malformed
-        // (schema drift, a renamed case, a partial write), drop the key so it re-derives cleanly
-        // rather than silently stranding the user on the default — the "it worked then broke" class
-        // §25.B exists to kill.
-        if let data = defaults.data(forKey: Self.scheduleModeKey) {
-            if let mode = try? JSONDecoder().decode(ScheduleMode.self, from: data) {
-                setScheduleMode(mode, userInitiated: false)   // restore must not tick
-            } else {
-                defaults.removeObject(forKey: Self.scheduleModeKey)
-            }
-        }
-
-        // Nightly warmth strength. `object(forKey:)` (not `double`) so an *unset* key stays the
-        // engine's 0.7 out-of-box default instead of being clobbered to 0.0. A *persisted* 0.0 is a
-        // real user choice (slider dragged to off) and is intentionally honored — distinct from unset.
-        if let strength = defaults.object(forKey: Self.globalWarmthStrengthKey) as? Double {
-            setGlobalWarmth(strength)
-        }
-
-        // Master toggle last. The final converged engine state is order-independent — each setter
-        // sets one box field and the engine recomputes from the whole box — so this is a mild nicety,
-        // not a correctness requirement. (Any brief default-state flash at launch comes from the
-        // engine's initial state-stream snapshot landing before these restores publish; this ordering
-        // doesn't affect that — the published state converges once the engine applies the restores.)
-        if let enabled = defaults.object(forKey: Self.isEnabledKey) as? Bool {
-            setEnabled(enabled, userInitiated: false)   // restore must not play the confirmation tone
-        }
-
-        // Reveal behaviour (hold vs toggle, §3). A fresh install keeps the default hold.
-        if let raw = defaults.string(forKey: Self.revealModeKey),
-           let mode = RevealMode(rawValue: raw) {
-            setRevealMode(mode)
-        }
-
-        // Excluded apps (suspend warmth while one is frontmost). Fresh install = none.
-        if let arr = defaults.array(forKey: Self.excludedAppsKey) as? [String] {
-            setExcludedApps(Set(arr))
-        }
-
-        if let lat = defaults.object(forKey: Self.userLatitudeKey) as? Double,
-           let lon = defaults.object(forKey: Self.userLongitudeKey) as? Double {
-            setUserCoordinate(.init(latitude: lat, longitude: lon))
-        }
 
         // Statistics (local-only). `double`/`integer` return 0 for an unset key — the right
         // fresh-install default; the collect flag defaults ON. Then start counting immediately if
@@ -208,11 +206,255 @@ final class AppModel {
         }
     }
 
+    /// Re-read the reloadable user settings from the app's preference domain and replay them through
+    /// the normal setters. Called once on launch (from `applyPersistedState()`) and again whenever a
+    /// `settingsChanged` notification arrives with no decodable payload (the raw-`defaults`
+    /// compatibility path, plan §2.2) — so this method holds ONLY settings, never the launch-only
+    /// stats/onboarding side effects.
+    ///
+    /// Reads use **CFPreferences against the app domain**, not `UserDefaults.standard`: a sibling
+    /// process (the `abendrot` CLI, or a bare `defaults write`) may have changed the on-disk plist,
+    /// and the running app's `UserDefaults` cache is not guaranteed to reflect a cross-process write.
+    /// `CFPreferencesAppSynchronize` drops the cache first so each read sees the latest persisted value.
+    func reloadUserSettingsFromDisk() {
+        let domain = AbendrotControl.preferenceDomain as CFString
+        CFPreferencesAppSynchronize(domain)
+
+        // Warmest point (the slider's warmest end / hybrid expanded-range pick). Clamp on read:
+        // only restore a sane, warm ceiling (500…3400K). `Kelvin.init` already floors at 500; the
+        // upper clamp guards against any future writer persisting a non-warm value that would
+        // neuter warming. The only writer today is the Maximum-warmth control.
+        if let saved = cfPrefInt(PreferenceKey.warmestPointKelvin),
+           saved <= Kelvin.ceilingCoolBound.value {
+            setWarmestPoint(Kelvin(saved))
+        }
+
+        // Schedule mode (Codable JSON — carries associated values). If the blob is ever malformed
+        // (schema drift, a renamed case, a partial write), drop the key so it re-derives cleanly
+        // rather than silently stranding the user on the default — the "it worked then broke" class
+        // §25.B exists to kill.
+        if let data = cfPrefData(PreferenceKey.scheduleMode) {
+            if let mode = try? JSONDecoder().decode(ScheduleMode.self, from: data) {
+                setScheduleMode(mode, userInitiated: false)   // restore must not tick
+            } else {
+                CFPreferencesSetAppValue(PreferenceKey.scheduleMode as CFString, nil, domain)
+                CFPreferencesAppSynchronize(domain)
+            }
+        }
+
+        // Nightly warmth strength. A *missing* key stays the engine's 0.7 out-of-box default instead
+        // of being clobbered to 0.0. A *persisted* 0.0 is a real user choice (slider dragged to off)
+        // and is intentionally honored — distinct from unset.
+        if let strength = cfPrefDouble(PreferenceKey.globalWarmthStrength) {
+            setGlobalWarmth(strength)
+        }
+
+        // Master toggle last. The final converged engine state is order-independent — each setter
+        // sets one box field and the engine recomputes from the whole box — so this is a mild nicety,
+        // not a correctness requirement. (Any brief default-state flash at launch comes from the
+        // engine's initial state-stream snapshot landing before these restores publish; this ordering
+        // doesn't affect that — the published state converges once the engine applies the restores.)
+        if let enabled = cfPrefBool(PreferenceKey.isEnabled) {
+            setEnabled(enabled, userInitiated: false)   // restore must not play the confirmation tone
+        }
+
+        // Reveal behaviour (hold vs toggle, §3). A fresh install keeps the default hold.
+        if let raw = cfPrefString(PreferenceKey.revealMode),
+           let mode = RevealMode(rawValue: raw) {
+            setRevealMode(mode)
+        }
+
+        // Excluded apps (suspend warmth while one is frontmost). Fresh install = none.
+        if let arr = cfPrefStringArray(PreferenceKey.excludedApps) {
+            setExcludedApps(Set(arr))
+        }
+
+        if let lat = cfPrefDouble(PreferenceKey.userLatitude),
+           let lon = cfPrefDouble(PreferenceKey.userLongitude) {
+            setUserCoordinate(.init(latitude: lat, longitude: lon))
+        }
+    }
+
+    // MARK: ── CFPreferences typed reads (app domain — cross-process safe) ─────
+    //
+    // Read the app's own preference domain via CFPreferences (not `UserDefaults.standard`) so a
+    // value written by a sibling process — the `abendrot` CLI or a `defaults write` — is observed
+    // even though the running app's UserDefaults cache may be stale. Each helper bridges the
+    // CFPropertyList to the expected Swift type and returns nil for "key unset / wrong type" so the
+    // caller keeps the engine default. Callers `CFPreferencesAppSynchronize` once before reading.
+
+    private func cfPrefValue(_ key: String) -> CFPropertyList? {
+        CFPreferencesCopyAppValue(key as CFString, AbendrotControl.preferenceDomain as CFString)
+    }
+    private func cfPrefBool(_ key: String) -> Bool? {
+        // CFBoolean and NSNumber both bridge to NSNumber here; `defaults write -bool` and the CLI's
+        // CFBoolean write both round-trip through this.
+        (cfPrefValue(key) as? NSNumber)?.boolValue
+    }
+    private func cfPrefInt(_ key: String) -> Int? {
+        (cfPrefValue(key) as? NSNumber)?.intValue
+    }
+    private func cfPrefDouble(_ key: String) -> Double? {
+        (cfPrefValue(key) as? NSNumber)?.doubleValue
+    }
+    private func cfPrefString(_ key: String) -> String? {
+        cfPrefValue(key) as? String
+    }
+    private func cfPrefData(_ key: String) -> Data? {
+        cfPrefValue(key) as? Data
+    }
+    private func cfPrefStringArray(_ key: String) -> [String]? {
+        cfPrefValue(key) as? [String]
+    }
+
+    // MARK: ── Control surface: apply messages + write snapshot (plan §2.2/§2.3) ─
+
+    /// Entry point for a received `settingsChanged` notification, taking the already-decoded message
+    /// (decoded off-actor in the observer block). A nil message means no decodable payload was
+    /// present — the sender used a raw `defaults write` — so fall back to re-reading the domain.
+    /// Factored from the observer so it can be exercised without a live engine.
+    func handleControlMessage(_ message: ControlMessage?) {
+        if let message {
+            applyControlMessage(message)
+        } else {
+            // No decodable payload → the sender used raw `defaults`. Re-read the domain and
+            // converge. This NEVER touches the launch-only stats/onboarding (those stay in
+            // `applyPersistedState`'s tail), so a reload can't re-pop onboarding or double-count.
+            reloadUserSettingsFromDisk()
+            writeControlSnapshot()
+        }
+    }
+
+    /// Convenience for tests/callers that hold a raw `userInfo` (decodes then dispatches).
+    func applyControlMessage(from userInfo: [AnyHashable: Any]?) {
+        handleControlMessage(ControlMessage.from(userInfo: userInfo))
+    }
+
+    /// Apply a decoded control message through the SAME setters the UI uses (so the engine and the
+    /// published `state` converge exactly as a live interaction would), record the ack requestID,
+    /// and write a fresh snapshot. Pure model mutation — works in preview mode (engine nil).
+    func applyControlMessage(_ message: ControlMessage) {
+        if let patch = message.patch {
+            apply(patch)
+        }
+        if let action = message.action {
+            apply(action)
+        }
+        lastAppliedRequestID = message.requestID
+        writeControlSnapshot()
+    }
+
+    /// Apply a settings patch field-by-field. Each present field is validated (defense in depth —
+    /// a malformed notification must not bypass the invariants the UI enforces) and routed through
+    /// the existing setter with `userInitiated: false` so no tone/tick plays for a programmatic change.
+    private func apply(_ patch: SettingsPatch) {
+        if let strength = patch.globalWarmthStrength,
+           let valid = try? ControlValidation.validatedStrength(strength) {
+            setGlobalWarmth(valid)
+        }
+        if let kelvin = patch.warmestPointKelvin,
+           let valid = try? ControlValidation.validatedKelvin(kelvin) {
+            setWarmestPoint(Kelvin(valid))
+        }
+        if let mode = patch.scheduleMode {
+            setScheduleMode(mode.toScheduleMode(), userInitiated: false)
+        }
+        if let revealRaw = patch.revealMode,
+           let valid = try? ControlValidation.validatedRevealMode(revealRaw),
+           let mode = RevealMode(rawValue: valid) {
+            setRevealMode(mode)
+        }
+        if let apps = patch.excludedApps {
+            setExcludedApps(Set(apps))
+        }
+        // Coordinate: an explicit clear wins; otherwise apply a complete lat+lon pair.
+        if patch.clearUserCoordinate == true {
+            setUserCoordinate(nil)
+        } else if let lat = patch.userLatitude, let lon = patch.userLongitude {
+            setUserCoordinate(.init(latitude: lat, longitude: lon))
+        }
+        // Enabled last (mild nicety; the engine recomputes from the whole box regardless).
+        if let enabled = patch.isEnabled {
+            setEnabled(enabled, userInitiated: false)
+        }
+    }
+
+    /// Apply a transient control action. Reveal is live-only (never persisted): begin the peek and
+    /// schedule its end after `holdSeconds` (default 3s), superseding any in-flight reveal task.
+    private func apply(_ action: ControlAction) {
+        switch action {
+        case .reveal(let holdSeconds):
+            let hold = holdSeconds ?? 3
+            beginReveal()
+            controlRevealTask?.cancel()
+            controlRevealTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(0, hold)))
+                guard !Task.isCancelled else { return }
+                self?.endReveal()
+                self?.writeControlSnapshot()
+            }
+        }
+    }
+
+    /// Encode the current state to `~/Library/Application Support/Abendrot/state.json` atomically.
+    /// Called every engine state tick and after each accepted control message. Errors are swallowed
+    /// quietly — a failed status write must never disrupt warming. (Plan §2.2.3.)
+    func writeControlSnapshot() {
+        let info = Bundle.main.infoDictionary
+        let snapshot = ControlStateSnapshot(
+            appVersion: info?["CFBundleShortVersionString"] as? String ?? "0.0.0",
+            appBuild: info?["CFBundleVersion"] as? String ?? "0",
+            pid: ProcessInfo.processInfo.processIdentifier,
+            appLaunchID: appLaunchID,
+            updatedAt: Date(),
+            lastAppliedRequestID: lastAppliedRequestID,
+            isEnabled: state.isEnabled,
+            scheduleMode: ControlScheduleMode(state.scheduleMode),
+            isScheduleActiveNow: state.isScheduleActiveNow,
+            isRevealing: state.isRevealing,
+            globalWarmthStrength: state.globalWarmth.strength,
+            globalKelvin: globalKelvin.value,
+            warmestPointKelvin: state.warmestPoint.value,
+            revealMode: revealMode.rawValue,
+            excludedApps: excludedApps.sorted(),
+            displays: state.displays.map { display in
+                DisplaySnapshot(
+                    id: display.id.cgUUID.uuidString,
+                    name: display.name,
+                    appliedMethod: display.appliedMethod.rawValue,
+                    preferredMethod: display.preferredMethod?.rawValue,
+                    warmthStrength: display.warmth.strength,
+                    warmthOverridden: display.warmthOverridden,
+                    isHardwareDDCEnabled: display.isHardwareDDCEnabled,
+                    lastError: display.lastError?.message
+                )
+            }
+        )
+        do {
+            let dir = ControlStateSnapshot.directoryURL()
+            try FileManager.default.createDirectory(
+                at: dir, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try encoder.encode(snapshot)
+            try data.write(to: ControlStateSnapshot.fileURL(), options: .atomic)
+        } catch {
+            // Best-effort: a status-file failure must not affect the user's warming.
+        }
+    }
+
     /// Neutral-reset + tear down. Call on app quit.
     func shutdown() async {
         flushWarmingSession()   // capture the in-flight warming time before quitting
         observationTask?.cancel()
         observationTask = nil
+        controlRevealTask?.cancel()
+        controlRevealTask = nil
+        if let controlObserver {
+            DistributedNotificationCenter.default().removeObserver(controlObserver)
+            self.controlObserver = nil
+        }
         frontmostMonitor?.stop()
         await engine?.shutdown()
     }
@@ -295,6 +537,26 @@ final class AppModel {
         Task { await engine?.setWarmth(level) }
     }
 
+    /// Set the global warmth so the *effective Kelvin* lands at (or as near as the curve allows) `target`,
+    /// at the current `warmestPoint`. Inverts `WarmthLevel.kelvin(warmestPoint:)` — which is monotonic in
+    /// strength — by binary search, so there's no duplicated mired math and it tracks the engine's own
+    /// curve exactly. Used by Cozy mode to keep the screen where it is while the warmest ceiling expands.
+    func setGlobalWarmthToKelvin(_ target: Kelvin) {
+        let wp = state.warmestPoint
+        var lo = 0.0, hi = 1.0
+        // kelvin() is non-increasing in strength (warmer = lower K): if a strength is warm enough
+        // (≤ target), we don't need more; otherwise we need more.
+        for _ in 0..<24 {
+            let mid = (lo + hi) / 2
+            if WarmthLevel(strength: mid).kelvin(warmestPoint: wp).value <= target.value {
+                hi = mid
+            } else {
+                lo = mid
+            }
+        }
+        setGlobalWarmth((lo + hi) / 2)
+    }
+
     func setScheduleMode(_ mode: ScheduleMode, userInitiated: Bool = true) {
         // Compare at the UI grain (Sunset · Always on): the dormant cases (.solar/.custom/...) all read
         // as Sunset, so re-selecting one is not a user-visible change and must not tick.
@@ -324,14 +586,18 @@ final class AppModel {
     // `object(forKey:)` (NOT `bool`/`double`, which collapse "never saved" into false/0.0)
     // so a fresh install keeps the engine's defaults — notably the 0.7 out-of-box warmth,
     // which a `double(forKey:)` miss would silently clobber to 0.0.
-    static let warmestPointKey = "warmestPointKelvin"
-    static let isEnabledKey = "isEnabled"
-    static let globalWarmthStrengthKey = "globalWarmthStrength"
-    static let scheduleModeKey = "scheduleMode"
-    static let revealModeKey = "revealMode"
-    static let excludedAppsKey = "excludedApps"
-    static let userLatitudeKey = "userLatitude"
-    static let userLongitudeKey = "userLongitude"
+    // The CLI control-surface keys are sourced from the shared `PreferenceKey` (AbendrotControl) so
+    // the app and the `abendrot` CLI can never drift on a key string. The `*Key` names are kept so
+    // the rest of AppModel is untouched — only the right-hand side now points at the shared constant.
+    static let warmestPointKey = PreferenceKey.warmestPointKelvin
+    static let isEnabledKey = PreferenceKey.isEnabled
+    static let globalWarmthStrengthKey = PreferenceKey.globalWarmthStrength
+    static let scheduleModeKey = PreferenceKey.scheduleMode
+    static let revealModeKey = PreferenceKey.revealMode
+    static let excludedAppsKey = PreferenceKey.excludedApps
+    static let userLatitudeKey = PreferenceKey.userLatitude
+    static let userLongitudeKey = PreferenceKey.userLongitude
+    // Stats + onboarding keys stay local — they are NOT part of the CLI control surface.
     static let warmedSecondsKey = "stats.warmedSeconds"
     static let warmSunsetCountKey = "stats.warmSunsetCount"
     static let lastWarmSunsetDayKey = "stats.lastWarmSunsetDay"
@@ -443,12 +709,21 @@ final class AppModel {
         guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coordinate, on: Date()) else {
             return "Today's sunset: —"
         }
-        // Format in the CITY's local clock, not the user's — otherwise a far city's sunset prints in
-        // the Mac's timezone (e.g. Tokyo's 7 PM shown as "3 AM"). Same longitude approximation (15°/hour)
-        // the resolver uses to compute it. Safe to mutate the shared formatter: AppModel is @MainActor.
+        // Auto uses the real system zone (proper, DST-correct abbreviation like "PDT"); a picked city uses
+        // its longitude-derived zone (15°/hour) so a far city's sunset prints in ITS local clock, not the
+        // Mac's (e.g. Tokyo's 7 PM, not "3 AM"). Safe to mutate the shared formatter: AppModel is @MainActor.
+        let zone = userCoordinate == nil
+            ? TimeZone.current
+            : (TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) ?? .current)
         let formatter = Self.sunsetReadoutFormatter
-        formatter.timeZone = TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) ?? .current
-        return "Today's sunset ≈ \(formatter.string(from: sunset))"
+        formatter.timeZone = zone
+        // Show a real, named abbreviation ("EDT", "PDT") but NOT a bare "GMT-5" offset — a picked city's
+        // longitude-derived zone has no place name, and the city name is already in the field (founder).
+        let time = formatter.string(from: sunset)
+        if let abbr = zone.abbreviation(for: sunset), !abbr.hasPrefix("GMT") {
+            return "Today's sunset ≈ \(time) \(abbr)"
+        }
+        return "Today's sunset ≈ \(time)"
     }
 
     /// Add one bundle id to the exclusion set (Advanced → Excluded apps "Add app…").
