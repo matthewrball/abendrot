@@ -64,6 +64,9 @@ SYNC_FILES=(
 sync_tree() {
   local rel="$1"
   echo "  rsync $rel/"
+  # Create the destination (incl. parents) for brand-new nested trees (e.g. cli/Sources when
+  # public has no cli/ yet) — rsync won't create intermediate parent dirs on its own.
+  [ -n "$DRY" ] || mkdir -p "$PUBLIC/$rel"
   rsync -a $DRY --delete "${EXCLUDES[@]}" "$BUILD/$rel/" "$PUBLIC/$rel/"
 }
 copy_file() {
@@ -99,7 +102,9 @@ for t in "${SYNC_TREES[@]}"; do [ -d "$PUBLIC/$t" ] && GATE_PATHS+=("$PUBLIC/$t"
 for f in "${SYNC_FILES[@]}"; do [ -f "$PUBLIC/$f" ] && GATE_PATHS+=("$PUBLIC/$f"); done
 
 TELL_PATTERN='§|docs/(research|marketing|engine|qa|release)/|plan §|abendrot-plan|RESUME-PROMPT|HANDOFF\b|\bfounder\b|\bMode [AB]\b|\bmode [AB]\b|\bWave-[0-9]|\bLane [A-Z]\b|dogfood|RELEASE\.md'
-if grep -rnE "$TELL_PATTERN" "${GATE_PATHS[@]}" 2>/dev/null; then
+# -I: skip binary files (e.g. .xcassets PNGs) — they can coincidentally match the pattern bytes
+# and are not a tell vector; only text files carry planning tells.
+if grep -rInE "$TELL_PATTERN" "${GATE_PATHS[@]}" 2>/dev/null; then
   echo "ERROR: planning tells remain after scrub (see matches above). Fix scrub-planning-tells.py and re-run." >&2
   exit 1
 fi
