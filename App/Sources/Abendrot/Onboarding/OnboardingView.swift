@@ -49,7 +49,10 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            topBar
+            // The closing "all set" step has no step indicator and no back chevron, so its top bar is empty
+            // — skip it there, or the empty slot plus the stack spacing leaves a dead gap above the
+            // checkmark. Numbered steps keep it.
+            if step != .allSet { topBar }
 
             Group {
                 switch step {
