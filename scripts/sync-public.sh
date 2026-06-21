@@ -91,6 +91,7 @@ INTERNAL_ONLY=(
   "HANDOFF.md"
   "LAUNCH.md"
   "RESUME-PROMPT.md"
+  "brand"   # internal brand planning/explorations — never synced; removed defensively if a stray copy lands
 )
 for f in "${INTERNAL_ONLY[@]}"; do
   if [ -e "$PUBLIC/$f" ]; then echo "  rm $f"; [ -n "$DRY" ] || rm -rf "$PUBLIC/$f"; fi
