@@ -7,7 +7,8 @@ import AbendrotControl
 //
 // Unit coverage for the CLI's pure logic: the exclude add/remove set math, the Kelvin→strength
 // curve inversion (must track the engine), validation rejects, and the get-value resolver. The live
-// transport (CFPreferences + notification + ack) is covered by the §4 round-trip, not here.
+// transport (CFPreferences + notification + ack) is exercised by the end-to-end round-trip against a
+// running app, not here.
 final class abendrotTests: XCTestCase {
 
     // MARK: exclude add/remove math (the CLI computes the FULL replacement set)
@@ -79,6 +80,41 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(ControlScheduleMode(rawValue: "always-on"), .alwaysOn)
         XCTAssertEqual(ControlScheduleMode(rawValue: "off"), .off)
         XCTAssertEqual(ControlScheduleMode(rawValue: "sunset"), .sunset)
+    }
+
+    // MARK: exclude bundle-id validation (reject empty / whitespace / shapeless)
+
+    func testValidatedBundleIDAcceptsRealIDs() throws {
+        XCTAssertEqual(try validatedBundleID("com.apple.dt.Xcode"), "com.apple.dt.Xcode")
+        // Lenient: unusual-but-dotted ids and surrounding whitespace (trimmed) pass.
+        XCTAssertEqual(try validatedBundleID("  com.figma.Desktop  "), "com.figma.Desktop")
+        XCTAssertEqual(try validatedBundleID("a.b"), "a.b")
+    }
+
+    func testValidatedBundleIDRejectsEmptyAndWhitespace() {
+        XCTAssertThrowsError(try validatedBundleID(""))
+        XCTAssertThrowsError(try validatedBundleID("   "))
+        XCTAssertThrowsError(try validatedBundleID("\t\n"))
+    }
+
+    func testValidatedBundleIDRejectsShapelessInput() {
+        // No dot ⇒ not a plausible reverse-DNS id.
+        XCTAssertThrowsError(try validatedBundleID("frobnicate"))
+        // Internal whitespace ⇒ rejected even though it has a dot.
+        XCTAssertThrowsError(try validatedBundleID("com.bad id"))
+    }
+
+    // MARK: get --json structured shapes (lossless warmth, structured location)
+
+    func testGetReportJSONObjectRejectsUnknownKey() {
+        XCTAssertNil(GetReport.jsonObject(forKey: "nonsense"))
+    }
+
+    func testGetReportJSONObjectModeIsSimpleShape() {
+        // Non-special keys keep the {key:value} shape.
+        let mode = GetReport.jsonObject(forKey: "mode")
+        XCTAssertNotNil(mode)
+        XCTAssertTrue(mode!.hasPrefix("{\"mode\":\""), "got \(mode!)")
     }
 
     // MARK: get-value resolver

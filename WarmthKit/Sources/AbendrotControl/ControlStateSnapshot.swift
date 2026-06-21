@@ -8,7 +8,7 @@ import Foundation
 // changes via `lastAppliedRequestID`.
 //
 // Liveness is "snapshot decodes AND `kill(pid, 0) == 0`" — never file mtime, because a healthy
-// idle app emits no state ticks for long stretches (plan §2.2.3).
+// idle app emits no state ticks for long stretches, so mtime would read as stale while running.
 public struct ControlStateSnapshot: Codable, Sendable, Equatable {
     public var schemaVersion: Int
     public var appVersion: String          // CFBundleShortVersionString
@@ -79,6 +79,36 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
     public static func directoryURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent(AbendrotControl.appSupportDirectoryName, isDirectory: true)
+    }
+}
+
+// MARK: - ControlLiveness
+//
+// A MINIMAL forward-compatible view of `state.json` — just the fields the CLI needs to answer
+// "is the app running?" and "did it apply my request?". The CLI decodes THIS (not the full
+// `ControlStateSnapshot`) for liveness and ack, so a newer app whose full snapshot grows a new
+// required field, changes a type, or bumps `schemaVersion` is still seen as running and can still
+// confirm a `set`. JSONDecoder ignores unknown keys; the forward-incompat risk is a new *required*
+// field on the full struct — keeping this set tiny (and all the same names/types) sidesteps it.
+public struct ControlLiveness: Codable, Sendable, Equatable {
+    public var schemaVersion: Int
+    public var pid: Int32
+    public var appLaunchID: String
+    public var updatedAt: Date
+    public var lastAppliedRequestID: String?
+
+    public init(
+        schemaVersion: Int,
+        pid: Int32,
+        appLaunchID: String,
+        updatedAt: Date,
+        lastAppliedRequestID: String?
+    ) {
+        self.schemaVersion = schemaVersion
+        self.pid = pid
+        self.appLaunchID = appLaunchID
+        self.updatedAt = updatedAt
+        self.lastAppliedRequestID = lastAppliedRequestID
     }
 }
 

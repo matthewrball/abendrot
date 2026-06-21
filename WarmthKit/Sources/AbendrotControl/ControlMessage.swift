@@ -5,7 +5,7 @@ import Foundation
 // A partial set of settings to change. Each `nil` field means "leave unchanged". The CLI does
 // the add/remove math itself and sends the FULL replacement set for `excludedApps`, so the app
 // never has to diff — it just applies what's present through its existing setters. This keeps the
-// app's apply path identical to a UI interaction (plan §2.2).
+// app's apply path identical to a UI interaction.
 public struct SettingsPatch: Codable, Sendable, Equatable {
     public var isEnabled: Bool?
     /// Validated 0.0...1.0 by `ControlValidation.validatedStrength`.
@@ -55,8 +55,8 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
 // MARK: - ControlAction
 //
 // A transient, non-persisted action (currently just the momentary reveal-true-color peek). Kept
-// separate from `SettingsPatch` because it never touches CFPreferences — it is live-only and the
-// CLI requires a running app + ack for it (plan §2.1 "transient actions").
+// separate from `SettingsPatch` because it never touches CFPreferences — it is a live-only,
+// transient action and the CLI requires a running app + ack for it.
 public enum ControlAction: Codable, Sendable, Equatable {
     case reveal(holdSeconds: Double?)
 }

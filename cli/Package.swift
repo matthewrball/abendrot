@@ -7,10 +7,11 @@
 // dependency on the sibling WarmthKit package. It is a THIN CLIENT — it never drives displays
 // itself (the engine can't run headless: AppKit/Metal in the umbrella). It persists settings to
 // the app's CFPreferences domain, posts a distributed notification for live apply, and reads the
-// app's `state.json` snapshot for `status` + live-apply acks. (Plan §2.3.)
+// app's `state.json` snapshot for `status` + live-apply acks.
 //
 // Builds + runs UNSIGNED locally. Distribution copies the release binary into the app bundle at
-// Contents/MacOS/abendrot and signs it inside-out (scripts/release/release.sh).
+// Contents/Helpers/abendrot (NOT Contents/MacOS, to avoid colliding with the app executable) and
+// signs it inside-out (scripts/release/release.sh).
 
 import PackageDescription
 

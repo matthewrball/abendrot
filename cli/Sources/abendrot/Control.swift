@@ -7,27 +7,55 @@ import AbendrotControl
 //
 // The shared CLI core: persist settings to the app's CFPreferences domain, post the live
 // `settingsChanged` notification, and read the app's `state.json` snapshot for `status` + acks.
-// A thin client — never drives displays itself (plan §2.3). All four pieces (persist / post /
-// snapshot / liveness) live here so every subcommand routes through one tested path.
+// A thin client — never drives displays itself. All four pieces (persist / post / snapshot /
+// liveness) live here so every subcommand routes through one tested path.
 enum Control {
 
     // MARK: Liveness
 
-    /// The app is "running" iff its `state.json` snapshot exists, decodes, and its pid is alive.
-    /// Never use file mtime — a healthy idle app can go a long time without a state tick (plan §2.2.3).
+    /// True iff a snapshot exists (in full OR minimal form) and its pid is alive. Used for the
+    /// "is the app running?" gate on `set`/`reveal`. Forward-tolerant: a newer app whose full
+    /// snapshot no longer decodes here still counts as running via the minimal liveness read.
+    static func isRunning() -> Bool {
+        guard let liveness = readLiveness() else { return false }
+        return pidAlive(liveness.pid)
+    }
+
+    /// The full snapshot when it both decodes AND its pid is alive — used where the rich fields are
+    /// needed. Never use file mtime: a healthy idle app can go a long time between state ticks, so
+    /// mtime would wrongly read a quiet-but-running app as stale.
     static func runningSnapshot() -> ControlStateSnapshot? {
         guard let snapshot = readSnapshot() else { return nil }
         return pidAlive(snapshot.pid) ? snapshot : nil
     }
 
-    /// Decode the current snapshot, retrying briefly on a transient/partial read (the app writes
+    /// Decode the full current snapshot, retrying briefly on a transient/partial read (the app writes
     /// atomically, so a partial read should be rare, but a decode failure mid-replace is possible).
+    /// Returns nil if the current shape no longer matches — callers that only need liveness/ack use
+    /// `readLiveness()` instead, which tolerates a forward-incompatible (newer-app) snapshot.
     static func readSnapshot() -> ControlStateSnapshot? {
         let url = ControlStateSnapshot.fileURL()
         for attempt in 0..<3 {
             guard let data = try? Data(contentsOf: url) else { return nil }
             if let snapshot = try? JSONDecoder().decode(ControlStateSnapshot.self, from: data) {
                 return snapshot
+            }
+            if attempt < 2 { usleep(30_000) }   // 30ms, then retry
+        }
+        return nil
+    }
+
+    /// Read only the fields needed for liveness and ack, decoding a MINIMAL struct so a future app
+    /// snapshot — new required field, changed type on a field we don't read, or a higher
+    /// `schemaVersion` — still reports `running` correctly and still lets a `set` confirm its ack.
+    /// JSONDecoder ignores unknown keys; the real forward-incompat risk is a new *required* field on
+    /// the full struct, which this minimal struct sidesteps. Same 3-try transient-read retry.
+    static func readLiveness() -> ControlLiveness? {
+        let url = ControlStateSnapshot.fileURL()
+        for attempt in 0..<3 {
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            if let liveness = try? JSONDecoder().decode(ControlLiveness.self, from: data) {
+                return liveness
             }
             if attempt < 2 { usleep(30_000) }   // 30ms, then retry
         }
@@ -167,24 +195,27 @@ enum Control {
     static func waitForAck(_ requestID: String, timeout: TimeInterval = 1.5) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let snapshot = readSnapshot(), snapshot.lastAppliedRequestID == requestID {
+            // Use the minimal liveness read, not the full snapshot decode, so the ack still lands
+            // against a newer app whose full snapshot shape we no longer decode.
+            if let liveness = readLiveness(), liveness.lastAppliedRequestID == requestID {
                 return true
             }
             usleep(50_000)   // 50ms
         }
-        if let snapshot = readSnapshot(), snapshot.lastAppliedRequestID == requestID {
+        if let liveness = readLiveness(), liveness.lastAppliedRequestID == requestID {
             return true
         }
         return false
     }
 }
 
-// MARK: - CLI exit codes (plan §2.3)
+// MARK: - CLI exit codes
 //
-// The spec pins exact POSIX-ish codes: 0 ok · 2 bad input · 3 app-not-running / no live ack for a
-// command that REQUIRES the app (reveal) · 4 live-apply timeout after a successful persist. These do
-// NOT match ArgumentParser's `ValidationError` (which exits EX_USAGE=64), so we print our own message
-// to stderr and throw ArgumentParser's `ExitCode(n)` — which exits with code `n` and prints nothing.
+// Exact POSIX-ish codes: 0 ok · 2 bad input · 3 app-not-running / no live ack for a command that
+// REQUIRES the app (reveal) · 4 live-apply timeout after a successful persist. These do NOT match
+// ArgumentParser's `ValidationError` (which exits EX_USAGE=64), so we print our own message to
+// stderr and throw ArgumentParser's `ExitCode(n)` — which exits with code `n` and prints nothing.
+// `main.swift` also remaps ArgumentParser's own parse/validation 64 down to 2 to keep this contract.
 enum CLIExit {
     static let badInput: Int32 = 2
     static let appNotRunning: Int32 = 3

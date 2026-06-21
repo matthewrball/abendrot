@@ -4,7 +4,7 @@ import WarmthCore
 
 // MARK: - AbendrotControlTests
 //
-// The HARD GATE for the shared control schema (spec §1.6). These prove the wire shape both the
+// The HARD GATE for the shared control schema. These prove the wire shape both the
 // app and the `abendrot` CLI depend on stays stable: constant strings (a silent key rename would
 // break cross-process control), Codable round-trips, the lossless CLI↔engine schedule mapping,
 // the distributed-notification plist round-trip, and that the CLI writes the SAME scheduleMode
@@ -128,6 +128,64 @@ final class AbendrotControlTests: XCTestCase {
         let data = try JSONEncoder().encode(snapshot)
         let decoded = try JSONDecoder().decode(ControlStateSnapshot.self, from: data)
         XCTAssertEqual(snapshot, decoded)
+    }
+
+    // MARK: ControlLiveness — forward-compatible decode of a future snapshot
+
+    func testLivenessDecodesFromFullSnapshotJSON() throws {
+        // The minimal liveness view must decode from a real full-snapshot encoding (same field
+        // names/types), so the CLI's liveness/ack path works against the current app.
+        let snapshot = ControlStateSnapshot(
+            appVersion: "0.1.0", appBuild: "1", pid: 4242,
+            appLaunchID: UUID().uuidString,
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastAppliedRequestID: "REQ-1",
+            isEnabled: true, scheduleMode: .sunset, isScheduleActiveNow: true,
+            isRevealing: false, globalWarmthStrength: 0.7, globalKelvin: 2700,
+            warmestPointKelvin: 1900, revealMode: "hold", excludedApps: [], displays: [])
+        let data = try JSONEncoder().encode(snapshot)
+        let liveness = try JSONDecoder().decode(ControlLiveness.self, from: data)
+        XCTAssertEqual(liveness.pid, 4242)
+        XCTAssertEqual(liveness.lastAppliedRequestID, "REQ-1")
+        XCTAssertEqual(liveness.schemaVersion, AbendrotControl.schemaVersion)
+    }
+
+    func testLivenessDecodesFromForwardIncompatibleSnapshot() throws {
+        // A FUTURE app snapshot: a higher schemaVersion, a brand-new REQUIRED field, and a changed
+        // type on a field the liveness view does not read. The full `ControlStateSnapshot` would
+        // fail to decode this, but `ControlLiveness` must still recover pid + ack so `status`
+        // reports running:true and a `set` can still confirm against a newer app.
+        // `updatedAt` is a numeric Date (seconds since the 2001 reference) — the default Codable
+        // encoding the app writes and the CLI decodes (no .iso8601 strategy on the read path).
+        let futureJSON = """
+        {
+          "schemaVersion": 99,
+          "pid": 5150,
+          "appLaunchID": "LAUNCH-XYZ",
+          "updatedAt": 803703602.008142,
+          "lastAppliedRequestID": "REQ-FUTURE",
+          "brandNewRequiredField": {"nested": [1, 2, 3]},
+          "isEnabled": "yes-now-a-string",
+          "displays": "no-longer-an-array"
+        }
+        """
+        let data = Data(futureJSON.utf8)
+        XCTAssertNil(try? JSONDecoder().decode(ControlStateSnapshot.self, from: data),
+                     "the full snapshot should NOT decode a forward-incompatible payload")
+        let liveness = try JSONDecoder().decode(ControlLiveness.self, from: data)
+        XCTAssertEqual(liveness.schemaVersion, 99)
+        XCTAssertEqual(liveness.pid, 5150)
+        XCTAssertEqual(liveness.lastAppliedRequestID, "REQ-FUTURE")
+    }
+
+    func testLivenessCodableRoundTrip() throws {
+        let liveness = ControlLiveness(
+            schemaVersion: 1, pid: 321, appLaunchID: UUID().uuidString,
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastAppliedRequestID: nil)
+        let data = try JSONEncoder().encode(liveness)
+        let decoded = try JSONDecoder().decode(ControlLiveness.self, from: data)
+        XCTAssertEqual(liveness, decoded)
     }
 
     // MARK: Transport-safety — the userInfo dict survives a real plist round-trip

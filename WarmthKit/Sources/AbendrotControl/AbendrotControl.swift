@@ -7,8 +7,8 @@ import WarmthCore
 // the CFPreferences domain, the distributed-notification name, the Application Support
 // paths, and the wire schema version. BOTH the running app and the `abendrot` CLI depend
 // on this pure-Swift target so the two can never drift on a preference-key string, an enum
-// encoding, or the snapshot/message shape. (Plan §2.3 — "this is exactly where AI-facing
-// CLIs rot": share the schema, not just `WarmthCore`.)
+// encoding, or the snapshot/message shape. This is exactly where AI-facing CLIs rot — so we
+// share the schema itself, not just the underlying `WarmthCore` engine types.
 //
 // Pure Foundation + WarmthCore ONLY — no AppKit / IOKit / CoreGraphics — so the CLI links
 // it headlessly. `WarmthState` stays non-Codable; `ControlStateSnapshot` is the Codable DTO.
@@ -25,7 +25,8 @@ public enum AbendrotControl {
     public static let preferenceDomain = "app.abendrot.Abendrot"
 
     /// DistributedNotification name: the app observes it, the CLI posts it. Same login session
-    /// only — never `postToAllSessions` (plan §2.5 security boundary).
+    /// only — never `postToAllSessions`, which keeps the control surface inside the user's own
+    /// session as a security boundary.
     public static let settingsChangedNotification = "app.abendrot.settingsChanged"
 
     /// Sub-directory under ~/Library/Application Support that holds the live `state.json`.
@@ -39,7 +40,7 @@ public enum AbendrotControl {
 //
 // The CFPreferences keys the app persists and the CLI writes. These MUST exactly equal the
 // strings `AppModel` persists today — AppModel re-exports them through its `*Key` constants so
-// there is one literal per setting across the whole codebase. (Spec §1.1 anti-drift.)
+// there is one literal per setting across the whole codebase, with no chance of the two drifting.
 //
 //   isEnabled              Bool
 //   globalWarmthStrength   Double

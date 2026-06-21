@@ -74,13 +74,18 @@ enum StatusReport {
         return lines.joined(separator: "\n")
     }
 
-    /// Human summary when no live snapshot exists — last-known persisted values, app not running.
-    static func humanFromPreferences() -> String {
+    /// Human summary when no full snapshot decodes — last-known persisted values. `running` is the
+    /// forward-tolerant liveness: normally the app is closed, but it is also true when a NEWER app
+    /// is live and its rich snapshot just doesn't decode here, so the header stays honest.
+    static func humanFromPreferences(running: Bool = false) -> String {
         let enabled = Control.configuredBool(PreferenceKey.isEnabled) ?? false
         let mode = Control.configuredScheduleMode().rawValue
         let strength = Control.configuredDouble(PreferenceKey.globalWarmthStrength)
         let maxWarmth = Control.configuredInt(PreferenceKey.warmestPointKelvin) ?? Kelvin.everydayWarmest.value
-        var lines = ["Abendrot — not running (showing saved settings)"]
+        let header = running
+            ? "Abendrot — running (newer app; showing saved settings)"
+            : "Abendrot — not running (showing saved settings)"
+        var lines = [header]
         lines.append("Enabled:  \(enabled ? "yes" : "no")")
         lines.append("Mode:     \(mode)")
         if let strength {
@@ -154,5 +159,34 @@ enum GetReport {
         if Double(value) != nil { return value }
         // location prints "lat lon" — quote it; auto/default/hold/etc. are also strings.
         return "\"\(JSONString.escape(value))\""
+    }
+
+    /// The `--json` object for one key. Unlike the human path, this emits structured, lossless
+    /// values an agent can parse without string-splitting: `warmth` at full precision (not %.2f),
+    /// and `location` as `{"latitude":…,"longitude":…}` or `{"auto":true}` (not a packed string).
+    /// Returns nil for an unknown key (the caller maps that to exit 2).
+    static func jsonObject(forKey key: String) -> String? {
+        switch key {
+        case "warmth":
+            if let strength = Control.configuredDouble(PreferenceKey.globalWarmthStrength) {
+                return "{\"warmth\":\(jsonNumber(strength))}"
+            }
+            return "{\"warmth\":\"default\"}"
+        case "location":
+            if let coord = Control.configuredCoordinate() {
+                return "{\"latitude\":\(jsonNumber(coord.lat)),\"longitude\":\(jsonNumber(coord.lon))}"
+            }
+            return "{\"auto\":true}"
+        default:
+            // Everything else keeps the simple {key:value} shape from the human resolver.
+            guard let (label, value) = value(forKey: key) else { return nil }
+            return "{\"\(label)\":\(jsonValue(value))}"
+        }
+    }
+
+    /// Render a Double as a JSON number at full precision. `String(describing:)` gives the shortest
+    /// round-trippable decimal for a `Double`, so no significant digits are lost.
+    private static func jsonNumber(_ value: Double) -> String {
+        String(describing: value)
     }
 }

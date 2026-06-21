@@ -4,7 +4,7 @@ import Foundation
 //
 // A single, message-carrying error type for control-surface validation. The CLI surfaces
 // `.description` on stderr and exits 2; the app's payload decoder uses the same validators so a
-// malformed notification can never bypass the invariants the UI enforces (plan §2.5).
+// malformed notification can never bypass the invariants the UI enforces.
 public enum ControlError: Error, CustomStringConvertible, Equatable {
     case badInput(String)
 

@@ -7,7 +7,7 @@ import AbendrotControl
 
 /// The common path for a settings command: persist the patch (survives restart), post it live, then
 /// report based on whether the app is running and acked. Throws ArgumentParser's `ExitCode` to set the
-/// process exit code; never crashes. (Plan §2.3 exit codes.)
+/// process exit code; never crashes.
 ///
 /// - app running + ack within timeout → success, `appliedLive: true`, exit 0.
 /// - app NOT running → "saved; app not running" on stderr, `appliedLive: false`, exit 0 (persist
@@ -15,7 +15,7 @@ import AbendrotControl
 /// - app running but NO ack within timeout → exit 4 (persisted, but live apply didn't confirm).
 func applySettings(_ patch: SettingsPatch, json: Bool) throws {
     Control.persist(patch)
-    let wasRunning = Control.runningSnapshot() != nil
+    let wasRunning = Control.isRunning()
     let requestID = Control.post(patch: patch)
 
     if !wasRunning {
@@ -55,15 +55,19 @@ struct Status: ParsableCommand {
 
     func run() throws {
         let snapshot = Control.readSnapshot()
-        let running = snapshot.map { Control.pidAlive($0.pid) } ?? false
+        // Liveness is read forward-tolerantly: if the full snapshot no longer decodes (a newer app)
+        // but the minimal liveness read does and its pid is alive, the app is still "running" — we
+        // just can't show its rich fields, so we fall back to the persisted view below.
+        let running = Control.isRunning()
 
         if json {
             print(StatusReport.json(snapshot: snapshot, running: running))
             return
         }
         guard let snapshot else {
-            // No live snapshot — show the persisted values so `status` still says something.
-            print(StatusReport.humanFromPreferences())
+            // No decodable live snapshot — show the persisted values so `status` still says
+            // something. `running` above already reflects true liveness against a newer app.
+            print(StatusReport.humanFromPreferences(running: running))
             return
         }
         print(StatusReport.human(snapshot: snapshot, running: running))
@@ -78,15 +82,19 @@ struct Get: ParsableCommand {
     @Flag(name: .long, help: "Emit machine-readable JSON.") var json = false
 
     func run() throws {
-        guard let (label, value) = GetReport.value(forKey: key) else {
+        if json {
+            guard let object = GetReport.jsonObject(forKey: key) else {
+                throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | reveal-mode | location | enabled",
+                           code: CLIExit.badInput)
+            }
+            print(object)
+            return
+        }
+        guard let (_, value) = GetReport.value(forKey: key) else {
             throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | reveal-mode | location | enabled",
                        code: CLIExit.badInput)
         }
-        if json {
-            print("{\"\(label)\":\(GetReport.jsonValue(value))}")
-        } else {
-            print(value)
-        }
+        print(value)
     }
 }
 
@@ -123,6 +131,11 @@ struct SetWarmth: ParsableCommand {
     @Flag(name: .long) var json = false
 
     func run() throws {
+        // A strength and --kelvin are two ways to express the same setting; accepting both would
+        // silently honor one and drop the other. Reject the ambiguous combination loudly.
+        if strength != nil, kelvin != nil {
+            throw fail("give a strength OR --kelvin, not both", code: CLIExit.badInput)
+        }
         if let kelvin {
             // Map a target Kelvin to a strength against the configured warmest point, inverting the
             // engine's own mired curve so the CLI tracks `WarmthLevel.kelvin(warmestPoint:)` exactly.
@@ -214,10 +227,29 @@ struct ExcludeAdd: ParsableCommand {
     @Flag(name: .long) var json = false
 
     func run() throws {
+        let id = try validatedBundleID(bundleID)
         let current = Control.configuredExcludedApps()
-        let next = Set(current).union([bundleID]).sorted()
+        let next = Set(current).union([id]).sorted()
         try applySettings(SettingsPatch(excludedApps: next), json: json)
     }
+}
+
+/// Light shape-check for an exclusion bundle id: non-empty, no internal whitespace, and at least
+/// one dot (a reverse-DNS hint). Stays lenient — unusual but dotted ids pass — so we never reject a
+/// legitimate id, only obviously bad input (empty, whitespace-only, a bare word).
+func validatedBundleID(_ raw: String) throws -> String {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        throw fail("bundle id must not be empty", code: CLIExit.badInput)
+    }
+    guard !trimmed.contains(where: { $0.isWhitespace }) else {
+        throw fail("bundle id must not contain spaces, got '\(raw)'", code: CLIExit.badInput)
+    }
+    guard trimmed.contains(".") else {
+        throw fail("bundle id should look like a reverse-DNS id (e.g. com.apple.dt.Xcode), got '\(trimmed)'",
+                   code: CLIExit.badInput)
+    }
+    return trimmed
 }
 
 struct ExcludeRemove: ParsableCommand {
@@ -258,7 +290,7 @@ struct Reveal: ParsableCommand {
 
     func run() throws {
         // Reveal is live-only: NO defaults write. Require a running app + ack, else exit 3.
-        guard Control.runningSnapshot() != nil else {
+        guard Control.isRunning() else {
             if json { print("{\"ok\":false,\"reason\":\"app-not-running\"}") }
             throw fail("app not running — reveal requires the running app", code: CLIExit.appNotRunning)
         }
