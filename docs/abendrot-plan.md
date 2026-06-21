@@ -1282,7 +1282,33 @@ A new "drive Abendrot from the terminal or an AI agent" capability (ties into th
   IANA-timezone tagging, and the city-selection animation smoothing each ran as a dispatched agent (`swift test`
   green) while the lead held design taste + builds.
 
-**Still open (Session 14):** founder **hardware/visual sign-off** on the whole wave at `cbf5b3a`; a **separate-lane
+**Lane B continued — an onboarding-polish dogfooding sub-wave (post-`cbf5b3a`, `b2627d5`→`52c91f4`).** A rapid
+founder-driven iteration tightening onboarding, Release-built + relaunched per change:
+- **Self-sizing onboarding window** (mirrors Settings): a `PreferenceKey` (`OnboardingHeightKey`) reports the
+  card's natural height; `OnboardingWindowController.fitContentHeight` hugs it (top edge fixed, animated). So
+  **Always-on compresses** (no empty gap), the heading + switcher never move, and the **welcome window opens
+  centered on the main display** (first fit centers; later fits hold the top edge). Replaced the fixed 320×520 card.
+- **Step-2 switcher is rock-stable** — a fixed-height subtitle slot under the heading crossfades the Sunset
+  status line ↔ the Always-on description, so toggling Sunset/Always-on no longer relocates the switcher.
+- **Step-3 polish** — the "what is Kelvin?" ⓘ moved to the **right of the K** readout (popover + Settings) via a
+  reusable **`KelvinInfoButton`** with an **opaque ember surface** (the ported `.glassSurface(.frost)` bled the
+  bright text through — fixed); conditional heading (Sunset "How warm should it get?" / Always-on "Set your
+  warmth"); a **back chevron** to step 2; the WarmSlider's "Warmth" header hidden (`showsHeader`); trimmed copy;
+  Sunset subtitle "**Set your maximum warmth once the sun begins to set.**", Always-on subtitle dropped.
+- **Cozy in onboarding step 3** — the compact `CozyModeControl` (no header/caption) + a **fireball thumb**
+  crossfade and **"Warmer" → "Warmest"** (fixed-width so the slider never resizes) on `WarmSlider` (`cozy` flag).
+  After the "820→500 K reads identical / abrupt / too much moving" feedback the onboarding toggle was redesigned
+  to **keep the slider in place** (`keepsSliderInPlace` — only flips the ceiling, no jump, no enablement
+  animation); the **Cozy subtitle is now static** (no on-state text swap).
+- **City picker** dismisses on **click-away**; copy "**International expert consensus recommends…**" (dropped "An").
+- **Cozy path unified (Lane A):** `AppModel.setCozy(_:)` is now the single cozy path shared by the Settings card
+  + the new **`abendrot cozy on|off`** CLI command (`ControlMessage.cozy` field, snapshot-derived cozy). ⚠️ The
+  Settings `CozyModeControl` + the onboarding path still carry their own inline toggle logic — a reconcile
+  candidate (route the card through `setCozy`; the onboarding keep-in-place path is intentionally different).
+- **Verify:** **112/22 WarmthKit + 20 cli tests + Release BUILD SUCCEEDED**; tree CLEAN at **`52c91f4`**. NOT
+  separate-lane-reviewed.
+
+**Still open (Session 14):** founder **hardware/visual sign-off** on the whole wave at `52c91f4`; a **separate-lane
 review** of Cozy mode + the city-picker + the CLI/control surface before any public push (NOT self-approved — the
 lanes committed fast); §25.J final look; §25.K hardware matrix; analytics (if greenlit); then the **gated public
 push** (now a Session 7→13 wave — and it must decide whether the CLI/control surface ships in 1.0 or trails it).
