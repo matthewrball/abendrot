@@ -24,6 +24,10 @@ let package = Package(
         .library(name: "WarmthKit", targets: ["WarmthKit"]),
         // Pure domain core, exposed for headless reuse/testing.
         .library(name: "WarmthCore", targets: ["WarmthCore"]),
+        // Shared control-surface schema (bundle id, preference keys, notification name,
+        // SettingsPatch/ControlMessage/ControlStateSnapshot) — depended on by BOTH the app and
+        // the standalone `abendrot` CLI so the two cannot drift. Pure Foundation + WarmthCore.
+        .library(name: "AbendrotControl", targets: ["AbendrotControl"]),
     ],
     dependencies: [
         // Carbon RegisterEventHotKey wrapper — true-global hotkey, no Accessibility
@@ -42,6 +46,17 @@ let package = Package(
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
             ]
+        ),
+
+        // ── AbendrotControl ──────────────────────────────────────────────────
+        // The shared control-surface schema. Pure Foundation + WarmthCore — NO AppKit / IOKit /
+        // CoreGraphics — so the standalone CLI links it headlessly. The single source of truth
+        // for the preference keys, distributed-notification name, and the message/snapshot wire
+        // shape that the app and the `abendrot` CLI both speak. (Engine/contract stays FROZEN;
+        // this is purely additive.)
+        .target(
+            name: "AbendrotControl",
+            dependencies: ["WarmthCore"]
         ),
 
         // ── CInterop ─────────────────────────────────────────────────────────
@@ -113,6 +128,14 @@ let package = Package(
         .testTarget(
             name: "WarmthCoreTests",
             dependencies: ["WarmthCore"]
+        ),
+
+        // AbendrotControl schema gate: constant strings (anti-drift), Codable round-trips, the
+        // lossless CLI↔engine schedule mapping, the distributed-notification plist round-trip, and
+        // scheduleMode wire-compat (the CLI writes the same Data AppModel reads).
+        .testTarget(
+            name: "AbendrotControlTests",
+            dependencies: ["AbendrotControl", "WarmthCore"]
         ),
 
         // Engine + DDC (M2): golden-vector wire-protocol tests, the verify/retry transport state
