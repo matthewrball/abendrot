@@ -55,6 +55,9 @@ SYNC_FILES=(
   "cli/Package.resolved"
   "AGENTS.md"
   "docs/abendrot.1"
+  # README.md is now canonical in the build repo (single source of truth) and synced to
+  # public; it is scrubbed + gated like every other synced text file.
+  "README.md"
 )
 
 # Sync a subtree build->public with --delete (so removed files propagate), scoped to that subtree.
