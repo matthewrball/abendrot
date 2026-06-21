@@ -41,3 +41,7 @@ release-scratch/
 # Editor
 .idea/
 *.iml
+
+# Agent / tooling state (internal — never publish)
+.omc/
+.baton/
