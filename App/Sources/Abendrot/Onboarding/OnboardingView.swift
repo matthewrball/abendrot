@@ -63,20 +63,28 @@ struct OnboardingView: View {
         .fixedSize(horizontal: false, vertical: true)   // window self-sizes to it (top edge fixed — see
                                            // OnboardingWindowController.fitContentHeight), so Always-on
                                            // compresses and the heading + switcher stay put at the top.
+        // Report the natural content height so the window hugs each step/mode (top edge fixed): Always-on
+        // compresses, Sunset grows, the heading stays put. Measured HERE — on the fixed-size card, BEFORE
+        // the fill frame below — so it reports the card's true height, not the filled window. Mirrors the
+        // self-sizing Settings window.
+        .background(GeometryReader { proxy in
+            Color.clear.preference(key: OnboardingHeightKey.self, value: proxy.size.height)
+        })
+        // Then FILL the window (card pinned to the top) so the frosted-ember glass reaches edge-to-edge,
+        // including the transparent title-bar strip. Without this, a tall step makes the window taller than
+        // the fixed-size card and the system-gray title bar peeks out above the frost — the Settings window
+        // avoids it the same way (its split view fills). The card keeps its natural size at the top; only
+        // the frost grows to fill.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
         // miss. `performDrag` only fires for clicks that fall THROUGH to this background, so interactive
         // controls (slider, buttons, mode control, city picker) keep their own drags. (This is why we keep
         // `isMovableByWindowBackground` off — it would steal the WarmSlider's drag.)
         .background(WindowDraggableBackground())
-        // Fill the window with the frosted-ember glass (same as Settings/About) so the OS rounds the
-        // corners and the traffic-light buttons sit cleanly in the transparent title bar — no detached
-        // floating-card border.
+        // The frosted-ember glass (same as Settings/About): now full-window, so the OS rounds the corners,
+        // the traffic-light buttons sit cleanly on the frost in the transparent title bar, and there is no
+        // detached floating-card border and no gray bar.
         .background(FrostBackground())
-        // Report the natural content height so the window hugs each step/mode (top edge fixed): Always-on
-        // compresses, Sunset grows, the heading stays put. Mirrors the self-sizing Settings window.
-        .background(GeometryReader { proxy in
-            Color.clear.preference(key: OnboardingHeightKey.self, value: proxy.size.height)
-        })
         .onPreferenceChange(OnboardingHeightKey.self) { OnboardingWindowController.fitContentHeight($0) }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
