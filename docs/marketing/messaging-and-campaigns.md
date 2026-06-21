@@ -373,8 +373,11 @@ Items I deliberately did **not** state as fact because they're outside `evidence
 > entering the health story at all). Where this lane mentions warmth, it's a *mechanical* statement
 > ("set warmth to 0.8", "warmest point of the slider"), never a benefit promise.
 >
-> **Status:** the v1 CLI is in development; the **official Abendrot MCP server is roadmap ("MCP coming"),
-> not yet shipped** — never claim it exists. Mark anything not-yet-shipped as roadmap.
+> **Status (updated 2026-06-21):** the v1 CLI is **shipped and open-source** — `abendrot` is in the public
+> repo (`github.com/matthewrball/abendrot`, CI green) and buildable from source today. A **signed
+> one-command install** (Homebrew cask, notarized DMG) lands with **v1.0**; the **official Abendrot MCP
+> server is roadmap ("MCP coming"), not yet shipped** — never claim it exists. So: list the CLI as a real,
+> available feature; keep the *signed install* and the *MCP server* labeled as coming.
 >
 > **Trust boundary to state honestly when relevant:** the CLI talks to the *running app* as the **same
 > macOS user, in your local session** — visual state only. No network listener, no privileged helper, no

@@ -1313,6 +1313,35 @@ review** of Cozy mode + the city-picker + the CLI/control surface before any pub
 lanes committed fast); §25.J final look; §25.K hardware matrix; analytics (if greenlit); then the **gated public
 push** (now a Session 7→13 wave — and it must decide whether the CLI/control surface ships in 1.0 or trails it).
 
+## §34 — Session 14 (2026-06-21): SHIPPED — first public push of the CLI/control-surface wave + CI green
+
+The founder **gated the public push and it went out.** The public mirror `github.com/matthewrball/abendrot`
+advanced `6f708b9` → `556f401` → **`91ba48d`** — shipping the whole Session 7→13 wave: the `abendrot` CLI +
+AbendrotControl schema, AGENTS.md / llms.txt / man page, **`abendrot cozy on|off`**, the consolidated marketing
+README, and the accumulated app/engine work. **CI is GREEN** (test-warmthcore + build-app-unsigned pass; the lint
+job is now advisory/non-blocking).
+
+**Decision (resolves the §33 open question):** the CLI/control surface **ships now** (open-source, in the public
+repo) — it does NOT trail 1.0. The *signed one-command install* (Homebrew cask / notarized DMG) still waits on an
+Apple Developer account → v1.0.
+
+**The staged publish (sync → gate → review → post-push CI check) caught + fixed four bugs a blind push would have
+shipped:** (1) `sync_tree` lacked `mkdir -p` → rsync died creating the new `cli/` tree; (2) the planning-tell gate
+grepped **binary** .xcassets PNGs → false-positive failure (fixed with `grep -I`); (3) an untracked `.omc/` would
+have been swept into `git add -A` and published — a tells leak (sync now `rm -rf`s an INTERNAL_ONLY set + `.omc/`
+gitignored in public); (4) **the scrub mangled Swift code** — `#` was treated as a comment prefix for ALL files,
+but Swift's `#expect/#require/#if` are CODE, so `== .foo` → `==.foo` (a broken `==.` operator); the **first** public
+push (`556f401`) shipped non-compiling code (CI red). Root-caused (file-type-aware comment prefixes + stop stripping
+the space before `.`); verified a scrubbed copy passes `swift test` 112/22; re-published clean at `91ba48d` → green.
+
+**Docs reconciled (this session):** the dev-lane marketing (`docs/marketing/messaging-and-campaigns.md`) now lists
+the CLI as a shipped/available feature; the control-surface plan (`.omc/plans/ai-control-surface-cli.md`) is marked
+APPROVED & SHIPPED.
+
+**Still open (founder-owned):** hardware/visual sign-off on real displays; signed/notarized distribution (needs an
+Apple Developer account); the MCP server (Phase 5 fast-follow); a cosmetic non-blocking SwiftLint soft-fail (no
+committed config); a `setCozy` reconcile of the Settings/onboarding inline toggle logic (§33 noted it).
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
