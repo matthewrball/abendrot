@@ -221,7 +221,14 @@ final class AppModel {
         // neuter warming. The only writer today is the Maximum-warmth control.
         if let saved = cfPrefInt(PreferenceKey.warmestPointKelvin),
            saved <= Kelvin.ceilingCoolBound.value {
-            setWarmestPoint(Kelvin(saved))
+            // One-time migration to the two-state ceiling (Cozy is now derived from
+            // warmestPoint < 1900): the granular slider was removed, so any persisted value in the
+            // band 1900 < wp ≤ 3400 is stale and makes the Cozy round-trip incoherent. Snap it up to
+            // everydayWarmest (1900) so the persisted state matches the 2-state ceiling and
+            // setCozy(false)→1900 is correct. setWarmestPoint re-persists, so this self-heals on load
+            // and is idempotent on any later reload.
+            let migrated = saved > Kelvin.everydayWarmest.value ? Kelvin.everydayWarmest.value : saved
+            setWarmestPoint(Kelvin(migrated))
         }
 
         // Schedule mode (Codable JSON — carries associated values). If the blob is ever malformed
@@ -349,7 +356,10 @@ final class AppModel {
         }
         if let kelvin = patch.warmestPointKelvin,
            let valid = try? ControlValidation.validatedKelvin(kelvin) {
-            setWarmestPoint(Kelvin(valid))
+            // Enforce the SAME warm-ceiling invariant the cold-launch restore path uses: a warmest
+            // point above `ceilingCoolBound` (3400K) neuters warming, so the live control path must
+            // clamp to it too (validatedKelvin only guards the full 500…6500 type domain).
+            setWarmestPoint(Kelvin(min(valid, Kelvin.ceilingCoolBound.value)))
         }
         if let mode = patch.scheduleMode {
             setScheduleMode(mode.toScheduleMode(), userInitiated: false)
@@ -362,11 +372,14 @@ final class AppModel {
         if let apps = patch.excludedApps {
             setExcludedApps(Set(apps))
         }
-        // Coordinate: an explicit clear wins; otherwise apply a complete lat+lon pair.
+        // Coordinate: an explicit clear wins; otherwise apply a complete, VALIDATED lat+lon pair.
+        // Defense in depth — a non-finite/out-of-range value (e.g. 1e308) from a malformed control
+        // message would otherwise trap downstream in `approximateTimeZone`'s mired/longitude math.
         if patch.clearUserCoordinate == true {
             setUserCoordinate(nil)
-        } else if let lat = patch.userLatitude, let lon = patch.userLongitude {
-            setUserCoordinate(.init(latitude: lat, longitude: lon))
+        } else if let lat = patch.userLatitude, let lon = patch.userLongitude,
+                  let coord = try? ControlValidation.validatedCoordinate(lat: lat, lon: lon) {
+            setUserCoordinate(.init(latitude: coord.lat, longitude: coord.lon))
         }
         // Cozy — the expanded-warmth master toggle — routes through `setCozy` (the SAME path the
         // Settings card uses), which moves the ceiling AND re-pins the on-screen warmth. Applied after
@@ -440,7 +453,12 @@ final class AppModel {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             let data = try encoder.encode(snapshot)
-            try data.write(to: ControlStateSnapshot.fileURL(), options: .atomic)
+            let fileURL = ControlStateSnapshot.fileURL()
+            try data.write(to: fileURL, options: .atomic)
+            // The atomic write lands at the default 0644 (world-readable); the dir is already 0700.
+            // Tighten the file to 0600 so only the owner can read the snapshot (it carries runtime
+            // state). Best-effort — a failed chmod must not disrupt warming.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {
             // Best-effort: a status-file failure must not affect the user's warming.
         }

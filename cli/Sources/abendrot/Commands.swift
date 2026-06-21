@@ -169,6 +169,12 @@ struct SetWarmth: ParsableCommand {
             // engine's own mired curve so the CLI tracks `WarmthLevel.kelvin(warmestPoint:)` exactly.
             let validKelvin = try requireValid { try ControlValidation.validatedKelvin(kelvin) }
             let warmest = Control.configuredWarmestPoint()
+            // The warmest point is the lowest (warmest) Kelvin reachable: at strength 1.0 the curve
+            // bottoms out there. A target below it can't be hit — the binary search saturates at
+            // strength 1.0 and the screen lands at the ceiling, not the request. Note it (exit stays 0).
+            if validKelvin < warmest.value {
+                printErr("\(validKelvin)K is warmer than the current max-warmth (\(warmest.value)K); applied the warmest reachable point — raise max-warmth or enable cozy to go warmer")
+            }
             let strength = WarmthCurve.strength(forKelvin: Kelvin(validKelvin), warmestPoint: warmest)
             try applySettings(SettingsPatch(globalWarmthStrength: strength), json: json)
         } else if let strength {

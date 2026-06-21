@@ -173,13 +173,13 @@ _abendrot() {
     unset 'unparsed_words[0]'
     unparsed_words=("${unparsed_words[@]}")
     case "${subcommand}" in
-    status|get|on|off|set|exclude|reveal|help)
+    status|get|on|off|cozy|set|exclude|reveal|help)
         # Offer subcommand argument completions
         "_abendrot_${subcommand}"
         ;;
     *)
         # Offer subcommand completions
-        COMPREPLY+=($(compgen -W 'status get on off set exclude reveal help' -- "${cur}"))
+        COMPREPLY+=($(compgen -W 'status get on off cozy set exclude reveal help' -- "${cur}"))
         ;;
     esac
 }
@@ -214,6 +214,21 @@ _abendrot_off() {
     repeating_options=()
     non_repeating_options=()
     __abendrot_offer_flags_options 0
+}
+
+_abendrot_cozy() {
+    repeating_flags=()
+    non_repeating_flags=(--json --version -h --help)
+    repeating_options=()
+    non_repeating_options=()
+    __abendrot_offer_flags_options 1
+
+    # Offer the on|off positional value completions. positional_number is -1 when ${cur} is empty
+    # (could be the positional) and 1 when a partial first positional has been typed; offer on|off in
+    # both cases, but never when ${cur} is a flag (then only flags/options above are relevant).
+    if [[ "${cur}" != -* && ( "${positional_number}" -eq 1 || "${positional_number}" -eq -1 ) ]]; then
+        COMPREPLY+=($(compgen -W 'on off' -- "${cur}"))
+    fi
 }
 
 _abendrot_set() {

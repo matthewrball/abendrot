@@ -321,4 +321,21 @@ final class AbendrotControlTests: XCTestCase {
         let error = ControlError.badInput("warmth must be 0.0–1.0, got 50.0")
         XCTAssertEqual(error.description, "warmth must be 0.0–1.0, got 50.0")
     }
+
+    func testValidatedCoordinateAcceptsInRangeAndRejectsBad() throws {
+        // Valid corners + a normal point round-trip the pair unchanged.
+        let london = try ControlValidation.validatedCoordinate(lat: 51.5, lon: -0.12)
+        XCTAssertEqual(london.lat, 51.5)
+        XCTAssertEqual(london.lon, -0.12)
+        XCTAssertNoThrow(try ControlValidation.validatedCoordinate(lat: -90, lon: -180))
+        XCTAssertNoThrow(try ControlValidation.validatedCoordinate(lat: 90, lon: 180))
+
+        // Non-finite and out-of-range values are rejected (the reachable-crash class this guards).
+        XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: .nan, lon: 0))
+        XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: 0, lon: .nan))
+        XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: .infinity, lon: 0))
+        XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: 0, lon: 1e308))
+        XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: 999, lon: 0))
+        XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: 0, lon: 999))
+    }
 }

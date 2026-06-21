@@ -363,7 +363,7 @@ public actor WarmthEngine {
     /// (resolves contract open-Q3). Suspends warmth while an excluded app is frontmost — independent of
     /// hold-to-reveal, so the two compose. Change-gated.
     ///
-    /// `onDisplays` (additive, Session 9) refines suspend to a MULTI-MONITOR setup: it is the set of
+    /// `onDisplays` (additive) refines suspend to a MULTI-MONITOR setup: it is the set of
     /// `CGDirectDisplayID`s the frontmost app's on-screen windows occupy, computed permission-free by
     /// the app-side bridge (`CGWindowListCopyWindowInfo` bounds + owner PID — no Screen Recording, no
     /// Accessibility). When the frontmost app is excluded, only THOSE displays go true-colour and the

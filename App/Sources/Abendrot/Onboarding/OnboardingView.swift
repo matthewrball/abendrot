@@ -38,6 +38,13 @@ struct OnboardingView: View {
 
     @State private var step: OnboardingStep = .welcome
     @State private var scheduleOption: ScheduleModeOption = .followSunset
+    // Warmth defaults to the warmest ONCE (first time the schedule step appears), so a return visit doesn't
+    // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
+    // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
+    @State private var hasInitializedWarmth = false
+    /// The "You're all set" CTA is two-step: first "Open menu bar" (reveals the popover so the user sees
+    /// where Abendrot lives), then "Done" (finishes). Flips true after the first tap.
+    @State private var didOpenMenuBar = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -59,20 +66,28 @@ struct OnboardingView: View {
         .fixedSize(horizontal: false, vertical: true)   // window self-sizes to it (top edge fixed — see
                                            // OnboardingWindowController.fitContentHeight), so Always-on
                                            // compresses and the heading + switcher stay put at the top.
+        // Report the natural content height so the window hugs each step/mode (top edge fixed): Always-on
+        // compresses, Sunset grows, the heading stays put. Measured HERE — on the fixed-size card, BEFORE
+        // the fill frame below — so it reports the card's true height, not the filled window. Mirrors the
+        // self-sizing Settings window.
+        .background(GeometryReader { proxy in
+            Color.clear.preference(key: OnboardingHeightKey.self, value: proxy.size.height)
+        })
+        // Then FILL the window (card pinned to the top) so the frosted-ember glass reaches edge-to-edge,
+        // including the transparent title-bar strip. Without this, a tall step makes the window taller than
+        // the fixed-size card and the system-gray title bar peeks out above the frost — the Settings window
+        // avoids it the same way (its split view fills). The card keeps its natural size at the top; only
+        // the frost grows to fill.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
         // miss. `performDrag` only fires for clicks that fall THROUGH to this background, so interactive
         // controls (slider, buttons, mode control, city picker) keep their own drags. (This is why we keep
         // `isMovableByWindowBackground` off — it would steal the WarmSlider's drag.)
         .background(WindowDraggableBackground())
-        // Fill the window with the frosted-ember glass (same as Settings/About) so the OS rounds the
-        // corners and the traffic-light buttons sit cleanly in the transparent title bar — no detached
-        // floating-card border.
+        // The frosted-ember glass (same as Settings/About): now full-window, so the OS rounds the corners,
+        // the traffic-light buttons sit cleanly on the frost in the transparent title bar, and there is no
+        // detached floating-card border and no gray bar.
         .background(FrostBackground())
-        // Report the natural content height so the window hugs each step/mode (top edge fixed): Always-on
-        // compresses, Sunset grows, the heading stays put. Mirrors the self-sizing Settings window.
-        .background(GeometryReader { proxy in
-            Color.clear.preference(key: OnboardingHeightKey.self, value: proxy.size.height)
-        })
         .onPreferenceChange(OnboardingHeightKey.self) { OnboardingWindowController.fitContentHeight($0) }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
@@ -179,11 +194,11 @@ struct OnboardingView: View {
             ), model: model, showsHeader: false, cozy: isCozy)
 
             // Cozy mode (the warmest candle & ember, below 1900 K) offered right here — the Settings →
-            // Advanced control, compact (no section header / science caption). Enabling animates the slider
-            // to halfway + ignites the fireball thumb so the user slides up into the deepest warmth; the
-            // choice (warmestPoint) persists past onboarding.
+            // Advanced control, compact (no section header / science caption). Enabling runs the slider all
+            // the way to the warmest + ignites the fireball thumb (the deepest ember); the choice
+            // (warmestPoint) persists past onboarding.
             CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
-                            keepsSliderInPlace: true)
+                            enablesAtWarmest: true)
 
             PrimaryButton(title: "Looks right") {
                 // Restore the schedule chosen in step 2 (this step forced Always-on so the screen could
@@ -198,7 +213,13 @@ struct OnboardingView: View {
         // on (from step 2), so this is a silent override; the "Looks right" button restores the real mode.
         .onAppear {
             model.setScheduleMode(.alwaysOn, userInitiated: false)
-            model.setGlobalWarmth(1.0)
+            // Re-prime to the warmest "preview of your evening" on EVERY entry for Sunset — showing the peak
+            // the evening ramp climbs to is this step's whole job. EXCEPTION: for Always-on the slider sets
+            // the user's REAL everyday warmth, so re-slamming 1.0 on back-nav would discard what they dialed
+            // keep it.
+            if scheduleOption != .alwaysOn {
+                model.setGlobalWarmth(1.0)
+            }
             model.setEnabled(true, userInitiated: false)
         }
     }
@@ -263,8 +284,13 @@ struct OnboardingView: View {
         .onAppear {
             // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
             // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
+            // ONCE only — on a return visit (back from the warmth step) we must NOT re-slam 1.0, or an
+            // Always-on user's dialed warmth would be lost the moment they step back to change the mode.
             model.setEnabled(true, userInitiated: true)
-            model.setGlobalWarmth(1.0)
+            if !hasInitializedWarmth {
+                model.setGlobalWarmth(1.0)
+                hasInitializedWarmth = true
+            }
             model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         }
     }
@@ -281,7 +307,7 @@ struct OnboardingView: View {
             Text("You’re all set")
                 .font(Theme.Typography.serif(22))
                 .foregroundStyle(Theme.Color.textPrimary)
-            Text("Abendrot is now configured. Adjust anything anytime from the menu bar.")
+            Text("Make adjustments in the menu bar.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
@@ -290,8 +316,17 @@ struct OnboardingView: View {
             privacyNote
                 .padding(.top, 6)
 
-            PrimaryButton(title: "Done") { onFinish() }
-                .padding(.top, 2)
+            // Two-step CTA: first reveal the menu-bar popover (so the user SEES where Abendrot lives), then
+            // finish . The title swaps to "Done" after the first tap.
+            PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
+                if didOpenMenuBar {
+                    onFinish()
+                } else {
+                    openMenuBarPopover()
+                    didOpenMenuBar = true
+                }
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -364,7 +399,31 @@ struct OnboardingView: View {
 
     private func goBack() {
         guard let prev = OnboardingStep(rawValue: step.rawValue - 1) else { return }
+        // The warmth step forces an Always-on PREVIEW so the screen blooms regardless of time. Undo it on
+        // the way back too — the "Looks right" forward path already restores the real mode — so a Sunset
+        // user eases back to neutral in daylight instead of the preview warming lingering on the mode step.
+        // (Back only ever shows on the warmth step.)
+        if step == .warmth {
+            model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+        }
         step = prev
+    }
+
+    /// Reveal the menu-bar popover so the user sees where Abendrot lives. SwiftUI's `MenuBarExtra(.window)`
+    /// has no public "present" API, so we find its `NSStatusBarButton` in the app's windows and click it.
+    /// Best-effort — a no-op if the button can't be located (the user still has the "Done" tap to finish).
+    private func openMenuBarPopover() {
+        func find(in view: NSView) -> NSStatusBarButton? {
+            if let button = view as? NSStatusBarButton { return button }
+            for sub in view.subviews { if let button = find(in: sub) { return button } }
+            return nil
+        }
+        for window in NSApp.windows {
+            if let content = window.contentView, let button = find(in: content) {
+                button.performClick(nil)
+                return
+            }
+        }
     }
 }
 

@@ -80,7 +80,7 @@ struct AbendrotApp: App {
     }
 }
 
-// MARK: - Dev relaunch (Session 11)
+// MARK: - Dev relaunch
 
 /// DEV-ONLY: kill this instance and reopen the freshly-built app from the local Release build path
 /// the "restart from latest build" otherwise run by hand. The `/bin/sh` child

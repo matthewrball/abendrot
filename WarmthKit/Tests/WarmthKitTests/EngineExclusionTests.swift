@@ -110,7 +110,7 @@ struct EngineExclusionTests {
         #expect(await appliedMethod(engine) == .off)                 // still suspended; the change-gate skips reapply
     }
 
-    // MARK: - Per-display suspend (multi-monitor refinement, Session 9)
+    // MARK: - Per-display suspend (multi-monitor refinement)
 
     /// Two DDC-warmed displays with distinct `CGDirectDisplayID`s, enabled, always-on, warmth > 0 —
     /// so each un-suspended display reads `appliedMethod == .hardware` and a suspended one reads `.off`.

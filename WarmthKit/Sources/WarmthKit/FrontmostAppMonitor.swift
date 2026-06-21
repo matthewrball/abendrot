@@ -13,7 +13,7 @@ import AppKit
 /// work) and resume when focus leaves it. The engine owns the membership check (`setExcludedApps`), so
 /// this stays a thin bridge: it only reports *which* app is front and *where* its windows are.
 ///
-/// **Per-display refinement (Session 9):** on a multi-monitor setup the engine suspends warmth ONLY on
+/// **Per-display refinement:** on a multi-monitor setup the engine suspends warmth ONLY on
 /// the display(s) the excluded app's windows sit on, keeping the other monitors warm. The display set is
 /// resolved here, permission-free, from `CGWindowListCopyWindowInfo` window *metadata* — `kCGWindowBounds`
 /// (geometry) + `kCGWindowOwnerPID` (owner) — which on macOS 15/26 needs **no Screen Recording** and **no
