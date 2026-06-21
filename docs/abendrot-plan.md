@@ -1229,6 +1229,64 @@ DELETED**, new **`OneShotPlayer.swift`** + **`SunsetTimeTests.swift`**. Next ses
 abendrot-build status`/diff, **re-run `swift test`** (engine + tests changed — do NOT trust the old 107/22),
 review the engine diff (esp. the `WarmthReducer` deletion) BEFORE committing. Nothing pushed.
 
+## §33 — Session 13 (2026-06-20): the `abendrot` CLI / AI-control surface + a General-tab / Cozy-mode / city-picker UX wave
+
+A long **two-lane** session on top of §32. **Lane A (a parallel session) — a developer / AI-control surface.**
+**Lane B (this lead session) — a founder-dogfooding UX wave.** Both committed to `build` as they went; the
+working tree ended **CLEAN at HEAD `cbf5b3a`**. Verified at HEAD: **112 WarmthKit tests / 22 suites + Release
+BUILD SUCCEEDED** (non-masked). Nothing pushed (public gate held). Full commit set: `f92cea4`→`cbf5b3a`.
+
+**⚠️ Two lanes committed to the same tree this session** — the HEAD moved repeatedly under the lead while it was
+documenting. On resume, `git -C abendrot-build log`/`status` is the source of truth, not these docs.
+
+**Lane A — `abendrot` CLI / AI-control surface (parallel lane; `f92cea4`→`cbf5b3a`; not driven or verified by the lead).**
+A new "drive Abendrot from the terminal or an AI agent" capability (ties into the §2 control-surface intent):
+- **`AbendrotControl`** — a shared schema target (`ControlMessage` / `ControlStateSnapshot` / `ControlValidation`):
+  the typed control protocol + a per-tick state snapshot the app writes so `abendrot status` reflects live truth.
+- **`abendrot` CLI thin-client** (`cli/`) — warmth / location / status / reveal over a distributed-notification +
+  state-file channel; a richer control-state snapshot; CLI warmth/location commands; exit-2 usage errors;
+  generated zsh/bash completions.
+- Wired into **`AppModel`** (`e51611d`): observes control messages (apply-when-idle) + republishes the live
+  snapshot each engine tick.
+- Release pipeline **embeds + inside-out signs** the `abendrot` helper.
+- Docs: **`AGENTS.md`**, **`llms.txt`**, an `abendrot` **man page**, and a developer/AI-control marketing draft.
+
+**Lane B — UX dogfooding wave (this lead session).**
+- **Schedule "Mode" merged into the General tab; the Schedule tab dropped.** General is now the full desktop twin
+  of the popover: master toggle → Warmth → **Mode** (the living-glyph Sunset/Always-on control) → **Location**
+  (shown only for Sunset) → app switches. Mode + Location stay visible regardless of the master toggle (Settings
+  = the config superset). `SettingsTab.schedule` removed (enum + title/icon/content switches).
+- **Self-sizing Settings window.** The detail content reports its natural height via a `PreferenceKey`
+  (`SettingsContentHeightKey`); `SettingsWindowController.fitDetailContentHeight` resizes the window to HUG the
+  current tab/mode (top edge fixed, animated) — no bottom gap, no clipping, in either General mode or any tab
+  (System-Settings-style). Replaced two earlier magic-number attempts (the ScrollView made `fittingSize` useless).
+- **Cozy mode** — the "Maximum warmth" control reframed from a slider to one delightful glass toggle
+  (`CozyModeControl`): off = the everyday 1900 K cap; on = the card ignites (sunset gradient + glowing flame +
+  ember halo) and `warmestPoint` drops to ~500 K. **Mode-aware enablement (founder):** Always-on jumps to the max
+  ember immediately; **Sunset KEEPS the current screen warmth and just unlocks headroom** — preserved via a
+  Kelvin-inverse **binary search** over the engine's own curve (`AppModel.setGlobalWarmthToKelvin`, no duplicated
+  mired math). The §13 note's citations (**Brown et al. 2022** → PLoS Biology; **CIE S 026** → the CIE page) are
+  **tappable links** (an `AttributedString` so the links stay accent + underlined under the faint body — a plain
+  markdown `Text` flattened them). Lane A also added Cozy mode to **onboarding step 3**.
+- **City-picker suite** (shared `CityAutocomplete` → BOTH Settings + onboarding):
+  - default suggestions **San Francisco / New York / Chicago**; **"Auto (from time zone)" → "Auto"**.
+  - the trailing affordance is now an **X**: closed → clear + open; open-with-text → clear the search; open-empty →
+    dismiss. The X **arms an Auto-reset** — dismissing without picking a city falls back to Auto (`armedAutoReset`).
+  - **smoother selection animation** — the dropdown freezes its visible rows (`closingSnapshot`) during the close
+    so the list no longer reflows/flickers as the pick commits.
+- **`MajorCities` → 152 cities**, each tagged with its **IANA timezone**. "Today's sunset" now shows the city's
+  real **DST-aware abbreviation** (PST/PDT, EST/EDT, MST for Arizona, …) instead of a bare "GMT-5"; Auto uses the
+  system zone; the longitude-offset is a last-ditch fallback only. Added **Milwaukee / Winston-Salem / Monterey**
+  + a broad US mid-size set (AK/HI incl.).
+- **Execution style:** heavy use of **background subagents** per the founder directive — US-cities expansion, the
+  IANA-timezone tagging, and the city-selection animation smoothing each ran as a dispatched agent (`swift test`
+  green) while the lead held design taste + builds.
+
+**Still open (Session 14):** founder **hardware/visual sign-off** on the whole wave at `cbf5b3a`; a **separate-lane
+review** of Cozy mode + the city-picker + the CLI/control surface before any public push (NOT self-approved — the
+lanes committed fast); §25.J final look; §25.K hardware matrix; analytics (if greenlit); then the **gated public
+push** (now a Session 7→13 wave — and it must decide whether the CLI/control surface ships in 1.0 or trails it).
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*
