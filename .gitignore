@@ -45,3 +45,6 @@ release-scratch/
 # Editor
 .idea/
 *.iml
+
+# Python bytecode cache (icon pipeline scripts)
+__pycache__/
