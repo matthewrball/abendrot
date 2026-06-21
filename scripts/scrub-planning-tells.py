@@ -323,10 +323,10 @@ INLINE_SECTION = re.compile(r"[ \t]*§[0-9][0-9A-Za-z.‑E\-/]*")  # e.g. §25, 
 COMMENT_PREFIXES = ("//", "*", "#", ".\\\"")  # Swift, block-comment, shell/yaml/ruby, man-page
 
 
-def clean_comment_artifacts(line: str) -> str:
+def clean_comment_artifacts(line: str, prefixes) -> str:
     stripped = line.lstrip()
-    # Only touch comment lines, so code spacing is never altered.
-    if not stripped.startswith(COMMENT_PREFIXES):
+    # Only touch real comment lines, so code spacing is never altered.
+    if not prefixes or not stripped.startswith(prefixes):
         return line
     indent = line[: len(line) - len(stripped)]
     body = stripped
@@ -337,7 +337,8 @@ def clean_comment_artifacts(line: str) -> str:
     body = re.sub(r"(?<![\w`)])\(\s*\)", "", body)  # standalone empty parens only
     body = re.sub(r"\(\s+", "(", body)           # space after (
     body = re.sub(r"\s+\)", ")", body)           # space before )
-    body = re.sub(r"\s+([.,;:])", r"\1", body)   # space before punctuation
+    body = re.sub(r"\s+([,;:])", r"\1", body)    # space before , ; : — NOT "." (would mangle a
+    #                                              code snippet like `x == .foo` inside a comment)
     body = re.sub(r"(?<=\S)  +", " ", body)      # collapse internal double spaces
     body = re.sub(r"(//+)\s*\.\s+", r"\1 ", body)   # "// . Foo" -> "// Foo"
     body = re.sub(r"(//+)\s*—\s+", r"\1 ", body)    # "// — Foo" -> "// Foo"
@@ -346,14 +347,18 @@ def clean_comment_artifacts(line: str) -> str:
     return indent + body
 
 
-def scrub(text: str) -> str:
+def scrub(text: str, suffix: str = "") -> str:
     for old, new in EXPLICIT:
         text = text.replace(old, new)
     for pat, repl in GENERIC_VOCAB:
         text = pat.sub(repl, text)
     text = PAREN_WITH_SECTION.sub("", text)
     text = INLINE_SECTION.sub("", text)
-    text = "\n".join(clean_comment_artifacts(l) for l in text.split("\n"))
+    # "#" marks comments in shell/yaml/ruby but is CODE in Swift (#expect, #require, #if,
+    # #available, #selector) — never treat it as a comment prefix in .swift, or those macros
+    # get their spacing mangled (e.g. `== .foo` -> `==.foo`, which breaks compilation).
+    prefixes = ("//", "*") if suffix == ".swift" else COMMENT_PREFIXES
+    text = "\n".join(clean_comment_artifacts(l, prefixes) for l in text.split("\n"))
     return text
 
 
@@ -377,7 +382,7 @@ for path in iter_target_paths():
         original = path.read_text()
     except (UnicodeDecodeError, OSError):
         continue  # skip binary / unreadable files
-    scrubbed = scrub(original)
+    scrubbed = scrub(original, path.suffix.lower())
     if scrubbed != original:
         path.write_text(scrubbed)
         changed += 1
