@@ -1361,8 +1361,20 @@ caught both on `dev` and kept `main` clean.
    before `main` ever sees it.
 3. **Verify:** CI green on `dev` + a final manual leak scan
    (`grep -rInE '/Users/|/home/|abendrot-(build|public)|§|\bfounder\b' abendrot-public/{App,WarmthKit,cli,scripts,README.md,AGENTS.md}` → 0).
-4. **Promote:** `git -C abendrot-public checkout main && git merge --ff-only dev && git push origin main`. The
-   `--ff-only` guarantees `main` is exactly the verified `dev` commit — no surprise merge content.
+4. **Promote:** `scripts/publish.sh promote` — verifies `origin/dev`'s CI is green (the two required
+   checks, via `gh`), re-runs the leak scan, then `git merge --ff-only origin/dev` into `main` and pushes
+   (confirms first). The `--ff-only` guarantees `main` is exactly the verified `dev` commit — no surprise
+   merge content.
+
+**Enforcement (GitHub branch protection — the real backstop, free on a public repo).** A local script can be
+skipped or absent in another checkout, so the bypass is closed server-side: `main` requires the
+`test-warmthcore` + `build-app-unsigned` checks GREEN on the commit, blocks force-push + deletion, requires
+linear history, and **`enforce_admins: true`** (binds even admin-credentialed agent lanes — the exact
+S14/S15 bypass vector). Because required checks attach to the commit SHA, a fresh un-CI'd commit pushed
+straight to `main` is rejected (no green checks yet), while a green `dev` tip still fast-forwards from the
+CLI — flow preserved, bypass closed. `dev` is lightly protected too (no force-push/deletion; normal commits
+flow). Manage via `gh api repos/matthewrball/abendrot/branches/{main,dev}/protection`; lift temporarily only
+for a genuine emergency.
 
 **Scrub hardened.** Testing the flow on copies surfaced a pre-existing gap the flow correctly caught: the
 short-form sprint tag `S13` (in `AppModel.swift`, from the §34 review-findings commit) survived the scrub but the
