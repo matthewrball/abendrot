@@ -49,6 +49,7 @@ SYNC_TREES=(
 )
 SYNC_FILES=(
   "WarmthKit/Package.swift"
+  "WarmthKit/Package.resolved"
   "project.yml"
   ".github/workflows/ci.yml"
   "cli/Package.swift"

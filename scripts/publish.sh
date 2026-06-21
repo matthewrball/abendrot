@@ -25,7 +25,7 @@ REQUIRED_CHECKS=(test-warmthcore build-app-unsigned)   # the real CI gates (see 
 # Legit PUBLIC-ONLY files: tracked in public but NOT produced by sync. Keep this TIGHT — every entry
 # is a conscious "yes, this belongs in public". The allowlist guard fails the publish on anything that
 # is neither in the sync set nor here, so a stray internal file can't ride along via `git add -A`.
-PUBLIC_ONLY=(.gitignore LICENSE CONTRIBUTING.md PRIVACY.md SECURITY.md WarmthKit/Package.resolved assets)
+PUBLIC_ONLY=(.gitignore LICENSE CONTRIBUTING.md PRIVACY.md SECURITY.md assets)
 
 [ -d "$BUILD/.git" ]  || { echo "BUILD is not a git repo: $BUILD" >&2; exit 1; }
 [ -d "$PUBLIC/.git" ] || { echo "PUBLIC is not a git repo: $PUBLIC" >&2; exit 1; }

@@ -1355,7 +1355,7 @@ caught both on `dev` and kept `main` clean.
    (b) runs `sync-public.sh` *from the clone* (rsync → `scrub-planning-tells.py` → hard grep tell/leak gate);
    (c) checks out public **`dev`** and stages the result; (d) runs an **allowlist guard** — fails the publish
    if any file outside the sync set + a tight `PUBLIC_ONLY` list (LICENSE, .gitignore, CONTRIBUTING/PRIVACY/
-   SECURITY.md, assets/, WarmthKit/Package.resolved) would be committed, so a stray internal file can't ride
+   SECURITY.md, assets/) would be committed, so a stray internal file can't ride
    along via `git add -A` (the guard reads the sync set straight from the cloned `sync-public.sh`, so there's
    no extra list to keep in lockstep); (e) re-runs an independent leak scan; (f) prints the founder-gated
    commands. It **never commits and never pushes** — both stay founder-gated. Guards: refuses to run
