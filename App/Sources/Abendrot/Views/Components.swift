@@ -150,7 +150,7 @@ struct WarmSlider: View {
     private var gradientSlider: some View {
         GeometryReader { geo in
             let usable = max(geo.size.width - thumbSize, 1)
-            let thumbX = CGFloat(strength.clamped01) * usable
+            let thumbX = CGFloat(thumbPosition(forStrength: strength)) * usable
 
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)                       // unfilled groove
@@ -217,13 +217,13 @@ struct WarmSlider: View {
                         let toDetent = Int((target * Double(detentCount)).rounded(.down))
                         if abs(value.translation.width) > 2 {
                             var tx = Transaction(); tx.disablesAnimations = true   // drag: follow finger 1:1
-                            withTransaction(tx) { strength = target }
+                            withTransaction(tx) { strength = engineStrength(forPosition: target) }
                             // Thumb pop per notch the thumb crosses (the visual detent — no sound).
                             if let last = lastDetent, toDetent != last, !reduceMotion { popTrigger &+= 1 }
                         } else {
                             // Tap / press-down: the thumb GLIDES to target via .smooth(0.16) above.
-                            let fromDetent = Int((strength.clamped01 * Double(detentCount)).rounded(.down))
-                            strength = target
+                            let fromDetent = Int((thumbPosition(forStrength: strength) * Double(detentCount)).rounded(.down))
+                            strength = engineStrength(forPosition: target)
                             let movedNotches = lastDetent == nil && abs(toDetent - fromDetent) >= 1
                             if movedNotches, !reduceMotion { popTrigger &+= 1 }
                         }
@@ -237,7 +237,7 @@ struct WarmSlider: View {
         // stray focus ring on click. VoiceOver still adjusts via the action below.
         .accessibilityElement()
         .accessibilityLabel("Warmth")
-        .accessibilityValue("\(Int((strength * 100).rounded())) percent")
+        .accessibilityValue("\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent")
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: nudge(0.05)
@@ -247,7 +247,60 @@ struct WarmSlider: View {
         }
     }
 
-    private func nudge(_ delta: Double) { strength = (strength + delta).clamped01 }
+    private func nudge(_ delta: Double) {
+        // Nudge in THUMB-POSITION space so ←/→ steps feel even in Cozy too (identity when not cozy).
+        let p = thumbPosition(forStrength: strength)
+        strength = engineStrength(forPosition: (p + delta).clamped01)
+    }
+
+    // MARK: Cozy perceptual distribution
+    //
+    // In Cozy the warmest point drops below ~1900K, but blue light is already 0 by ~1900K — below that ONLY
+    // green changes, slowly, so a mired-linear thumb spends most of its travel in a near-flat deep-red region
+    // (~89% of the visible warming is done by the halfway point). To make equal travel ≈ equal VISIBLE change,
+    // the thumb is distributed by perceptual progress (how far the white point has actually shifted) rather
+    // than by mired. The engine's strength↔Kelvin curve is untouched — only where the thumb sits and how a
+    // drag maps to strength changes, and only when `cozy`. Non-cozy stays a plain 1:1 slider.
+    // ponytail: the green/blue weighting is a simple proxy — tune by eye.
+
+    /// How far the white point has shifted toward the warmest point, 0 (neutral) … 1 (warmest). Blue is gone
+    /// by ~1900K, so below that this is carried by green — exactly the band mired over-stretches.
+    private func warmthProgress(_ k: Kelvin) -> Double {
+        let g = rgbGain(for: k)
+        return 1 - (g.green + g.blue) / 2
+    }
+
+    /// Thumb position (0…1) for an engine strength. Identity unless Cozy.
+    private func thumbPosition(forStrength s: Double) -> Double {
+        guard cozy else { return s.clamped01 }
+        let wp = model.state.warmestPoint
+        let full = warmthProgress(wp)
+        guard full > 0 else { return s.clamped01 }
+        let k = WarmthLevel(strength: s.clamped01).kelvin(warmestPoint: wp)
+        return (warmthProgress(k) / full).clamped01
+    }
+
+    /// Engine strength for a thumb position (0…1) — the inverse of `thumbPosition(forStrength:)`.
+    private func engineStrength(forPosition p: Double) -> Double {
+        guard cozy else { return p.clamped01 }
+        let wp = model.state.warmestPoint
+        let full = warmthProgress(wp)
+        guard full > 0 else { return p.clamped01 }
+        let target = p.clamped01 * full
+        // Bisect the Kelvin whose progress matches (progress falls monotonically as K rises), then map that
+        // Kelvin back to strength through the engine's own mired curve so the slider and engine never drift.
+        var loK = Double(wp.value), hiK = Double(Kelvin.neutral.value)
+        for _ in 0..<24 {
+            let midK = (loK + hiK) / 2
+            if warmthProgress(Kelvin(Int(midK.rounded()))) >= target { loK = midK } else { hiK = midK }
+        }
+        let k = Kelvin(Int(((loK + hiK) / 2).rounded()))
+        let neutralMired = 1_000_000.0 / Double(Kelvin.neutral.value)
+        let warmestMired = 1_000_000.0 / Double(wp.value)
+        let mired = 1_000_000.0 / Double(k.value)
+        guard warmestMired != neutralMired else { return 0 }
+        return ((mired - neutralMired) / (warmestMired - neutralMired)).clamped01
+    }
 
     /// A glassy thumb: a bright warm-white core, a hairline rim, and a soft ember glow. On press the
     /// rim brightens and the ember glow blooms — the Liquid-Glass "grab" feedback.
