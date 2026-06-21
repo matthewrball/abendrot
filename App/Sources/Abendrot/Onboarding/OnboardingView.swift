@@ -42,6 +42,9 @@ struct OnboardingView: View {
     // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
     // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
     @State private var hasInitializedWarmth = false
+    /// The "You're all set" CTA is two-step: first "Open menu bar" (reveals the popover so the user sees
+    /// where Abendrot lives), then "Done" (finishes). Flips true after the first tap.
+    @State private var didOpenMenuBar = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -304,7 +307,7 @@ struct OnboardingView: View {
             Text("You’re all set")
                 .font(Theme.Typography.serif(22))
                 .foregroundStyle(Theme.Color.textPrimary)
-            Text("Abendrot is now configured. Adjust anything anytime from the menu bar.")
+            Text("Make adjustments in the menu bar.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
@@ -313,8 +316,17 @@ struct OnboardingView: View {
             privacyNote
                 .padding(.top, 6)
 
-            PrimaryButton(title: "Done") { onFinish() }
-                .padding(.top, 2)
+            // Two-step CTA: first reveal the menu-bar popover (so the user SEES where Abendrot lives), then
+            // finish (founder). The title swaps to "Done" after the first tap.
+            PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
+                if didOpenMenuBar {
+                    onFinish()
+                } else {
+                    openMenuBarPopover()
+                    didOpenMenuBar = true
+                }
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -395,6 +407,23 @@ struct OnboardingView: View {
             model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         }
         step = prev
+    }
+
+    /// Reveal the menu-bar popover so the user sees where Abendrot lives. SwiftUI's `MenuBarExtra(.window)`
+    /// has no public "present" API, so we find its `NSStatusBarButton` in the app's windows and click it.
+    /// Best-effort — a no-op if the button can't be located (the user still has the "Done" tap to finish).
+    private func openMenuBarPopover() {
+        func find(in view: NSView) -> NSStatusBarButton? {
+            if let button = view as? NSStatusBarButton { return button }
+            for sub in view.subviews { if let button = find(in: sub) { return button } }
+            return nil
+        }
+        for window in NSApp.windows {
+            if let content = window.contentView, let button = find(in: content) {
+                button.performClick(nil)
+                return
+            }
+        }
     }
 }
 
