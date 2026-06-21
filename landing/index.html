@@ -54,6 +54,15 @@
     "url": "https://abendrot.app/",
     "license": "https://opensource.org/licenses/MIT",
     "isAccessibleForFree": true,
+    "featureList": [
+      "Warms color temperature across every display — built-in and external",
+      "Per-display warming method reported (Hardware / Gamma / Overlay)",
+      "Hold-to-Reveal-True-Color hotkey for color-critical work",
+      "Command-line interface (abendrot CLI) to control the running app",
+      "Scriptable warmth, schedule and exclusions from the terminal",
+      "Machine-readable live state via abendrot status --json",
+      "Controllable by AI assistants that can run a shell command (Claude Code, Codex, Cursor)"
+    ],
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
   }
   </script>
@@ -82,6 +91,7 @@
       <a href="#demo">See it warm</a>
       <a href="#proof">Tiny &amp; native</a>
       <a href="#audit">Audit the engine</a>
+      <a href="#cli">Terminal &amp; AI</a>
       <a href="#roadmap">Roadmap</a>
     </div>
     <a class="nav-cta" href="https://github.com/matthewrball/abendrot" rel="noopener">GitHub →</a>
@@ -340,6 +350,63 @@
       </div>
     </section>
 
+    <!-- ===================== CONTROL FROM THE TERMINAL / AI ===================== -->
+    <section id="cli">
+      <div class="wrap">
+        <div class="audit-grid">
+          <div class="audit-copy reveal">
+            <span class="eyebrow">Control it from your terminal — or your AI</span>
+            <h2>Read the engine. Then drive it from the command line.</h2>
+            <p>
+              The same engine you can audit ships a real CLI. <code>abendrot</code> talks to the running
+              app — set the warmth, switch the schedule, exclude an app, or pop true color — straight from
+              a shell script, a keybinding, or an AI assistant like Claude&nbsp;Code, Codex, or Cursor. And
+              because state comes back as JSON, you can pipe it anywhere.
+            </p>
+            <ul class="audit-points">
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Scriptable: <code>abendrot set warmth 0.8</code>, <code>abendrot reveal --hold 10</code>, <code>abendrot on</code>.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Machine-readable: <code>abendrot status --json</code> reports live state, per-display method and all.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Local by design: same macOS user, your session, visual state only — no network listener, no privileged helper.</span></li>
+            </ul>
+          </div>
+
+          <div class="code-card glass reveal" style="--reveal-delay:90ms">
+            <div class="code-head">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="fname">~/zsh</span>
+              <span class="src">abendrot CLI · v1</span>
+            </div>
+<pre aria-label="Shell session showing the abendrot command-line interface"><code><span class="tok-com"># Warm the screen to 80% — or hand the same command to your AI assistant.</span>
+$ <span class="tok-fn">abendrot</span> set warmth <span class="tok-num">0.8</span>
+
+<span class="tok-com"># Read the live state back as JSON — pipe it anywhere.</span>
+$ <span class="tok-fn">abendrot</span> status <span class="tok-attr">--json</span>
+{
+  <span class="tok-str">"enabled"</span>: <span class="tok-key">true</span>,
+  <span class="tok-str">"mode"</span>: <span class="tok-str">"sunset"</span>,
+  <span class="tok-str">"warmth"</span>: <span class="tok-num">0.8</span>,
+  <span class="tok-str">"kelvin"</span>: <span class="tok-num">2700</span>,
+  <span class="tok-str">"warmingNow"</span>: <span class="tok-key">true</span>,
+  <span class="tok-str">"displays"</span>: [
+    { <span class="tok-str">"name"</span>: <span class="tok-str">"Built-in"</span>, <span class="tok-str">"method"</span>: <span class="tok-str">"overlay"</span> },
+    { <span class="tok-str">"name"</span>: <span class="tok-str">"LG UltraFine"</span>, <span class="tok-str">"method"</span>: <span class="tok-str">"hardware"</span> }
+  ]
+}
+
+<span class="tok-com"># Momentary true-color peek for color-critical work, then it eases back.</span>
+$ <span class="tok-fn">abendrot</span> reveal <span class="tok-attr">--hold</span> <span class="tok-num">10</span></code></pre>
+          </div>
+        </div>
+
+        <p class="placeholder-note reveal">
+          CLI shown is the v1 command surface (in development). The JSON above illustrates the shape of
+          <code>abendrot status --json</code>; exact fields are finalized with the shipping build. An
+          official Abendrot <strong>MCP server is on the roadmap</strong> ("MCP coming") — until then, the
+          AI integration is this CLI, which an assistant runs exactly as you would.
+        </p>
+      </div>
+    </section>
+
     <!-- ===================== SCIENCE / TRUST ===================== -->
     <section id="science">
       <div class="wrap">
@@ -439,6 +506,19 @@
           </li>
 
           <li class="roadmap-item glass reveal">
+            <span class="rm-status active" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </span>
+            <div class="rm-body">
+              <div class="rm-head">
+                <h3>CLI + AI control</h3>
+                <span class="rm-chip wip">In progress</span>
+              </div>
+              <p>The <code>abendrot</code> command-line tool — set warmth and schedule, read <code>status --json</code>, exclude apps, trigger a momentary reveal — so the terminal <em>and</em> AI assistants can drive it. See <a href="#cli">Control it from your terminal</a>. An official Abendrot <strong>MCP server is a planned fast-follow</strong> ("MCP coming").</p>
+            </div>
+          </li>
+
+          <li class="roadmap-item glass reveal">
             <span class="rm-status next" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </span>
@@ -495,6 +575,7 @@
       <nav class="f-links" aria-label="Footer">
         <a href="https://github.com/matthewrball/abendrot" rel="noopener">GitHub</a>
         <a href="#audit">Audit the engine</a>
+        <a href="#cli">Terminal &amp; AI</a>
         <a href="#science">The science</a>
         <a href="https://github.com/matthewrball/abendrot/blob/main/PRIVACY.md" rel="noopener">Privacy</a>
         <a href="https://opensource.org/licenses/MIT" rel="noopener">License (MIT)</a>

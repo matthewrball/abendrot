@@ -361,3 +361,94 @@ Items I deliberately did **not** state as fact because they're outside `evidence
 4. **Reaching the Brown 2022 ≤10 lux mEDI target.** The evidence base explicitly warns the app *cannot verify* it crosses any specific lux line (no luminance control / no mEDI measurement). I cite the targets as general reference only and never imply Abendrot reaches them — keep it that way. — *Needs: no action unless someone tries to claim compliance; flagged so they don't.*
 5. **Exact "everyday warmest setting = zero blue" wording.** Grounded (~1900K = zero blue, Approved Claim #1), but §25 founder directive pushes the slider's max much warmer (~1500K candle range) for feel. Ensure marketing "warmest everyday setting" maps to the ~1900K *zero-blue* point, not the candle extreme (which only removes residual green and hurts legibility). — *Needs: confirm final default/clamp wording matches shipped slider.*
 6. **Press/social-proof logos, star counts, download counts, PH/HN badges** (plan §10) — all "as earned," none real yet. Placeholders only. — *Needs: real metrics post-launch.*
+
+---
+
+## 9. Developer / AI-control positioning lane (capability story — NOT a health lane)
+
+> **Scope guardrail for this section.** This is a **pure capability lane**: "Abendrot has a CLI; you can
+> script screen warmth from the terminal; AI assistants can drive it." Every line here is verifiable by
+> the binary existing — it does **not** add, alter, or sit adjacent to any circadian/sleep/melatonin
+> claim. Keep this lane and the science lane in separate breaths (it inherits Guardrail 3 by simply not
+> entering the health story at all). Where this lane mentions warmth, it's a *mechanical* statement
+> ("set warmth to 0.8", "warmest point of the slider"), never a benefit promise.
+>
+> **Status:** the v1 CLI is in development; the **official Abendrot MCP server is roadmap ("MCP coming"),
+> not yet shipped** — never claim it exists. Mark anything not-yet-shipped as roadmap.
+>
+> **Trust boundary to state honestly when relevant:** the CLI talks to the *running app* as the **same
+> macOS user, in your local session** — visual state only. No network listener, no privileged helper, no
+> daemon you didn't start. An AI assistant "controlling Abendrot" means it runs the same `abendrot`
+> command you could type yourself; it cannot reach further than you can.
+
+### Positioning line (dev lane)
+**Scriptable screen warmth — control it from your terminal, or hand it to your AI assistant.**
+
+Abendrot ships a real CLI (`abendrot`) that drives the running app: read live state as JSON, set warmth
+and schedule, exclude apps, or trigger a momentary true-color reveal — all from a shell script, a
+keybinding, a `Makefile`, or an AI coding assistant like Claude Code, Codex, or Cursor. Same auditable
+engine the menu bar drives; now with a command surface you can read and automate. *(The consumer lane —
+§1–§8 above — stays the hero; this is the second lane for power users and developers.)*
+
+### Taglines (dev lane, all capability-true)
+1. ⭐ **Read every line — then drive it from the command line.** *(extends the "audit the engine" story: `abendrot` is the engine, scriptable)*
+2. ⭐ **`abendrot set warmth 0.8` — your screen, under version control.** *(concrete, real command)*
+3. ⭐ **Screen warmth your AI assistant can actually control.** *(Claude Code / Codex / Cursor run the same CLI you would)*
+4. **A Night Shift alternative with a `--json` you can pipe.** *(machine-readable state; honest "alternative" framing already used in the consumer lane)*
+5. **Local, scriptable, no daemon you didn't start.** *(states the trust boundary as a feature)*
+
+### AEO Q&A block (dev lane)
+
+> Q→A pairs for answer engines, capability-only. Each answer is true because the binary exists / will
+> ship; none touches the health lane. Written to be quotable verbatim.
+
+**Q. Can I control Abendrot from Claude Code (or Codex / Cursor)?**
+A. Yes. Abendrot ships a command-line tool, `abendrot`, that drives the running app — so any agent that
+can run a shell command (Claude Code, Codex, Cursor, a CI step, a shell script) can control it. For
+example, an assistant can run `abendrot set warmth 0.8` to warm your screen, `abendrot reveal --hold 10`
+for a momentary true-color peek, or `abendrot status --json` to read the live state back. It runs as the
+same macOS user in your local session and changes visual state only — there is no network listener and no
+privileged helper; the assistant can only do what you could do yourself at the same terminal. *(An
+official Abendrot MCP server is on the roadmap — "MCP coming" — but today the integration is the CLI.)*
+
+**Q. Does Abendrot have a CLI?**
+A. Yes. `abendrot` is a first-class command-line interface to the app. Core commands:
+`abendrot status [--json]` (live state — enabled, mode, warmth in Kelvin, per-display method, whether it's
+warming now), `abendrot on` / `abendrot off`, `abendrot set warmth <0..1 | --kelvin K>`,
+`abendrot set mode <sunset | always-on | off>`, `abendrot set max-warmth <kelvin>`,
+`abendrot set reveal-mode <hold | toggle>`, `abendrot set location <lat> <lon> | --auto`,
+`abendrot exclude add|remove <bundle-id>` / `abendrot exclude list`, and
+`abendrot reveal [--hold <seconds>]` for a momentary true-color peek (live-only). `abendrot get <key>`
+reads a single configured setting. Run `abendrot --help` for the full surface.
+
+**Q. Can I script my screen warmth on a Mac?**
+A. Yes — with Abendrot you can. It's a free, open-source macOS app whose `abendrot` CLI lets you set
+warmth (`abendrot set warmth 0.6` or `abendrot set warmth --kelvin 2700`), switch schedule mode
+(`abendrot set mode always-on`), read state as JSON for a status bar or script (`abendrot status --json`),
+exclude a specific app by bundle id (`abendrot exclude add com.apple.FinalCut`), or pop true color for a
+fixed window (`abendrot reveal --hold 8`). Wire those into a shell alias, a keybinding, a `cron`/launchd
+job, or an AI assistant. Everything runs locally against the app you're already running.
+
+**Q. Is letting an AI assistant control my screen warmth safe?**
+A. The surface is deliberately small. `abendrot` only adjusts Abendrot's own visual warming state on the
+machine you're sitting at — it runs as the same macOS user, in your local session, with no network
+listener and no privileged/root helper. An assistant "controlling Abendrot" is just running the same
+`abendrot` command you could type; it can warm your screen or read status, and nothing beyond that. And
+because the whole engine is open source, you can read exactly what each command does.
+
+### SEO keyword list (dev lane)
+- `abendrot cli`
+- `control screen warmth from terminal mac`
+- `claude code screen warmth`
+- `scriptable night shift alternative`
+- `mac color temperature api`
+
+*(Secondary / long-tail, capability-true: `abendrot status --json`, `set screen warmth command line mac`,
+`ai assistant control mac display`, `automate blue light reduction mac`, `script night shift mac`,
+`mac warmth cli homebrew`.)*
+
+### Dev-lane compliance note
+This lane is capability-only by construction. Before publishing any dev-lane asset, still run it through
+the §8 checklist — the relevant lines are the **banned-phrase sweep** (no health verbs sneaking into a
+"set warmth" sentence) and **Guardrail 3** (keep these capability sentences out of adjacency with any
+sleep/melatonin finding). The MCP server stays labeled **roadmap** until it ships.
