@@ -1,0 +1,29 @@
+# Abendrot
+
+> Abendrot is a free, open-source, native macOS menu-bar app that warms your screen's
+> color temperature on every display. It ships a small command-line tool, `abendrot`,
+> that lets an AI assistant (Claude Code, Codex, Cursor) or a shell script read the app's
+> live state and change its settings — set warmth, switch schedule mode, exclude apps,
+> and trigger a momentary true-color reveal.
+
+The `abendrot` CLI is a same-user, local-session, visual-state-only control surface: no
+network listener, no socket, no privileged helper. It persists settings to the app's
+preference domain and, when the app is running, applies them live and confirms the change.
+
+## Controlling Abendrot (for agents)
+
+- [AGENTS.md](https://abendrot.app/AGENTS.md): The canonical reference for the `abendrot`
+  CLI — every command with a real example, every settable preference with its value range,
+  the `status --json` field reference, the exit-code table, the trust boundary, and a raw
+  `defaults` fallback appendix. Start here to set warmth and read status.
+
+## Quick start
+
+```sh
+abendrot set warmth 0.8    # set global warmth (0.0 none … 1.0 warmest)
+abendrot status --json     # read live state back and verify the change
+```
+
+## About
+
+- [Homepage](https://abendrot.app/): What Abendrot is, who it's for, and how to install it.
