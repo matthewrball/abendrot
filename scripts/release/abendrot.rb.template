@@ -2,14 +2,14 @@
 #
 # This is a TEMPLATE (.rb.template) so it is never accidentally treated as a live
 # cask. Publish the real cask only AFTER the Sparkle appcast + DMG are coherent
-# and at least one release is notarized+stapled (plan §21.2 "Homebrew cask
-# contract: publish only after appcast+DMG coherent").
+# and at least one release is notarized+stapled (the Homebrew cask publishes only
+# after appcast+DMG are coherent).
 #
-# Distribution plan (§9): own tap first (homebrew-abendrot) -> later submit to
-# homebrew-cask central. Binaries are hosted on GitHub Releases (Wave-1 decision),
+# Distribution: own tap first (homebrew-abendrot) -> later submit to
+# homebrew-cask central. Binaries are hosted on GitHub Releases,
 # so the `url` uses versioned GitHub-release download URLs.
 #
-# Contract requirements (§21.2): livecheck, auto_updates true, zap, SHA256,
+# Cask requirements: livecheck, auto_updates true, zap, SHA256,
 # versioned URLs. The :no_check sha256 is a PLACEHOLDER — replace with the real
 # DMG SHA256 (plain-dmg.sh / pretty-dmg.sh print it) at publish time, or compute
 # per-version. `auto_updates true` is correct because Sparkle self-updates the app.
@@ -27,7 +27,7 @@ cask "abendrot" do
   # Sparkle drives in-app updates; declare so brew defers to the app.
   auto_updates true
 
-  # macOS 26 "Tahoe" floor (plan §3 deployment target).
+  # macOS 26 "Tahoe" deployment-target floor.
   depends_on macos: ">= :tahoe"
 
   # Read the latest version straight from the Sparkle appcast (single source of truth).
@@ -40,14 +40,14 @@ cask "abendrot" do
 
   # The `abendrot` CLI ships INSIDE the app bundle (Contents/Helpers/abendrot) and is
   # symlinked onto PATH so `abendrot set warmth 0.8` works after `brew install`. The
-  # helper is signed inside-out as part of the notarized bundle (plan §2.4), so a
+  # helper is signed inside-out as part of the notarized bundle, so a
   # quarantined install assesses it under the app's ticket rather than separately.
   # NOTE: Helpers/ (not MacOS/) avoids a case-insensitive collision with the app's own
   # `Abendrot` executable — see scripts/release/release.sh embed_cli_helper().
   binary "#{appdir}/Abendrot.app/Contents/Helpers/abendrot"
 
   # Clean uninstall: remove app + all support/state Abendrot writes.
-  # PLACEHOLDER bundle id — confirm with Lane A (e.g. app.abendrot.Abendrot).
+  # PLACEHOLDER bundle id (e.g. app.abendrot.Abendrot).
   uninstall quit: "app.abendrot.Abendrot"
 
   zap trash: [

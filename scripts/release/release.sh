@@ -11,29 +11,29 @@
 # What it does (the Go CLI's job, our way):
 #   1. Read version + build number from the EXPORTED app's Info.plist (plutil).
 #   2. Warn on a duplicate/sub-decreasing build number vs the existing appcast.
-#   3. Build the DMG (pretty on a UI runner, else plain) — Mode-B safe.
-#   4. (Mode A) notarize + staple + verify via notarize.sh.
+#   3. Build the DMG (pretty on a UI runner, else plain) — credential-less safe.
+#   4. When signing is enabled: notarize + staple + verify via notarize.sh.
 #   5. Sparkle-sign the DMG with `sign_update` (EdDSA) — the SINGLE release
-#      authority's key (see RELEASE.md: local machine, key in login keychain).
+#      authority's key (local machine, key in login keychain).
 #   6. Update appcast.xml PRESERVING existing <item> entries (prepend the new one).
 #   7. `gh release create` the tag, upload the DMG, attach notes.
 #
-# DESIGN RULE (plan §21.2): release is GATED on >=1 notarized+stapled DMG WHEN
-# signing is enabled. In Mode B (no Apple account) the gate is relaxed and the
-# script clearly stamps the output as an UNSIGNED pre-release.
+# DESIGN RULE: release is GATED on >=1 notarized+stapled DMG WHEN
+# signing is enabled. When signing is deferred (no Apple account) the gate is
+# relaxed and the script clearly stamps the output as an UNSIGNED pre-release.
 #
 # This file is a working SKELETON: the Sparkle + appcast + gh steps are real
-# command lines, guarded so the script runs end-to-end TODAY in Mode B and
-# tells you exactly what each later step will do. Placeholders that depend on
-# Lane A (scheme/app name) are env vars at the top.
+# command lines, guarded so the script runs end-to-end TODAY without credentials
+# and tells you exactly what each later step will do. Configurable placeholders
+# (scheme/app name) are env vars at the top.
 #
-# SIGNING RULE (plan §21.2): an appcast <item> that carries a
+# SIGNING RULE: an appcast <item> that carries a
 # `sparkle:edSignature` attribute is a PROMISE that the enclosure is EdDSA-signed
 # by the single release authority. Therefore:
 #   * SIGNED path (default for a real release): a missing/empty EdDSA signature is
 #     a HARD FAILURE — the script exits non-zero and writes NOTHING to the
 #     appcast. We never publish an item that claims to be signed but isn't.
-#   * UNSIGNED path (--unsigned, dev/dogfood only): the script OMITS the signature
+#   * UNSIGNED path (--unsigned, local testing only): the script OMITS the signature
 #     attributes entirely (never an empty string), stamps the build UNSIGNED, and
 #     forces a GitHub pre-release. Such an item must not feed an auto-update
 #     channel (Sparkle with SUPublicEDKey set will reject an unsigned enclosure).
@@ -42,17 +42,17 @@
 #   scripts/release/release.sh --app <exported/Abendrot.app> [--prerelease] \
 #       [--notes <notes.md>] [--dmg-mode auto|pretty|plain] [--unsigned]
 #
-# Env (Mode A only): ASC_API_KEY_P8(_BASE64), ASC_API_KEY_ID, ASC_API_ISSUER_ID,
+# Env (signing-enabled only): ASC_API_KEY_P8(_BASE64), ASC_API_KEY_ID, ASC_API_ISSUER_ID,
 #   SPARKLE_SIGN_UPDATE (path to Sparkle's sign_update tool; auto-discovered).
 #
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# ---- PLACEHOLDERS (confirm with Lane A) ----
+# ---- PLACEHOLDERS ----
 APP_DISPLAY_NAME="Abendrot"
 GH_REPO="matthewrball/abendrot"
-APPCAST_PATH="$REPO_ROOT/appcast.xml"            # hosted via GitHub (raw) per Wave-1
+APPCAST_PATH="$REPO_ROOT/appcast.xml"            # hosted via GitHub (raw)
 DOWNLOAD_URL_BASE="https://github.com/${GH_REPO}/releases/download"
 # --------------------------------------------
 
@@ -60,7 +60,7 @@ APP=""
 NOTES=""
 PRERELEASE="false"
 DMG_MODE="auto"
-UNSIGNED="false"   # --unsigned: dev/dogfood path; OMITS edSignature attributes.
+UNSIGNED="false"   # --unsigned: local-testing path; OMITS edSignature attributes.
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -97,14 +97,14 @@ fi
 
 # --- 2.5 Embed + sign the `abendrot` CLI helper (inside-out) ----------------
 # The CLI ships INSIDE the app bundle (one download, always version-matched). Order
-# is load-bearing (plan §2.4): build the helper, copy it in, then sign the HELPER
+# is load-bearing: build the helper, copy it in, then sign the HELPER
 # FIRST — with its own unique identifier (app.abendrot.Abendrot.cli), the hardened
 # runtime, and a secure timestamp — so that when the containing .app is signed later
 # (at export / Developer-ID time) the nested Mach-O is already correctly signed. We
 # do NOT use `codesign --deep`: nested code is signed explicitly, inside-out, and the
 # helper never inherits app-only entitlements.
 #
-# DEVIATION FROM plan §2.4 / spec §5 path (Contents/MacOS/abendrot), with reason:
+# DEVIATION FROM the planned path (Contents/MacOS/abendrot), with reason:
 # the app's own executable is `Abendrot` (CFBundleExecutable), and the macOS default
 # APFS volume is CASE-INSENSITIVE, so `Contents/MacOS/abendrot` COLLIDES with
 # `Contents/MacOS/Abendrot` — copying the helper there OVERWRITES the app binary. We
@@ -114,13 +114,13 @@ fi
 # case-collision exists, MacOS/ can be restored.)
 #
 # SIGNING IS GUARDED behind the SAME "no Developer ID" condition the rest of the
-# pipeline uses (Mode B = deferred): when ASC_API_KEY_ID is unset OR --unsigned is
+# pipeline uses (signing deferred): when ASC_API_KEY_ID is unset OR --unsigned is
 # passed, we EMBED the helper but SKIP codesign, leaving a clear note. This keeps
 # the structure exercised end-to-end locally (the binary really is embedded) while
 # never attempting to sign without an identity.
 CLI_PKG="$REPO_ROOT/cli"
 CLI_SIGN_ID="app.abendrot.Abendrot.cli"     # unique helper identifier (NOT the app's id)
-DEVELOPER_ID_APP="${DEVELOPER_ID_APP:-Developer ID Application}"  # Mode A signing identity
+DEVELOPER_ID_APP="${DEVELOPER_ID_APP:-Developer ID Application}"  # signing identity
 
 embed_cli_helper() {
   local app="$1"
@@ -144,12 +144,12 @@ embed_cli_helper() {
   chmod 755 "$dest"
 
   # Sign the helper FIRST, inside-out — ONLY when a Developer ID identity is
-  # configured (Mode A) and this is a SIGNED build. Otherwise leave it unsigned
-  # (Mode B dev/dogfood) with a clear note; the app's own export step is likewise
-  # unsigned today.
+  # configured and this is a SIGNED build. Otherwise leave it unsigned
+  # (unsigned local builds) with a clear note; the app's own export step is
+  # likewise unsigned today.
   if [ "$UNSIGNED" = "true" ] || [ -z "${ASC_API_KEY_ID:-}" ]; then
-    echo "release: NOTE — helper EMBEDDED but UNSIGNED (Mode B / --unsigned; signing deferred)." >&2
-    echo "         At Mode A, the helper is signed inside-out with id '$CLI_SIGN_ID'," >&2
+    echo "release: NOTE — helper EMBEDDED but UNSIGNED (--unsigned; signing deferred)." >&2
+    echo "         When signing is enabled, the helper is signed inside-out with id '$CLI_SIGN_ID'," >&2
     echo "         --options runtime, --timestamp, BEFORE the containing .app is signed." >&2
     return 0
   fi
@@ -162,13 +162,13 @@ embed_cli_helper() {
     --timestamp \
     "$dest" || { echo "release: ABORT — helper codesign failed." >&2; exit 5; }
 
-  # Verify the helper signature strictly (plan §2.4 verification additions). The
+  # Verify the helper signature strictly. The
   # app-level --deep --strict verify + helper spctl run AFTER the app is signed
   # (at export/notarize time); these guarded checks document the contract here.
   codesign --verify --strict --verbose=2 "$dest" \
     || { echo "release: ABORT — helper signature failed --verify --strict." >&2; exit 5; }
   echo "release: helper signed + verified. (App is signed inside-out AFTER this, at export.)"
-  # NOTE: after the .app is signed at export, also run (Mode A):
+  # NOTE: after the .app is signed at export, also run (when signing is enabled):
   #   codesign --verify --deep --strict "$app"
   #   spctl -a -vvv --type execute "$dest"
   # These live with the export/notarize step (the app must be signed first).
@@ -204,7 +204,7 @@ else
   "$REPO_ROOT/scripts/dmg/plain-dmg.sh" --app "$APP" --out "$DMG_OUT" --volname "$APP_DISPLAY_NAME"
 fi
 
-# --- 4. Notarize + staple (Mode A) / clean skip (Mode B) --------------------
+# --- 4. Notarize + staple (when signing enabled) / clean skip otherwise -----
 # notarize.sh exits 0 with a clear message when no Apple credentials exist.
 NOTARIZED="false"
 if "$REPO_ROOT/scripts/release/notarize.sh" "$DMG_OUT"; then
@@ -214,14 +214,14 @@ if "$REPO_ROOT/scripts/release/notarize.sh" "$DMG_OUT"; then
   fi
 fi
 
-# Release gate (§21.2): block a SIGNED release that failed to notarize/staple.
+# Release gate: block a SIGNED release that failed to notarize/staple.
 if [ -n "${ASC_API_KEY_ID:-}" ] && [ "$NOTARIZED" != "true" ]; then
   echo "release: ABORT — signing is configured but the DMG is not notarized+stapled." >&2
-  echo "         Per plan §21.2, releases are gated on >=1 notarized+stapled DMG." >&2
+  echo "         Releases are gated on >=1 notarized+stapled DMG." >&2
   exit 4
 fi
 if [ "$NOTARIZED" != "true" ]; then
-  echo "release: NOTE — UNSIGNED pre-release (Mode B). Mark the GitHub release as" >&2
+  echo "release: NOTE — UNSIGNED pre-release. Mark the GitHub release as" >&2
   echo "         pre-release and document the right-click>Open / xattr workaround." >&2
   PRERELEASE="true"
 fi
@@ -232,7 +232,7 @@ fi
 #
 # SIGNED is true unless the operator explicitly passed --unsigned. A SIGNED build
 # MUST end up with a non-empty EdDSA signature or the script aborts before writing
-# the appcast (no item that claims to be signed but isn't — plan §21.2).
+# the appcast (no item that claims to be signed but isn't).
 SIGNED="true"
 [ "$UNSIGNED" = "true" ] && SIGNED="false"
 
@@ -240,7 +240,7 @@ ED_SIGNATURE=""
 DMG_SIZE="$(stat -f%z "$DMG_OUT" 2>/dev/null || wc -c < "$DMG_OUT")"
 
 if [ "$SIGNED" = "false" ]; then
-  echo "release: --unsigned -> building an UNSIGNED dev/dogfood release." >&2
+  echo "release: --unsigned -> building an UNSIGNED local-test release." >&2
   echo "         The appcast item will OMIT sparkle:edSignature entirely (not an" >&2
   echo "         empty string) and the GitHub release is forced to pre-release." >&2
   PRERELEASE="true"
@@ -264,10 +264,10 @@ else
     echo "release: ABORT — signed release requires a Sparkle EdDSA signature, but" >&2
     echo "         sign_update produced none (tool missing, key absent, or signing" >&2
     echo "         failed). Refusing to write an appcast item that claims to be" >&2
-    echo "         signed but isn't (plan §21.2)." >&2
+    echo "         signed but isn't." >&2
     echo "         Fix: ensure Sparkle's sign_update is on PATH (or set" >&2
     echo "         SPARKLE_SIGN_UPDATE) and the EdDSA key is in the login keychain;" >&2
-    echo "         or re-run with --unsigned for a dev/dogfood build." >&2
+    echo "         or re-run with --unsigned for a local test build." >&2
     exit 5
   fi
 fi
@@ -280,7 +280,7 @@ PUBDATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
 # Build the <enclosure> two ways:
 #   SIGNED   -> include sparkle:edSignature (guaranteed non-empty by step 5).
 #   UNSIGNED -> OMIT the attribute entirely (never edSignature="") and tag the
-#               title so the item self-documents as a dev/dogfood build.
+#               title so the item self-documents as a local test build.
 if [ "$SIGNED" = "true" ]; then
   ITEM_TITLE="${APP_DISPLAY_NAME} ${VERSION}"
   ENCLOSURE="<enclosure url=\"${DOWNLOAD_URL}\"

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# sync-public.sh — export the shippable app/engine source from the PRIVATE build repo
-# to the CLEAN public mirror, then scrub planning tells. Idempotent. Does NOT git-push
-# (that is founder-gated) and does NOT commit — it only updates the public working tree.
+# sync-public.sh — export the shippable app/engine/CLI source + agent-control docs
+# from the PRIVATE build repo to the CLEAN public mirror, then scrub planning tells.
+# Idempotent. Does NOT git-push (that is founder-gated) and does NOT commit — it only
+# updates the public working tree.
 #
 # Usage:
 #   scripts/sync-public.sh            # real run
@@ -12,8 +13,11 @@
 #
 set -euo pipefail
 
-BUILD="${BUILD:-/Users/ball/Documents/abendrot}"
-PUBLIC="${PUBLIC:-/Users/ball/Documents/abendrot-public}"
+# The real sub-repos live INSIDE the umbrella workspace. Default to them directly
+# (NOT the parent workspace, which holds private planning material). Override with
+# BUILD=/path PUBLIC=/path for testing against copies.
+BUILD="${BUILD:-/Users/ball/Documents/abendrot/abendrot-build}"
+PUBLIC="${PUBLIC:-/Users/ball/Documents/abendrot/abendrot-public}"
 DRY=""
 [ "${1:-}" = "--dry-run" ] && DRY="-n"
 
@@ -27,6 +31,32 @@ EXCLUDES=(
   --exclude='.DS_Store' --exclude='.omc/' --exclude='*.xcodeproj/'
 )
 
+# ---------------------------------------------------------------------------
+# The synced fileset. EVERY entry here is also a scrub TARGET (scrub-planning-tells.py)
+# and is covered by the grep gate below — the three lists MUST stay in lockstep so no
+# path reaches public un-scrubbed or un-gated.
+# ---------------------------------------------------------------------------
+SYNC_TREES=(
+  "App/Sources"
+  "App/Resources"
+  "WarmthKit/Sources"
+  "WarmthKit/Tests"
+  "scripts/dmg"
+  "scripts/release"
+  "cli/Sources"
+  "cli/Tests"
+  "cli/completions"
+)
+SYNC_FILES=(
+  "WarmthKit/Package.swift"
+  "project.yml"
+  ".github/workflows/ci.yml"
+  "cli/Package.swift"
+  "cli/Package.resolved"
+  "AGENTS.md"
+  "docs/abendrot.1"
+)
+
 # Sync a subtree build->public with --delete (so removed files propagate), scoped to that subtree.
 sync_tree() {
   local rel="$1"
@@ -36,19 +66,12 @@ sync_tree() {
 copy_file() {
   local rel="$1"
   echo "  cp $rel"
-  [ -n "$DRY" ] || cp "$BUILD/$rel" "$PUBLIC/$rel"
+  [ -n "$DRY" ] || { mkdir -p "$PUBLIC/$(dirname "$rel")"; cp "$BUILD/$rel" "$PUBLIC/$rel"; }
 }
 
 echo "== Syncing shippable source build -> public =="
-sync_tree "App/Sources"
-sync_tree "App/Resources"
-sync_tree "WarmthKit/Sources"
-sync_tree "WarmthKit/Tests"
-copy_file "WarmthKit/Package.swift"
-copy_file "project.yml"
-copy_file ".github/workflows/ci.yml"
-sync_tree "scripts/dmg"
-sync_tree "scripts/release"
+for t in "${SYNC_TREES[@]}"; do sync_tree "$t"; done
+for f in "${SYNC_FILES[@]}"; do copy_file "$f"; done
 
 # Internal-only files that must not appear in public (present in build, absent in public).
 echo "== Removing internal-only files from public =="
@@ -65,8 +88,15 @@ echo "== Scrubbing planning tells from public source =="
 python3 "$BUILD/scripts/scrub-planning-tells.py" "$PUBLIC"
 
 echo "== Verifying public source is clean (0 planning tells) =="
-if grep -rnE '§|docs/(research|marketing|engine|qa)|plan §|abendrot-plan|RESUME-PROMPT|HANDOFF\b|founder' \
-     "$PUBLIC/App/Sources" "$PUBLIC/WarmthKit/Sources" "$PUBLIC/WarmthKit/Tests" 2>/dev/null; then
+# Gate EVERY synced path. The pattern covers §-refs, internal doc paths, the build/release
+# vocabulary (Mode A/B, Wave-N, Lane X, dev/dogfood), the internal RELEASE.md/abendrot-plan
+# paths, the handoff/resume artifacts, and "founder". Any surviving hit fails the run.
+GATE_PATHS=()
+for t in "${SYNC_TREES[@]}"; do [ -d "$PUBLIC/$t" ] && GATE_PATHS+=("$PUBLIC/$t"); done
+for f in "${SYNC_FILES[@]}"; do [ -f "$PUBLIC/$f" ] && GATE_PATHS+=("$PUBLIC/$f"); done
+
+TELL_PATTERN='§|docs/(research|marketing|engine|qa|release)/|plan §|abendrot-plan|RESUME-PROMPT|HANDOFF\b|\bfounder\b|\bMode [AB]\b|\bmode [AB]\b|\bWave-[0-9]|\bLane [A-Z]\b|dogfood|RELEASE\.md'
+if grep -rnE "$TELL_PATTERN" "${GATE_PATHS[@]}" 2>/dev/null; then
   echo "ERROR: planning tells remain after scrub (see matches above). Fix scrub-planning-tells.py and re-run." >&2
   exit 1
 fi

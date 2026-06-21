@@ -15,7 +15,6 @@ It's the f.lux / Night Shift successor that actually works on external monitors 
 **Status:** Planning complete; brand/design and build in progress. Not yet released.
 
 - Website: https://abendrot.app *(coming soon)*
-- Plan & docs: [`docs/abendrot-plan.md`](docs/abendrot-plan.md)
 - Built for macOS 26 "Tahoe", Apple Silicon.
 
 > General wellness, not medical advice. Abendrot reduces evening blue-light exposure on a schedule; it links the science rather than making health claims.
@@ -66,4 +65,4 @@ Common tasks → commands (v1 surface). Run `abendrot --help` for the full list.
 
 ---
 
-*This README is a stub; the full marketing README (demo GIF, badges, comparison table, install) ships with v1.0 — see plan §12.*
+*This README is a stub; the full marketing README (demo GIF, badges, comparison table, install) ships with v1.0.*
