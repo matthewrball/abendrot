@@ -379,6 +379,13 @@ struct OnboardingView: View {
 
     private func goBack() {
         guard let prev = OnboardingStep(rawValue: step.rawValue - 1) else { return }
+        // The warmth step forces an Always-on PREVIEW so the screen blooms regardless of time. Undo it on
+        // the way back too — the "Looks right" forward path already restores the real mode — so a Sunset
+        // user eases back to neutral in daylight instead of the preview warming lingering on the mode step.
+        // (Back only ever shows on the warmth step.)
+        if step == .warmth {
+            model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+        }
         step = prev
     }
 }
