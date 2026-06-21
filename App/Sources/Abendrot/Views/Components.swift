@@ -264,10 +264,12 @@ struct WarmSlider: View {
     // ponytail: the green/blue weighting is a simple proxy — tune by eye.
 
     /// How far the white point has shifted toward the warmest point, 0 (neutral) … 1 (warmest). Blue is gone
-    /// by ~1900K, so below that this is carried by green — exactly the band mired over-stretches.
+    /// by ~1900K, so below that this is carried by green — exactly the band mired over-stretches. Green is
+    /// weighted a little above blue (0.62/0.38) so the deep sub-1900K band gets more of the slider's travel
+    /// (~32% vs ~26% at equal weight). ponytail: tune the 0.62 by eye for how spread the deep end feels.
     private func warmthProgress(_ k: Kelvin) -> Double {
         let g = rgbGain(for: k)
-        return 1 - (g.green + g.blue) / 2
+        return 1 - (0.62 * g.green + 0.38 * g.blue)
     }
 
     /// Thumb position (0…1) for an engine strength. Identity unless Cozy.

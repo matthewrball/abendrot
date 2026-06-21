@@ -1177,10 +1177,10 @@ struct CozyModeControl: View {
     var showsSectionLabel: Bool = true
     /// Hide the when-on science caption (onboarding keeps it compact; the detail lives in Settings).
     var showsExplanation: Bool = true
-    /// Onboarding behaviour: toggling Cozy only flips the warmest point — the slider thumb stays exactly
-    /// put (no jump, no animation), so the warmth deepens/lightens in place and only the fireball thumb +
-    /// "Warmest" label crossfade. (Settings keeps the richer "preserve current warmth, unlock headroom".)
-    var keepsSliderInPlace: Bool = false
+    /// Onboarding behaviour: turning Cozy ON unlocks the deepest ember AND runs the slider all the way to
+    /// the warmest, so the screen blooms to the maximum (rather than holding a mid-slider spot); OFF restores
+    /// the everyday 1900K ceiling. (Settings keeps the richer "preserve current warmth, unlock headroom".)
+    var enablesAtWarmest: Bool = false
 
     /// Derived from the actual warmest point so the toggle can never disagree with the engine.
     private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
@@ -1277,13 +1277,18 @@ struct CozyModeControl: View {
     }
 
     private func toggle() {
-        if keepsSliderInPlace {
-            // Onboarding: just flip the warmest point. The slider thumb stays exactly where it is (no jump,
-            // no enablement animation) — toggling deepens/lightens the warmth in place, so the only motion
-            // is the fireball thumb + "Warmest" label crossfading (founder: keep it smooth, minimal). This
-            // path deliberately does NOT preserve warmth, so it stays a bare `setWarmestPoint` rather than
-            // `setCozy` (which re-pins the screen for the Settings/CLI "unlock headroom" behaviour).
-            model.setWarmestPoint(isCozy ? Kelvin.everydayWarmest : Kelvin.warmestSupported)
+        if enablesAtWarmest {
+            // Onboarding: Cozy means "give me the coziest." Turning ON unlocks the deepest ember AND runs the
+            // slider all the way to the warmest, so the screen blooms to the maximum instead of holding a
+            // mid-slider spot; OFF restores the everyday 1900K ceiling. Animated so the thumb glides to the end.
+            withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
+                if isCozy {
+                    model.setWarmestPoint(Kelvin.everydayWarmest)
+                } else {
+                    model.setWarmestPoint(Kelvin.warmestSupported)
+                    model.setGlobalWarmth(1.0)
+                }
+            }
             return
         }
         // Settings: the richer behaviour — preserve the user's warmth and just unlock headroom, animated.

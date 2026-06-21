@@ -191,11 +191,11 @@ struct OnboardingView: View {
             ), model: model, showsHeader: false, cozy: isCozy)
 
             // Cozy mode (the warmest candle & ember, below 1900 K) offered right here — the Settings →
-            // Advanced control, compact (no section header / science caption). Enabling animates the slider
-            // to halfway + ignites the fireball thumb so the user slides up into the deepest warmth; the
-            // choice (warmestPoint) persists past onboarding.
+            // Advanced control, compact (no section header / science caption). Enabling runs the slider all
+            // the way to the warmest + ignites the fireball thumb (the deepest ember); the choice
+            // (warmestPoint) persists past onboarding.
             CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
-                            keepsSliderInPlace: true)
+                            enablesAtWarmest: true)
 
             PrimaryButton(title: "Looks right") {
                 // Restore the schedule chosen in step 2 (this step forced Always-on so the screen could
