@@ -373,20 +373,13 @@ struct KelvinInfoButton: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(width: 200, alignment: .leading)
                         .padding(11)
-                        // OPAQUE ember surface, not translucent glass: over the onboarding's transparent
-                        // window + bright Kelvin text, .glassSurface(.frost) let content bleed through and
-                        // made the tooltip unreadable (founder). The frost gradient colours carry their OWN
-                        // alpha, so a solid opaque base must sit UNDER them — otherwise the gradient alone is
-                        // still see-through (the subtitle bled through). inkOnAccent is the deep, fully-opaque
-                        // plum; the ember gradient on top gives the warm tint.
+                        // FULLY OPAQUE — a single solid fill, no glass, no frost gradient. Both of those carry
+                        // alpha, so even over a dark window the tooltip read as translucent frosted glass and
+                        // the subtitle behind it showed through. inkOnAccent is the deep, fully-opaque plum
+                        // (opacity 1); a plain solid fill blocks everything behind it.
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(Theme.Color.inkOnAccent)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(LinearGradient(colors: [Theme.Color.frostTop, Theme.Color.frostBottom],
-                                                             startPoint: .top, endPoint: .bottom))
-                                )
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
