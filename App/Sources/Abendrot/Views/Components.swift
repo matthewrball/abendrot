@@ -22,7 +22,7 @@ import WarmthKit
 /// restyled with the ember track.
 struct WarmSlider: View {
     @Binding var strength: Double
-    /// The view-model — owns the dial-tick graph + its "Soft confirmation tone" gate (`dialTick`/`dialRatchet`).
+    /// The view-model. (Slider click sounds were removed; kept for callers + any future view-model needs.)
     var model: AppModel
     var compact: Bool = false
     /// When provided (the popover's main slider), the Warmth row shows this Kelvin readout inline,
@@ -52,7 +52,7 @@ struct WarmSlider: View {
     private var thumbSize: CGFloat { compact ? 15 : 20 }
     /// Detents spanning the track — the notch count AND the click cadence, kept in one place so the
     /// marks you see line up exactly with the clicks you hear. More = finer/denser mini ticks.
-    private let detentCount = 60
+    private let detentCount = 110
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 12) {
@@ -205,40 +205,27 @@ struct WarmSlider: View {
             // (below) disables this so the thumb tracks the finger 1:1 — no lag, no jitter.
             .animation(reduceMotion ? nil : .smooth(duration: 0.16), value: strength)
             .contentShape(Rectangle())
-            // Clicky "dial" feedback, gated on the "Soft confirmation tone" pref. Driven here (not via
-            // onChange) so a 1:1 drag and a glide-on-tap are told apart. ponytail: 40 detents = a fine
-            // click-dial; tune the click timbre + loudness in DialTick.
+            // Visual "dial" feedback: a thumb pop each time the thumb crosses a notch. Driven here (not
+            // via onChange) so a 1:1 drag and a glide-on-tap are told apart. (Slider click sounds removed.)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .updating($isPressing) { _, state, _ in state = true }
                     .onChanged { value in
-                        // Pre-spin the audio engine on press-down (first event of the gesture) so the very
-                        // first click isn't delayed by render-thread startup.
-                        if lastDetent == nil { model.dialPrewarm() }
                         let target = Double((value.location.x - thumbSize / 2) / usable).clamped01
-                        // Detent = which notch line the thumb has PASSED (floor, not round): a click fires the
-                        // instant the thumb CENTER crosses a notch, exactly in line with the marks. (Round flips
-                        // at the midpoint BETWEEN notches — half a notch off, which read as "not lined up".)
+                        // Detent = which notch line the thumb has PASSED (floor, not round): the thumb pop
+                        // fires the instant the thumb CENTER crosses a notch, exactly in line with the marks.
                         let toDetent = Int((target * Double(detentCount)).rounded(.down))
                         if abs(value.translation.width) > 2 {
                             var tx = Transaction(); tx.disablesAnimations = true   // drag: follow finger 1:1
                             withTransaction(tx) { strength = target }
-                            // One click + thumb pop per notch the thumb crosses. The model gates on the pref.
-                            if let last = lastDetent, toDetent != last {
-                                model.dialTick(volume: 0.2)
-                                if !reduceMotion { popTrigger &+= 1 }
-                            }
+                            // Thumb pop per notch the thumb crosses (the visual detent — no sound).
+                            if let last = lastDetent, toDetent != last, !reduceMotion { popTrigger &+= 1 }
                         } else {
-                            // Tap / press-down: the thumb GLIDES to target via .smooth(0.16) above — ratchet
-                            // the clicks across that same glide so they track the moving thumb. Reduce Motion
-                            // skips the glide (instant), so it gets a single click instead.
-                            let fromDetent = Int((strength.clamped01 * Double(detentCount)).rounded(.down))   // before the jump
+                            // Tap / press-down: the thumb GLIDES to target via .smooth(0.16) above.
+                            let fromDetent = Int((strength.clamped01 * Double(detentCount)).rounded(.down))
                             strength = target
-                            let steps = abs(toDetent - fromDetent)
-                            if lastDetent == nil, steps >= 1 {
-                                if reduceMotion { model.dialTick(volume: 0.2) }
-                                else { model.dialRatchet(steps: steps, duration: 0.16, volume: 0.2); popTrigger &+= 1 }
-                            }
+                            let movedNotches = lastDetent == nil && abs(toDetent - fromDetent) >= 1
+                            if movedNotches, !reduceMotion { popTrigger &+= 1 }
                         }
                         lastDetent = toDetent
                     }
@@ -529,111 +516,6 @@ struct AppIconView: View {
                 .aspectRatio(contentMode: .fit)
         } else {
             SunsetArcGlyph()
-        }
-    }
-}
-
-// MARK: - DialTick
-//
-/// A realistic "dial detent" click for slider adjustment — synthesized once (no asset). Each grain
-/// models a real detent: a sharp broadband SNAP exciting a tiny resonant body (a few damped modes — a
-/// bright "tick" pair plus a faint low "tock"), so it reads as a mechanical click rather than a beep or
-/// a flat noise burst. Four grains are slightly detuned so a sweep sounds organic, not like one looped
-/// sample. Round-robined per detent crossing. Quiet; the "Soft confirmation tone" gate lives on
-/// `AppModel` (`dialTick`/`dialRatchet`), which owns the one instance. Lazy main-actor engine, idles when idle.
-@MainActor
-final class DialTick {
-    private let core = OneShotPlayer()
-    private var grains: [AVAudioPCMBuffer] = []
-    private var next = 0
-    private var ratchetTask: Task<Void, Never>?
-
-    init() {
-        let sampleRate = 44_100.0
-        let frames = AVAudioFrameCount(sampleRate * 0.030)   // ~30 ms — room for the resonant body to ring out
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else { return }
-        // ponytail: taste-tune by ear — four detuned variants keep a fast sweep organic. tick(volume:)
-        // at the call site is the loudness knob; the snap + resonant modes (freq/decay/gain) live in grain().
-        let detunes = [0.97, 0.99, 1.02, 1.04]
-        grains = detunes.compactMap { Self.grain(detune: $0, format: format, frames: frames, sampleRate: sampleRate) }
-        guard !grains.isEmpty else { return }
-        core.engine.attach(core.player)
-        core.engine.connect(core.player, to: core.engine.mainMixerNode, format: format)
-    }
-
-    private static func grain(detune: Double, format: AVAudioFormat, frames: AVAudioFrameCount,
-                              sampleRate: Double) -> AVAudioPCMBuffer? {
-        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
-              let out = buf.floatChannelData?[0] else { return nil }
-        buf.frameLength = frames
-        // A real detent click = a sharp broadband SNAP that excites a small resonant body. Model the body
-        // as a few damped modes (a bright tick pair + a faint low tock), detuned per grain so it's organic.
-        let fcHP = 3000.0
-        let aHP = 1.0 - exp(-2.0 * Double.pi * fcHP / sampleRate)
-        let snapDecay = 2600.0                                  // mechanism snap — ~1 ms, broadband
-        // resonant modes of the little "housing": (Hz, decay 1/s, gain)
-        let modes: [(f: Double, d: Double, g: Double)] = [
-            (1900 * detune, 360, 0.50),   // primary bright tick
-            (3400 * detune, 520, 0.30),   // upper sparkle → crispness
-            (260  * detune, 130, 0.16),   // faint low tock → just enough body to feel tactile
-        ]
-        var lpHP = 0.0
-        let n = Int(frames)
-        for i in 0..<n {
-            let tSec = Double(i) / sampleRate
-            let t01 = Double(i) / Double(n)
-            let white = Double.random(in: -1...1)
-            lpHP += aHP * (white - lpHP)
-            let snap = (white - lpHP) * exp(-tSec * snapDecay)              // bright broadband transient
-            var body = 0.0
-            for m in modes { body += m.g * sin(2.0 * Double.pi * m.f * tSec) * exp(-tSec * m.d) }
-            var s = snap * 0.55 + body * 0.5
-            if t01 > 0.75 { s *= cos((t01 - 0.75) / 0.25 * Double.pi / 2) }  // clickless silent tail
-            out[i] = Float(max(-1.0, min(1.0, s)))
-        }
-        return buf
-    }
-
-    /// One click. Retriggers immediately (`stop`) so back-to-back clicks read as a tight ratchet rather
-    /// than a queue of lagging grains. Does NOT touch the ratchet task (the ratchet loop calls this).
-    /// Idles the engine 2s after the dial goes quiet.
-    private func fire(volume: Float) {
-        guard !grains.isEmpty else { return }
-        let buffer = grains[next % grains.count]
-        next &+= 1
-        core.fire(buffer: buffer, volume: volume, idleAfter: 2)
-    }
-
-    /// Spin up the engine on slider press so the first detent click isn't delayed by engine startup.
-    func prewarm() {
-        guard !grains.isEmpty else { return }
-        core.prewarm(idleAfter: 2)
-    }
-
-    /// A single detent click (a 1:1 drag step). Cancels any in-flight tap ratchet so the two never
-    /// overlap — once the user starts dragging, the drag supersedes the tap glide.
-    func tick(volume: Float) {
-        ratchetTask?.cancel()
-        fire(volume: volume)
-    }
-
-    /// A burst of `steps` clicks spread evenly across `duration` — used for a TAP, whose thumb glides
-    /// to the target over that same duration, so the clicks track the moving thumb instead of firing all
-    /// at once. `steps <= 1` is just a single click.
-    func ratchet(steps: Int, duration: Double, volume: Float) {
-        ratchetTask?.cancel()
-        let count = min(steps, 64)
-        guard count >= 1 else { return }
-        guard count > 1 else { fire(volume: volume); return }
-        let dt = duration / Double(count)
-        ratchetTask = Task { @MainActor [weak self] in
-            for i in 0..<count {
-                self?.fire(volume: volume)
-                if i < count - 1 {
-                    try? await Task.sleep(for: .seconds(dt))
-                    if Task.isCancelled { return }
-                }
-            }
         }
     }
 }

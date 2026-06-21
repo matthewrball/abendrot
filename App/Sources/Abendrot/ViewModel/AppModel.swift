@@ -74,11 +74,6 @@ final class AppModel {
     /// Built lazily on first toggle; nil only if the audio buffers can't be allocated. See `toggleAdvanced()`.
     @ObservationIgnored private lazy var expandSwoosh: SwooshSound? = SwooshSound()
 
-    /// The synthesized "dial detent" tick for slider drags. Owned here (not a global) so the gate +
-    /// graph live together, matching the chime/swoosh; the `WarmSlider` view routes through `dialTick`/
-    /// `dialRatchet`. Built lazily on first drag.
-    @ObservationIgnored private lazy var dialTickPlayer = DialTick()
-
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
@@ -516,25 +511,6 @@ final class AppModel {
         expandSwoosh?.play(opening: isAdvancedExpanded, volume: 0.03)
     }
 
-    /// One slider-drag detent click — gated by the SAME "Soft confirmation tone" pref as the chimes
-    /// (General tab). Owns both the gate and the tick graph so the `WarmSlider` view doesn't reach a
-    /// global or read the pref inline.
-    func dialTick(volume: Float) {
-        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        dialTickPlayer.tick(volume: volume)
-    }
-
-    /// A burst of detent clicks spread across a tap's glide — gated identically to `dialTick`.
-    func dialRatchet(steps: Int, duration: Double, volume: Float) {
-        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        dialTickPlayer.ratchet(steps: steps, duration: duration, volume: volume)
-    }
-
-    /// Pre-spin the dial engine on slider press (gated like `dialTick`) so the first click is tight.
-    func dialPrewarm() {
-        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        dialTickPlayer.prewarm()
-    }
 
     func setGlobalWarmth(_ strength: Double) {
         let level = WarmthLevel(strength: strength)

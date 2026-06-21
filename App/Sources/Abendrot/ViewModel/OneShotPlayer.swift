@@ -40,14 +40,6 @@ final class OneShotPlayer {
         scheduleIdle(after: idleAfter)
     }
 
-    /// Spin the engine up ahead of the first `fire(…)` so that first sound isn't delayed by render-thread
-    /// startup (e.g. on a slider press, before the first detent is crossed). Idles itself after `idleAfter`
-    /// if no shot follows (a press with no movement).
-    func prewarm(idleAfter: TimeInterval) {
-        if !engine.isRunning { try? engine.start() }
-        scheduleIdle(after: idleAfter)
-    }
-
     /// Stop the engine `seconds` after the (short) sound so the render thread doesn't run on forever.
     private func scheduleIdle(after seconds: TimeInterval) {
         idleTask?.cancel()
