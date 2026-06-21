@@ -27,6 +27,22 @@ If `abendrot` is not on your `PATH`, the binary ships inside the installed app b
 Homebrew cask symlinks it onto `PATH` for you). If neither is available, use the raw
 `defaults` fallback in the appendix at the end of this file.
 
+### Building / locating the CLI from source
+
+If you are working in the source tree (not an installed app), build the CLI and run it from the
+package's build directory rather than the app bundle:
+
+```sh
+swift build -c release --package-path cli
+# binary lands at:
+cli/.build/release/abendrot          # SwiftPM's stable per-config path (resolves to the arch dir)
+./cli/.build/release/abendrot --version   # → 0.1.0
+```
+
+The CLI is a standalone SwiftPM executable; it controls the same running app via the shared
+preference domain and `state.json`, so a source-built `abendrot` drives an installed/running app
+exactly like the shipped one.
+
 ## How it works (one paragraph)
 
 The CLI is a thin same-user client. A `set`/`on`/`off`/`exclude` command does two things:
@@ -101,6 +117,11 @@ abendrot set warmth --kelvin 3000  # target ~3000K effective
 
 - `<strength>`: Double, `0.0`–`1.0`. Out-of-range input is rejected (exit 2), not clamped.
 - `--kelvin <kelvin>`: Int, `500`–`6500`. Out-of-range rejected (exit 2).
+- Giving **both** a strength and `--kelvin` is rejected (exit 2) — pick one.
+- A bare leading-negative strength like `set warmth -1` is read as an unknown option and rejected
+  (exit 2). To pass a negative value positionally, use the `--` terminator: `set warmth -- -1`
+  (which then fails the `0.0`–`1.0` range check, also exit 2). Valid strengths are never negative,
+  so this only matters when you are deliberately probing the bound.
 
 ### `abendrot set mode <mode> [--json]`
 
@@ -288,7 +309,7 @@ gracefully; new fields may appear under the same `schemaVersion` minor evolution
 | Code | Name | Meaning |
 |---|---|---|
 | `0` | OK | Command succeeded. For a `set` while the app is **closed**, this still means the value was **persisted** (it applies on next launch); the CLI prints `saved; app not running` on stderr and reports `"appliedLive": false` under `--json`. |
-| `2` | Bad input | Invalid value or unknown key (e.g. `warmth 50`, an unknown `get` key, a malformed mode). The CLI prints a clear message to stderr. |
+| `2` | Bad input | Invalid value or unknown key (e.g. `warmth 50`, an unknown `get` key, a malformed mode), **and** any malformed invocation — a missing/extra argument, an unknown option or subcommand, a non-numeric value, or both a strength and `--kelvin`. The CLI prints a clear message to stderr. (There is no separate `64`/`EX_USAGE` exit; usage errors are normalized to `2`.) |
 | `3` | App not running | A command that **requires** the running app could not reach it. Today this is `reveal` (live-only): no running app, or the app did not confirm the reveal in time. |
 | `4` | Live-apply timeout | A `set` persisted successfully and the app **was** running, but it did not confirm the live apply within the timeout. The value is saved; it just was not confirmed live. |
 
