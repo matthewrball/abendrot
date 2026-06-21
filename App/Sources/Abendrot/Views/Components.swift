@@ -28,6 +28,13 @@ struct WarmSlider: View {
     /// When provided (the popover's main slider), the Warmth row shows this Kelvin readout inline,
     /// with an info tooltip. Other callers pass nil (they have their own readouts).
     var kelvin: Kelvin?
+    /// Show the header row above the slider (the "Warmth" label + any Kelvin ticker). Onboarding passes
+    /// false — its step already shows a big Kelvin readout + a "Set your warmth" heading, so the label is
+    /// redundant — while keeping the full-size (non-compact) track + thumb.
+    var showsHeader: Bool = true
+    /// Cozy mode active — the thumb crossfades into a glowing fireball and the warm end reads "Warmest"
+    /// (founder). Set live by the onboarding warmth step; the popover/Settings sliders leave it false.
+    var cozy: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// True while the thumb is being pressed/dragged — drives the Liquid-Glass "grab" feedback
@@ -49,7 +56,7 @@ struct WarmSlider: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 12) {
-            if !compact {
+            if !compact && showsHeader {
                 warmthTicker
             }
 
@@ -62,10 +69,14 @@ struct WarmSlider: View {
                     .foregroundStyle(Theme.Color.textMuted)
                     .fixedSize()
                 gradientSlider
-                Text("Warmer")
-                    .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(Theme.Color.textMuted)
-                    .fixedSize()
+                // Cozy unlocks the deepest end, so the warm label glows up to "Warmest" (founder). Fixed
+                // width (fits "Warmest") so swapping the word never resizes the slider — only a crossfade.
+                Text(cozy ? "Warmest" : "Warmer")
+                    .font(Theme.Typography.ui(11.5, weight: cozy ? .semibold : .regular))
+                    .foregroundStyle(cozy ? Theme.Color.accentHighlight : Theme.Color.textMuted)
+                    .contentTransition(.opacity)
+                    .frame(width: 58, alignment: .leading)
+                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: cozy)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -83,19 +94,10 @@ struct WarmSlider: View {
 
     private var warmthTicker: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 5) {
-                SectionLabel("Warmth")
-                if kelvin != nil {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(showKelvinInfo ? Theme.Color.accentHighlight : Theme.Color.textFaint)
-                        .onHover { showKelvinInfo = $0 }
-                        .accessibilityLabel("What is Kelvin?")
-                        .accessibilityHint(kelvinInfoText)
-                }
-            }
+            SectionLabel("Warmth")
             if let kelvin {
-                // Big lit "price-board" numerals — tabular so the value ticks cleanly as you drag.
+                // Big lit "price-board" numerals — tabular so the value ticks cleanly as you drag. The
+                // "what is Kelvin?" ⓘ sits to the RIGHT of the K (founder), with the readout it explains.
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(kelvin.displayValue.formatted(.number))
                         .font(Theme.Typography.serif(42))
@@ -104,6 +106,13 @@ struct WarmSlider: View {
                     Text("K")
                         .font(Theme.Typography.serif(23))
                         .foregroundStyle(Theme.Color.accentHighlight.opacity(0.7))
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(showKelvinInfo ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                        .onHover { showKelvinInfo = $0 }
+                        .accessibilityLabel("What is Kelvin?")
+                        .accessibilityHint(kelvinInfoText)
+                        .padding(.leading, 6)
                 }
                 .foregroundStyle(Theme.Color.accentHighlight)
                 .shadow(color: Theme.Color.accent.opacity(0.35), radius: 12, y: 1)   // lit-sign glow
@@ -119,9 +128,7 @@ struct WarmSlider: View {
         }
     }
 
-    private var kelvinInfoText: String {
-        "Kelvin is colour temperature — lower numbers are warmer and give off less blue light."
-    }
+    private var kelvinInfoText: String { KelvinInfoButton.explanation }
 
     /// A small frosted-glass card explaining the Kelvin readout, animated in on hover.
     private var kelvinTooltip: some View {
@@ -176,7 +183,7 @@ struct WarmSlider: View {
                 }
                 .allowsHitTesting(false)
 
-                glassThumb(pressed: isPressing)
+                thumbView
                     .frame(width: thumbSize, height: thumbSize)
                     .scaleEffect(isPressing ? 1.12 : 1.0)
                     // Snappy, well-damped press feedback — settles fast so rapid clicks don't throb.
@@ -264,10 +271,86 @@ struct WarmSlider: View {
             .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
             .shadow(color: Theme.Color.accentDeep.opacity(pressed ? 0.5 : 0.35), radius: pressed ? 9 : 5)
     }
+
+    /// The thumb: the glassy default, crossfading to the Cozy fireball when `cozy` is on.
+    @ViewBuilder private var thumbView: some View {
+        ZStack {
+            glassThumb(pressed: isPressing).opacity(cozy ? 0 : 1)
+            fireballThumb(pressed: isPressing).opacity(cozy ? 1 : 0)
+        }
+        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: cozy)
+    }
+
+    /// The Cozy-mode thumb: a molten ember core behind a flame, wrapped in a warm bloom — the "fireball"
+    /// the user slides into the warmest (founder). The glow extends past the thumb frame for presence.
+    private func fireballThumb(pressed: Bool) -> some View {
+        ZStack {
+            Circle()
+                .fill(RadialGradient(
+                    colors: [Theme.Color.accentHi, Theme.Color.accent, Theme.Color.accentDeep],
+                    center: .init(x: 0.5, y: 0.34), startRadius: 0, endRadius: thumbSize * 0.78))
+            Image(systemName: "flame.fill")
+                .font(.system(size: thumbSize * 0.6, weight: .bold))
+                .foregroundStyle(LinearGradient(colors: [.white, Theme.Color.accentHi],
+                                                startPoint: .top, endPoint: .bottom))
+                .shadow(color: .black.opacity(0.18), radius: 0.5)
+        }
+        .overlay(Circle().strokeBorder(.white.opacity(pressed ? 0.95 : 0.7), lineWidth: 0.5))
+        .shadow(color: Theme.Color.accent.opacity(0.75), radius: pressed ? 16 : 11)        // ember bloom
+        .shadow(color: Theme.Color.accentDeep.opacity(0.55), radius: pressed ? 10 : 6, y: 1)
+    }
 }
 
 private extension Double {
     var clamped01: Double { Swift.min(1, Swift.max(0, self)) }
+}
+
+// MARK: - KelvinInfoButton
+
+/// A small ⓘ button that reveals a frosted "what is Kelvin?" explainer on hover — the popover Warmth
+/// header's helper, made reusable so the onboarding warmth step can show it beside its title. The
+/// tooltip opens down-and-left (trailing-anchored) so it stays on-screen even when the icon sits to the
+/// right of a centered title.
+struct KelvinInfoButton: View {
+    static let explanation = "Kelvin is colour temperature — lower numbers are warmer and give off less blue light."
+    @State private var show = false
+
+    var body: some View {
+        Image(systemName: "info.circle")
+            .font(.system(size: 11))
+            .foregroundStyle(show ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+            .onHover { show = $0 }
+            .accessibilityLabel("What is Kelvin?")
+            .accessibilityHint(Self.explanation)
+            .overlay(alignment: .topTrailing) {
+                if show {
+                    Text(Self.explanation)
+                        .font(Theme.Typography.ui(11))
+                        .foregroundStyle(Theme.Color.textPrimary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 200, alignment: .leading)
+                        .padding(11)
+                        // OPAQUE ember surface (the app's frost-fallback gradient), not translucent glass:
+                        // over the onboarding's transparent window + bright Kelvin text, .glassSurface(.frost)
+                        // let the content behind bleed through and made the tooltip unreadable (founder).
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(LinearGradient(colors: [Theme.Color.frostTop, Theme.Color.frostBottom],
+                                                     startPoint: .top, endPoint: .bottom))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+                        .offset(y: 26)
+                        .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
+                        .zIndex(2)
+                }
+            }
+            .animation(.spring(response: 0.30, dampingFraction: 0.82), value: show)
+    }
 }
 
 // MARK: - BlueLightReductionLabel

@@ -5,13 +5,12 @@ import WarmthKit
 // MARK: - SettingsTab
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, schedule, displays, advanced, privacy, statistics, about
+    case general, displays, advanced, privacy, statistics, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return "General"
-        case .schedule: return "Schedule"
         case .displays: return "Displays"
         case .advanced: return "Advanced"
         case .privacy: return "Privacy"
@@ -23,7 +22,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "gearshape"
-        case .schedule: return "sunset"
         case .displays: return "display.2"
         case .advanced: return "slider.horizontal.3"
         case .privacy: return "hand.raised"
@@ -79,8 +77,15 @@ struct SettingsView: View {
                 tabBody
                     .padding(24)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(GeometryReader { proxy in
+                        // Report the current tab's natural content height so the window can hug it.
+                        Color.clear.preference(key: SettingsContentHeightKey.self, value: proxy.size.height)
+                    })
             }
             .scrollContentBackground(.hidden)
+            .onPreferenceChange(SettingsContentHeightKey.self) { height in
+                Task { @MainActor in SettingsWindowController.fitDetailContentHeight(height) }
+            }
         }
         .frame(minWidth: 680, minHeight: 480)
         .background(FrostBackground())
@@ -90,7 +95,6 @@ struct SettingsView: View {
     private var tabBody: some View {
         switch model.settingsTab {
         case .general: GeneralTab(model: model)
-        case .schedule: ScheduleTab(model: model)
         case .displays: DisplaysTab(model: model)
         case .advanced: AdvancedTab(model: model)
         case .privacy: PrivacyTab(model: model)
@@ -98,6 +102,14 @@ struct SettingsView: View {
         case .about: AboutTab()
         }
     }
+}
+
+/// The current tab's natural content height (measured inside the detail ScrollView) so the Settings
+/// window can size itself to hug whatever tab/mode is showing — see
+/// `SettingsWindowController.fitDetailContentHeight`.
+private struct SettingsContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 // MARK: - Tab header
@@ -238,6 +250,51 @@ private struct GeneralTab: View {
             }
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.isEnabled)
 
+            // Schedule MODE lives here (founder): the menu-bar popover groups on/off + warmth + mode as
+            // one "how it warms" unit, so General is its full desktop twin. The Mode selector now hides
+            // with the master toggle (popover parity); Location stays visible (a standing preference).
+            VStack(alignment: .leading, spacing: 12) {
+                // Mode selector hides when warming is off (popover parity — on/off + warmth + mode are one
+                // unit). Location stays visible regardless: a standing preference (where to estimate sunset),
+                // useful even while warming is off (founder).
+                if model.state.isEnabled {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionLabel("Mode")
+                        ModeControl(
+                            selection: Binding(
+                                get: { ScheduleModeOption(model.state.scheduleMode) },
+                                set: { model.setScheduleMode($0.toScheduleMode()) }
+                            ),
+                            onChange: { _ in }
+                        )
+                        // Shared `ScheduleModeOption.subtitle` — the same one-liner as the popover.
+                        Text(ScheduleModeOption(model.state.scheduleMode).subtitle)
+                            .font(Theme.Typography.ui(12))
+                            .foregroundStyle(Theme.Color.textMuted)
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                }
+
+                // Location only matters for Sunset (it estimates your sunset time); hidden for Always on.
+                // Kept visible even when warming is off — a standing preference (founder).
+                if ScheduleModeOption(model.state.scheduleMode) == .followSunset {
+                    VStack(alignment: .leading, spacing: 7) {
+                        SectionLabel("Location")
+                        Text("Used to estimate your sunset. No location permission required.")
+                            .font(Theme.Typography.ui(11.5))
+                            .foregroundStyle(Theme.Color.textMuted)
+                        CityAutocomplete(model: model, opensUpward: true)
+                            .frame(width: 300, alignment: .leading)
+                        Text(model.todaysSunsetReadout)
+                            .font(Theme.Typography.ui(11))
+                            .foregroundStyle(Theme.Color.textFaint)
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                }
+            }
+            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: ScheduleModeOption(model.state.scheduleMode))
+            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.isEnabled)
+
             DividerLine()
 
             // Far-right switches (label left, control trailing) to match the master toggle and the
@@ -300,41 +357,6 @@ private struct GeneralTab: View {
     }
 }
 
-// MARK: - Schedule
-
-private struct ScheduleTab: View {
-    @Bindable var model: AppModel
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: "Schedule", subtitle: "When Abendrot warms your displays.")
-            ModeControl(
-                selection: Binding(
-                    get: { ScheduleModeOption(model.state.scheduleMode) },
-                    set: { model.setScheduleMode($0.toScheduleMode()) }
-                ),
-                onChange: { _ in }
-            )
-            // Mirrors the menu-bar popover: shows ONLY the selected mode's one-line subtitle (the shared
-            // `ScheduleModeOption.subtitle`), updating live as you toggle Sunset ↔ Always on.
-            Text(ScheduleModeOption(model.state.scheduleMode).subtitle)
-                .font(Theme.Typography.ui(12))
-                .foregroundStyle(Theme.Color.textMuted)
-
-            VStack(alignment: .leading, spacing: 7) {
-                SectionLabel("Location")
-                Text("Used to estimate your sunset. No location permission required.")
-                    .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(Theme.Color.textMuted)
-                CityAutocomplete(model: model, opensUpward: true)
-                    .frame(width: 300, alignment: .leading)
-                Text(model.todaysSunsetReadout)
-                    .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textFaint)
-            }
-        }
-    }
-}
-
 // MARK: - CityAutocomplete
 
 // Internal (not private) so onboarding step 3 reuses the exact same liquid-glass city picker.
@@ -350,16 +372,36 @@ struct CityAutocomplete: View {
     @State private var isOpen = false
     @State private var hoveredID: String?
     @State private var highlightedID: String?
+    /// Set when the X (reset) is clicked. If the dropdown is then dismissed WITHOUT picking a city,
+    /// the selection falls back to Auto (founder). Cleared by any explicit pick.
+    @State private var armedAutoReset = false
+    /// The rows the dropdown was showing when `close()` ran. Held for the duration of the out-transition
+    /// so settling the field text (which recomputes `filteredCities`) can't reflow the list mid-fade.
+    @State private var closingSnapshot: [MajorCities.City]?
 
     /// Sentinel id for the pinned "Auto (from time zone)" row so it joins the keyboard highlight cycle.
     private let autoID = "__auto__"
 
+    // The first three are the default suggestions shown before the user types (founder pick); the rest
+    // are fallbacks in case one isn't in MajorCities. Only the first three resolved cities are shown.
     private let popularCityNames = [
-        "San Francisco", "Seattle", "New York", "London", "Paris", "Tokyo", "Sydney", "São Paulo"
+        "San Francisco", "New York", "Chicago", "Seattle", "London", "Paris", "Tokyo", "Sydney"
     ]
 
     var body: some View {
         searchField
+            // Click-away: while the list is open, a near-invisible full-bleed catcher sits behind the field
+            // + dropdown so a click anywhere else dismisses the menu. The onboarding window's drag-background
+            // otherwise swallows outside clicks without resigning the field's focus, leaving the list open.
+            // The field (front) and dropdown (overlay) sit above it, so their own taps still work.
+            .background {
+                if isOpen {
+                    Color.black.opacity(0.001)
+                        .frame(width: 3000, height: 3000)
+                        .contentShape(Rectangle())
+                        .onTapGesture { fieldFocused = false; close() }
+                }
+            }
             // Float the dropdown BELOW the field as an overlay instead of pushing layout down. This keeps
             // a height-constrained host (the onboarding card) from clipping content/button below, and it's
             // the right behaviour anywhere (a menu should float over content, not shove it). The offset ≈
@@ -420,19 +462,28 @@ struct CityAutocomplete: View {
                     return .handled
                 }
 
+            // Always an X (founder): clears the input and opens the list; when there's nothing left to
+            // clear, it dismisses — so the dropdown is always closable (the chevron used to only re-open).
             Button {
-                if selectedCity == nil {
-                    open()
+                armedAutoReset = true                    // a reset gesture: dismiss without a pick → Auto
+                if isOpen && !query.isEmpty {
+                    query = ""                           // clear a typed search; keep the list open
+                    highlightedID = filteredCities.first?.id
+                } else if isOpen {
+                    fieldFocused = false
+                    close()                              // already empty → dismiss (falls back to Auto)
                 } else {
-                    selectAuto()
+                    query = ""
+                    open()                               // closed → clear the input and open the list
                 }
             } label: {
-                Image(systemName: selectedCity == nil ? "chevron.down" : "xmark.circle.fill")
-                    .font(.system(size: 11, weight: .medium))
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.Color.textFaint)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(selectedCity == nil ? "Show cities" : "Use automatic location")
+            .accessibilityLabel(isOpen ? "Clear or close the city list" : "Clear and browse cities")
+            .help(isOpen ? "Clear, or close the list" : "Clear and browse cities")
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
@@ -444,13 +495,13 @@ struct CityAutocomplete: View {
 
     private var dropdown: some View {
         VStack(spacing: 4) {
-            cityRow(title: "Auto (from time zone)", systemImage: "globe",
+            cityRow(title: "Auto", systemImage: "globe",
                     selected: selectedCity == nil, highlighted: highlightedID == autoID) {
                 selectAuto()
             }
             .onHover { if $0 { highlightedID = autoID } }
 
-            if filteredCities.isEmpty {
+            if dropdownCities.isEmpty {
                 Text("No cities found")
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textFaint)
@@ -462,7 +513,7 @@ struct CityAutocomplete: View {
                 // A VStack sizes to its rows, so the results always render — and good autocomplete doesn't
                 // need a long list (founder: the search does the narrowing).
                 VStack(spacing: 3) {
-                    ForEach(filteredCities.prefix(3)) { city in
+                    ForEach(dropdownCities.prefix(3)) { city in
                         cityRow(
                             title: city.name,
                             systemImage: nil,
@@ -566,8 +617,8 @@ struct CityAutocomplete: View {
         if let selectedCity { return selectedCity.name }
         // Show the neutral "Auto (from time zone)" by default — NOT the derived representative city, which
         // can read as wrong (e.g. "Los Angeles" to an SF user) and overstates precision. Users opt in to a
-        // city for accuracy. Matches the dropdown's own "Auto (from time zone)" row.
-        return "Auto (from time zone)"
+        // city for accuracy. Matches the dropdown's own "Auto" row.
+        return "Auto"
     }
 
     private var filteredCities: [MajorCities.City] {
@@ -583,6 +634,12 @@ struct CityAutocomplete: View {
             return !name.hasPrefix(needle) && name.contains(needle)
         }
         return Array((prefix + contains).prefix(8))
+    }
+
+    /// The rows the dropdown actually renders. While closing, this is the frozen `closingSnapshot` so the
+    /// list keeps the rows it had as it fades/scales out (no reflow); otherwise it's the live results.
+    private var dropdownCities: [MajorCities.City] {
+        closingSnapshot ?? filteredCities
     }
 
     private var defaultCities: [MajorCities.City] {
@@ -601,6 +658,8 @@ struct CityAutocomplete: View {
     }
 
     private func open() {
+        closingSnapshot = nil    // discard any held close-snapshot so the list shows live results again
+        hoveredID = nil
         fieldFocused = true
         isOpen = true
         if query == selectionText { query = "" }
@@ -608,9 +667,17 @@ struct CityAutocomplete: View {
     }
 
     private func close() {
+        // Freeze the rows the dropdown is showing BEFORE flipping `isOpen` (the body's `.animation(value:
+        // isOpen)` drives the fade/scale-out). While closing, `dropdownCities` reads this snapshot, so
+        // settling the field text below — which recomputes `filteredCities` — can't reflow the list under
+        // the out-transition. Hover/highlight tints are held too, so no row flips its background mid-fade.
+        closingSnapshot = dropdownCities
         isOpen = false
-        hoveredID = nil
-        highlightedID = nil
+        if armedAutoReset {
+            // The X was clicked and the list was dismissed without choosing a city → fall back to Auto.
+            model.setUserCoordinate(nil)
+            armedAutoReset = false
+        }
         syncQueryToSelection()
     }
 
@@ -619,12 +686,14 @@ struct CityAutocomplete: View {
     }
 
     private func selectAuto() {
+        armedAutoReset = false
         model.setUserCoordinate(nil)
         fieldFocused = false
         close()
     }
 
     private func select(_ city: MajorCities.City) {
+        armedAutoReset = false        // an explicit pick: do NOT fall back to Auto on close
         model.setUserCoordinate(city.coordinate)
         fieldFocused = false
         close()
@@ -912,7 +981,7 @@ private struct AdvancedTab: View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "Advanced", subtitle: "Maximum warmth, the reveal shortcut, and per-app exclusions.")
 
-            MaximumWarmthControl(model: model)
+            CozyModeControl(model: model)
             DividerLine()
 
             // Reveal True Color hotkey — moved here from the former Shortcuts tab, tucked under
@@ -1095,78 +1164,147 @@ private struct ExcludedAppRow: View {
 
 // MARK: - Maximum warmth (warmest-point ceiling + opt-in expanded range)
 
-/// Sets the slider's *warmest end* (the engine `warmestPoint`). The everyday maximum is 1900K —
-/// the point where blue is fully removed (so "minimize blue light" is already 100% achieved). The
-/// opt-in "Expanded range" unlocks deeper warmth toward pure red (~500K): a real but minimal
-/// additional circadian reduction with a real legibility cost — see
-/// docs/research/max-warmth-circadian-research.md (Brown et al. 2022; CIE S 026:2018). The slider
-/// reads "right = warmer", matching the main warmth slider.
-private struct MaximumWarmthControl: View {
+/// "Cozy mode" — the maximum-warmth control, reframed as one delightful toggle (no granular slider,
+/// founder). Off, the warmest the General slider reaches is 1900K — where blue is already fully removed.
+/// On, it unlocks the deepest candle & ember glow: the engine `warmestPoint` drops to `warmestSupported`
+/// (~500K), the card ignites into the sunset gradient, and the screen eases warmer immediately. Below
+/// 1900K is a real but minimal extra circadian reduction at a real legibility cost — see
+/// docs/research/max-warmth-circadian-research.md (Brown et al. 2022; CIE S 026:2018).
+struct CozyModeControl: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    // Derived (not separately persisted) from the actual warmest point on appear, so the toggle can
-    // never disagree with the value. The warmest point itself is what persists (via AppModel).
-    @State private var expanded = false
+    /// Hide the "Maximum warmth" section header (onboarding shows the card bare, under its own title).
+    var showsSectionLabel: Bool = true
+    /// Hide the when-on science caption (onboarding keeps it compact; the detail lives in Settings).
+    var showsExplanation: Bool = true
+    /// Onboarding behaviour: toggling Cozy only flips the warmest point — the slider thumb stays exactly
+    /// put (no jump, no animation), so the warmth deepens/lightens in place and only the fireball thumb +
+    /// "Warmest" label crossfade. (Settings keeps the richer "preserve current warmth, unlock headroom".)
+    var keepsSliderInPlace: Bool = false
 
-    private var coolBound: Int { Kelvin.ceilingCoolBound.value }   // least-warm end of this control
-    private var warmBound: Int { expanded ? Kelvin.warmestSupported.value : Kelvin.everydayWarmest.value }
+    /// Derived from the actual warmest point so the toggle can never disagree with the engine.
+    private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
+    private var cardShape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
+
+    /// The §13-safe note with both citations as tappable links. Built as an AttributedString so the body
+    /// stays faint while the links read as links — accent-coloured + underlined + clickable. (A blanket
+    /// `.foregroundStyle` on a markdown Text flattens the link colour, so they didn't look tappable.)
+    private var scienceNote: AttributedString {
+        let md = "Below ~1900 K blue light is already gone, so going warmer mainly removes green — a deeper, candle-like glow that's lovely at night but harder to read, with little extra circadian benefit. ([Brown et al. 2022](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3001571); [CIE S 026](https://cie.co.at/publications/cie-system-metrology-optical-radiation-iprgc-influenced-responses-light-0).)"
+        var note = (try? AttributedString(markdown: md)) ?? AttributedString(md)
+        note.foregroundColor = Theme.Color.textFaint
+        for run in note.runs where run.link != nil {
+            note[run.range].foregroundColor = Theme.Color.accent
+            note[run.range].underlineStyle = .single
+        }
+        return note
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            if showsSectionLabel {
                 SectionLabel("Maximum warmth")
-                Spacer()
-                Text("\(model.state.warmestPoint.displayValue) K")
-                    .font(Theme.Typography.serif(14))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.Color.accentHighlight)
-                    .contentTransition(.numericText(value: Double(model.state.warmestPoint.displayValue)))
-                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.warmestPoint.displayValue)
             }
-            Text("The warmest your slider can reach. 1900 K already removes blue light entirely.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textMuted)
 
-            WarmSlider(strength: warmestBinding, model: model)
+            Button(action: toggle) { card }
+                .buttonStyle(.plain)
+                .accessibilityElement()
+                .accessibilityLabel("Cozy mode")
+                .accessibilityValue(isCozy ? "On" : "Off")
+                .accessibilityHint("Unlocks the warmest candle and ember glow, below 1900 Kelvin.")
+                .accessibilityAddTraits(.isButton)
 
-            Toggle("Expanded range — reach candle & ember (below 1900 K)", isOn: $expanded)
-                .toggleStyle(.switch)
-                .tint(Theme.Color.accent)
-                .onChange(of: expanded) { _, on in
-                    // Leaving expanded range: pull a deeper-than-everyday pick back up to the 1900K cap.
-                    if !on, model.state.warmestPoint.value < Kelvin.everydayWarmest.value {
-                        model.setWarmestPoint(Kelvin.everydayWarmest)
-                    }
-                }
-
-            if expanded {
-                Text("Below ~1900 K, blue light is already fully removed — going warmer mainly removes green: deeper and more candle-like, but harder to read, with little additional circadian benefit. (See Brown et al. 2022; CIE S 026.)")
+            if isCozy && showsExplanation {
+                Text(scienceNote)
                     .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textFaint)
                     .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
             }
         }
-        .onAppear {
-            // Single source of truth: a sub-1900K ceiling means the expanded range is in use.
-            expanded = model.state.warmestPoint.value < Kelvin.everydayWarmest.value
-        }
+        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: isCozy)
     }
 
-    /// Maps the WarmSlider's 0…1 strength onto [warmBound … coolBound] Kelvin (1 = warmest).
-    private var warmestBinding: Binding<Double> {
-        Binding(
-            get: {
-                let span = Double(coolBound - warmBound)
-                guard span > 0 else { return 0 }
-                let s = (Double(coolBound) - Double(model.state.warmestPoint.value)) / span
-                return min(1, max(0, s))
-            },
-            set: { s in
-                let span = Double(coolBound - warmBound)
-                let k = Int((Double(coolBound) - s * span).rounded())
-                model.setWarmestPoint(Kelvin(k))
+    private var card: some View {
+        HStack(spacing: 14) {
+            Image(systemName: isCozy ? "flame.fill" : "flame")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textMuted)
+                .shadow(color: isCozy ? Theme.Color.accentHighlight.opacity(0.55) : .clear, radius: 8)
+                .scaleEffect(isCozy ? 1 : 0.9)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Cozy mode")
+                    .font(Theme.Typography.ui(14, weight: .semibold))
+                    .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
+                Text(isCozy
+                     ? "On — candle & ember glow."
+                     : "The warmest candle & ember glow.")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.82) : Theme.Color.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        )
+
+            Spacer(minLength: 8)
+
+            // Display-only switch — the whole card is the hit target; it just mirrors + animates state.
+            Toggle("", isOn: .constant(isCozy))
+                .toggleStyle(.switch)
+                .tint(isCozy ? Theme.Color.groundIndigo : Theme.Color.accent)
+                .labelsHidden()
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                if isCozy {
+                    cardShape.fill(Theme.Gradient.sunset)
+                    cardShape
+                        .fill(LinearGradient(colors: [.white.opacity(0.32), .white.opacity(0.04), .clear],
+                                             startPoint: .top, endPoint: .bottom))
+                        .blendMode(.softLight)
+                } else {
+                    cardShape.fill(Color.white.opacity(0.04))
+                }
+                cardShape.strokeBorder(isCozy ? Color.white.opacity(0.18) : Theme.Color.lineStrong, lineWidth: 0.5)
+            }
+        }
+        .shadow(color: isCozy ? Theme.Color.accentDeep.opacity(0.38) : .clear, radius: 8, y: 2)
+        .shadow(color: isCozy ? Theme.Color.accent.opacity(0.28) : .clear, radius: 18)   // ember glow
+        .contentShape(cardShape)
+    }
+
+    private func toggle() {
+        if keepsSliderInPlace {
+            // Onboarding: just flip the warmest point. The slider thumb stays exactly where it is (no jump,
+            // no enablement animation) — toggling deepens/lightens the warmth in place, so the only motion
+            // is the fireball thumb + "Warmest" label crossfading (founder: keep it smooth, minimal).
+            model.setWarmestPoint(isCozy ? Kelvin.everydayWarmest : Kelvin.warmestSupported)
+            return
+        }
+        // Settings: the richer behaviour — preserve the user's warmth and just unlock headroom, animated.
+        withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
+            if isCozy {
+                // Turning OFF: restore the everyday 1900K ceiling, keeping the screen where it is — a
+                // deeper-than-everyday pick is pulled up to exactly 1900K (the new cap).
+                let restore = Kelvin(max(model.globalKelvin.value, Kelvin.everydayWarmest.value))
+                model.setWarmestPoint(Kelvin.everydayWarmest)
+                model.setGlobalWarmthToKelvin(restore)
+            } else {
+                // Turning ON: unlock the deepest candle & ember (~500K). In Always-on, warm to that
+                // maximum right away; in Sunset, keep the user's current warmth exactly where it is and
+                // just hand them the headroom to push it warmer (founder). Engine reapplies live.
+                let current = model.globalKelvin
+                model.setWarmestPoint(Kelvin.warmestSupported)
+                if ScheduleModeOption(model.state.scheduleMode) == .alwaysOn {
+                    model.setGlobalWarmth(1.0)
+                } else {
+                    model.setGlobalWarmthToKelvin(current)
+                }
+            }
+        }
     }
 }
 

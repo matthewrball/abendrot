@@ -42,7 +42,7 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            stepIndicator
+            topBar
 
             Group {
                 switch step {
@@ -85,6 +85,31 @@ struct OnboardingView: View {
         }
     }
 
+    // A leading back chevron, shown only on the warmth step, layered over the centered step indicator,
+    // so users can return to step 2 and change their mode. Earlier steps need no back (welcome is the
+    // entry; the mode step's onAppear re-applies the chosen mode on return).
+    @ViewBuilder
+    private var topBar: some View {
+        ZStack {
+            stepIndicator
+            if step == .warmth {
+                HStack {
+                    Button { goBack() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.textMuted)
+                            .padding(.vertical, 4)
+                            .padding(.trailing, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back")
+                    Spacer()
+                }
+            }
+        }
+    }
+
     // MARK: Step 1 — welcome / orientation
     //
     // A menu-bar agent launches with no Dock icon and no window, so a brand-new user can miss that
@@ -112,19 +137,26 @@ struct OnboardingView: View {
 
     private var warmthStep: some View {
         VStack(spacing: 14) {
-            Text("How warm should it get?")
-                .font(Theme.Typography.serif(19))
-                .foregroundStyle(Theme.Color.textPrimary)
-            // Honest framing (fixes the old "set your maximum" copy — the slider sets everyday warmth, not
-            // the ceiling). For Sunset users the forced preview is explicitly "your evening" so the cool-down
-            // on finish reads as intended, not a glitch.
-            Text(scheduleOption == .followSunset
-                 ? "A preview of your evening — drag to set how warm. You can change it anytime."
-                 : "Drag to set how warm. You can change it anytime.")
-                .font(Theme.Typography.ui(12.5))
-                .foregroundStyle(Theme.Color.textMuted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                Text(scheduleOption == .followSunset ? "How warm should it get?" : "Set your warmth")
+                    .font(Theme.Typography.serif(19))
+                    .foregroundStyle(Theme.Color.textPrimary)
+                // Ported from the popover Warmth header (founder) — the "what is Kelvin?" helper beside
+                // the step title, since this step no longer shows the slider's own "Warmth" header.
+                KelvinInfoButton()
+            }
+            // The slider sets everyday warmth STRENGTH (not the Advanced "Maximum warmth" ceiling /
+            // warmestPoint). Sunset shows "maximum warmth once the sun begins to set" — it names the peak the
+            // evening ramp climbs to AND explains the cool-down on finish (daytime → neutral until sunset),
+            // so the restore doesn't read as a glitch. Always-on needs no subtitle (the big Kelvin readout +
+            // slider are self-explanatory).
+            if scheduleOption == .followSunset {
+                Text("Set your maximum warmth once the sun begins to set.")
+                    .font(Theme.Typography.ui(12.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             // Live applied Kelvin — the slider drives the engine directly, so this number and the screen
             // warm together as you drag.
@@ -139,7 +171,14 @@ struct OnboardingView: View {
             WarmSlider(strength: Binding(
                 get: { model.state.globalWarmth.strength },
                 set: { model.setGlobalWarmth($0) }
-            ), model: model)
+            ), model: model, showsHeader: false, cozy: isCozy)
+
+            // Cozy mode (the warmest candle & ember, below 1900 K) offered right here — the Settings →
+            // Advanced control, compact (no section header / science caption). Enabling animates the slider
+            // to halfway + ignites the fireball thumb so the user slides up into the deepest warmth; the
+            // choice (warmestPoint) persists past onboarding.
+            CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
+                            keepsSliderInPlace: true)
 
             PrimaryButton(title: "Looks right") {
                 // Restore the schedule chosen in step 2 (this step forced Always-on so the screen could
@@ -167,6 +206,17 @@ struct OnboardingView: View {
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
+            if scheduleOption == .followSunset {
+                Text(model.isWarmingActive
+                     ? "The sun has set — your screen is warming now."
+                     : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+
             // Apply the mode LIVE on each toggle so the user feels the difference immediately: Always-on
             // warms the screen now; Sunset (in daylight) eases back to neutral. `setScheduleMode` also
             // plays the soft mode tick (gated by the sound pref).
@@ -178,14 +228,6 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 11) {
                     sunsetScienceCard
                     VStack(alignment: .leading, spacing: 6) {
-                        // It's not broken — it's armed. Say what's happening AND exactly when, so the
-                        // neutral daytime screen never reads as "nothing happened".
-                        Text(model.isWarmingActive
-                             ? "The sun has set — your screen is warming now."
-                             : "It’s daytime, so your screen stays neutral for now. Warmth eases in around your local sunset:")
-                            .font(Theme.Typography.ui(11.5))
-                            .foregroundStyle(Theme.Color.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
                         CityAutocomplete(model: model, opensUpward: true)
                         Text(model.todaysSunsetReadout)
                             .font(Theme.Typography.ui(12, weight: .semibold))
@@ -195,7 +237,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
             } else {
-                Text("Warmth starts now and stays on — day and night.")
+                Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
                     .font(Theme.Typography.ui(12.5))
                     .foregroundStyle(Theme.Color.textMuted)
                     .multilineTextAlignment(.center)
@@ -298,12 +340,21 @@ struct OnboardingView: View {
 
     // MARK: Helpers
 
+    /// Cozy mode (deepest warmth) is on when the warmest point is below the everyday 1900K ceiling — drives
+    /// the fireball thumb + "Warmest" label on the step-3 slider.
+    private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
+
     private func advance() {
         guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
             onFinish()
             return
         }
         step = next
+    }
+
+    private func goBack() {
+        guard let prev = OnboardingStep(rawValue: step.rawValue - 1) else { return }
+        step = prev
     }
 }
 

@@ -709,12 +709,19 @@ final class AppModel {
         guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coordinate, on: Date()) else {
             return "Today's sunset: —"
         }
-        // Auto uses the real system zone (proper, DST-correct abbreviation like "PDT"); a picked city uses
-        // its longitude-derived zone (15°/hour) so a far city's sunset prints in ITS local clock, not the
-        // Mac's (e.g. Tokyo's 7 PM, not "3 AM"). Safe to mutate the shared formatter: AppModel is @MainActor.
-        let zone = userCoordinate == nil
-            ? TimeZone.current
-            : (TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) ?? .current)
+        // Display zone: Auto = the system zone; a picked city = its real IANA zone (looked up from the
+        // city) so the sunset prints in that city's local clock with a proper DST-aware abbreviation
+        // (PST/PDT, EST/EDT). Longitude zone is only a last-ditch fallback. Mutating the shared formatter
+        // is safe: AppModel is @MainActor.
+        let zone: TimeZone
+        if userCoordinate == nil {
+            zone = .current
+        } else if let city = MajorCities.all.first(where: { $0.coordinate == coordinate }),
+                  let cityZone = TimeZone(identifier: city.timeZone) {
+            zone = cityZone
+        } else {
+            zone = TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) ?? .current
+        }
         let formatter = Self.sunsetReadoutFormatter
         formatter.timeZone = zone
         // Show a real, named abbreviation ("EDT", "PDT") but NOT a bare "GMT-5" offset — a picked city's

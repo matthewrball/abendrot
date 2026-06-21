@@ -16,6 +16,8 @@ import SwiftUI
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     private static var shared: SettingsWindowController?
+    /// First content-fit (on open) is instant; later fits (mode/tab changes) animate.
+    private var hasFitContent = false
 
     /// Open (or re-focus) the Settings window for the given model, optionally deep-linking a tab.
     ///
@@ -52,9 +54,27 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    /// Resize the Settings window so the detail pane exactly hugs `contentHeight` — the current tab's
+    /// natural content height, measured by SettingsView. Keeps the width and the TOP edge fixed (grows /
+    /// shrinks downward). The first fit (on open) is instant; later fits — switching tab, or toggling
+    /// Sunset ⇄ Always-on which shows/hides Location — animate, so the window follows the content like
+    /// macOS System Settings does between panes.
+    static func fitDetailContentHeight(_ contentHeight: CGFloat) {
+        guard contentHeight > 1, let ctrl = shared, let win = ctrl.window else { return }
+        let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
+        let target = max(contentHeight + titlebar, win.minSize.height)
+        let current = win.frame
+        guard abs(current.height - target) > 1 else { return }
+        var f = current
+        f.origin.y = current.maxY - target   // keep the top edge fixed
+        f.size.height = target
+        win.setFrame(f, display: true, animate: ctrl.hasFitContent)
+        ctrl.hasFitContent = true
+    }
+
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 824),
             // `.fullSizeContentView` MUST be present at creation for the glass chrome.
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
@@ -68,11 +88,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         // window moved instead of the slider thumb. The window stays draggable by its transparent
         // title-bar strip (where the traffic-light buttons live). (Settings slider-drag bug fix.)
         window.isMovableByWindowBackground = false
+        window.minSize = NSSize(width: 700, height: 520)
         window.center()
-        window.setFrameAutosaveName("AbendrotSettings")
 
         let hosting = NSHostingController(rootView: SettingsView(model: model))
         window.contentViewController = hosting
+        // The window then resizes to HUG each tab's content height (see `fitDetailContentHeight`, driven by
+        // a height preference in SettingsView): General is taller in Sunset, with Location, than in
+        // Always-on, so the window follows — no bottom gap, no clipping, in either mode or any tab.
 
         super.init(window: window)
         window.delegate = self
