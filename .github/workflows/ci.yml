@@ -101,7 +101,7 @@ jobs:
     # continue-on-error once a .swift-format / .swiftlint.yml config is agreed and the tree is clean.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install lint tools
         run: |
@@ -156,7 +156,7 @@ jobs:
   test-warmthcore:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Show toolchain
         run: |
@@ -193,7 +193,7 @@ jobs:
     # finding can never block the real app-build gate.
     needs: [test-warmthcore]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install XcodeGen
         run: |
@@ -250,7 +250,7 @@ jobs:
 
       - name: Upload unsigned DMG artifact
         if: ${{ hashFiles('build/*.dmg') != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: abendrot-unsigned-dmg
           path: build/*.dmg
@@ -273,7 +273,7 @@ jobs:
     # signing/notarization is reserved for push to main + manual dispatch.
     environment: release-signing   # GitHub "environment" -> optional required reviewers
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Import Developer ID cert into a temporary keychain
         env:
@@ -353,7 +353,7 @@ jobs:
 
       - name: Upload notarized DMG
         if: ${{ hashFiles('build/*.dmg', '../*.dmg') != '' || env.EXPORTED_APP != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: abendrot-notarized-dmg
           path: ${{ runner.temp }}/Abendrot.dmg
@@ -402,7 +402,7 @@ jobs:
           - { name: "generic-ddc-monitor",    note: "hardware warmth via IOAVService DDC" }
           - { name: "hdmi-dock-edgecase",     note: "HDMI on Apple Silicon / dock transport" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Describe planned matrix rig (UNIMPLEMENTED — fails on purpose)
         run: |
           echo "=== PLANNED self-hosted display-matrix rig: ${{ matrix.rig.name }} ==="
