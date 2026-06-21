@@ -373,6 +373,13 @@ final class AppModel {
         } else if let lat = patch.userLatitude, let lon = patch.userLongitude {
             setUserCoordinate(.init(latitude: lat, longitude: lon))
         }
+        // Cozy — the expanded-warmth master toggle — routes through `setCozy` (the SAME path the
+        // Settings card uses), which moves the ceiling AND re-pins the on-screen warmth. Applied after
+        // the raw `warmestPointKelvin` setter so, in the (CLI never sends this) both-set case, the cozy
+        // toggle's ceiling wins. No validation needed — it's a plain Bool master toggle.
+        if let cozy = patch.cozy {
+            setCozy(cozy)
+        }
         // Enabled last (mild nicety; the engine recomputes from the whole box regardless).
         if let enabled = patch.isEnabled {
             setEnabled(enabled, userInitiated: false)
@@ -481,7 +488,7 @@ final class AppModel {
         // ON = the bright Glass chime; OFF = the SAME chime pitched DOWN ~5 semitones — a deeper,
         // dampened version (founder). (AVAudioPlayer.rate only time-stretches — it PRESERVES pitch — so
         // it was imperceptible; a real pitch shift needs the AVAudioUnitTimePitch graph below.)
-        confirmationChime?.play(pitchCents: warming ? 0 : -500)
+        confirmationChime?.play(pitchCents: warming ? 0 : -500, volume: 0.7)   // ~0.35 effective vs the 0.5 master
     }
 
     /// A soft tick when the user switches Schedule mode (Sunset · Always on), gated by the SAME
@@ -609,6 +616,36 @@ final class AppModel {
         state.warmestPoint = kelvin
         UserDefaults.standard.set(kelvin.value, forKey: Self.warmestPointKey)
         Task { await engine?.setWarmestPoint(kelvin) }
+    }
+
+    /// Cozy mode — the master "expanded warmth" toggle, in ONE place so the Settings card, onboarding,
+    /// and the `abendrot cozy on|off` CLI all share this exact path (UI and CLI can never disagree).
+    ///
+    /// ON drops the warmest-point ceiling to `Kelvin.warmestSupported` (~500K — the deepest candle &
+    /// ember). OFF restores the everyday `Kelvin.everydayWarmest` (1900K) ceiling. In both directions
+    /// the *on-screen warmth holds*: we capture the current effective Kelvin first, move the ceiling,
+    /// then re-pin the screen to that same Kelvin via `setGlobalWarmthToKelvin` — so expanding the
+    /// range never jumps the picture. The one richer-than-pin nuance is Always-on turning cozy ON:
+    /// there the screen warms straight to the new maximum (1.0), matching the Settings card today.
+    func setCozy(_ on: Bool) {
+        if on {
+            // Turning ON: unlock the deepest candle & ember (~500K). In Always-on, warm to that maximum
+            // right away; otherwise keep the current warmth exactly where it is and just hand over the
+            // headroom to push warmer. Capture BEFORE moving the ceiling so the pin uses the old Kelvin.
+            let current = globalKelvin
+            setWarmestPoint(Kelvin.warmestSupported)
+            if ScheduleModeOption(state.scheduleMode) == .alwaysOn {
+                setGlobalWarmth(1.0)
+            } else {
+                setGlobalWarmthToKelvin(current)
+            }
+        } else {
+            // Turning OFF: restore the everyday 1900K ceiling, keeping the screen where it is — a
+            // deeper-than-everyday pick is pulled up to exactly 1900K (the new cap).
+            let restore = Kelvin(max(globalKelvin.value, Kelvin.everydayWarmest.value))
+            setWarmestPoint(Kelvin.everydayWarmest)
+            setGlobalWarmthToKelvin(restore)
+        }
     }
 
     // MARK: ── Reveal True Color ─────────────────────────────────────────────

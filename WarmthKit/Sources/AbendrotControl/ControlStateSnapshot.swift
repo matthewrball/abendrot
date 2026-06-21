@@ -1,4 +1,5 @@
 import Foundation
+import WarmthCore
 
 // MARK: - ControlStateSnapshot
 //
@@ -25,9 +26,20 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
     public var globalWarmthStrength: Double
     public var globalKelvin: Int
     public var warmestPointKelvin: Int
+    /// Cozy mode — derived from the warmest point so the snapshot can never disagree with the engine:
+    /// the expanded-warmth ceiling is in effect exactly when it sits below the everyday 1900K cap. Held
+    /// as a stored field (not computed) so it lands in `state.json` / `status --json` for agents, and
+    /// `Self.isCozy(warmestPointKelvin:)` keeps the one derivation rule shared with the app + CLI.
+    public var cozy: Bool
     public var revealMode: String
     public var excludedApps: [String]
     public var displays: [DisplaySnapshot]
+
+    /// The single source of truth for "is cozy on": the warmest-point ceiling is below the everyday
+    /// 1900K cap. Used by the app to set the snapshot field and by the CLI to read it from a patch.
+    public static func isCozy(warmestPointKelvin: Int) -> Bool {
+        warmestPointKelvin < Kelvin.everydayWarmest.value
+    }
 
     public init(
         schemaVersion: Int = AbendrotControl.schemaVersion,
@@ -62,6 +74,8 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
         self.globalWarmthStrength = globalWarmthStrength
         self.globalKelvin = globalKelvin
         self.warmestPointKelvin = warmestPointKelvin
+        // Derived in the init so every snapshot is internally consistent (cozy ⇔ ceiling < 1900K).
+        self.cozy = Self.isCozy(warmestPointKelvin: warmestPointKelvin)
         self.revealMode = revealMode
         self.excludedApps = excludedApps
         self.displays = displays

@@ -50,11 +50,27 @@ final class AbendrotControlTests: XCTestCase {
             excludedApps: ["com.apple.dt.Xcode", "com.figma.Desktop"],
             userLatitude: 51.5,
             userLongitude: -0.12,
-            clearUserCoordinate: false
+            clearUserCoordinate: false,
+            cozy: true
         )
         let data = try JSONEncoder().encode(patch)
         let decoded = try JSONDecoder().decode(SettingsPatch.self, from: data)
         XCTAssertEqual(patch, decoded)
+        XCTAssertEqual(decoded.cozy, true)
+    }
+
+    func testCozyOnlyPatchRoundTripsAndIsNotEmpty() throws {
+        // A `cozy on/off` command sends a patch with ONLY `cozy` set — it must survive the wire and
+        // not read as a no-op (the app skips an empty patch).
+        let patch = SettingsPatch(cozy: false)
+        XCTAssertFalse(patch.isEmpty)
+        let data = try JSONEncoder().encode(patch)
+        let decoded = try JSONDecoder().decode(SettingsPatch.self, from: data)
+        XCTAssertEqual(patch, decoded)
+        XCTAssertEqual(decoded.cozy, false)
+        // Every other field stays nil — cozy is a standalone master toggle.
+        XCTAssertNil(decoded.warmestPointKelvin)
+        XCTAssertNil(decoded.globalWarmthStrength)
     }
 
     func testEmptySettingsPatchRoundTripAndIsEmpty() throws {
@@ -128,6 +144,28 @@ final class AbendrotControlTests: XCTestCase {
         let data = try JSONEncoder().encode(snapshot)
         let decoded = try JSONDecoder().decode(ControlStateSnapshot.self, from: data)
         XCTAssertEqual(snapshot, decoded)
+        // 1900K ceiling ⇒ cozy off; the field rides through the wire.
+        XCTAssertFalse(decoded.cozy)
+    }
+
+    func testSnapshotDerivesCozyFromWarmestPoint() {
+        // The derivation rule (warmestPointKelvin < everydayWarmest) is the single source of truth, and
+        // the init must apply it so `cozy` can never disagree with the ceiling it's reported alongside.
+        XCTAssertTrue(ControlStateSnapshot.isCozy(warmestPointKelvin: 500))
+        XCTAssertTrue(ControlStateSnapshot.isCozy(warmestPointKelvin: 1899))
+        XCTAssertFalse(ControlStateSnapshot.isCozy(warmestPointKelvin: 1900))
+        XCTAssertFalse(ControlStateSnapshot.isCozy(warmestPointKelvin: 2700))
+
+        func snapshot(maxK: Int) -> ControlStateSnapshot {
+            ControlStateSnapshot(
+                appVersion: "0.1.0", appBuild: "1", pid: 1, appLaunchID: "L",
+                updatedAt: Date(timeIntervalSince1970: 0), lastAppliedRequestID: nil,
+                isEnabled: true, scheduleMode: .sunset, isScheduleActiveNow: false,
+                isRevealing: false, globalWarmthStrength: 0.7, globalKelvin: 2700,
+                warmestPointKelvin: maxK, revealMode: "hold", excludedApps: [], displays: [])
+        }
+        XCTAssertTrue(snapshot(maxK: 500).cozy)     // expanded range in effect
+        XCTAssertFalse(snapshot(maxK: 1900).cozy)   // everyday ceiling
     }
 
     // MARK: ControlLiveness — forward-compatible decode of a future snapshot

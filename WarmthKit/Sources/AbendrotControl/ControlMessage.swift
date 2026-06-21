@@ -21,6 +21,12 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
     public var userLongitude: Double?
     /// `true` == `--auto`: clear the manual coordinate (remove both lat/lon keys).
     public var clearUserCoordinate: Bool?
+    /// Cozy mode — the expanded-warmth master toggle. `true` drops the warmest-point ceiling to
+    /// `Kelvin.warmestSupported` (~500K) holding the on-screen warmth; `false` restores the everyday
+    /// `Kelvin.everydayWarmest` (1900K). The app routes this through `AppModel.setCozy`, the SAME path
+    /// the Settings card uses, so it moves the ceiling AND re-pins warmth (no jump). It is NOT a raw
+    /// `warmestPointKelvin` write — that field sets the ceiling alone, leaving the screen to follow.
+    public var cozy: Bool?
 
     public init(
         isEnabled: Bool? = nil,
@@ -31,7 +37,8 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         excludedApps: [String]? = nil,
         userLatitude: Double? = nil,
         userLongitude: Double? = nil,
-        clearUserCoordinate: Bool? = nil
+        clearUserCoordinate: Bool? = nil,
+        cozy: Bool? = nil
     ) {
         self.isEnabled = isEnabled
         self.globalWarmthStrength = globalWarmthStrength
@@ -42,6 +49,7 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         self.userLatitude = userLatitude
         self.userLongitude = userLongitude
         self.clearUserCoordinate = clearUserCoordinate
+        self.cozy = cozy
     }
 
     /// True when no field is set — used by the app to decide a message is a no-op patch.
@@ -49,6 +57,7 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         isEnabled == nil && globalWarmthStrength == nil && warmestPointKelvin == nil
             && scheduleMode == nil && revealMode == nil && excludedApps == nil
             && userLatitude == nil && userLongitude == nil && clearUserCoordinate == nil
+            && cozy == nil
     }
 }
 
