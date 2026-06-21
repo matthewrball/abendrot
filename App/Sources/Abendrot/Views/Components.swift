@@ -373,13 +373,20 @@ struct KelvinInfoButton: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(width: 200, alignment: .leading)
                         .padding(11)
-                        // OPAQUE ember surface (the app's frost-fallback gradient), not translucent glass:
-                        // over the onboarding's transparent window + bright Kelvin text, .glassSurface(.frost)
-                        // let the content behind bleed through and made the tooltip unreadable (founder).
+                        // OPAQUE ember surface, not translucent glass: over the onboarding's transparent
+                        // window + bright Kelvin text, .glassSurface(.frost) let content bleed through and
+                        // made the tooltip unreadable (founder). The frost gradient colours carry their OWN
+                        // alpha, so a solid opaque base must sit UNDER them — otherwise the gradient alone is
+                        // still see-through (the subtitle bled through). inkOnAccent is the deep, fully-opaque
+                        // plum; the ember gradient on top gives the warm tint.
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(LinearGradient(colors: [Theme.Color.frostTop, Theme.Color.frostBottom],
-                                                     startPoint: .top, endPoint: .bottom))
+                                .fill(Theme.Color.inkOnAccent)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(LinearGradient(colors: [Theme.Color.frostTop, Theme.Color.frostBottom],
+                                                             startPoint: .top, endPoint: .bottom))
+                                )
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
