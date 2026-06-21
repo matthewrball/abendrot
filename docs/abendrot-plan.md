@@ -1342,6 +1342,37 @@ APPROVED & SHIPPED.
 Apple Developer account); the MCP server (Phase 5 fast-follow); a cosmetic non-blocking SwiftLint soft-fail (no
 committed config); a `setCozy` reconcile of the Settings/onboarding inline toggle logic (§33 noted it).
 
+## §35 — Session 15 (2026-06-21): public `dev`/staging branch — `main` never advances except from a verified-green `dev`
+
+**Why.** The §34 publish went straight to `main` and leaked a hardcoded dev home path (`/Users/…/abendrot-build`,
+in the app's dev-relaunch) and briefly shipped scrub-mangled code → a forced `main` rollback (to `6f708b9`; the
+leaky wave parked on `backup/s13-public-91ba48d`; re-published clean at `8286282`). A staging branch would have
+caught both on `dev` and kept `main` clean.
+
+**The staged publish flow (now the durable default):**
+1. **`scripts/publish.sh`** (new, private — NOT synced to public). It: (a) clones the **committed** build HEAD into
+   a throwaway dir — never the working tree, so uncommitted WIP/secrets can't ride along (the §34 leak vector);
+   (b) runs `sync-public.sh` *from the clone* (rsync → `scrub-planning-tells.py` → hard grep tell/leak gate);
+   (c) checks out public **`dev`** and stages the result; (d) re-runs an independent leak scan; (e) prints the
+   founder-gated commands. It **never commits and never pushes** — both stay founder-gated. Guards: refuses to run
+   if `dev` is missing or the public tree is dirty.
+2. **Commit + push `dev`** (founder-gated). CI now runs on `dev` — `ci.yml` `on.push.branches: [main, dev]` (PR CI
+   already covered PRs). The required gates (`test-warmthcore` + `build-app-unsigned`) run on the staged content
+   before `main` ever sees it.
+3. **Verify:** CI green on `dev` + a final manual leak scan
+   (`grep -rInE '/Users/|/home/|abendrot-(build|public)|§|\bfounder\b' abendrot-public/{App,WarmthKit,cli,scripts,README.md,AGENTS.md}` → 0).
+4. **Promote:** `git -C abendrot-public checkout main && git merge --ff-only dev && git push origin main`. The
+   `--ff-only` guarantees `main` is exactly the verified `dev` commit — no surprise merge content.
+
+**Scrub hardened.** Testing the flow on copies surfaced a pre-existing gap the flow correctly caught: the
+short-form sprint tag `S13` (in `AppModel.swift`, from the §34 review-findings commit) survived the scrub but the
+gate rejected it. Added `S1N` rules to `scrub-planning-tells.py`'s `SESSION_REFS`, mirroring the long-form
+"Session N" handling and anchored on `", "` / `"("` / the literal `the` so no code token is touched (verified: an
+old-vs-new scrub diff over the whole synced tree changes exactly that one comment line).
+
+**Invariants (unchanged, reinforced):** the build repo is NEVER pushed; the scrub+gate are never weakened; publish
+sources only from the committed HEAD; `backup/s13-public-91ba48d` stays as the safety net.
+
 ---
 
 *Status: ✅ APPROVED for execution (2026-06-16). All decisions locked; §21.6 staged-beta strategy confirmed. **§25 warming overhaul + max-warmth ceiling: DONE (Session-6, hybrid).** Execution proceeds in `/Users/ball/Documents/abendrot` via `/team` across the §15 lanes, with heavy backend dispatched to Opus 4.8 `/goal` (max effort) and the hardest engine logic retained in the lead session. See `RESUME-PROMPT.md` to start the execution session.*

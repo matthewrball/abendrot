@@ -324,6 +324,12 @@ GENERIC_VOCAB = [
 SESSION_REFS = [
     (re.compile(r",\s*Session\s+[0-9]+"), ""),     # ", Session N" clause inside a paren
     (re.compile(r"\s*\(Session\s+[0-9]+\)"), ""),  # standalone "(Session N)" group
+    # Short-form "S1N" sprint tags (e.g. "S13"). Same clause/paren shapes as above, plus the
+    # bare inline "the S1N <noun>" prose form -> drop just the tag, keep the noun. Anchored on
+    # ", " / "(" / the literal lowercase "the" so no Swift identifier or code token is touched.
+    (re.compile(r",\s*S1[0-9]\b"), ""),            # ", S13" clause
+    (re.compile(r"\s*\(S1[0-9]\)"), ""),           # "(S13)" group
+    (re.compile(r"(\bthe)\s+S1[0-9]\b"), r"\1"),   # "the S13 ceiling" -> "the ceiling"
 ]
 
 # ---------------------------------------------------------------------------
