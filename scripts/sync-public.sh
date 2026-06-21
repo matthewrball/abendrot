@@ -107,12 +107,13 @@ python3 "$BUILD/scripts/scrub-planning-tells.py" "$PUBLIC"
 echo "== Verifying public source is clean (0 planning tells) =="
 # Gate EVERY synced path. The pattern covers §-refs, internal doc paths, the build/release
 # vocabulary (Mode A/B, Wave-N, Lane X, dev/dogfood), the internal RELEASE.md/abendrot-plan
-# paths, the handoff/resume artifacts, and "founder". Any surviving hit fails the run.
+# paths, the handoff/resume artifacts, "founder", absolute home paths (/Users, /home), and the
+# private repo names (abendrot-build/-public). Any surviving hit fails the run.
 GATE_PATHS=()
 for t in "${SYNC_TREES[@]}"; do [ -d "$PUBLIC/$t" ] && GATE_PATHS+=("$PUBLIC/$t"); done
 for f in "${SYNC_FILES[@]}"; do [ -f "$PUBLIC/$f" ] && GATE_PATHS+=("$PUBLIC/$f"); done
 
-TELL_PATTERN='§|docs/(research|marketing|engine|qa|release)/|plan §|abendrot-plan|RESUME-PROMPT|HANDOFF\b|\bfounder\b|\bMode [AB]\b|\bmode [AB]\b|\bWave-[0-9]|\bLane [A-Z]\b|dogfood|RELEASE\.md'
+TELL_PATTERN='§|docs/(research|marketing|engine|qa|release)/|plan §|abendrot-plan|RESUME-PROMPT|HANDOFF\b|\bfounder\b|\bMode [AB]\b|\bmode [AB]\b|\bWave-[0-9]|\bLane [A-Z]\b|dogfood|RELEASE\.md|/Users/|/home/[a-z]|abendrot-(build|public)'
 # -I: skip binary files (e.g. .xcassets PNGs) — they can coincidentally match the pattern bytes
 # and are not a tell vector; only text files carry planning tells.
 if grep -rInE "$TELL_PATTERN" "${GATE_PATHS[@]}" 2>/dev/null; then

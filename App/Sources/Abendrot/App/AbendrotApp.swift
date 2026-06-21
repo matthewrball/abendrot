@@ -93,7 +93,9 @@ struct AbendrotApp: App {
 /// defaults we just wiped, so the "fresh" instance wouldn't be fresh. Plain relaunch uses SIGTERM so
 /// displays still neutral-reset and stats persist across the restart.
 private func relaunchFromLatestBuild(force: Bool = false) {
-    let appPath = "/Users/ball/Documents/abendrot/abendrot-build/build/Release/Build/Products/Release/Abendrot.app"
+    // Reopen the bundle we're running from (the local Release build path during testing). Derived rather
+    // than hardcoded, so no absolute home path or private repo name lives in source to reach the mirror.
+    let appPath = Bundle.main.bundlePath
     let kill = force ? "killall -9 Abendrot 2>/dev/null" : "killall Abendrot 2>/dev/null"
     let task = Process()
     task.executableURL = URL(fileURLWithPath: "/bin/sh")
