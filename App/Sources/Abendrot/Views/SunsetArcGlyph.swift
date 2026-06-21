@@ -47,54 +47,63 @@ struct SunsetArcGlyph: View {
 
 // MARK: - Menu-bar status-item glyph
 //
-// The single most-seen surface. Two states (the Amphetamine pattern):
-//   • `template()` — resting/inactive. A MONOCHROME template image; `isTemplate = true` is CRITICAL
-//     (plan §6.5): macOS tints it to match light/dark bars. Without it the icon vanishes on light bars.
-//   • `active()`   — warming is on. The sun fills in and the whole mark goes ember-amber so a glance
-//     says "warming now" (brand-direction.md: "glows amber when warming is active"). Non-template so
-//     the amber survives the menu bar's auto-tinting.
-// `AbendrotApp` swaps between them on `AppModel.isWarmingActive`. Geometry matches `SunsetArcGlyph`.
+// The single most-seen surface. Resting = the original shipped sunset glyph (a filled half-sun on a
+// horizon). Warming keeps the EXACT same shape and same width — it just adds ember-amber + a soft glow
+// + one reflection ripple on the water below (founder pick, 2026-06-21; same-width states → no jump).
+//   • `template()` — resting/inactive. MONOCHROME template; `isTemplate = true` is CRITICAL (plan §6.5):
+//     macOS tints it to match light/dark bars. Without it the icon vanishes on light bars.
+//   • `active()`   — warming on. Identical sun + horizon, now ember-amber with a soft glow and the
+//     reflection ripple added. Non-template so the amber/glow survive the menu bar's auto-tinting.
+// `AbendrotApp` swaps between them on `AppModel.isWarmingActive`.
 enum MenuBarGlyph {
-    /// Inactive (resting) glyph: hollow One-Ripple arc as a tintable template image.
+    /// Inactive (resting) glyph: the filled half-sun + horizon, as a tintable template image.
     static func template(pointSize: CGFloat = 18) -> NSImage {
-        let image = draw(pointSize: pointSize, filled: false, color: .black)
+        let image = draw(pointSize: pointSize, color: .black, withRipple: false, glow: false)
         image.isTemplate = true   // CRITICAL — adapts to the menu bar; see note above.
         return image
     }
 
-    /// Active (warming) glyph: solid sun in ember amber.
+    /// Active (warming) glyph: identical shape/width, ember-amber + soft glow + the reflection ripple.
     static func active(pointSize: CGFloat = 18) -> NSImage {
         // ponytail: one amber (--accent #FD9228) that reads on both light & dark bars; deepen
         // per-appearance only if it ever looks washed-out on a light bar.
         let amber = NSColor(srgbRed: 253 / 255, green: 146 / 255, blue: 40 / 255, alpha: 1)
-        let image = draw(pointSize: pointSize, filled: true, color: amber)
+        let image = draw(pointSize: pointSize, color: amber, withRipple: true, glow: true)
         image.isTemplate = false
         return image
     }
 
-    /// Shared drawing. `flipped: false` → y-UP AppKit space, so the upper dome is the 0°→180° arc.
-    private static func draw(pointSize: CGFloat, filled: Bool, color: NSColor) -> NSImage {
+    /// Shared drawing on a 24-unit grid. `flipped: false` → y-UP AppKit space, so the upper dome is the
+    /// 0°→180° arc. Matches the original shipped geometry: horizon at 0.40·h (y=9.6), sun radius 0.30·w
+    /// (7.2), line 0.08·w (1.92). The ripple (active only) sits below the horizon; both states share the
+    /// identical sun + horizon footprint, so the icon never resizes between states.
+    private static func draw(pointSize: CGFloat, color: NSColor, withRipple: Bool, glow: Bool) -> NSImage {
         NSImage(size: NSSize(width: pointSize, height: pointSize), flipped: false) { rect in
             let s = rect.width / 24.0
             func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: x * s, y: y * s) }
-            let lw = 2.8 * s
+            let horizonY: CGFloat = 9.6
+            let lw = 1.92 * s
+
+            NSGraphicsContext.current?.saveGraphicsState()
+            if glow {
+                let shadow = NSShadow()
+                shadow.shadowColor = color.withAlphaComponent(0.85)
+                shadow.shadowBlurRadius = 2.6 * s
+                shadow.shadowOffset = .zero
+                shadow.set()
+            }
             color.set()
 
-            // Half-sun dome — center (12,12), radius 6.5, upper semicircle.
+            // Filled half-sun dome — center (12, 9.6), radius 7.2, upper semicircle.
             let dome = NSBezierPath()
-            dome.appendArc(withCenter: p(12, 12), radius: 6.5 * s, startAngle: 0, endAngle: 180)
-            dome.lineWidth = lw
-            dome.lineCapStyle = .round
-            dome.lineJoinStyle = .round
-            if filled {
-                dome.close()        // chord along the horizon → solid half-disc
-                dome.fill()
-            } else {
-                dome.stroke()       // hollow outline
-            }
+            dome.appendArc(withCenter: p(12, horizonY), radius: 7.2 * s, startAngle: 0, endAngle: 180)
+            dome.close()        // chord along the horizon → solid half-disc
+            dome.fill()
 
-            // Horizon line + the single reflection ripple (y-up: ripple sits below the horizon).
-            for (a, b) in [(p(4, 12), p(20, 12)), (p(8.5, 7.5), p(15.5, 7.5))] {
+            // Horizon line, plus the reflection ripple below it when active.
+            var segments: [(NSPoint, NSPoint)] = [(p(2.88, horizonY), p(21.12, horizonY))]
+            if withRipple { segments.append((p(8.5, 5.5), p(15.5, 5.5))) }
+            for (a, b) in segments {
                 let line = NSBezierPath()
                 line.lineWidth = lw
                 line.lineCapStyle = .round
@@ -102,6 +111,7 @@ enum MenuBarGlyph {
                 line.line(to: b)
                 line.stroke()
             }
+            NSGraphicsContext.current?.restoreGraphicsState()
             return true
         }
     }

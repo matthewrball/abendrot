@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abendrot — Old icon × One Ripple</title>
+<style>
+
+:root{
+  --indigo:#160A12;--plum:#221019;--twilight:#341320;--twilight2:#45192A;
+  --line:rgba(255,240,230,.10);--line2:rgba(255,240,230,.16);
+  --text:#F3EADF;--muted:rgba(243,234,223,.60);--faint:rgba(243,234,223,.38);
+  --accent:#FD9228;--accent2:#FFC061;--accent-deep:#C2310A;--cream:#F7ECD9;
+  --zoom:84px;
+}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;color:var(--text);letter-spacing:-.01em;
+  background:
+    radial-gradient(1100px 720px at 80% -10%,rgba(253,146,40,.13),transparent 60%),
+    radial-gradient(900px 700px at 10% 2%,rgba(120,60,160,.10),transparent 55%),
+    linear-gradient(170deg,#1b0c14 0%,var(--plum) 52%,var(--indigo) 100%);
+  background-attachment:fixed;min-height:100vh;-webkit-font-smoothing:antialiased;padding-bottom:120px;}
+.serif{font-family:ui-serif,"New York",Georgia,serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+header.top{padding:54px 0 8px;text-align:center;}
+.word{font-family:ui-serif,"New York",Georgia,serif;font-size:clamp(34px,5vw,56px);font-weight:600;letter-spacing:-.03em;line-height:1;
+  background:linear-gradient(180deg,#fff 0%,var(--accent2) 64%,var(--accent) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.kicker{margin-top:10px;color:var(--muted);font-size:12.5px;letter-spacing:.13em;text-transform:uppercase;}
+.lead{max-width:70ch;margin:14px auto 0;color:var(--muted);font-size:15px;text-wrap:balance;line-height:1.6;}
+details.research{margin:30px auto 0;max-width:920px;border:.5px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03);}
+details.research>summary{cursor:pointer;padding:16px 20px;font-weight:600;font-size:14.5px;color:var(--accent2);list-style:none;}
+details.research>summary::-webkit-details-marker{display:none}
+details.research>summary::before{content:"▸ ";color:var(--accent)}
+details.research[open]>summary::before{content:"▾ "}
+.research .body{padding:0 22px 20px;color:var(--muted);font-size:13.5px;line-height:1.65;}
+.research .body h2{color:var(--accent2);font-size:15px;margin:18px 0 6px;}
+.research .body code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:5px;font-size:12px;}
+.synth{margin:26px auto 0;max-width:920px;border-radius:16px;padding:20px 22px;
+  background:linear-gradient(140deg,rgba(253,146,40,.12),rgba(253,146,40,.03));border:.5px solid var(--line2);}
+.synth h3{margin:0 0 8px;font-size:15px;color:var(--accent2);}
+.synth .pick{font-size:14px;margin:6px 0;color:var(--text);}
+.synth .pick b{color:var(--accent2);}
+.synth p{color:var(--muted);font-size:13.5px;line-height:1.6;margin:10px 0 0;}
+
+.controls{position:sticky;top:0;z-index:20;margin-top:34px;padding:12px 14px;border-radius:14px;
+  display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center;
+  background:linear-gradient(140deg,rgba(40,20,30,.82),rgba(24,12,18,.88));
+  backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
+  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12),0 12px 30px rgba(0,0,0,.4);}
+.controls label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+.controls input[type=range]{accent-color:var(--accent);width:140px;}
+.controls .walls{display:flex;gap:7px;}
+.controls .walls button{width:26px;height:26px;border-radius:7px;border:1.5px solid transparent;cursor:pointer;padding:0;}
+.controls .walls button.sel{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(255,192,97,.3);}
+
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:24px;}
+@media(max-width:880px){.grid{grid-template-columns:1fr}}
+.card{border-radius:18px;padding:18px 18px 20px;
+  background:linear-gradient(140deg,rgba(255,255,255,.07),rgba(255,255,255,.025) 50%,rgba(255,255,255,.05));
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,.30),inset 0 0 0 .5px rgba(255,255,255,.12),0 16px 40px rgba(0,0,0,.38);}
+.card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.card-h .fam{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);}
+.card-h h3{margin:3px 0 0;font-size:18px;font-weight:600;letter-spacing:-.02em;}
+.score{flex:none;font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;font-variant-numeric:tabular-nums;}
+.score.hi{background:rgba(120,220,150,.16);color:#9be8b4;}
+.score.mid{background:rgba(255,192,97,.16);color:var(--accent2);}
+.score.lo{background:rgba(255,120,120,.14);color:#ff9b9b;}
+.concept{color:var(--muted);font-size:13px;margin:8px 0 14px;line-height:1.5;}
+
+.bars{display:flex;flex-direction:column;gap:9px;}
+.bar{height:30px;border-radius:9px;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 12px;}
+.bar.dark{background:linear-gradient(180deg,rgba(34,22,40,.78),rgba(18,11,20,.88));box-shadow:inset 0 0 0 .5px rgba(255,255,255,.10);}
+.bar.light{background:linear-gradient(180deg,rgba(248,243,233,.92),rgba(236,228,214,.96));box-shadow:inset 0 0 0 .5px rgba(0,0,0,.10);}
+.bar .clock{font-size:12px;font-variant-numeric:tabular-nums;}
+.bar.dark .clock{color:rgba(255,255,255,.82)}.bar.light .clock{color:rgba(30,24,40,.78)}
+.bar .sys{display:flex;opacity:.7}.bar .sys svg{width:14px;height:14px}
+.bar.dark .sys svg{color:rgba(255,255,255,.8)}.bar.light .sys svg{color:rgba(30,24,40,.7)}
+/* the icon host: template tinting via currentColor */
+.ico{width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.ico svg{width:18px;height:18px;display:block;color:inherit}
+.bar.dark .ico.inactive{color:rgba(255,255,255,.92)}
+.bar.light .ico.inactive{color:rgba(28,22,38,.88)}
+.bar.dark .ico.active{color:var(--accent2);filter:drop-shadow(0 0 3px rgba(255,171,92,.85)) drop-shadow(0 0 1.5px rgba(255,171,92,.6))}
+.bar.light .ico.active{color:var(--accent-deep);filter:drop-shadow(0 0 3px rgba(253,146,40,.8))}
+.bartag{font-size:10px;color:var(--faint);align-self:center;margin-right:auto;letter-spacing:.04em}
+
+.zoom{display:flex;gap:12px;margin-top:16px;}
+.zoom figure{margin:0;flex:1;text-align:center;}
+.zoom .stage{height:calc(var(--zoom) + 28px);border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:rgba(10,6,10,.5);box-shadow:inset 0 0 0 .5px var(--line);}
+.zoom .stage.wall{background-size:cover;background-position:center;}
+.zoom .stage svg{width:var(--zoom);height:var(--zoom);display:block}
+.zoom .big.inactive{color:rgba(255,255,255,.9)}
+.zoom .big.active{color:var(--accent);filter:drop-shadow(0 0 10px rgba(253,146,40,.75)) drop-shadow(0 0 4px rgba(253,146,40,.6))}
+.zoom figcaption{font-size:11px;color:var(--muted);margin-top:6px;}
+
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin:16px 0 0;}
+.meta div{display:flex;gap:7px;font-size:12px;}
+.meta dt{color:var(--faint);flex:none;}
+.meta dd{margin:0;color:var(--text);}
+.meta .v-yes{color:#9be8b4}.meta .v-marginal{color:var(--accent2)}.meta .v-no{color:#ff9b9b}
+.treat{font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.5;}
+.treat b{color:var(--accent2);font-weight:600}
+.pc{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;}
+.pc ul{margin:0;padding-left:16px;font-size:11.5px;line-height:1.5;color:var(--muted)}
+.pc .pros li::marker{color:#9be8b4}.pc .cons li::marker{color:#ff9b9b}
+.pc h4{margin:0 0 4px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.rationale{font-size:12.5px;color:var(--faint);margin:12px 0 0;line-height:1.55;border-top:.5px solid var(--line);padding-top:10px;}
+.foot{margin-top:60px;text-align:center;color:var(--muted);font-size:13.5px}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+  <div class="word">Abendrot</div>
+  <div class="kicker">Old menu-bar icon × One Ripple · pick the resting state</div>
+  <p class="lead">You liked the <b>One Ripple active</b> but the <b>old inactive</b> — so these combine them. Both combos share the same active (filled amber sun + one reflection ripple); the choice is whether the <b>resting</b> state is a hollow outline arc or the old solid sun. The last card is the original shipped icon, unchanged, in case you want to redeploy it. Zoom to ~16px to judge.</p>
+</header>
+
+  <section class="synth" id="synth"></section>
+
+  <details class="research">
+    <summary>Research brief · menu-bar template glyphs, active/inactive conventions, tiny-icon survival</summary>
+    <div class="body" id="research-body"></div>
+  </details>
+</div>
+
+<div class="wrap">
+  <div class="controls">
+    <label>Zoom
+      <input type="range" id="zoomRange" min="48" max="160" value="84">
+    </label>
+    <label>Busy wallpaper
+      <span class="walls" id="walls"></span>
+    </label>
+  </div>
+
+  <main class="grid" id="grid"></main>
+
+  <footer class="foot">Abendrot menu-bar icon lab · all marks rendered as monochrome <code>currentColor</code> templates · amber = "warming" active state only.</footer>
+</div>
+
+<script>
+const DATA = {"research": "## Old icon \u00d7 One Ripple \u2014 combine\nYou liked the **One Ripple active** but the **old inactive**, so these combine them.\n\n- **The shared active** (warming on): a solid ember-amber half-sun + horizon + one reflection ripple \u2014 the One Ripple active.\n- **The resting state** is the open question: the clean **hollow** old arc, or the **filled** old sun. Both drop the ripple at rest so the off state stays simple like the old icon; the ripple then *appears* when warming.\n- The **Old icon (as shipped)** card is the faithful original (filled, low, large, no ripple) in case you want to redeploy it as-is.\n\nAll are monochrome NSImage templates at rest (macOS auto-tints for light/dark bars); active renders in amber.", "icons": [{"id": "combo-hollow", "name": "Combo \u00b7 hollow resting", "family": "Combination", "concept": "Off = the clean old half-sun + horizon outline (no ripple). On = the sun fills AND the One-Ripple reflection appears on the water.", "activeTreatment": "Resting hollow arc \u2192 solid amber half-sun, and the single reflection ripple APPEARS (it is part of the on-signal). Footprint fixed; only fill + ripple change.", "rationale": "The most literal read of your ask: old inactive outline + One-Ripple active. The ripple appearing only when warming gives the strongest, most poetic on/off tell \u2014 the water 'lights up' when warming starts.", "svgInactive": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/></svg>", "svgActive": "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\" fill=\"none\"/><line x1=\"8.5\" y1=\"16.5\" x2=\"15.5\" y2=\"16.5\" fill=\"none\"/></svg>", "templateSafe": true, "verdict": {"readsAt16": "yes", "templateSafe": true, "activeInactiveLegible": "yes", "pros": ["Off state is the clean old arc you liked \u2014 no ripple clutter at rest", "Active gains BOTH fill and the reflection ripple, so the on/off change is unmistakable even in grayscale", "Fixed footprint; the only motion is the sun filling and the ripple blooming"], "cons": ["Active is slightly busier than rest (by design)", "Ripple only present when active, so the app-icon reflection isn't visible at rest"], "score": 9, "oneLine": "Old clean arc when off, sun + reflection light up when warming \u2014 the clearest on/off of the set."}}, {"id": "combo-filled", "name": "Combo \u00b7 filled resting (old look)", "family": "Combination", "concept": "Off = the old FILLED half-sun + horizon (the icon you shipped, minus the ripple). On = same sun, plus the reflection ripple, in amber.", "activeTreatment": "Sun stays a solid half-disc in both states; warming ADDS the single reflection ripple and shifts to amber. Closest to literally redeploying the old icon and lighting it up.", "rationale": "If 'old inactive' means the old FILLED look, this keeps the solid sun at rest and only adds the ripple + amber when warming.", "svgInactive": "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\" fill=\"none\"/></svg>", "svgActive": "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\" fill=\"none\"/><line x1=\"8.5\" y1=\"16.5\" x2=\"15.5\" y2=\"16.5\" fill=\"none\"/></svg>", "templateSafe": true, "verdict": {"readsAt16": "yes", "templateSafe": true, "activeInactiveLegible": "marginal", "pros": ["Resting state is the old solid sun you shipped", "Warming adds the reflection ripple \u2014 a subtle but on-brand on-signal", "Bold and legible at 16px in both states"], "cons": ["On/off rests mostly on the amber color + a small ripple (sun is filled either way) \u2014 weaker grayscale tell than the hollow combo", "A solid sun at rest is heavier than the typical outline resting icon"], "score": 8, "oneLine": "Redeploys the old solid sun and lights up a ripple when warming \u2014 faithful, but a softer grayscale on/off than the hollow combo."}}, {"id": "one-ripple", "name": "One Ripple (current pick)", "family": "Reference", "concept": "The current build: hollow half-sun + horizon + one ripple at rest; solid sun + ripple when warming.", "activeTreatment": "Hollow \u2192 solid sun; ripple present in both states.", "rationale": "Shown for reference \u2014 what's wired into the app right now.", "svgInactive": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/><line x1=\"8.5\" y1=\"16.5\" x2=\"15.5\" y2=\"16.5\"/></svg>", "svgActive": "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.5 12 A6.5 6.5 0 0 1 18.5 12 Z\" stroke=\"none\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\" fill=\"none\"/><line x1=\"8.5\" y1=\"16.5\" x2=\"15.5\" y2=\"16.5\" fill=\"none\"/></svg>", "templateSafe": true, "verdict": {"readsAt16": "yes", "templateSafe": true, "activeInactiveLegible": "marginal", "pros": ["Reflection ripple visible even at rest (highest app-icon fidelity)", "Reads cleanly at 16px", "Matches the existing favicon's single-ripple vocabulary"], "cons": ["On/off rests on ~2px of sun interior filling \u2014 subtle", "Ripple at rest is slightly busier than the bare old arc"], "score": 7, "oneLine": "The current wired glyph \u2014 ripple always present; the combos move the ripple to the active state."}}, {"id": "old-deployed", "name": "Old icon (as shipped)", "family": "Reference", "concept": "The provisional glyph Abendrot shipped for months: a filled half-sun, sitting low and large, on a thin full-width horizon. No ripple, single state.", "activeTreatment": "None historically \u2014 it was one static template glyph. (Shown here lit in amber just to preview a warm tint.)", "rationale": "Reference / redeploy candidate. Faithful to the shipped geometry (horizon at 0.40\u00b7h, sun radius 0.30\u00b7w, line 0.08\u00b7w).", "svgInactive": "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"1.92\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.8 14.4 A7.2 7.2 0 0 1 19.2 14.4 Z\" stroke=\"none\"/><line x1=\"2.88\" y1=\"14.4\" x2=\"21.12\" y2=\"14.4\" fill=\"none\"/></svg>", "svgActive": "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"1.92\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.8 14.4 A7.2 7.2 0 0 1 19.2 14.4 Z\" stroke=\"none\"/><line x1=\"2.88\" y1=\"14.4\" x2=\"21.12\" y2=\"14.4\" fill=\"none\"/></svg>", "templateSafe": true, "verdict": {"readsAt16": "yes", "templateSafe": true, "activeInactiveLegible": "no", "pros": ["Bold, instantly legible filled sun at 16px", "The familiar look you've been running"], "cons": ["No active/inactive distinction \u2014 always the same", "Sits low/large in the slot vs the tuned One-Ripple proportions", "Drops the app-icon's reflection entirely"], "score": 7, "oneLine": "The original shipped glyph \u2014 bold and familiar, but a single static state with no warming signal."}}], "synthesis": {"topPicks": [{"id": "combo-hollow", "why": "Exactly your ask \u2014 the old clean outline arc at rest, and One Ripple's filled sun + reflection when warming. The ripple appearing only when active is the strongest on/off signal here."}, {"id": "combo-filled", "why": "If 'old inactive' means the old SOLID sun: keeps the filled arc at rest and adds the ripple + amber when warming. Most literal redeploy-the-old-icon path."}], "narrowingGuidance": "Both combos share the SAME active state (One Ripple: filled amber sun + one reflection ripple). The only decision is the resting state: HOLLOW outline arc (combo-hollow \u2014 clean, and the fill+ripple appearing gives the boldest on/off) vs FILLED solid sun (combo-filled \u2014 literally the old icon's body, with just the ripple + amber added when warming). Pick based on whether you want the resting icon to read as an outline or a solid sun. Card 4 is the exact old icon if you'd rather redeploy it unchanged.", "overallNotes": "Zoom to ~16px and toggle the wallpapers. The combos use One Ripple's tuned proportions so the icon never jumps between states; the 'Old icon' card uses the original larger/lower geometry for faithful comparison."}};
+
+// Generic outline system glyph (a Wi-Fi-ish chevron arc) for the bar mock.
+const SYS_GLYPH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M8.5 16.05a6 6 0 0 1 7 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>';
+
+// Warm/busy CSS-gradient wallpapers — the hardest case for a warm icon to survive.
+const WALLS = [
+  {id:'W1', css:'linear-gradient(160deg,#ff9a56,#ff6a3d 50%,#c23a1f)'},
+  {id:'W2', css:'linear-gradient(150deg,#f7b267,#f4845f 45%,#c75146 80%,#7a2d3a)'},
+  {id:'W3', css:'repeating-linear-gradient(58deg,#e8a04a 0 14px,#d98438 14px 28px)'},
+  {id:'W4', css:'linear-gradient(165deg,#2a1830,#6a100f 55%,#fb7c0e)'}
+];
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function scoreClass(score){
+  if (score >= 8) return 'hi';
+  if (score >= 6) return 'mid';
+  return 'lo';
+}
+
+// --- Markdown -> basic HTML for the research brief (## -> h2, - bullets -> <li>, rest -> <p>)
+function renderMarkdown(md){
+  const lines = md.split('\n');
+  let html = '';
+  let inList = false;
+  const closeList = () => { if (inList){ html += '</ul>'; inList = false; } };
+
+  const inline = (text) => {
+    let t = escapeHtml(text);
+    // code spans
+    t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // bold
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // italics
+    t = t.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // links [text](url)
+    t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return t;
+  };
+
+  for (let raw of lines){
+    const line = raw.replace(/\s+$/,'');
+    if (line.trim() === ''){ closeList(); continue; }
+    const h2 = line.match(/^#{1,6}\s+(.*)$/);
+    if (h2){ closeList(); html += '<h2>' + inline(h2[1]) + '</h2>'; continue; }
+    const bullet = line.match(/^\s*-\s+(.*)$/);
+    if (bullet){
+      if (!inList){ html += '<ul>'; inList = true; }
+      html += '<li>' + inline(bullet[1]) + '</li>';
+      continue;
+    }
+    closeList();
+    html += '<p>' + inline(line) + '</p>';
+  }
+  closeList();
+  return html;
+}
+
+// --- Synthesis block (top picks + narrowing guidance)
+function renderSynth(){
+  const s = DATA.synthesis;
+  const nameById = {};
+  DATA.icons.forEach(i => { nameById[i.id] = i.name; });
+  let html = '<h3>Synthesis · top picks</h3>';
+  s.topPicks.forEach(p => {
+    const name = nameById[p.id] || p.id;
+    html += '<div class="pick"><b>' + escapeHtml(name) + '</b> — ' + escapeHtml(p.why) + '</div>';
+  });
+  html += '<p><b>Narrowing guidance:</b> ' + escapeHtml(s.narrowingGuidance) + '</p>';
+  document.getElementById('synth').innerHTML = html;
+}
+
+// --- One card
+function renderCard(icon){
+  const v = icon.verdict;
+  const sc = scoreClass(v.score);
+  const tmplClass = icon.templateSafe ? 'v-yes' : 'v-no';
+  const tmplVal = icon.templateSafe ? 'yes' : 'no';
+
+  const pros = (v.pros || []).map(p => '<li>' + escapeHtml(p) + '</li>').join('');
+  const cons = (v.cons || []).map(c => '<li>' + escapeHtml(c) + '</li>').join('');
+
+  const art = document.createElement('article');
+  art.className = 'card';
+  art.innerHTML =
+    '<div class="card-h">' +
+      '<div><div class="fam">' + escapeHtml(icon.family) + '</div><h3>' + escapeHtml(icon.name) + '</h3></div>' +
+      '<span class="score ' + sc + '">' + v.score + '/10</span>' +
+    '</div>' +
+    '<p class="concept">' + escapeHtml(icon.concept) + '</p>' +
+
+    '<div class="bars">' +
+      '<div class="bar dark"><span class="bartag">Dark bar</span>' +
+        '<span class="ico inactive">' + icon.svgInactive + '</span>' +
+        '<span class="ico active">' + icon.svgActive + '</span>' +
+        '<span class="sys">' + SYS_GLYPH + '</span>' +
+        '<span class="clock">9:41 PM</span></div>' +
+      '<div class="bar light"><span class="bartag">Light bar</span>' +
+        '<span class="ico inactive">' + icon.svgInactive + '</span>' +
+        '<span class="ico active">' + icon.svgActive + '</span>' +
+        '<span class="sys">' + SYS_GLYPH + '</span>' +
+        '<span class="clock">9:41 PM</span></div>' +
+    '</div>' +
+
+    '<div class="zoom">' +
+      '<figure><div class="stage"><span class="big inactive">' + icon.svgInactive + '</span></div><figcaption>Inactive</figcaption></figure>' +
+      '<figure><div class="stage"><span class="big active">' + icon.svgActive + '</span></div><figcaption>Active</figcaption></figure>' +
+      '<figure><div class="stage wall"><span class="big active">' + icon.svgActive + '</span></div><figcaption>Active · busy wallpaper</figcaption></figure>' +
+    '</div>' +
+
+    '<dl class="meta">' +
+      '<div><dt>Reads@16</dt><dd class="v-' + escapeHtml(v.readsAt16) + '">' + escapeHtml(v.readsAt16) + '</dd></div>' +
+      '<div><dt>Template-safe</dt><dd class="' + tmplClass + '">' + tmplVal + '</dd></div>' +
+      '<div><dt>Active≠Inactive</dt><dd class="v-' + escapeHtml(v.activeInactiveLegible) + '">' + escapeHtml(v.activeInactiveLegible) + '</dd></div>' +
+      '<div><dt>Family</dt><dd>' + escapeHtml(icon.family) + '</dd></div>' +
+    '</dl>' +
+    '<p class="treat"><b>Active:</b> ' + escapeHtml(icon.activeTreatment) + '</p>' +
+    '<div class="pc">' +
+      '<div><h4>Pros</h4><ul class="pros">' + pros + '</ul></div>' +
+      '<div><h4>Cons</h4><ul class="cons">' + cons + '</ul></div>' +
+    '</div>' +
+    '<p class="rationale">' + escapeHtml(icon.rationale) + '</p>';
+
+  return art;
+}
+
+// --- Grid (sorted by verdict.score desc)
+function renderGrid(){
+  const grid = document.getElementById('grid');
+  const sorted = DATA.icons.slice().sort((a,b) => b.verdict.score - a.verdict.score);
+  const frag = document.createDocumentFragment();
+  sorted.forEach(icon => frag.appendChild(renderCard(icon)));
+  grid.appendChild(frag);
+}
+
+// --- Controls: zoom + wallpaper swatches
+function applyWall(css){
+  document.querySelectorAll('.stage.wall').forEach(el => { el.style.backgroundImage = css; });
+}
+
+function renderControls(){
+  const range = document.getElementById('zoomRange');
+  range.addEventListener('input', () => {
+    document.documentElement.style.setProperty('--zoom', range.value + 'px');
+  });
+
+  const walls = document.getElementById('walls');
+  WALLS.forEach((w, idx) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.title = w.id;
+    b.style.background = w.css;
+    if (idx === 0) b.classList.add('sel');
+    b.addEventListener('click', () => {
+      walls.querySelectorAll('button').forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+      applyWall(w.css);
+    });
+    walls.appendChild(b);
+  });
+}
+
+// --- Boot
+document.getElementById('research-body').innerHTML = renderMarkdown(DATA.research);
+renderSynth();
+renderGrid();
+renderControls();
+applyWall(WALLS[0].css); // default W1
+</script>
+</body>
+</html>
