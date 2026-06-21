@@ -11,12 +11,12 @@ import AppKit
 // and front correctly, then flip back to `.accessory` when the LAST such window
 // closes. A bare set/reset breaks when two windows overlap; a counter fixes it.
 //
-// Usage: call `enter` before showing a window, `leave` when it closes.
+// Usage: call `enter()` before showing a window, `leave()` when it closes.
 @MainActor
 enum AppActivationPolicy {
     private static var count = 0
 
-    /// Foreground the app (`.regular`) for a window that needs focus. Balanced by `leave`.
+    /// Foreground the app (`.regular`) for a window that needs focus. Balanced by `leave()`.
     static func enter() {
         count += 1
         if count == 1 {

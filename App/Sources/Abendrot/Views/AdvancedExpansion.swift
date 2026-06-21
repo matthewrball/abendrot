@@ -3,15 +3,16 @@ import WarmthKit
 
 // MARK: - AdvancedExpansion
 //
-// The "liquid expansion" power rows. Surfaces, per display:
-// - an independent warmth override → AppModel.setWarmth(_:for:)
-// - a layer override (Overlay/Gamma/Hardware) → AppModel.setPreferredMethod(_:for:)
-// - a DDC opt-in toggle (where capable) → AppModel.setHardwareDDCEnabled(_:for:)
-// plus per-app exclusions + screenshot-exempt entry points (engine-backed).
+// The "liquid expansion" power rows: the per-display "Override" rows, plus the
+// per-app exclusions deep-link. (Reveal-during-captures dropped for v1.0 — gamma/DDC screenshots are
+// already un-tinted at scanout, so the only capturable case is overlay-only; revisit post-launch.)
 //
-// Layer override is only offered where the engine reports the capability as
-// `.supported`; "we don't know" stays a first-class, rendered state (capability
-// types) rather than a silent enable.
+// Per-display "Custom warmth" lives here now (a simple toggle + slider, no jargon), surfaced only
+// when the user expands the popover — a lone screen shows no per-display row (nothing to
+// disambiguate). The schedule Mode control moved OUT of here and into the simple popover (under the
+// warmth slider). The engine internals (warming method, hardware DDC) stay out of the popover
+// entirely — they're troubleshooting/compatibility details that live in the Settings window's
+// "Displays → (per-display) Advanced" compatibility section.
 struct AdvancedExpansion: View {
     @Bindable var model: AppModel
 
@@ -19,130 +20,52 @@ struct AdvancedExpansion: View {
         VStack(alignment: .leading, spacing: 12) {
             DividerLine()
 
-            SectionLabel(text: "Per-display override & engine")
+            // Per-display "Override" rows — moved out of the simple popover. Shown ONLY with 2+
+            // displays (a lone screen needs no row); the app-level "can only tint" banner in the
+            // simple view still fires for a single incompatible display. The `tintOnly` test is the
+            // shared `model.isTintOnly` (single source of truth, also used by that banner).
+            if model.state.displays.count > 1 {
+                VStack(spacing: 8) {
+                    ForEach(model.state.displays) { display in
+                        DisplayRow(model: model, display: display, tintOnly: model.isTintOnly(display))
+                    }
+                }
 
-            ForEach(model.state.displays) { display in
-                AdvancedDisplayRow(display: display, model: model)
+                DividerLine()
             }
 
-            DividerLine()
-
-            // Per-app exclusions + screenshot-exempt — entry points only for this
-            // structural pass; full pickers live in Settings → Advanced/Privacy.
-            HStack {
-                Label("Per-app exclusions", systemImage: "app.badge.checkmark")
-                    .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.textMuted)
-                Spacer()
-                Text("Settings →")
-                    .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textFaint)
-            }
-
-            HStack {
-                Label("Reveal during captures", systemImage: "camera.viewfinder")
-                    .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.textMuted)
-                Spacer()
-                // Manual reveal-during-captures (auto-suspend is OUT of scope for v1.0,
-                // contract). This toggle is a placeholder hook; wiring lands in
-                // Settings → Privacy. TODO(settings).
-                Text("Manual")
-                    .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textFaint)
-            }
-        }
-    }
-}
-
-// MARK: - AdvancedDisplayRow
-
-private struct AdvancedDisplayRow: View {
-    let display: DisplayState
-    @Bindable var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text(display.name)
-                    .font(Theme.Typography.ui(12.5))
-                    .foregroundStyle(Theme.Color.textPrimary)
-                Spacer()
-                layerMenu
-            }
-
-            WarmSlider(strength: warmthBinding, kelvin: nil, compact: true)
-
-            if ddcCapable {
-                Toggle(isOn: ddcBinding) {
-                    Text("Use hardware DDC")
-                        .font(Theme.Typography.ui(11.5))
+            // Per-app exclusions — the popover is the quick surface; the full picker lives in
+            // Settings → Advanced. This row opens it there directly (deep-links the tab).
+            Button {
+                SettingsWindowController.show(model: model, tab: .advanced)
+            } label: {
+                HStack {
+                    Label("Per-app exclusions", systemImage: "app.badge.checkmark")
+                        .font(Theme.Typography.ui(12))
                         .foregroundStyle(Theme.Color.textMuted)
+                    Spacer()
+                    // "Manage" + a chevron — signals "opens the full settings" (navigation),
+                    // clearer than the "…" which conventionally means a dialog/needs-more-input.
+                    HStack(spacing: 3) {
+                        Text("Manage")
+                            .font(Theme.Typography.ui(11))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.Color.accent)
                 }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .tint(Theme.Color.accent)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .pointerStyle(.link)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 10)
-        .background(Theme.Color.line.opacity(0.4), in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
-    }
-
-    // Layer override menu — only methods the engine reports as available are offered.
-    private var layerMenu: some View {
-        Menu {
-            Button("Automatic (best available)") {
-                model.setPreferredMethod(nil, for: display.id)
-            }
-            ForEach(availableMethods, id: \.self) { method in
-                Button(method.badge) {
-                    model.setPreferredMethod(method, for: display.id)
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                MethodBadge(method: display.appliedMethod)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(Theme.Color.textFaint)
-            }
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    /// Methods the engine classified as `.supported` for this display (+ overlay,
-    /// which is the always-safe universal default per contract invariant #1).
-    private var availableMethods: [DisplayMethod] {
-        var methods: [DisplayMethod] = [.overlay]
-        if case .supported = display.capabilities.gamma { methods.append(.gamma) }
-        if case .supported = display.capabilities.hardware { methods.append(.hardware) }
-        return methods
-    }
-
-    private var ddcCapable: Bool {
-        if case .supported = display.capabilities.hardware { return true }
-        return false
-    }
-
-    private var warmthBinding: Binding<Double> {
-        Binding(
-            get: { display.warmth.strength },
-            set: { model.setWarmth($0, for: display.id) }
-        )
-    }
-
-    private var ddcBinding: Binding<Bool> {
-        Binding(
-            get: { display.isHardwareDDCEnabled },
-            set: { model.setHardwareDDCEnabled($0, for: display.id) }
-        )
     }
 }
 
 // MARK: - Preview
 
+// `MockWarmthState.warming` has three displays, so the expansion renders the moved per-display
+// "Override" rows (the >1-display guard is satisfied).
 #Preview("Advanced expansion") {
     let model = AppModel(previewState: MockWarmthState.warming)
     model.isAdvancedExpanded = true

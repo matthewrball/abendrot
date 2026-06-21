@@ -1,10 +1,10 @@
-# Abendrot — XcodeGen project spec (Lane B, app UI).
+# Abendrot — XcodeGen project spec (app UI).
 #
 # Generates `Abendrot.xcodeproj` (scheme `Abendrot`, matching .github/workflows/ci.yml
 # env ABENDROT_APP_SCHEME) wiring the SwiftUI/AppKit menu-bar app to the local
 # WarmthKit Swift package. Regenerate after editing this file or adding sources:
 #
-#     xcodegen generate
+# xcodegen generate
 #
 # The generated .xcodeproj is a BUILD ARTIFACT — it is git-ignored. project.yml is the
 # source of truth (App/README.md documents the workflow).
@@ -52,10 +52,14 @@ targets:
       # Link only the umbrella product — the app talks to WarmthEngine, never backends.
       - package: WarmthKit
         product: WarmthKit
+      # The shared control-surface schema (preference keys, notification name, message/snapshot
+      # DTOs) the app uses to observe + apply CLI/AI control messages and write state.json.
+      - package: WarmthKit
+        product: AbendrotControl
     info:
       path: App/Resources/Info.plist
       properties:
-        # LSUIElement = agent app: no Dock icon, no Cmd-Tab (plan §4.3).
+        # LSUIElement = agent app: no Dock icon, no Cmd-Tab.
         LSUIElement: true
         CFBundleName: Abendrot
         CFBundleDisplayName: Abendrot
@@ -64,16 +68,16 @@ targets:
         LSMinimumSystemVersion: "26.0"
         NSHumanReadableCopyright: "Abendrot. Soften into the evening."
         # No camera/mic/location/accessibility usage strings — core function needs no
-        # permissions (contract §0.4). A notification usage prompt is requested at
+        # permissions. A notification usage prompt is requested at
         # runtime during onboarding, not declared as an always-on permission.
         #
-        # Sparkle auto-update wiring (docs/release/RELEASE.md §4 — single signing
+        # Sparkle auto-update wiring (the release runbook — single signing
         # authority). The appcast lives at the raw GitHub URL; Sparkle reads it to
         # discover updates.
         SUFeedURL: "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
         # PLACEHOLDER — the REAL EdDSA public key is injected at release time from the
-        # keypair whose PRIVATE half lives ONLY in the founder's login keychain
-        # (RELEASE.md §4). `generate_keys` prints the public key; never commit a
+        # keypair whose PRIVATE half lives ONLY in the maintainer's login keychain
+        #. `generate_keys` prints the public key; never commit a
         # private key. Until then this placeholder keeps the bundle key present so the
         # plist schema is stable.
         SUPublicEDKey: "INJECTED_AT_RELEASE_PUBLIC_ED_KEY_PLACEHOLDER"

@@ -14,8 +14,8 @@ import SwiftUI
 //
 // Token discipline (baked into tokens.json):
 // - Never pure #000 — grounds are warm-tinted near-blacks.
-// - `Theme.Color.revealTrueWhite` (#FFFFFF) is RESERVED for the Reveal-True-Color
-// veil only. Body text is `textPrimary` (#ECE8F4), never white.
+// - #FFFFFF is RESERVED for the Reveal-True-Color veil only. Body text is
+// `textPrimary` (#ECE8F4), never white.
 // - Light + Reduce-Transparency surfaces are warm cream / twilight, never grey.
 enum Theme {
 
@@ -32,27 +32,38 @@ enum Theme {
         // Twilight grounds (dark) / warm cream (light)
         static let groundIndigo = SwiftUI.Color("GroundIndigo", bundle: .main)
         static let groundPlum = SwiftUI.Color("GroundPlum", bundle: .main)
-        static let groundTwilight = SwiftUI.Color("GroundTwilight", bundle: .main)
-        static let groundTwilight2 = SwiftUI.Color("GroundTwilight2", bundle: .main)
+
+        /// Fixed near-black ink for text/glyphs ON the bright accent gradient (selected segmented-control
+        /// segment, onboarding CTA, etc.). NOT `groundIndigo` — that is an adaptive GROUND (cream in Light
+        /// Mode) and washes out on the gradient (~1.3:1). Matches groundIndigo's DARK value, so Dark Mode is
+        /// pixel-unchanged while Light Mode becomes legible (WCAG AA).
+        static let inkOnAccent = SwiftUI.Color(.sRGB, red: 0x16 / 255.0, green: 0x0A / 255.0, blue: 0x12 / 255.0, opacity: 1)
 
         // Text
         static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .main)
         static let textMuted = SwiftUI.Color("TextMuted", bundle: .main)
         static let textFaint = SwiftUI.Color("TextFaint", bundle: .main)
-        static let textCream = SwiftUI.Color("TextCream", bundle: .main)
 
         // Lines / dividers
         static let line = SwiftUI.Color("LineBase", bundle: .main)
         static let lineStrong = SwiftUI.Color("LineStrong", bundle: .main)
-
-        /// RESERVED: the only #FFFFFF in the system — Reveal-True-Color veil only.
-        static let revealTrueWhite = SwiftUI.Color("RevealTrueWhite", bundle: .main)
 
         // Reduce-Transparency SOLID fallback (ember-tinted gradient endpoints).
         static let solidTop = SwiftUI.Color("SolidTop", bundle: .main)
         static let solidBottom = SwiftUI.Color("SolidBottom", bundle: .main)
         static let frostTop = SwiftUI.Color("FrostTop", bundle: .main)
         static let frostBottom = SwiftUI.Color("FrostBottom", bundle: .main)
+    }
+
+    // MARK: Gradients (the icon's sunset glow → on-brand control fills)
+
+    enum Gradient {
+        /// The brand sunset ramp: gold → orange → deep ember (mirrors the app-icon glow).
+        static let sunsetColors: [SwiftUI.Color] = [Color.accentHighlight, Color.accent, Color.accentPress]
+        /// Vertical sunset — buttons / segmented pills (light at the top, like a lit surface).
+        static let sunset = LinearGradient(colors: sunsetColors, startPoint: .top, endPoint: .bottom)
+        /// Horizontal sunset — the warmth track (Softer → Warmer deepens toward ember).
+        static let sunsetHorizontal = LinearGradient(colors: sunsetColors, startPoint: .leading, endPoint: .trailing)
     }
 
     // MARK: Radius (tokens.json → radius.*)
@@ -75,7 +86,6 @@ enum Theme {
 
         /// Approximation of the `ease-warm` cubic-bezier as a SwiftUI timing curve.
         static let warm = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durBase)
-        static let warmFast = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durFast)
 
         /// The one "big" moment — Reveal True Color "lift the veil".
         /// Physical/elastic spring, not a fade.
@@ -86,6 +96,13 @@ enum Theme {
         /// Resolve an animation honouring Reduce Motion (instant when reduced).
         static func warm(reduceMotion: Bool) -> Animation? {
             reduceMotion ? nil : warm
+        }
+
+        /// The reveal for the warmth group (slider + display rows) dropping in/out when "Warm my
+        /// displays" toggles. `.smooth` is critically damped — no overshoot or jitter, eases cleanly.
+        static let controlReveal = Animation.smooth(duration: 0.38)
+        static func controlReveal(reduceMotion: Bool) -> Animation? {
+            reduceMotion ? nil : controlReveal
         }
     }
 

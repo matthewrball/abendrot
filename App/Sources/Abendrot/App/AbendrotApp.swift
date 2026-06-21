@@ -9,7 +9,7 @@ import WarmthKit
 // sunset-arc template glyph. Settings open as a programmatic glass window
 // (`SettingsWindowController`), NOT a SwiftUI `Window` scene (see that file's note).
 //
-// Lifecycle: `AppModel.start` boots the engine + reveal hotkey; `shutdown`
+// Lifecycle: `AppModel.start()` boots the engine + reveal hotkey; `shutdown()`
 // neutral-resets every display on quit.
 @main
 struct AbendrotApp: App {
@@ -25,18 +25,82 @@ struct AbendrotApp: App {
         MenuBarExtra {
             PopoverView(model: model)
         } label: {
-            // Provisional template glyph; the real icon + amber-active glow are
-            // deferred to brand-lock. TODO(brand-lock).
-            Image(nsImage: MenuBarGlyph.image())
+            // "One Ripple" sunset-arc glyph: a monochrome template at rest, ember-amber filled while
+            // warming (chosen 2026-06-20 from the menu-bar icon lab). Reactive via @Observable model.
+            Image(nsImage: model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template())
         }
         .menuBarExtraStyle(.window)
+        // (First-run onboarding is presented imperatively from `AppModel.applyPersistedState()`, not via
+        // a Scene `.onChange` here — that has no prior art on `MenuBarExtra` and isn't guaranteed to fire
+        // on a cold launch where the menu is never clicked.)
+        // Replace AppKit's default About panel: the standard "About Abendrot" menu item
+        // (and any caller of `orderFrontStandardAboutPanel`) opens our branded glass
+        // `AboutWindowController` instead. `model` is in scope from the App body.
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Abendrot") {
+                    AboutWindowController.show(model: model)
+                }
+            }
+        }
 
-        // A SwiftUI Settings scene only so ⌘, / `openSettings` resolve; the real glass
+        // TODO(pre-release): REMOVE before shipping — a DEV-ONLY menu-bar item to replay the onboarding
+        // flow on demand for testing (by request). Deliberately a SEPARATE menu-bar item
+        // (default `.menu` style → a small ✨ pull-down) so it stays OUT of the main popover and doesn't
+        // clutter the UI under test. Delete this whole scene to remove. NOT gated behind `#if DEBUG`
+        // because the maintainer tests the Release build.
+        MenuBarExtra("Replay onboarding", systemImage: "sparkles") {
+            Button("Relaunch (latest build)") {
+                relaunchFromLatestBuild()
+            }
+            Divider()
+            Button("Replay onboarding") {
+                OnboardingWindowController.show(model: model)
+            }
+            Button("Reset onboarding + ALL settings (fresh install + relaunch)") {
+                // TRUE fresh-install reset: wipe the ENTIRE app defaults domain — the onboarding flag
+                // plus warmth, schedule, location, excluded apps, stats, everything — then relaunch so a
+                // brand-new instance comes straight up (onboarding shows AND every setting is back to
+                // out-of-box). `synchronize()` flushes the wipe to disk BEFORE the relaunch, and the
+                // relaunch force-kills (SIGKILL) so no orderly shutdown re-flushes state into the wiped
+                // domain.
+                if let domain = Bundle.main.bundleIdentifier {
+                    UserDefaults.standard.removePersistentDomain(forName: domain)
+                    UserDefaults.standard.synchronize()
+                }
+                relaunchFromLatestBuild(force: true)
+            }
+        }
+
+        // A SwiftUI Settings scene only so ⌘, / `openSettings()` resolve; the real glass
         // window is the programmatic one. This scene routes to it.
         Settings {
             SettingsLauncher(model: model)
         }
     }
+}
+
+// MARK: - Dev relaunch (Session 11)
+
+/// DEV-ONLY: kill this instance and reopen the freshly-built app from the local Release build path
+/// the "restart from latest build" otherwise run by hand. The `/bin/sh` child
+/// is reparented to launchd when the kill takes us down, so `open` still fires; the short sleep lets the
+/// old instance go before the new one launches. Paired with the dev MenuBarExtra above — delete both
+/// before shipping.
+///
+/// `force` (the fresh-install reset) sends SIGKILL so NO orderly shutdown runs — otherwise
+/// `applicationShouldTerminate` would flush in-memory state (e.g. the warmed-time stat) back into the
+/// defaults we just wiped, so the "fresh" instance wouldn't be fresh. Plain relaunch uses SIGTERM so
+/// displays still neutral-reset and stats persist across the restart.
+private func relaunchFromLatestBuild(force: Bool = false) {
+    // Reopen the bundle we're running from (the local Release build path during testing). Derived rather
+    // than hardcoded, so no absolute home path or private repo name lives in source to reach the mirror.
+    let appPath = Bundle.main.bundlePath
+    let kill = force ? "killall -9 Abendrot 2>/dev/null" : "killall Abendrot 2>/dev/null"
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/bin/sh")
+    task.arguments = ["-c", "\(kill); sleep 0.5; open \"\(appPath)\""]
+    try? task.run()
 }
 
 // MARK: - SettingsLauncher
@@ -48,10 +112,25 @@ private struct SettingsLauncher: View {
     var body: some View {
         Color.clear
             .frame(width: 1, height: 1)
+            .background(SettingsHostWindowDismisser())
             .onAppear {
                 SettingsWindowController.show(model: model)
             }
     }
+}
+
+// The SwiftUI `Settings` scene exists only so ⌘, resolves; it hosts the 1×1 launcher above that opens
+// the real glass window. Without this, that invisible host window LINGERS after the glass window closes,
+// so a second ⌘, finds it already open and `onAppear` never re-fires → Settings won't reopen. Closing the
+// host right after it appears makes each ⌘, recreate it and re-trigger the launch. (The popover gear calls
+// `SettingsWindowController.show` directly and doesn't go through this scene at all.)
+private struct SettingsHostWindowDismisser: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { [weak view] in view?.window?.close() }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 // MARK: - AppDelegate
@@ -78,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Neutral-reset every display before exit.
         // The reset runs on the main actor, so we can't block the main thread waiting
         // for it (a DispatchSemaphore.wait here would deadlock the very Task it awaits).
-        // Instead defer termination with.terminateLater, run the async shutdown, then
+        // Instead defer termination with .terminateLater, run the async shutdown, then
         // tell AppKit it's safe to exit. The displays are neutral-reset before the
         // process exits, without blocking the main thread.
         guard let model else { return .terminateNow }

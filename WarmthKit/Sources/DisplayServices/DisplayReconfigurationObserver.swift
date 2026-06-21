@@ -32,7 +32,7 @@ public final class DisplayReconfigurationObserver: Sendable {
     ]
 
     /// Create an observer and its event stream. The stream yields one `Void` per *settled*
-    /// reconfiguration. Registration with CoreGraphics happens in `start`.
+    /// reconfiguration. Registration with CoreGraphics happens in `start()`.
     public init() {
         let (stream, continuation) = AsyncStream<Void>.makeStream(
             bufferingPolicy: .bufferingNewest(1)

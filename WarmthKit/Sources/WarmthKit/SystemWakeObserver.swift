@@ -31,7 +31,7 @@ public final class SystemWakeObserver {
 
     /// Nonisolated so the `WarmthEngine` actor can construct the observer from its own
     /// nonisolated initializer without a main-actor hop. Only the `AsyncStream` is built here; no
-    /// AppKit state is touched until `start` runs on the main actor.
+    /// AppKit state is touched until `start()` runs on the main actor.
     public nonisolated init() {
         let (stream, continuation) = AsyncStream<Void>.makeStream(
             bufferingPolicy: .bufferingNewest(1)
@@ -50,7 +50,7 @@ public final class SystemWakeObserver {
             object: nil,
             queue: .main
         ) { _ in
-            // `queue:.main` guarantees main-thread delivery; the continuation is Sendable.
+            // `queue: .main` guarantees main-thread delivery; the continuation is Sendable.
             continuation.yield(())
         }
         #endif

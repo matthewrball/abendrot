@@ -107,11 +107,4 @@ enum MockWarmthState {
             displays: [builtInXDR(warmth: 0)]
         )
     }
-
-    /// Reveal-True-Color active (warmth suspended across all displays).
-    static var revealing: WarmthState {
-        var s = warming
-        s.isRevealing = true
-        return s
-    }
 }

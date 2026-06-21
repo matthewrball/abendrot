@@ -64,6 +64,25 @@ struct WarmthLevelTests {
         #expect(mid < Kelvin.neutral)
         #expect(mid > warmest)
     }
+
+    @Test("strength 0 lands on the neutral constant (6500K); strength 1 is the warmest point exactly")
+    func endpointsHitNeutralConstant() {
+        let warmest = Kelvin(3000)
+        #expect(WarmthLevel(strength: 0).kelvin(warmestPoint: warmest).value == Kelvin.neutral.value)
+        #expect(WarmthLevel(strength: 0).kelvin(warmestPoint: warmest).value == 6500)
+        #expect(WarmthLevel(strength: 1).kelvin(warmestPoint: warmest) == warmest)
+    }
+
+    @Test("Kelvin is monotonically non-increasing across sampled strengths 0→1")
+    func monotonicAcrossSamples() {
+        let warmest = Kelvin(1900)
+        var previous = WarmthLevel(strength: 0).kelvin(warmestPoint: warmest)
+        for strength in stride(from: 0.0, through: 1.0, by: 0.125) {
+            let current = WarmthLevel(strength: strength).kelvin(warmestPoint: warmest)
+            #expect(current <= previous)
+            previous = current
+        }
+    }
 }
 
 // MARK: - Gain math
@@ -210,6 +229,111 @@ struct ScheduleResolverTests {
         #expect(noonElev > 0)
         #expect(midnightElev < 0)
     }
+
+    // MARK: Sunset ramp + timezone coordinates
+
+    @Test("rampFactor: 0 above ramp start, 1 below sunset, warmer toward sunset between")
+    func rampFactorEnvelope() {
+        let start = ScheduleResolver.rampStartElevation   // +6°
+        let full = ScheduleResolver.rampFullElevation     // −0.833°
+        #expect(ScheduleResolver.rampFactor(elevation: start + 5, rampStart: start, rampFull: full) == 0)
+        #expect(ScheduleResolver.rampFactor(elevation: start, rampStart: start, rampFull: full) == 0)
+        #expect(ScheduleResolver.rampFactor(elevation: full, rampStart: start, rampFull: full) == 1)
+        #expect(ScheduleResolver.rampFactor(elevation: full - 10, rampStart: start, rampFull: full) == 1)
+        let mid = ScheduleResolver.rampFactor(elevation: (start + full) / 2, rampStart: start, rampFull: full)
+        #expect(mid > 0 && mid < 1)
+        // Lower elevation = closer to/past sunset = warmer.
+        let lower = ScheduleResolver.rampFactor(elevation: 1, rampStart: start, rampFull: full)
+        let higher = ScheduleResolver.rampFactor(elevation: 4, rampStart: start, rampFull: full)
+        #expect(lower > higher)
+    }
+
+    @Test("solarRampDecision: off in daytime, full at night")
+    func solarRamp() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func utc(_ h: Int) -> Date {
+            cal.date(from: DateComponents(year: 2026, month: 6, day: 21, hour: h))!
+        }
+        let lat = 51.5, lon = -0.13   // London
+        let warmth = WarmthLevel(strength: 0.8)
+        let noon = ScheduleResolver.solarRampDecision(at: utc(12), latitude: lat, longitude: lon, configuredWarmth: warmth)
+        #expect(!noon.isActiveNow)
+        #expect(noon.target == .off)
+        let night = ScheduleResolver.solarRampDecision(at: utc(1), latitude: lat, longitude: lon, configuredWarmth: warmth)
+        #expect(night.isActiveNow)
+        #expect(night.target == warmth)               // deep night → full configured warmth (factor 1)
+    }
+
+    @Test("sunsetTime finds evening sunset and returns nil for polar day")
+    func sunsetTime() {
+        var losAngeles = Calendar(identifier: .gregorian)
+        losAngeles.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let summerDate = losAngeles.date(from: DateComponents(year: 2026, month: 6, day: 21, hour: 12))!
+        let sunset = ScheduleResolver.sunsetTime(
+            forCoordinate: .init(latitude: 34.05, longitude: -118.24),
+            on: summerDate,
+            calendar: losAngeles
+        )
+        #expect(sunset != nil)
+        if let sunset {
+            let hour = losAngeles.component(.hour, from: sunset)
+            #expect(hour >= 19 && hour <= 21)
+        }
+
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let polarDate = utc.date(from: DateComponents(year: 2026, month: 6, day: 21, hour: 12))!
+        #expect(ScheduleResolver.sunsetTime(
+            forCoordinate: .init(latitude: 80, longitude: 0),
+            on: polarDate,
+            calendar: utc
+        ) == nil)
+    }
+
+    @Test("TimeZoneCoordinates: known identifier hits the table; unknown uses the UTC-offset longitude")
+    func timeZoneCoordinates() {
+        let ny = TimeZoneCoordinates.coordinate(forIdentifier: "America/New_York", secondsFromGMT: -5 * 3600)
+        #expect(abs(ny.latitude - 40.71) < 0.5)
+        #expect(abs(ny.longitude - (-74.01)) < 0.5)
+        // Unknown identifier → longitude from the offset (UTC+1 = 15°E), equator latitude.
+        let unknown = TimeZoneCoordinates.coordinate(forIdentifier: "Etc/Nowhere", secondsFromGMT: 3600)
+        #expect(unknown.latitude == 0)
+        #expect(abs(unknown.longitude - 15) < 0.001)
+    }
+
+    // MARK: isWithinWindow boundary + degenerate cases
+
+    @Test("isWithinWindow: midnight-wrapping window (22:00→06:00) is active at the edges, off midday")
+    func windowMidnightWrapEdges() {
+        let start = DateComponents(hour: 22, minute: 0)
+        let end = DateComponents(hour: 6, minute: 0)
+        // 23:59 (just before midnight) and 00:01 (just after) are inside the wrap.
+        #expect(ScheduleResolver.isWithinWindow(start: start, end: end, at: date(hour: 23, minute: 59), calendar: .current))
+        #expect(ScheduleResolver.isWithinWindow(start: start, end: end, at: date(hour: 0, minute: 1), calendar: .current))
+        // Midday is firmly outside.
+        #expect(!ScheduleResolver.isWithinWindow(start: start, end: end, at: date(hour: 12, minute: 0), calendar: .current))
+    }
+
+    @Test("isWithinWindow: a zero-length window (start == end) is never active")
+    func windowZeroLength() {
+        let same = DateComponents(hour: 22, minute: 0)
+        #expect(!ScheduleResolver.isWithinWindow(start: same, end: same, at: date(hour: 22, minute: 0), calendar: .current))
+        #expect(!ScheduleResolver.isWithinWindow(start: same, end: same, at: date(hour: 12, minute: 0), calendar: .current))
+    }
+
+    @Test("sunsetTime: returns nil (no crash) for a polar latitude with no sunset")
+    func sunsetTimePolarNil() {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        // 80°N at the June solstice: the sun never sets → no -0.833° crossing → nil.
+        let polarSummer = utc.date(from: DateComponents(year: 2026, month: 6, day: 21, hour: 12))!
+        #expect(ScheduleResolver.sunsetTime(
+            forCoordinate: .init(latitude: 80, longitude: 0),
+            on: polarSummer,
+            calendar: utc
+        ) == nil)
+    }
 }
 
 // MARK: - DisplayMethod & DisplayIdentity
@@ -256,39 +380,5 @@ struct DisplayIdentityTests {
         let a = DisplayIdentity(cgUUID: uuid, edid: EDIDFingerprint(vendorID: 1, productID: 2, serial: 100))
         let b = DisplayIdentity(cgUUID: uuid, edid: EDIDFingerprint(vendorID: 1, productID: 2, serial: 200))
         #expect(a != b)
-    }
-}
-
-// MARK: - WarmthReducer
-
-@Suite("WarmthReducer")
-struct WarmthReducerTests {
-    @Test("reveal suspends effective warmth")
-    func revealSuspends() {
-        var state = DisplayWarmthState(
-            isEngineEnabled: true,
-            requestedWarmth: WarmthLevel(strength: 0.8),
-            isScheduleActive: true,
-            isRevealing: false
-        )
-        #expect(state.effectiveWarmth.strength == 0.8)
-        state = WarmthReducer.reduce(state, .beginReveal)
-        #expect(state.effectiveWarmth == .off)
-        state = WarmthReducer.reduce(state, .endReveal)
-        #expect(state.effectiveWarmth.strength == 0.8)
-    }
-
-    @Test("engine disabled forces off")
-    func disabledForcesOff() {
-        let state = DisplayWarmthState(isEngineEnabled: false, requestedWarmth: WarmthLevel(strength: 1), isScheduleActive: true)
-        #expect(state.effectiveWarmth == .off)
-    }
-
-    @Test("inactive schedule forces off")
-    func scheduleGate() {
-        var state = DisplayWarmthState(isEngineEnabled: true, requestedWarmth: WarmthLevel(strength: 1), isScheduleActive: true)
-        #expect(state.effectiveWarmth.strength == 1)
-        state = WarmthReducer.reduce(state, .setScheduleActive(false))
-        #expect(state.effectiveWarmth == .off)
     }
 }

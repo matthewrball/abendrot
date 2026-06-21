@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import WarmthCore
 import DisplayServices
 import HardwareDDC
@@ -32,7 +33,7 @@ public actor WarmthEngine {
     /// Persisted DDC native-state snapshot + write-ahead dirty flag, shared with the DDC transport
     /// so launch-time recovery (engine-driven) and native-gain restore (transport-driven) read the
     /// same record. Crash/exit handlers can't reliably do async DDC, so recovery is driven
-    /// from this store on the next `start`, not from teardown hooks (invariant 7).
+    /// from this store on the next `start()`, not from teardown hooks (invariant 7).
     private let snapshotStore: any DDCSnapshotStore
 
     /// Test-only fixed display list. When non-nil the engine is in test mode: it enumerates these
@@ -51,6 +52,7 @@ public actor WarmthEngine {
 
     private struct RememberedDisplaySettings {
         var warmth: WarmthLevel
+        var warmthOverridden: Bool
         var isHardwareDDCEnabled: Bool
         var preferredMethod: DisplayMethod?
     }
@@ -62,14 +64,28 @@ public actor WarmthEngine {
     /// System-wake observer (NSWorkspace) — main-actor, owned by the umbrella.
     private let wakeObserver: SystemWakeObserver
     /// The long-lived task that coalesces reconfiguration + wake bursts and re-baselines once
-    /// per quiet window. Cancelled in `shutdown`.
+    /// per quiet window. Cancelled in `shutdown()`.
     private var rebaselineTask: Task<Void, Never>?
+
+    /// Low-frequency timer that advances the Sunset-mode ramp. Night Shift change / wake / hotplug
+    /// all trigger `reapply`, but with Night Shift OFF (the common case for an app that replaces it)
+    /// there are no notifications, so the solar ramp needs its own tick. `reapply` writes to a
+    /// backend only when the resolved warmth actually changes, so an idle tick costs ~nothing.
+    private var rampTask: Task<Void, Never>?
+    private let rampTickInterval: Duration = .seconds(60)
+
+    /// Short post-launch / wake / reconfiguration re-assert burst. Some panels (notably the built-in,
+    /// whose gamma macOS rewrites as True Tone / auto-brightness / Night Shift settle, and displays that
+    /// enumerate a beat late) come up un-warmed and would otherwise wait up to a full 60s ramp tick to be
+    /// re-asserted. The burst re-applies at ~1/3/6/12s so warmth lands within seconds. `reapply` re-writes
+    /// the backend each pass, so it overcomes an external reset; re-applying the same value is imperceptible.
+    private var catchUpTask: Task<Void, Never>?
     /// Debounce policy (the timing arithmetic is pure / unit-tested in `ReconfigurationDebounce`).
     private let rebaselineDebounceWindow: Duration = .milliseconds(400)
 
     // MARK: Observation
 
-    /// One continuation per active `stateUpdates` subscriber.
+    /// One continuation per active `stateUpdates()` subscriber.
     private var continuations: [UUID: AsyncStream<WarmthState>.Continuation] = [:]
 
     private let logger = Logger(label: "com.abendrot.WarmthKit.WarmthEngine")
@@ -86,7 +102,7 @@ public actor WarmthEngine {
             configuration: configuration,
             overlay: OverlayBackend(),
             gamma: GammaBackend(),
-            ddc: DDCBackend(transport: transport),
+            ddc: transport,
             snapshotStore: store,
             nightShiftFollower: SystemNightShiftStateFollower(),
             injectedDisplays: nil
@@ -175,6 +191,9 @@ public actor WarmthEngine {
             }
             // Start the hotplug + wake observers and the coalescing re-baseline loop.
             await startSystemObservers()
+            // Advance the Sunset ramp over the evening even when Night Shift is off (no system
+            // notifications then). Live mode only; tests drive time/reapply explicitly.
+            startRampTicker()
         }
 
         // Launch-time stale-state recovery (invariant 7). A prior run may have died (crash /
@@ -186,12 +205,17 @@ public actor WarmthEngine {
         await recoverStaleDisplays()
         await reapply()
         publish()
+        scheduleCatchUpReasserts()
     }
 
     /// Neutral-reset every display via every active layer, then tear down. Called on quit.
     public func shutdown() async {
         rebaselineTask?.cancel()
         rebaselineTask = nil
+        rampTask?.cancel()
+        rampTask = nil
+        catchUpTask?.cancel()
+        catchUpTask = nil
         reconfigurationObserver.stop()
         await wakeObserver.stop()
         nightShiftFollower.stop()
@@ -234,6 +258,14 @@ public actor WarmthEngine {
         publish()
     }
 
+    /// Manual location override for Sunset mode. `nil` = derive the coordinate from the system time zone
+    /// (the default). Set = use this exact coordinate for the solar sunset calc. No permission, no network.
+    public func setUserCoordinate(_ coordinate: TimeZoneCoordinates.Coordinate?) async {
+        box.userCoordinate = coordinate
+        await reapply()
+        publish()
+    }
+
     public func setWarmestPoint(_ kelvin: Kelvin) async {
         box.value.warmestPoint = kelvin
         await reapply()
@@ -244,6 +276,9 @@ public actor WarmthEngine {
 
     /// Suspend warmth across ALL displays (true colour). Idempotent.
     public func beginReveal() async {
+        // Reveal is meaningless while warming is off (nothing to reveal-from), so the hotkey is
+        // effectively disabled until "Warm my displays" is on.
+        guard box.value.isEnabled else { return }
         guard !box.value.isRevealing else { return }
         box.value.isRevealing = true
         await reapply()
@@ -264,6 +299,21 @@ public actor WarmthEngine {
     public func setWarmth(_ level: WarmthLevel, for id: DisplayIdentity) async {
         guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }
         box.value.displays[index].warmth = level
+        box.value.displays[index].warmthOverridden = true   // setting a per-display value IS the override
+        rememberSettings(box.value.displays[index])
+        await reapply()
+        publish()
+    }
+
+    /// Enable/disable a display's "Custom warmth" override. Enabling seeds the per-display warmth to
+    /// the current global so the slider starts where the display already is; disabling makes the
+    /// display follow the global warmth/schedule again.
+    public func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity) async {
+        guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }
+        box.value.displays[index].warmthOverridden = enabled
+        if enabled {
+            box.value.displays[index].warmth = box.value.globalWarmth
+        }
         rememberSettings(box.value.displays[index])
         await reapply()
         publish()
@@ -273,7 +323,7 @@ public actor WarmthEngine {
     public func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) async {
         guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }
         // Record the per-display override; nil → automatic best-available. The layer is resolved
-        // (and validated against capability + opt-in + kill switch) in `reapply`, never written
+        // (and validated against capability + opt-in + kill switch) in `reapply()`, never written
         // straight to `appliedMethod` — that conflation is what would trap a display off.
         box.value.displays[index].preferredMethod = method
         rememberSettings(box.value.displays[index])
@@ -281,7 +331,7 @@ public actor WarmthEngine {
         publish()
     }
 
-    /// DDC opt-in toggle. No-op (returns.unsupported in state) where DDC isn't capable.
+    /// DDC opt-in toggle. No-op (returns .unsupported in state) where DDC isn't capable.
     public func setHardwareDDCEnabled(_ enabled: Bool, for id: DisplayIdentity) async {
         guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }
         box.value.displays[index].isHardwareDDCEnabled = enabled
@@ -294,16 +344,63 @@ public actor WarmthEngine {
     private func rememberSettings(_ display: DisplayState) {
         rememberedSettings[display.id.persistentKey] = RememberedDisplaySettings(
             warmth: display.warmth,
+            warmthOverridden: display.warmthOverridden,
             isHardwareDDCEnabled: display.isHardwareDDCEnabled,
             preferredMethod: display.preferredMethod
         )
     }
 
-    /// Per-app exclusions (v1.0 = per-app only; per-website is future).
+    /// Per-app exclusions (v1.0 = per-app only; per-website is future). Re-evaluates suspend
+    /// immediately so excluding the app you're currently in (or un-excluding it) takes effect now.
     public func setExcludedApps(_ bundleIDs: Set<String>) async {
-        // TODO(milestone): persist exclusions and suspend warmth while an excluded app is front.
         box.excludedApps = bundleIDs
+        if recomputeExcludedSuspend() { await reapply() }
         publish()
+    }
+
+    /// The app-side NSWorkspace bridge reports the frontmost app's bundle id here (nil if none /
+    /// unresolvable). The engine owns the membership check so suspend-while-excluded is unit-testable
+    /// (resolves contract open-Q3). Suspends warmth while an excluded app is frontmost — independent of
+    /// hold-to-reveal, so the two compose. Change-gated.
+    ///
+    /// `onDisplays` (additive, Session 9) refines suspend to a MULTI-MONITOR setup: it is the set of
+    /// `CGDirectDisplayID`s the frontmost app's on-screen windows occupy, computed permission-free by
+    /// the app-side bridge (`CGWindowListCopyWindowInfo` bounds + owner PID — no Screen Recording, no
+    /// Accessibility). When the frontmost app is excluded, only THOSE displays go true-colour and the
+    /// rest stay warm. `nil` (the default, and the legacy behaviour) means "all displays" — so a caller
+    /// that can't or doesn't compute the set, and every existing test, suspends everywhere as before.
+    public func setFrontmostApp(_ bundleID: String?, onDisplays displayIDs: Set<CGDirectDisplayID>? = nil) async {
+        box.frontmostBundleID = bundleID
+        box.frontmostDisplayIDs = displayIDs
+        // Publish-on-change only (deliberately unlike setExcludedApps): the frontmost id isn't part of
+        // the published WarmthState, so when suspend doesn't flip there is nothing new to publish.
+        if recomputeExcludedSuspend() { await reapply(); publish() }
+    }
+
+    /// Recompute whether (and where) the current frontmost app suspends warmth. Returns true if the
+    /// suspend state flipped — either the whole-app flag OR the per-display target set changed — so the
+    /// caller can reapply only on change. Pure over box fields.
+    private func recomputeExcludedSuspend() -> Bool {
+        let excluded = box.frontmostBundleID.map { box.excludedApps.contains($0) } ?? false
+        // The displays to suspend: when an excluded app is frontmost, the set it reported (nil = all
+        // displays, the single-display / unresolved fallback). When nothing excluded is frontmost, no
+        // display is suspended.
+        let newDisplays: Set<CGDirectDisplayID>? = excluded ? box.frontmostDisplayIDs : Set()
+        guard excluded != box.isExcludedAppFrontmost || newDisplays != box.suspendedDisplayIDs else {
+            return false
+        }
+        box.isExcludedAppFrontmost = excluded
+        box.suspendedDisplayIDs = newDisplays
+        return true
+    }
+
+    /// Whether a given display is currently suspended by an excluded frontmost app. `nil`
+    /// `suspendedDisplayIDs` means "all displays" (the whole-app / fallback path); a set means only
+    /// those `CGDirectDisplayID`s. An empty set suspends nothing.
+    private func isDisplaySuspendedByExclusion(_ id: DisplayIdentity) -> Bool {
+        guard box.isExcludedAppFrontmost else { return false }
+        guard let suspended = box.suspendedDisplayIDs else { return true }   // nil = all displays
+        return suspended.contains(id.currentDisplayID)
     }
 
     // MARK: ── Safety ────────────────────────────────────────────────────────────
@@ -442,6 +539,23 @@ public actor WarmthEngine {
         await rebuildDisplayRows(for: currentDisplays())
         await recoverStaleDisplays()
         await reapply()
+        scheduleCatchUpReasserts()
+    }
+
+    /// Fire a short re-assert burst at ~1/3/6/12s after launch / wake / reconfiguration. Live mode only
+    /// (hermetic tests drive reapply explicitly). Re-applying the same warmth is imperceptible; the point
+    /// is to re-assert a panel macOS reset (built-in True Tone / ambient) or one that enumerated late,
+    /// rather than waiting for the next 60s ramp tick.
+    private func scheduleCatchUpReasserts() {
+        guard injectedDisplays == nil else { return }
+        catchUpTask?.cancel()
+        catchUpTask = Task { [weak self] in
+            for interval in [Duration.seconds(1), .seconds(2), .seconds(3), .seconds(6)] {
+                try? await Task.sleep(for: interval)
+                if Task.isCancelled { return }
+                await self?.reapply()
+            }
+        }
     }
 
     /// (Re)build the `DisplayState` rows for `identities` WITHOUT applying — so launch-time recovery
@@ -475,11 +589,26 @@ public actor WarmthEngine {
                     appliedMethod: previous?.appliedMethod ?? caps.recommendedMethod,
                     capabilities: caps,
                     warmth: previous?.warmth ?? remembered?.warmth ?? .off,
+                    warmthOverridden: previous?.warmthOverridden ?? remembered?.warmthOverridden ?? false,
                     isHardwareDDCEnabled: previous?.isHardwareDDCEnabled ?? remembered?.isHardwareDDCEnabled ?? false,
                     preferredMethod: previous?.preferredMethod ?? remembered?.preferredMethod,
                     lastError: previous?.lastError
                 )
             )
+        }
+
+        // Prefer the OS-localized display name ("Built-in Display", "LG UltraFine") over the generic
+        // EDID/"Display" fallback, so rows match System Settings. Real-display path only: tests inject
+        // identities (and assert on their names), and `NSScreen` is meaningless headless. `NSScreen`
+        // is main-actor isolated, so this awaits a single hop to the main actor.
+        if injectedDisplays == nil {
+            let ids = rows.map { $0.id.currentDisplayID }
+            let localizedNames = await DisplayNaming.localizedNames(for: ids)
+            for index in rows.indices {
+                if let name = localizedNames[rows[index].id.currentDisplayID] {
+                    rows[index].name = name
+                }
+            }
         }
 
         box.value.displays = rows
@@ -511,6 +640,32 @@ public actor WarmthEngine {
         publish()
     }
 
+    // MARK: ── Sunset ramp ticker ───────────────────────────────────────────────
+
+    /// Spawn the low-frequency loop that re-evaluates the schedule so the Sunset ramp advances.
+    private func startRampTicker() {
+        let interval = rampTickInterval
+        rampTask = Task { [weak self] in
+            let clock = ContinuousClock()
+            while !Task.isCancelled {
+                try? await clock.sleep(for: interval)
+                if Task.isCancelled { return }
+                await self?.tickRamp()
+            }
+        }
+    }
+
+    /// One ramp tick: re-apply so the solar-ramped warmth moves, publishing only when the observable
+    /// state actually changed. The per-minute applied-warmth nudges aren't reflected in `WarmthState`
+    /// (so a mid-ramp tick is a silent backend update); activation edges flip `isScheduleActiveNow`
+    /// and do publish. Cheap: gated on `isEnabled`, and `reapply` is draw-on-change.
+    private func tickRamp() async {
+        guard box.value.isEnabled else { return }
+        let before = box.value
+        await reapply()
+        if box.value != before { publish() }
+    }
+
     /// Resolve the schedule + master enable + reveal and push the target to each display via
     /// its applied layer. Minimal for this scaffold — full layer selection is a later milestone.
     private func reapply() async {
@@ -526,16 +681,26 @@ public actor WarmthEngine {
             nightShift = nil
         }
 
+        // Real sunset from the system timezone — zero permission (default). Resolved
+        // fresh each pass so it tracks travel / DST. Live mode only: hermetic tests pass nil so the
+        // fixed-window degrade stays deterministic (the solar ramp is unit-tested in WarmthCore).
+        let solarCoordinate: TimeZoneCoordinates.Coordinate? =
+            injectedDisplays == nil ? (box.userCoordinate ?? TimeZoneCoordinates.current()) : nil
+
         let decision = ScheduleResolver.resolveWithDegrade(
             mode: box.value.scheduleMode,
             at: Date(),
             configuredWarmth: box.value.globalWarmth,
             nightShift: nightShift,
             privateAPIsEnabled: privateOn,
-            fallback: configuration.fallbackSchedule
+            fallback: configuration.fallbackSchedule,
+            solarCoordinate: solarCoordinate
         )
         box.value.isScheduleActiveNow = decision.isActiveNow
 
+        // Global gates (master enable, schedule, hold-to-reveal). The excluded-app suspend is applied
+        // PER DISPLAY below, so on a multi-monitor setup only the display(s) the excluded app occupies
+        // go true-colour while the rest stay warm.
         let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing
         let warmestPoint = box.value.warmestPoint
 
@@ -556,7 +721,12 @@ public actor WarmthEngine {
                 override: display.preferredMethod,
                 privateAPIsEnabled: privateOn
             )
-            let effective = engineOn ? maxWarmth(display.warmth, decision.target) : .off
+            // This display is on only when the global gates pass AND it is not currently suspended by
+            // an excluded frontmost app sitting on it (per-display, so other monitors stay warm).
+            let displayOn = engineOn && !isDisplaySuspendedByExclusion(id)
+            // A display uses its OWN warmth only when overridden ("Custom warmth"); otherwise it
+            // follows the global/schedule target. (Replaces the old max-boost model.)
+            let effective = displayOn ? (display.warmthOverridden ? display.warmth : decision.target) : .off
 
             // Clean up a layer we are LEAVING this pass (user disabled DDC, capability changed) so a
             // display can't stay warm on two layers at once.
@@ -676,10 +846,6 @@ public actor WarmthEngine {
         }
     }
 
-    private func maxWarmth(_ a: WarmthLevel, _ b: WarmthLevel) -> WarmthLevel {
-        a.strength >= b.strength ? a : b
-    }
-
     // MARK: Publishing
 
     private func publish() {
@@ -704,6 +870,22 @@ public actor WarmthEngine {
 private struct WarmthStateBox {
     var value: WarmthState
     var excludedApps: Set<String> = []
+    var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
+    /// The frontmost app's bundle id reported by the app-side `FrontmostAppMonitor` (nil = none /
+    /// unresolvable). Engine-private — not part of the published surface.
+    var frontmostBundleID: String? = nil
+    /// The `CGDirectDisplayID`s the frontmost app's on-screen windows occupy, computed permission-free
+    /// by the app-side bridge. `nil` = "all displays" (single-display / unresolved fallback). Only
+    /// consulted when `frontmostBundleID` is excluded. Engine-private.
+    var frontmostDisplayIDs: Set<CGDirectDisplayID>? = nil
+    /// Derived: whether `frontmostBundleID` is in `excludedApps`. When true the engine suspends warmth
+    /// on the excluded app's display(s) (`suspendedDisplayIDs`), independent of (and composing with)
+    /// hold-to-reveal.
+    var isExcludedAppFrontmost: Bool = false
+    /// Derived: the `CGDirectDisplayID`s to suspend while an excluded app is frontmost. `nil` = all
+    /// displays (whole-app suspend / single-display fallback, == legacy behaviour); a set = only those
+    /// monitors. Empty set suspends nothing. Engine-private.
+    var suspendedDisplayIDs: Set<CGDirectDisplayID>? = nil
 }
 
 // MARK: - NoopBackend (test-support neutral layer)

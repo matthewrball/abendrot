@@ -83,9 +83,12 @@ public struct WarmthState: Sendable, Equatable {
 public struct DisplayState: Sendable, Equatable, Identifiable {
     public var id: DisplayIdentity
     public var name: String                       // human label for the row
-    public var appliedMethod: DisplayMethod       // → the Hardware/Gamma/Overlay badge
+    public var appliedMethod: DisplayMethod       // the layer currently warming this display
     public var capabilities: DisplayCapabilities
     public var warmth: WarmthLevel
+    /// When true, this display uses its OWN `warmth` (a user "Custom warmth" override). When false
+    /// it follows the global warmth/schedule. (Replaces the old max(per-display, global) boost.)
+    public var warmthOverridden: Bool
     public var isHardwareDDCEnabled: Bool          // opt-in flag
     /// The user's explicit per-display layer override (`setPreferredMethod`), or nil for
     /// automatic best-available. `appliedMethod` is the *currently applied* badge; this is the
@@ -99,6 +102,7 @@ public struct DisplayState: Sendable, Equatable, Identifiable {
         appliedMethod: DisplayMethod,
         capabilities: DisplayCapabilities,
         warmth: WarmthLevel,
+        warmthOverridden: Bool = false,
         isHardwareDDCEnabled: Bool,
         preferredMethod: DisplayMethod? = nil,
         lastError: EngineErrorSummary? = nil
@@ -108,6 +112,7 @@ public struct DisplayState: Sendable, Equatable, Identifiable {
         self.appliedMethod = appliedMethod
         self.capabilities = capabilities
         self.warmth = warmth
+        self.warmthOverridden = warmthOverridden
         self.isHardwareDDCEnabled = isHardwareDDCEnabled
         self.preferredMethod = preferredMethod
         self.lastError = lastError
@@ -121,6 +126,7 @@ public struct DisplayState: Sendable, Equatable, Identifiable {
             && lhs.name == rhs.name
             && lhs.appliedMethod == rhs.appliedMethod
             && lhs.warmth == rhs.warmth
+            && lhs.warmthOverridden == rhs.warmthOverridden
             && lhs.isHardwareDDCEnabled == rhs.isHardwareDDCEnabled
             && lhs.preferredMethod == rhs.preferredMethod
             && lhs.lastError == rhs.lastError

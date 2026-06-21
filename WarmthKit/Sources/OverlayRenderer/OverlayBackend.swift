@@ -24,14 +24,14 @@ enum OverlayVeil {
 /// vanishes when warmth is off (a non-zero alpha at 6500K would tint an "off" screen); rises with
 /// warmth — the red-minus-blue attenuation — and is capped so it stays a legible tint.
 package func veilAlpha(for gain: RGBGain) -> Double {
-    let warmth = max(0, gain.red - gain.blue)
-    return min(OverlayVeil.maxAlpha, warmth)
+    let warmth = max(0, min(1, gain.red - gain.blue))
+    return OverlayVeil.maxAlpha * warmth // Scale into the cap instead of clamping early.
 }
 
 // MARK: - OverlayBackend
 
 /// The universal default layer: one borderless, click-through `NSPanel` hosting a `CALayer`
-/// warm-tint veil per active `NSScreen`, sitting at `CGShieldingWindowLevel`. Works on
+/// warm-tint veil per active `NSScreen`, sitting at `CGShieldingWindowLevel()`. Works on
 /// buttonless Apple panels and on M5 Tahoe where gamma silently no-ops, so it is `.supported`
 /// everywhere — it is the reliable floor under DDC (opt-in) and gamma (classified).
 ///
@@ -145,8 +145,8 @@ public final class OverlayBackend: WarmthBackend {
 /// child `CALayer` whose colour/opacity encode the warmth gain.
 ///
 /// The window recipe follows the reference `macos-app-skills` overlay playbook exactly:
-/// `[.borderless,.nonactivatingPanel]`, transparent, shadowless, click-through, joins all
-/// Spaces, and floats at `CGShieldingWindowLevel`.
+/// `[.borderless, .nonactivatingPanel]`, transparent, shadowless, click-through, joins all
+/// Spaces, and floats at `CGShieldingWindowLevel()`.
 @MainActor
 final class OverlayPanel {
     let identity: DisplayIdentity

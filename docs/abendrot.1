@@ -1,0 +1,287 @@
+.\" Man page for the abendrot CLI.
+.\" Render locally with: man ./docs/abendrot.1 (or: groff -man -Tascii docs/abendrot.1)
+.TH ABENDROT 1 "June 20, 2026" "abendrot 0.1.0" "User Commands"
+.SH NAME
+abendrot \- control the Abendrot screen-warmth app from the terminal or an AI assistant
+.SH SYNOPSIS
+.B abendrot
+.I subcommand
+.RI [ options ]
+.br
+.B abendrot status
+.RB [ \-\-json ]
+.br
+.B abendrot get
+.I key
+.RB [ \-\-json ]
+.br
+.B abendrot on
+|
+.B off
+.RB [ \-\-json ]
+.br
+.B abendrot set warmth
+.RI [ strength ]
+.RB [ \-\-kelvin
+.IR kelvin ]
+.RB [ \-\-json ]
+.br
+.B abendrot set mode
+.I mode
+.RB [ \-\-json ]
+.br
+.B abendrot set max-warmth
+.I kelvin
+.RB [ \-\-json ]
+.br
+.B abendrot set reveal-mode
+.I mode
+.RB [ \-\-json ]
+.br
+.B abendrot set location
+.RI [ latitude ]
+.RI [ longitude ]
+.RB [ \-\-auto ]
+.RB [ \-\-json ]
+.br
+.B abendrot exclude add
+|
+.B remove
+.I bundle-id
+.RB [ \-\-json ]
+.br
+.B abendrot exclude list
+.RB [ \-\-json ]
+.br
+.B abendrot reveal
+.RB [ \-\-hold
+.IR seconds ]
+.RB [ \-\-json ]
+.br
+.B abendrot
+.RB [ \-\-version "] [" \-h | \-\-help ]
+.SH DESCRIPTION
+.B abendrot
+is a thin, same-user command-line client for the Abendrot macOS menu-bar app, which
+warms the screen's color temperature on every display. It is intended for use from a
+shell or by an AI assistant (Claude Code, Codex, Cursor).
+.PP
+A setting command does two things: it writes the new value to the app's CFPreferences
+domain
+.B app.abendrot.Abendrot
+(so the value survives an app restart), and it posts a local distributed notification that
+wakes the running app so the change applies immediately. The app writes a snapshot file that
+records the request id of the command it applied; the CLI polls that snapshot to confirm the
+change landed.
+.B status
+reads that same snapshot.
+.PP
+There is no daemon, socket, XPC service, network listener, or privileged helper. The control
+surface is scoped to the same macOS user, the local login session, and the app's visual state
+only.
+.PP
+Every data-emitting command accepts
+.B \-\-json
+for machine-readable output.
+.SH COMMANDS
+.TP
+.B status \fR[\fB\-\-json\fR]
+Show live app state: enabled, schedule mode, warmth (strength and approximate Kelvin),
+reveal mode, the per-app exclusion list, and the per-display method in use. When the app is
+not running, the last-saved (persisted) values are shown instead.
+.TP
+.B get \fIkey\fR \fR[\fB\-\-json\fR]
+Print one configured setting.
+.I key
+is one of
+.BR warmth ", " mode ", " max-warmth ", " reveal-mode ", " location ", " enabled .
+Reads the preference domain directly, so it works whether or not the app is running.
+.TP
+.B on \fR[\fB\-\-json\fR]
+Enable warming (the master toggle, \fBisEnabled\fR = true).
+.TP
+.B off \fR[\fB\-\-json\fR]
+Disable warming (\fBisEnabled\fR = false).
+.TP
+.B set warmth \fR[\fIstrength\fR] [\fB\-\-kelvin\fR \fIkelvin\fR] [\fB\-\-json\fR]
+Set global warmth. Provide a
+.I strength
+of
+.BR 0.0 \(en 1.0
+(0 = none, 1 = warmest), or use
+.B \-\-kelvin
+to target an effective Kelvin of
+.BR 500 \(en 6500 ,
+which is mapped to a strength against the configured warmest-point curve. Provide one or the
+other, not both. Out-of-range values are rejected (exit 2), not clamped.
+.TP
+.B set mode \fImode\fR \fR[\fB\-\-json\fR]
+Set the schedule mode:
+.BR sunset " (warm on local sunset), " always-on " (warm continuously), or " off .
+.TP
+.B set max-warmth \fIkelvin\fR \fR[\fB\-\-json\fR]
+Set the warmest-point ceiling in Kelvin
+.RB ( 500 \(en 6500 ;
+a lower number is warmer).
+.TP
+.B set reveal-mode \fImode\fR \fR[\fB\-\-json\fR]
+Set the reveal behaviour:
+.BR hold " or " toggle .
+.TP
+.B set location \fR[\fIlatitude\fR] [\fIlongitude\fR] [\fB\-\-auto\fR] [\fB\-\-json\fR]
+Set a manual coordinate for the sunset schedule
+.RI ( latitude
+.BR \-90 \(en90 ,
+.I longitude
+.BR \-180 \(en180 ),
+or pass
+.B \-\-auto
+to clear the manual coordinate and derive sunset from the system time zone.
+.TP
+.B exclude add \fIbundle-id\fR \fR[\fB\-\-json\fR]
+Add a bundle id (e.g.\&
+.BR com.apple.dt.Xcode )
+to the warmth-exclusion set.
+.TP
+.B exclude remove \fIbundle-id\fR \fR[\fB\-\-json\fR]
+Remove a bundle id from the exclusion set.
+.TP
+.B exclude list \fR[\fB\-\-json\fR]
+List excluded bundle ids (one per line, or
+.B (none)
+when empty).
+.TP
+.B reveal \fR[\fB\-\-hold\fR \fIseconds\fR] [\fB\-\-json\fR]
+Momentary true-color peek: temporarily drop warmth to reveal real colors. This is live-only
+\(em it requires a running app and writes no persisted setting. Default hold is 3 seconds. If
+the app is not running, exits 3.
+.TP
+.B \-\-version
+Print the CLI version.
+.TP
+.B \-h ", " \-\-help
+Print usage. Use
+.B abendrot help \fIsubcommand\fR
+for detailed help on a subcommand.
+.SH OPTIONS
+.TP
+.B \-\-json
+Emit machine-readable JSON. Accepted by every data-emitting command. A setting command
+prints an object of the form
+.BR {\(dqok\(dq:true,\(dqappliedLive\(dq:true,\(dqpersisted\(dq:true} .
+.TP
+.B \-\-kelvin \fIkelvin\fR
+For
+.BR "set warmth" :
+target an effective Kelvin
+.RB ( 500 \(en 6500 )
+instead of a strength.
+.TP
+.B \-\-auto
+For
+.BR "set location" :
+clear the manual coordinate.
+.TP
+.B \-\-hold \fIseconds\fR
+For
+.BR reveal :
+hold the reveal for N seconds (default 3).
+.SH EXIT STATUS
+.TP
+.B 0
+Success. For a
+.B set
+issued while the app is closed, this still means the value was persisted (it applies on next
+launch); the CLI prints
+.B saved; app not running
+to standard error and reports
+.B \(dqappliedLive\(dq:false
+under
+.BR \-\-json .
+.TP
+.B 2
+Bad input \(em an invalid value or an unknown key (a message is printed to standard error).
+.TP
+.B 3
+The app is not running, or did not confirm in time, for a command that requires it
+.RB ( reveal ).
+.TP
+.B 4
+Live-apply timeout \(em a
+.B set
+persisted successfully and the app was running, but it did not confirm the live apply within
+the timeout. The value is saved; it just was not confirmed live.
+.SH FILES
+.TP
+.I ~/Library/Application Support/Abendrot/state.json
+The live snapshot the app writes on every state change and after every accepted command; the
+CLI reads it for
+.B status
+and to confirm its own changes.
+.TP
+.I ~/Library/Preferences/app.abendrot.Abendrot.plist
+The app's CFPreferences domain
+.RB ( app.abendrot.Abendrot )
+where settings persist. The CLI writes the keys
+.BR isEnabled ", " globalWarmthStrength ", " warmestPointKelvin ", " scheduleMode ", "
+.BR revealMode ", " excludedApps ", " userLatitude ", and " userLongitude .
+.SH EXAMPLES
+Set warmth to 80% and confirm it:
+.PP
+.RS
+.nf
+abendrot set warmth 0.8
+abendrot status --json
+.fi
+.RE
+.PP
+Target a specific color temperature:
+.PP
+.RS
+.nf
+abendrot set warmth --kelvin 3000
+.fi
+.RE
+.PP
+Switch to the sunset schedule and raise the warmest point:
+.PP
+.RS
+.nf
+abendrot set mode sunset
+abendrot set max-warmth 1900
+.fi
+.RE
+.PP
+Exclude a color-critical app from warming, then list exclusions:
+.PP
+.RS
+.nf
+abendrot exclude add com.apple.dt.Xcode
+abendrot exclude list
+.fi
+.RE
+.PP
+Briefly reveal true colors for 10 seconds (requires the running app):
+.PP
+.RS
+.nf
+abendrot reveal --hold 10
+.fi
+.RE
+.SH SECURITY
+The control surface is scoped to the same macOS user, the local login session, and the app's
+visual state only. Any process running as the same user that can run
+.B abendrot
+(or write the preference plist) can change warmth, toggle warming, or trigger reveal. There is
+no network listener, socket, LaunchDaemon, privileged helper, or cross-user delivery. The app
+validates every command exactly as it validates user-interface input.
+.SH SEE ALSO
+The
+.B AGENTS.md
+document that ships with Abendrot is the canonical, agent-facing reference for this CLI,
+including the full
+.B status --json
+field reference and a raw
+.B defaults
+fallback. Project homepage:
+.BR https://abendrot.app/ .

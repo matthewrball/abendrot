@@ -6,13 +6,13 @@ extension ScheduleResolver {
 
     /// Resolve a schedule while applying the engine's **degrade policy**.
     ///
-    /// For `.followSystemNightShift`: warmth is active when Night Shift is actively ON. In **every
-    /// other case** — Night Shift reports OFF, the private follower is unavailable, or the kill
-    /// switch is engaged — this falls back to `fallback` (an approximate evening window) instead of
-    /// resolving to "never active". This is what prevents the *default* configuration from sitting
-    /// dark: a user who enables Abendrot but doesn't run Night Shift still gets warmth in the
-    /// evening (the "enabled but never warms" fix), and so does a user on an OS build where
-    /// `CBBlueLightClient` is unavailable.
+    /// For `.followSystemNightShift` ("Sunset"): when a `solarCoordinate` is available (always, in
+    /// production) warmth follows the user's REAL sunset via a graded pre-sunset ramp — Abendrot
+    /// computes its own sunset rather than deferring to Night Shift. Only when NO coordinate is
+    /// available (hermetic tests, an unresolvable zone) does it fall back to following Night Shift
+    /// when actively ON, else the fixed `fallback` evening window — so the engine never sits dark
+    /// (the "enabled but never warms" fix), including on an OS build where `CBBlueLightClient`
+    /// is unavailable.
     ///
     /// Non-follow modes (`.solar`, `.custom`, `.alwaysOn`, `.off`) don't depend on the private
     /// follower and resolve unchanged.
@@ -22,7 +22,9 @@ extension ScheduleResolver {
     /// unavailable.
     /// - privateAPIsEnabled: the global kill switch. When `false`, the follower is treated as
     /// unavailable regardless of `nightShift`.
-    /// - fallback: the approximate evening window used when the follower can't be read.
+    /// - fallback: the fixed evening window used only when no `solarCoordinate` is available.
+    /// - solarCoordinate: the user's timezone-approximated location; when present, the degrade
+    /// path uses a real solar sunset ramp instead of the fixed window. (Founder: zero-permission.)
     public static func resolveWithDegrade(
         mode: ScheduleMode,
         at date: Date,
@@ -30,16 +32,27 @@ extension ScheduleResolver {
         configuredWarmth: WarmthLevel = WarmthLevel(strength: 1),
         nightShift: Bool?,
         privateAPIsEnabled: Bool,
-        fallback: CustomSchedule
+        fallback: CustomSchedule,
+        solarCoordinate: TimeZoneCoordinates.Coordinate? = nil
     ) -> ScheduleDecision {
         switch mode {
         case .followSystemNightShift:
-            // Follow Night Shift when it is actively ON. Otherwise — it reports OFF, or the follower
-            // is unavailable / kill-switched — fall back to an evening WINDOW so the default still
-            // warms in the evening even when the user doesn't run Night Shift. This is the fix
-            // for "enabled but never warms": a truthful Night-Shift-OFF must NOT leave the app dark,
-            // it must defer to our own evening schedule. The window carries the user's configured
-            // warmth (matching the NS-on branch), not a hardcoded full strength.
+            // "Sunset" = the user's REAL sunset, always. When a timezone coordinate is available
+            // (always, in production) warmth follows the solar ramp REGARDLESS of Night Shift —
+            // Abendrot computes its own sunset rather than deferring to Night Shift's schedule.
+            // (Founder M1.)
+            if let solarCoordinate {
+                return solarRampDecision(
+                    at: date,
+                    latitude: solarCoordinate.latitude,
+                    longitude: solarCoordinate.longitude,
+                    configuredWarmth: configuredWarmth
+                )
+            }
+            // No coordinate (hermetic tests, or an unresolvable zone): follow Night Shift when it is
+            // actively ON, else fall back to a fixed evening WINDOW so the default still warms in the
+            // evening and never sits dark (the "enabled but never warms" fix). Both carry the
+            // user's configured warmth.
             if privateAPIsEnabled, nightShift == true {
                 return resolve(
                     .followSystemNightShift,

@@ -38,7 +38,7 @@ enum NightShiftPrivateAPI {
     /// The block parameter MUST be `@escaping`: CoreBrightness retains the block past the call
     /// (it fires it on later Night Shift changes). Without `@escaping` the Swift runtime treats it
     /// as non-escaping and traps ("closure argument passed as @noescape to Objective-C has
-    /// escaped") the moment CoreBrightness stores it — i.e. on the engine's very first `start`.
+    /// escaped") the moment CoreBrightness stores it — i.e. on the engine's very first `start()`.
     private typealias SetNotificationIMP = @convention(c) (
         AnyObject, Selector, @escaping @convention(block) () -> Void
     ) -> Void
@@ -90,7 +90,7 @@ enum NightShiftPrivateAPI {
     // MARK: Observation
 
     /// Register a status-change notification block on the client. The block runs on an arbitrary
-    /// CoreBrightness queue. We pass a plain ` -> Void` and let the caller re-read the status.
+    /// CoreBrightness queue. We pass a plain `() -> Void` and let the caller re-read the status.
     static func observe(client: AnyObject, _ onChange: @escaping @Sendable () -> Void) {
         guard client.responds(to: setNotificationSelector) else { return }
         guard let method = class_getInstanceMethod(object_getClass(client), setNotificationSelector) else {

@@ -28,7 +28,7 @@
 
 It's the f.lux / Night Shift successor built to do the thing the incumbents quietly fail at: reliably warm **external monitors** and the **buttonless Apple displays** — Studio Display, Pro Display XDR, LG UltraFine — and keep working on the newest Apple Silicon Macs, where the classic gamma trick silently stops warming. Without tracking you.
 
-> **Status: pre-release, in active development.** The warmth engine is implemented and unit-tested (91 tests) and verified warming real hardware. There's no signed download yet — you can build it from source today (see [Build from source](#build-from-source)). The first notarized release lands here when it's ready.
+> **Status: pre-release.** The warmth engine is implemented and unit-tested (112 tests) and verified warming real hardware. There's no signed download yet — you can build it from source today (see [Build from source](#build-from-source)). The first notarized release lands here when it's ready.
 
 ## Grounded in the science
 
@@ -42,6 +42,7 @@ Abendrot is designed around that: it attenuates the display's blue channel as it
 
 - **Warmth that actually lands on every display.** A layered engine warms each display with the best true-warming method available — and **tells you which one each display is using**, never a silent no-op.
 - **Reveal True Color.** Hold a global hotkey and warmth lifts across every display for color-critical work; release and it eases back. Built for designers and photographers.
+- **Scriptable & AI-controllable.** An `abendrot` CLI drives the running app from your terminal — or from an AI assistant like Claude Code, Codex, or Cursor. Read live state as JSON, set warmth, trigger a reveal. *(see [Scripting & AI control](#scripting--ai-control))*
 - **Health is the reason; reliability is the proof.** Abendrot helps you keep warmer, lower-blue light in the evening, and links the circadian research instead of making medical claims.
 - **Genuinely trustworthy.** MIT-licensed, no telemetry by default, no account, runs entirely on your Mac. The anti-NightOwl.
 
@@ -57,6 +58,40 @@ Warmth is applied per display by a layered engine that picks the best working me
 
 Each connected display shows a small badge — `Gamma` / `Hardware` / `Overlay` — so you always know what's actually happening. The schedule follows your system Night Shift window when available, or a custom/manual schedule.
 
+## Scripting & AI control
+
+Abendrot ships a command-line tool, `abendrot`, that drives the **running app** — so you can script screen warmth from a shell, a keybinding, a `launchd`/`cron` job, or hand the same commands to an AI coding assistant like **Claude Code, Codex, or Cursor**. It's the same auditable engine the menu bar drives, now with a command surface you can read and automate.
+
+```sh
+abendrot set warmth 0.8        # warm the screen to 80%
+abendrot status --json         # read live state as JSON — pipe it anywhere
+abendrot reveal --hold 10      # momentary true-color peek, then ease back
+```
+
+**Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. When you install the app, the binary ships inside the bundle and the Homebrew cask symlinks it onto your `PATH`.
+
+<details>
+<summary><strong>Common tasks → commands</strong> — the v1 surface (<code>abendrot --help</code> for everything)</summary>
+
+| Task | Command |
+|---|---|
+| Set warmth (0–1, or by Kelvin) | `abendrot set warmth 0.8` · `abendrot set warmth --kelvin 2700` |
+| Read live status as JSON | `abendrot status --json` |
+| Read one configured setting | `abendrot get warmth` |
+| Turn warming on / off | `abendrot on` · `abendrot off` |
+| Set the schedule mode | `abendrot set mode sunset` *(or `always-on` / `off`)* |
+| Set the warmest point the slider maps to | `abendrot set max-warmth 1900` |
+| Toggle cozy mode (the deepest candle/ember warmth) | `abendrot cozy on` · `abendrot cozy off` |
+| Choose hold vs toggle for reveal | `abendrot set reveal-mode hold` *(or `toggle`)* |
+| Set location for the sunset schedule | `abendrot set location --auto` *(or `<lat> <lon>`)* |
+| Exclude an app from warming | `abendrot exclude add com.apple.FinalCut` |
+| List / remove exclusions | `abendrot exclude list` · `abendrot exclude remove <bundle-id>` |
+| Momentary true-color reveal | `abendrot reveal --hold 8` |
+
+Machine-readable everywhere: every command takes `--json`, and exit codes are scriptable (`0` ok · `2` bad input · `3` app not running · `4` live-apply timeout). See [`AGENTS.md`](AGENTS.md) for the full agent-facing reference.
+
+</details>
+
 ## How it compares
 
 | | **Abendrot** | Apple Night Shift | f.lux | Redshift |
@@ -68,19 +103,20 @@ Each connected display shows a small badge — `Gamma` / `Hardware` / `Overlay` 
 | Reliable on third-party external monitors | Yes (layered, with fallback) | Inconsistent <sup>1</sup> | Gamma only; unreliable | X11 only |
 | Shows the actual color temperature + method, per display | Yes | No — a "Less / More Warm" slider | No | Per-output |
 | Reveal-true-color hotkey | Yes (hold) | No | No | Toggle only |
+| Scriptable CLI / AI control | Yes (`abendrot`, `--json`) | No | No | Partial (CLI) |
 | Open source | Yes (MIT) | No | No (freeware, closed) | Yes (GPL) |
 | Telemetry | None by default | Apple's | Unknown (closed-source) | None |
 | Price | Free forever | Free (built in) | Free | Free |
 
 <sub>Night Shift is a fine, free, built-in option — especially on a MacBook's own display. Abendrot is for deeper warmth and reliable warming across **every** external display, with the actual Kelvin and warming method shown per screen.</sub>
 
-<sub><sup>1</sup> Apple publishes no Kelvin value for Night Shift; ~2700–3400 K is a third-party estimate (Iris, f.lux). On external displays, Apple states performance "depends on the characteristics of the display" ([Apple Support](https://support.apple.com/en-us/102191)). <sup>2</sup> Per f.lux co-founder Michael Herf (2017 spectrometer measurement, macOS 10.12.4), Night Shift removes under ~30% of blue light's biological impact at its default setting. Figures reflect third-party measurements/estimates and our own testing. General wellness, not medical advice.</sub>
+<sub><sup>1</sup> Apple publishes no Kelvin value for Night Shift; ~2700–3400 K is a third-party estimate (Iris, f.lux). On external displays, Apple states performance "depends on the characteristics of the display" ([Apple Support](https://support.apple.com/en-us/102191)). <sup>2</sup> Per Michael Herf of f.lux (2017 spectrometer measurement, macOS 10.12.4), Night Shift removes under ~30% of blue light's biological impact at its default setting. Figures reflect third-party measurements/estimates and our own testing. General wellness, not medical advice.</sub>
 
 ## Install
 
 > **Pre-release.** Abendrot isn't downloadable yet. Signed, notarized builds and a Homebrew cask arrive with **v1.0** — watch [Releases](https://github.com/matthewrball/abendrot/releases) or [abendrot.app](https://abendrot.app). Until then, build from source below.
 
-*Coming with v1.0:* download a `.dmg` from Releases, or `brew install --cask abendrot`. Requirements: macOS 26 "Tahoe" or later, Apple Silicon.
+*Coming with v1.0:* download a `.dmg` from Releases, or `brew install --cask abendrot` (which also puts the `abendrot` CLI on your `PATH`). Requirements: macOS 26 "Tahoe" or later, Apple Silicon.
 
 ## The science
 
@@ -104,18 +140,22 @@ git clone https://github.com/matthewrball/abendrot.git
 cd abendrot
 
 # Engine package — builds and tests headlessly, no app bundle needed
-swift test --package-path WarmthKit          # 91 tests / 21 suites
+swift test --package-path WarmthKit          # 112 tests / 22 suites
 
 # The app
 xcodegen generate                            # generates Abendrot.xcodeproj from project.yml
 open Abendrot.xcodeproj                       # build & run the Abendrot scheme in Xcode
+
+# The CLI (optional) — a standalone thin client to the running app
+swift build -c release --package-path cli
+./cli/.build/release/abendrot --version      # → 0.1.0
 ```
 
 It runs in the menu bar — look for the sunset arc. Quit from the popover footer (power icon) or ⌘Q.
 
 ## Tech
 
-Native **Swift 6** (SwiftUI + AppKit), **macOS 26 "Tahoe"**, Apple Silicon. No Electron, no bundled runtime. The warmth engine lives in a standalone, unit-tested Swift package (`WarmthKit`); the app is a small menu-bar agent.
+Native **Swift 6** (SwiftUI + AppKit), **macOS 26 "Tahoe"**, Apple Silicon. No Electron, no bundled runtime. The warmth engine lives in a standalone, unit-tested Swift package (`WarmthKit`); the app is a small menu-bar agent; the `abendrot` CLI is a separate thin client that talks to the running app.
 
 ## Privacy
 

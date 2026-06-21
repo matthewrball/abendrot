@@ -50,7 +50,7 @@ public struct ReconfigurationDebounce: Sendable {
     }
 
     /// Given the current time `now`, decide whether the quiet window has elapsed since the last
-    /// event. Does **not** mutate; the caller pairs this with `consumeFire` once it actually
+    /// event. Does **not** mutate; the caller pairs this with `consumeFire()` once it actually
     /// fires.
     ///
     /// - Returns: `true` when at least `window` has passed since the last recorded event and a

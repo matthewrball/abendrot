@@ -7,19 +7,19 @@
   <language>), preserving all prior entries (Sparkle clients dedupe by the
   <sparkle:version> element build number).
 
-  HOSTING (Wave-1 decision): the appcast + binaries live on GitHub. Sparkle's
+  HOSTING: the appcast + binaries live on GitHub. Sparkle's
   SUFeedURL in Info.plist points at the RAW GitHub URL of this file on the default
   branch, e.g.:
     https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml
-  Lane A must set SUFeedURL + SUPublicEDKey in the app's Info.plist accordingly.
+  The app must set SUFeedURL + SUPublicEDKey in the app's Info.plist accordingly.
 
   Each SIGNED <item>'s sparkle:edSignature is produced by Sparkle's `sign_update`
   using the SINGLE release authority's EdDSA private key (login keychain only —
   never committed). release.sh HARD-FAILS rather than emit a signed item with an
   empty signature, so a signature attribute here is always a real signature.
 
-  UNSIGNED dev/dogfood items (release.sh --unsigned) OMIT the sparkle:edSignature
-  attribute ENTIRELY (never an empty string) and carry "(UNSIGNED dev build)" in
+  UNSIGNED items (release.sh --unsigned) OMIT the sparkle:edSignature
+  attribute ENTIRELY (never an empty string) and carry "(UNSIGNED build)" in
   the title. Sparkle with SUPublicEDKey configured rejects an unsigned enclosure,
   so such items must NOT be published to a real auto-update channel.
 -->

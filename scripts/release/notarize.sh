@@ -2,30 +2,30 @@
 #
 # notarize.sh — submit a DMG (or .app/.zip) to Apple notarization, staple, verify.
 #
-# Plan refs: §9 (notarytool submit --wait + stapler staple), §8/§21.2 release
-# gates (spctl -a -vvv, parse notarytool log), Wave-1 founder decision (signing
-# DEFERRED -> this MUST no-op gracefully with no Apple credentials = Mode B).
+# Notarization workflow: notarytool submit --wait + stapler staple, with release
+# gates (spctl -a -vvv, parse notarytool log), the deferred-signing decision (signing
+# DEFERRED -> this MUST no-op gracefully with no Apple credentials = credential-less mode).
 #
 # MODE B (default, TODAY, no Apple account): if no App Store Connect API key is
 # configured, this script prints a clear explanation and exits 0 (success) so the
 # release/CI pipeline is never blocked by the absence of credentials.
 #
-# MODE A (when the founder buys the $99 Apple Developer Program): set the env
+# WHEN SIGNING IS ENABLED (with an Apple Developer Program account): set the env
 # vars below (or pass --key/--key-id/--issuer) and it performs a real notarize +
 # staple + Gatekeeper verify.
 #
-# Credentials needed for Mode A (see docs/release/RELEASE.md "$99 checklist"):
-#   ASC_API_KEY_P8       path to the App Store Connect API key .p8     (or *_BASE64)
-#   ASC_API_KEY_ID       the key ID  (e.g. ABC123XYZ)
-#   ASC_API_ISSUER_ID    the issuer UUID
+# Credentials needed when signing is enabled (see the release runbook):
+# ASC_API_KEY_P8 path to the App Store Connect API key .p8 (or *_BASE64)
+# ASC_API_KEY_ID the key ID (e.g. ABC123XYZ)
+# ASC_API_ISSUER_ID the issuer UUID
 # In CI these come from secrets (ASC_API_KEY_P8_BASE64 is base64-decoded here).
 #
 # Usage:
-#   scripts/release/notarize.sh <path-to-dmg|app|zip> \
-#       [--key <p8>] [--key-id <id>] [--issuer <uuid>]
+# scripts/release/notarize.sh <path-to-dmg|app|zip> \
+# [--key <p8>] [--key-id <id>] [--issuer <uuid>]
 #
-# Exit codes: 0 success OR cleanly-skipped (Mode B); 2 args; 3 missing target;
-#             4 notarization rejected; 5 staple/verify failed.
+# Exit codes: 0 success OR cleanly-skipped (when signing is deferred); 2 args; 3 missing target;
+# 4 notarization rejected; 5 staple/verify failed.
 
 set -euo pipefail
 
@@ -42,7 +42,7 @@ while [ $# -gt 0 ]; do
     --key-id) KEY_ID="${2:-}"; shift 2 ;;
     --issuer) ISSUER="${2:-}"; shift 2 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed -n '1,30p'; exit 0 ;;
-    *) echo "notarize: unknown arg '$1'" >&2; exit 2 ;;
+    *) echo "notarize: unknown arg '$1'" >&2; exit 2;;
   esac
 done
 
@@ -68,16 +68,16 @@ fi
 # ---------------------------------------------------------------------------
 if [ -z "$KEY_PATH" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER" ]; then
   cat >&2 <<'EOF'
-notarize: SKIPPED (Mode B — no Apple credentials configured).
+notarize: SKIPPED (no Apple credentials configured).
 
-  The signing/notarization step is DEFERRED per the Wave-1 founder decision
+  The signing/notarization step is DEFERRED per the deferred-signing decision
   (no $99 Apple Developer Program yet). The DMG/app you built is valid for
   LOCAL/unsigned testing today, but it is NOT notarized: on another Mac it will
   trip Gatekeeper (right-click > Open, or `xattr -dr com.apple.quarantine`).
 
-  To enable notarization (Mode A), provide all three:
+  To enable notarization (when signing is enabled), provide all three:
       ASC_API_KEY_P8 (or ASC_API_KEY_P8_BASE64), ASC_API_KEY_ID, ASC_API_ISSUER_ID
-  See docs/release/RELEASE.md -> "$99 account -> what to supply".
+  See the release runbook.
 EOF
   echo "notarize: exiting 0 (clean skip)."
   exit 0
@@ -113,7 +113,7 @@ STATUS="$(/usr/libexec/PlistBuddy -c 'Print :status' "$SUBMIT_LOG" 2>/dev/null |
 REQ_ID="$(/usr/libexec/PlistBuddy -c 'Print :id' "$SUBMIT_LOG" 2>/dev/null || echo '')"
 echo "notarize: status='$STATUS' id='$REQ_ID'"
 
-# Always fetch + print the detailed log (the audit trail; §21.2 "parse notarytool log").
+# Always fetch + print the detailed log (the audit trail).
 if [ -n "$REQ_ID" ]; then
   echo "notarize: fetching notarytool log for $REQ_ID ..."
   xcrun notarytool log "$REQ_ID" \
@@ -134,7 +134,7 @@ fi
 xcrun stapler validate "$TARGET" || { echo "notarize: stapler validate failed." >&2; exit 5; }
 
 # Gatekeeper assessment. For a DMG, assess the mounted app; for an .app assess
-# directly. spctl -a -vvv is the §8 release gate.
+# directly. spctl -a -vvv is the release gate.
 echo "notarize: Gatekeeper verify (spctl -a -vvv)..."
 case "$TARGET" in
   *.dmg)

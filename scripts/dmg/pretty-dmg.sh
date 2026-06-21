@@ -2,34 +2,33 @@
 #
 # pretty-dmg.sh — branded "unboxing" DMG (Abendrot, UI-runner only).
 #
-# Plan refs: §9 ("branded DMG — explicit requirement"), §21.2 (two DMG modes),
-# §21.4 (DMG as unboxing: split-screen cold->warm background so dragging the app
+# Two DMG modes (branded + plain),
+# with the DMG as unboxing: split-screen cold->warm background so dragging the app
 # from the "cold/blue" side to the "warm" Applications side demos the product).
 #
 # IMPORTANT — UI RUNNER ONLY. create-dmg art-directs the Finder window via
 # AppleScript, which requires a logged-in WindowServer session. It HANGS on
 # headless CI (create-dmg issue #154). Run this:
-#   - locally on the founder's Mac, OR
-#   - on the self-hosted UI runner with a logged-in user.
+# - locally on the maintainer's Mac, OR
+# - on the self-hosted UI runner with a logged-in user.
 # For headless/forked-PR/Mode-B builds, use plain-dmg.sh instead. Releases are
-# gated on >=1 notarized+stapled DMG when signing is enabled (§21.2); the pretty
+# gated on >=1 notarized+stapled DMG when signing is enabled; the pretty
 # DMG is preferred for public releases, with plain-dmg as the guaranteed fallback.
 #
-# Lane C dependency (BLOCKING for final art, NON-blocking for function):
-#   The split-screen cold->warm background PNG (@1x + @2x) is OWNED BY LANE C
-#   (brand). Until it lands, this script falls back to NO background (still a
-#   functional drag-to-Applications DMG). Drop the art at:
-#       scripts/dmg/assets/dmg-background.png      (1x, 660x400 pt -> 660x400 px)
-#       scripts/dmg/assets/dmg-background@2x.png   (2x, 1320x800 px)
-#   and (optional) a volume icon at:
-#       scripts/dmg/assets/volume.icns
-#   The window geometry + icon coordinates below are RESERVED to match that art
-#   (see GEOMETRY block). Lane C: design the background to these coordinates, or
-#   tell Lane E new numbers.
+# Brand-asset dependency (BLOCKING for final art, NON-blocking for function):
+# The split-screen cold->warm background PNG (@1x + @2x) is brand-owned
+# . Until it lands, this script falls back to NO background (still a
+# functional drag-to-Applications DMG). Drop the art at:
+# scripts/dmg/assets/dmg-background.png (1x, 660x400 pt -> 660x400 px)
+# scripts/dmg/assets/dmg-background@2x.png (2x, 1320x800 px)
+# and (optional) a volume icon at:
+# scripts/dmg/assets/volume.icns
+# The window geometry + icon coordinates below are RESERVED to match that art
+# (see GEOMETRY block). Design the background to these coordinates, or update them here.
 #
 # Usage:
-#   scripts/dmg/pretty-dmg.sh --app <Abendrot.app> --out <out.dmg> \
-#       [--volname "Abendrot"] [--background <png>] [--volicon <icns>]
+# scripts/dmg/pretty-dmg.sh --app <Abendrot.app> --out <out.dmg> \
+# [--volname "Abendrot"] [--background <png>] [--volicon <icns>]
 #
 # Exit codes: 0 ok; 2 args; 3 missing app; 5 create-dmg missing; 6 build fail.
 
@@ -41,7 +40,7 @@ ASSETS_DIR="$SCRIPT_DIR/assets"
 APP=""
 OUT=""
 VOLNAME="Abendrot"
-BACKGROUND="$ASSETS_DIR/dmg-background.png"   # Lane C art (placeholder until delivered)
+BACKGROUND="$ASSETS_DIR/dmg-background.png"   # brand art (placeholder until delivered)
 VOLICON="$ASSETS_DIR/volume.icns"            # optional brand volume icon
 
 usage() { grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed -n '1,40p'; }
@@ -54,7 +53,7 @@ while [ $# -gt 0 ]; do
     --background) BACKGROUND="${2:-}"; shift 2 ;;
     --volicon)    VOLICON="${2:-}"; shift 2 ;;
     -h|--help)    usage; exit 0 ;;
-    *) echo "pretty-dmg: unknown arg '$1'" >&2; usage >&2; exit 2 ;;
+    *) echo "pretty-dmg: unknown arg '$1'" >&2; usage >&2; exit 2;;
   esac
 done
 
@@ -72,7 +71,7 @@ fi
 if ! command -v create-dmg >/dev/null 2>&1; then
   echo "pretty-dmg: 'create-dmg' not found." >&2
   echo "            Install:  brew install create-dmg  (create-dmg/create-dmg shell tool)" >&2
-  echo "            For headless CI / Mode B, use scripts/dmg/plain-dmg.sh instead." >&2
+  echo "            For headless CI without credentials, use scripts/dmg/plain-dmg.sh instead." >&2
   exit 5
 fi
 
@@ -88,11 +87,11 @@ OUT_DIR="$(dirname "$OUT")"; mkdir -p "$OUT_DIR"
 rm -f "$OUT"
 
 # ---------------------------------------------------------------------------
-# GEOMETRY (RESERVED for Lane C's split-screen cold->warm background).
+# GEOMETRY (RESERVED for the split-screen cold->warm background).
 # Window is 660x400 pt. The .app sits on the LEFT ("cold/blue") side; the
 # /Applications drop-link sits on the RIGHT ("warm") side, so the drag gesture
-# moves the icon across the cold->warm gradient — the unboxing demo (§21.4).
-# Lane C: paint the gradient + the connecting arrow to land under these points.
+# moves the icon across the cold->warm gradient — the unboxing demo.
+# Paint the gradient + the connecting arrow to land under these points.
 WINDOW_X=200          # window top-left X on screen
 WINDOW_Y=120          # window top-left Y on screen
 WINDOW_W=660          # window width  (pt)
@@ -115,12 +114,12 @@ ARGS=(
   --no-internet-enable
 )
 
-# Background art is OPTIONAL: include only if Lane C has delivered it.
+# Background art is OPTIONAL: include only if the brand art has been delivered.
 if [ -f "$BACKGROUND" ]; then
   echo "pretty-dmg: using brand background -> $BACKGROUND"
   ARGS+=( --background "$BACKGROUND" )
 else
-  echo "pretty-dmg: NOTE — Lane C background not found at '$BACKGROUND'." >&2
+  echo "pretty-dmg: NOTE — branded background not found at '$BACKGROUND'." >&2
   echo "            Building a functional (un-arted) branded DMG. Geometry is" >&2
   echo "            still applied so the art can be dropped in later unchanged." >&2
 fi

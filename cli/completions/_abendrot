@@ -1,0 +1,321 @@
+#compdef abendrot
+
+__abendrot_complete() {
+    local -ar non_empty_completions=("${@:#(|:*)}")
+    local -ar empty_completions=("${(M)@:#(|:*)}")
+    _describe -V '' non_empty_completions -- empty_completions -P $'\'\''
+}
+
+__abendrot_custom_complete() {
+    local -a completions
+    completions=("${(@f)"$("${command_name}" "${@}" "${command_line[@]}")"}")
+    if [[ "${#completions[@]}" -gt 1 ]]; then
+        __abendrot_complete "${completions[@]:0:-1}"
+    fi
+}
+
+__abendrot_cursor_index_in_current_word() {
+    if [[ -z "${QIPREFIX}${IPREFIX}${PREFIX}" ]]; then
+        printf 0
+    else
+        printf %s "${#${(z)LBUFFER}[-1]}"
+    fi
+}
+
+_abendrot() {
+    emulate -RL zsh -G
+    setopt extendedglob nullglob numericglobsort
+    unsetopt aliases banghist
+
+    local -xr SAP_SHELL=zsh
+    local -x SAP_SHELL_VERSION
+    SAP_SHELL_VERSION="$(builtin emulate zsh -c 'printf %s "${ZSH_VERSION}"')"
+    local -r SAP_SHELL_VERSION
+
+    local context state state_descr line
+    local -A opt_args
+
+    local -r command_name="${words[1]}"
+    local -ar command_line=("${words[@]}")
+    local -ir current_word_index="$((CURRENT - 1))"
+
+    local -i ret=1
+    local -ar arg_specs=(
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'status:Show live app state (enabled, mode, warmth, per-display method).'
+            'get:Print one configured setting (warmth, mode, max-warmth, reveal-mode, location, enabled).'
+            'on:Enable warming (isEnabled = true).'
+            'off:Disable warming (isEnabled = false).'
+            'set:Change a setting.'
+            'exclude:Manage the per-app warmth-exclusion list.'
+            'reveal:Momentary true-color peek (live-only; requires a running app).'
+            'help:Show subcommand help information.'
+        )
+        _describe -V subcommand subcommands && ret=0
+        ;;
+    arg)
+        case "${words[1]}" in
+        status|get|on|off|set|exclude|reveal|help)
+            "_abendrot_${words[1]}" && ret=0
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_abendrot_status() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--json[Emit machine-readable JSON.]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_get() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':key:'
+        '--json[Emit machine-readable JSON.]'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_on() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_off() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_set() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'warmth:Set global warmth 0.0–1.0, or target a Kelvin with --kelvin.'
+            'mode:Set schedule mode: sunset | always-on | off.'
+            'max-warmth:Set the warmest-point ceiling in Kelvin (500–6500).'
+            'reveal-mode:Set reveal behaviour: hold | toggle.'
+            'location:Set manual sunset location <lat> <lon>, or --auto to clear it.'
+        )
+        _describe -V subcommand subcommands && ret=0
+        ;;
+    arg)
+        case "${words[1]}" in
+        warmth|mode|max-warmth|reveal-mode|location)
+            "_abendrot_set_${words[1]}" && ret=0
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_abendrot_set_warmth() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':strength:'
+        '--kelvin[Target effective Kelvin (500–6500) instead of a strength.]:kelvin:'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_set_mode() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':mode:'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_set_max-warmth() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':kelvin:'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_set_reveal-mode() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':mode:'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_set_location() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':latitude:'
+        ':longitude:'
+        '--auto[Clear the manual coordinate; derive sunset from the system time zone.]'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_exclude() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+        '(-): :->command'
+        '(-)*:: :->arg'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+    case "${state}" in
+    command)
+        local -ar subcommands=(
+            'add:Add a bundle id to the exclusion set.'
+            'remove:Remove a bundle id from the exclusion set.'
+            'list:List excluded bundle ids.'
+        )
+        _describe -V subcommand subcommands && ret=0
+        ;;
+    arg)
+        case "${words[1]}" in
+        add|remove|list)
+            "_abendrot_exclude_${words[1]}" && ret=0
+            ;;
+        esac
+        ;;
+    esac
+
+    return "${ret}"
+}
+
+_abendrot_exclude_add() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':bundle-id:'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_exclude_remove() {
+    local -i ret=1
+    local -ar arg_specs=(
+        ':bundle-id:'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_exclude_list() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_reveal() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '--hold[Hold the reveal for N seconds (default 3).]:hold:'
+        '--json'
+        '--version[Show the version.]'
+        '(-h --help)'{-h,--help}'[Show help information.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+_abendrot_help() {
+    local -i ret=1
+    local -ar arg_specs=(
+        '*:subcommands:'
+        '--version[Show the version.]'
+    )
+    _arguments -w -s -S : "${arg_specs[@]}" && ret=0
+
+    return "${ret}"
+}
+
+if [[ "${funcstack[1]}" = _abendrot ]]; then
+    _abendrot "${@}"
+else
+    compdef _abendrot abendrot
+fi
