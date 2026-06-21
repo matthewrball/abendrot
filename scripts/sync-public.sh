@@ -79,10 +79,21 @@ echo "== Syncing shippable source build -> public =="
 for t in "${SYNC_TREES[@]}"; do sync_tree "$t"; done
 for f in "${SYNC_FILES[@]}"; do copy_file "$f"; done
 
-# Internal-only files that must not appear in public (present in build, absent in public).
+# Internal-only paths that must NEVER appear in public — dev docs plus any planning/orchestration
+# state. rm -rf so directories left in the public tree (e.g. an .omc/ from running tooling there)
+# are removed: rsync's --exclude only stops them being COPIED, not deleted if already present, and
+# an untracked .omc/ would otherwise be swept into a `git add -A` at commit time and published.
 echo "== Removing internal-only files from public =="
-for f in "App/README.md"; do
-  if [ -e "$PUBLIC/$f" ]; then echo "  rm $f"; [ -n "$DRY" ] || rm -f "$PUBLIC/$f"; fi
+INTERNAL_ONLY=(
+  "App/README.md"
+  ".omc"
+  ".baton"
+  "HANDOFF.md"
+  "LAUNCH.md"
+  "RESUME-PROMPT.md"
+)
+for f in "${INTERNAL_ONLY[@]}"; do
+  if [ -e "$PUBLIC/$f" ]; then echo "  rm $f"; [ -n "$DRY" ] || rm -rf "$PUBLIC/$f"; fi
 done
 
 if [ -n "$DRY" ]; then
