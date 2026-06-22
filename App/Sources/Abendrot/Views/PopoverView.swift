@@ -261,8 +261,8 @@ struct PopoverView: View {
             Button { SettingsWindowController.show(model: model) } label: {
                 HStack(spacing: 3) {
                     Text("Change your maximum in Settings")
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 8, weight: .semibold))
                         .accessibilityHidden(true)
                 }
                 .font(Theme.Typography.ui(11, weight: .medium))
