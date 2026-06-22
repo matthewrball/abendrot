@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 import WarmthKit
 
 // MARK: - AbendrotApp
@@ -17,12 +18,13 @@ struct AbendrotApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
+        _ = UpdateManager.shared
         // Hand the model to the delegate so the app-quit hook can neutral-reset displays.
         appDelegate.bind(model: model)
     }
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $model.showInMenuBar) {
             PopoverView(model: model)
         } label: {
             // "One Ripple" sunset-arc glyph: a monochrome template at rest, ember-amber filled while
@@ -42,13 +44,14 @@ struct AbendrotApp: App {
                     AboutWindowController.show(model: model)
                 }
             }
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView()
+            }
         }
 
-        // TODO(pre-release): REMOVE before shipping — a DEV-ONLY menu-bar item to replay the onboarding
-        // flow on demand for testing (by request). Deliberately a SEPARATE menu-bar item
-        // (default `.menu` style → a small ✨ pull-down) so it stays OUT of the main popover and doesn't
-        // clutter the UI under test. Delete this whole scene to remove. NOT gated behind `#if DEBUG`
-        // because the maintainer tests the Release build.
+        #if DEBUG
+        // Developer-only menu-bar item to replay the onboarding flow on demand for testing. Deliberately
+        // separate from the main popover so it stays out of the product UI.
         MenuBarExtra("Replay onboarding", systemImage: "sparkles") {
             Button("Relaunch (latest build)") {
                 relaunchFromLatestBuild()
@@ -71,6 +74,7 @@ struct AbendrotApp: App {
                 relaunchFromLatestBuild(force: true)
             }
         }
+        #endif
 
         // A SwiftUI Settings scene only so ⌘, / `openSettings()` resolve; the real glass
         // window is the programmatic one. This scene routes to it.
@@ -138,6 +142,7 @@ private struct SettingsHostWindowDismisser: NSViewRepresentable {
 /// Owns app-level lifecycle the SwiftUI `App` can't express directly: engine start on
 /// launch, neutral-reset on quit, and the menu-bar-only activation policy.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let launchAtLoginDefaultRegisteredKey = "launchAtLoginDefaultRegistered"
     private weak var model: AppModel?
 
     @MainActor
@@ -148,9 +153,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Start as a menu-bar-only agent; windows raise it via AppActivationPolicy.
         NSApp.setActivationPolicy(.accessory)
+        registerLaunchAtLoginByDefaultIfNeeded()
         Task { @MainActor in
             model?.start()
         }
+    }
+
+    private func registerLaunchAtLoginByDefaultIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Self.launchAtLoginDefaultRegisteredKey) == nil else { return }
+
+        do {
+            if SMAppService.mainApp.status != .enabled {
+                try SMAppService.mainApp.register()
+            }
+            defaults.set(true, forKey: "launchAtLogin")
+        } catch {
+            defaults.set(SMAppService.mainApp.status == .enabled, forKey: "launchAtLogin")
+        }
+        defaults.set(true, forKey: Self.launchAtLoginDefaultRegisteredKey)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

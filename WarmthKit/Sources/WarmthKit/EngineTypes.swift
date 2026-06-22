@@ -51,6 +51,10 @@ public struct WarmthState: Sendable, Equatable {
     public var isScheduleActiveNow: Bool          // resolved schedule decision
     public var isRevealing: Bool                  // hold-to-reveal active
     public var globalWarmth: WarmthLevel
+    /// The warmth the engine is ACTUALLY applying right now — the schedule decision's target
+    /// (`globalWarmth` in Always-on; `globalWarmth × sunset-ramp` in Sunset; `.off`/neutral by day).
+    /// Published so the popover can show a live, locked readout in Sunset mode instead of the peak.
+    public var resolvedWarmth: WarmthLevel
     /// The Kelvin the warmth slider's max (strength 1.0) maps to — published so the UI can show
     /// an accurate Kelvin readout instead of assuming a default.
     public var warmestPoint: Kelvin
@@ -63,6 +67,7 @@ public struct WarmthState: Sendable, Equatable {
         isScheduleActiveNow: Bool = false,
         isRevealing: Bool = false,
         globalWarmth: WarmthLevel = .off,
+        resolvedWarmth: WarmthLevel = .off,
         warmestPoint: Kelvin = Kelvin.everydayWarmest,
         privateAPIsEnabled: Bool = true,
         displays: [DisplayState] = []
@@ -72,6 +77,7 @@ public struct WarmthState: Sendable, Equatable {
         self.isScheduleActiveNow = isScheduleActiveNow
         self.isRevealing = isRevealing
         self.globalWarmth = globalWarmth
+        self.resolvedWarmth = resolvedWarmth
         self.warmestPoint = warmestPoint
         self.privateAPIsEnabled = privateAPIsEnabled
         self.displays = displays

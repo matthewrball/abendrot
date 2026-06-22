@@ -23,18 +23,17 @@ import SwiftUI
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private static var shared: OnboardingWindowController?
-    /// First fit (on open) is instant; later fits (step / mode changes) animate.
+    private static let defaultHeight: CGFloat = 399
+    /// First fit (on open) is instant; later fits follow SwiftUI's measured height.
     private var hasFitContent = false
     private var resizeTask: Task<Void, Never>?
 
-    /// Resize the window so it hugs `contentHeight` — the onboarding card's natural height for the current
-    /// step/mode (measured in OnboardingView). Keeps the width + TOP edge fixed (grows/shrinks downward), so
-    /// the heading + switcher never move and Always-on compresses. First fit (open) is instant; later fits
-    /// animate. Mirrors `SettingsWindowController.fitDetailContentHeight`.
+    /// Resize the window so it hugs `contentHeight`, keeping the width + TOP edge fixed.
+    /// SwiftUI reports start/end layout sizes here; larger jumps are interpolated top-pinned.
     static func fitContentHeight(_ contentHeight: CGFloat) {
         guard contentHeight > 1, let ctrl = shared, let win = ctrl.window else { return }
         let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
-        let target = contentHeight + titlebar
+        let target = max(contentHeight + titlebar, defaultHeight)
         let current = win.frame
         guard abs(current.height - target) > 0.5 else {
             ctrl.hasFitContent = true
@@ -85,7 +84,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
             let startFrame = current
             let startHeight = current.height
             let pinnedTop = current.maxY
-            let duration: TimeInterval = 0.35
+            let duration: TimeInterval = 0.38
             let start = CACurrentMediaTime()
 
             while !Task.isCancelled {
@@ -132,7 +131,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: Self.defaultHeight),
             // `.fullSizeContentView` MUST be present at creation for the glass chrome. A fixed card:
             // no `.resizable`/`.miniaturizable` — the only traffic light is close.
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -177,6 +176,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     // MARK: NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        resizeTask?.cancel()
         // Mark onboarding done whether the user finished or just closed it — never nag twice.
         UserDefaults.standard.set(true, forKey: AppModel.hasCompletedOnboardingKey)
         AppActivationPolicy.leave()

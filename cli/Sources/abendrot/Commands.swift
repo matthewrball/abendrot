@@ -211,7 +211,7 @@ struct SetMaxWarmth: ParsableCommand {
 }
 
 struct SetRevealMode: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "reveal-mode", abstract: "Set reveal behaviour: hold | toggle.")
+    static let configuration = CommandConfiguration(commandName: "reveal-mode", abstract: "Set reveal behavior: hold | toggle.")
     @Argument(help: "hold | toggle") var mode: String
     @Flag(name: .long) var json = false
 
@@ -292,8 +292,9 @@ struct ExcludeRemove: ParsableCommand {
     @Flag(name: .long) var json = false
 
     func run() throws {
+        let id = try validatedBundleID(bundleID)
         let current = Control.configuredExcludedApps()
-        let next = Set(current).subtracting([bundleID]).sorted()
+        let next = Set(current).subtracting([id]).sorted()
         try applySettings(SettingsPatch(excludedApps: next), json: json)
     }
 }
