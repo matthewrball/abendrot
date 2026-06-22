@@ -4,7 +4,8 @@ import WarmthKit
 
 // MARK: - OnboardingStep
 
-private enum OnboardingStep: Int, CaseIterable {
+// `internal` (not `private`) so the screenshot harness in AbendrotApp can deep-link a start step.
+enum OnboardingStep: Int, CaseIterable {
     // Mode FIRST, then the warmth preview: the schedule is the cheap decision a new user can actually
     // reason about, and putting warmth last lands onboarding on its strongest sensory beat — the screen
     // blooming warm under the user's finger.
@@ -23,6 +24,10 @@ private enum OnboardingStep: Int, CaseIterable {
     static let numberedTotal = 3
 }
 
+enum OnboardingLayout {
+    static let windowSize = NSSize(width: 320, height: 580)
+}
+
 // MARK: - OnboardingView
 //
 // "3 clicks to warmth": welcome → choose the schedule → set your warmth — three
@@ -36,7 +41,13 @@ struct OnboardingView: View {
     @Bindable var model: AppModel
     var onFinish: () -> Void
 
-    @State private var step: OnboardingStep = .welcome
+    init(model: AppModel, onFinish: @escaping () -> Void, initialStep: OnboardingStep = .welcome) {
+        self._model = Bindable(wrappedValue: model)
+        self.onFinish = onFinish
+        self._step = State(initialValue: initialStep)
+    }
+
+    @State private var step: OnboardingStep
     @State private var scheduleOption: ScheduleModeOption = .followSunset
     // Warmth defaults to the warmest ONCE (first time the schedule step appears), so a return visit doesn't
     // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
@@ -50,6 +61,7 @@ struct OnboardingView: View {
     @State private var sliderPressing = false
     @State private var sunsetDetailHeight: CGFloat = 0
     @State private var sunsetDetailReveal: CGFloat = 1
+    @State private var scheduleRevealTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -69,21 +81,11 @@ struct OnboardingView: View {
             .transition(.opacity)
         }
         .padding(24)
-        .frame(width: 320)
-        .fixedSize(horizontal: false, vertical: true)
-        // Report the natural content height so the window can grow for taller step/mode content. Measured
-        // HERE — on the fixed-size card, BEFORE
-        // the fill frame below — so it reports the card's true height, not the filled window. Mirrors the
-        // self-sizing Settings window.
-        .background(GeometryReader { proxy in
-            Color.clear.preference(key: OnboardingHeightKey.self, value: proxy.size.height)
-        })
-        // Then FILL the window (card pinned to the top) so the frosted-ember glass reaches edge-to-edge,
-        // including the transparent title-bar strip. Without this, a tall step makes the window taller than
-        // the fixed-size card and the system-gray title bar peeks out above the frost — the Settings window
-        // avoids it the same way (its split view fills). The card keeps its natural size at the top; only
-        // the frost grows to fill.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // This onboarding host is intentionally fixed-size: schedule changes animate the lower detail
+        // area inside the window, while the title/header/switcher keep their screen position.
+        .frame(width: OnboardingLayout.windowSize.width,
+               height: OnboardingLayout.windowSize.height,
+               alignment: .top)
         // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
         // miss. `performDrag` only fires for clicks that fall THROUGH to this background, so interactive
         // controls (slider, buttons, mode control, city picker) keep their own drags. (This is why we keep
@@ -93,9 +95,6 @@ struct OnboardingView: View {
         // the traffic-light buttons sit cleanly on the frost in the transparent title bar, and there is no
         // detached floating-card border and no gray bar.
         .background(FrostBackground())
-        .onPreferenceChange(OnboardingHeightKey.self) { height in
-            Task { @MainActor in OnboardingWindowController.fitContentHeight(height) }
-        }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
 
@@ -253,7 +252,7 @@ struct OnboardingView: View {
             // warms the screen now; Sunset (in daylight) eases back to neutral. `setScheduleMode` also
             // plays the soft mode tick (gated by the sound pref). The switcher sits at a CONSTANT y — the
             // heading + fixed subtitle slot above it never change height.
-            ModeControl(selection: scheduleSelection) { _ in }
+            ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
 
             VStack(spacing: 0) {
                 ZStack(alignment: .top) {
@@ -269,14 +268,13 @@ struct OnboardingView: View {
                 PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
             }
         }
-        // The Sunset detail animates only its clipped height; the outer AppKit panel follows that size.
+        // The Sunset detail animates only its clipped height; the outer AppKit panel stays fixed.
         .onPreferenceChange(SunsetDetailHeightKey.self) { sunsetDetailHeight = $0 }
         // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
         // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
         // "Abendrot is now active"; the mode tick then plays on each toggle.
         .onAppear {
-            let showSunsetDetail = scheduleOption == .followSunset
-            sunsetDetailReveal = showSunsetDetail ? 1 : 0
+            sunsetDetailReveal = isShowingSunsetDetail ? 1 : 0
 
             // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
             // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
@@ -403,6 +401,10 @@ struct OnboardingView: View {
         )
     }
 
+    private var isShowingSunsetDetail: Bool {
+        scheduleOption == .followSunset
+    }
+
     private var sunsetDetailFrameHeight: CGFloat? {
         guard sunsetDetailHeight > 0 else {
             return sunsetDetailReveal > 0 ? nil : 0
@@ -458,9 +460,18 @@ struct OnboardingView: View {
 
     private func applyScheduleOption(_ option: ScheduleModeOption) {
         guard option != scheduleOption else { return }
-        withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
-            scheduleOption = option
-            sunsetDetailReveal = option == .followSunset ? 1 : 0
+        scheduleRevealTask?.cancel()
+        scheduleOption = option
+        let shouldRevealSunsetDetail = isShowingSunsetDetail
+        scheduleRevealTask = Task { @MainActor in
+            // Commit the stable header/switcher state first; the next frame animates only the lower detail
+            // height, so the fixed onboarding window never captures two schedule layouts at once.
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
+                sunsetDetailReveal = shouldRevealSunsetDetail ? 1 : 0
+            }
+            scheduleRevealTask = nil
         }
         model.setScheduleMode(option.toScheduleMode())
     }
@@ -622,15 +633,6 @@ private struct WindowDraggableBackground: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
-}
-
-// MARK: - OnboardingHeightKey
-
-/// The onboarding card's natural content height, so the window can hug each step/mode — see
-/// `OnboardingWindowController.fitContentHeight`.
-private struct OnboardingHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 private struct SunsetDetailHeightKey: PreferenceKey {

@@ -13,7 +13,7 @@ struct GeneralTab: View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "General", subtitle: "How Abendrot behaves day to day.")
 
-            // The primary control, first and consistent with the menu-bar popover:
+            // The primary control, first and consistent with the menu-bar popover: the
             // master toggle + the SAME liquid-glass WarmSlider. In Sunset this edits the evening
             // maximum; the menu bar only shows the live, clock-owned warmth.
             VStack(alignment: .leading, spacing: 12) {
