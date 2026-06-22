@@ -25,7 +25,16 @@ enum OnboardingStep: Int, CaseIterable {
 }
 
 enum OnboardingLayout {
-    static let windowSize = NSSize(width: 320, height: 580)
+    static let contentWidth: CGFloat = 320
+    static let welcomeHeight: CGFloat = 375
+    static let scheduleAlwaysOnHeight: CGFloat = 380
+    static let scheduleSunsetHeight: CGFloat = 575
+    static let warmthHeight: CGFloat = 500
+    static let allSetHeight: CGFloat = 420
+    static let minimumContentHeight: CGFloat = 300
+    static let maximumContentHeight: CGFloat = 620
+
+    static let initialContentSize = NSSize(width: contentWidth, height: welcomeHeight)
 }
 
 // MARK: - OnboardingView
@@ -40,10 +49,17 @@ enum OnboardingLayout {
 struct OnboardingView: View {
     @Bindable var model: AppModel
     var onFinish: () -> Void
+    var onHeightChange: (CGFloat, Bool) -> Void
 
-    init(model: AppModel, onFinish: @escaping () -> Void, initialStep: OnboardingStep = .welcome) {
+    init(
+        model: AppModel,
+        onFinish: @escaping () -> Void,
+        initialStep: OnboardingStep = .welcome,
+        onHeightChange: @escaping (CGFloat, Bool) -> Void = { _, _ in }
+    ) {
         self._model = Bindable(wrappedValue: model)
         self.onFinish = onFinish
+        self.onHeightChange = onHeightChange
         self._step = State(initialValue: initialStep)
     }
 
@@ -81,11 +97,12 @@ struct OnboardingView: View {
             .transition(.opacity)
         }
         .padding(24)
-        // This onboarding host is intentionally fixed-size: schedule changes animate the lower detail
-        // area inside the window, while the title/header/switcher keep their screen position.
-        .frame(width: OnboardingLayout.windowSize.width,
-               height: OnboardingLayout.windowSize.height,
-               alignment: .top)
+        // The NSWindow resizes dynamically, but the SwiftUI content is always laid out in the target
+        // step-height box and pinned to its top edge. That prevents the controls from recentering or
+        // "jumping" while AppKit animates the lower window edge.
+        .frame(width: OnboardingLayout.contentWidth, height: targetContentHeight, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .clipped()
         // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
         // miss. `performDrag` only fires for clicks that fall THROUGH to this background, so interactive
         // controls (slider, buttons, mode control, city picker) keep their own drags. (This is why we keep
@@ -95,6 +112,12 @@ struct OnboardingView: View {
         // the traffic-light buttons sit cleanly on the frost in the transparent title bar, and there is no
         // detached floating-card border and no gray bar.
         .background(FrostBackground())
+        .onAppear {
+            onHeightChange(targetContentHeight, false)
+        }
+        .onChange(of: targetContentHeight) { _, height in
+            onHeightChange(height, !reduceMotion)
+        }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
 
@@ -267,13 +290,15 @@ struct OnboardingView: View {
 
                 PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
             }
+            .padding(.bottom, 20)
         }
-        // The Sunset detail animates only its clipped height; the outer AppKit panel stays fixed.
+        // The Sunset detail animates inside a top-pinned AppKit window whose height follows the mode.
         .onPreferenceChange(SunsetDetailHeightKey.self) { sunsetDetailHeight = $0 }
         // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
         // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
         // — "Abendrot is now active"; the mode tick then plays on each toggle.
         .onAppear {
+            scheduleRevealTask?.cancel()
             sunsetDetailReveal = isShowingSunsetDetail ? 1 : 0
 
             // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
@@ -286,6 +311,10 @@ struct OnboardingView: View {
                 hasInitializedWarmth = true
             }
             model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+        }
+        .onDisappear {
+            scheduleRevealTask?.cancel()
+            scheduleRevealTask = nil
         }
     }
 
@@ -401,6 +430,21 @@ struct OnboardingView: View {
         )
     }
 
+    private var targetContentHeight: CGFloat {
+        switch step {
+        case .welcome:
+            return OnboardingLayout.welcomeHeight
+        case .schedule:
+            return isShowingSunsetDetail
+                ? OnboardingLayout.scheduleSunsetHeight
+                : OnboardingLayout.scheduleAlwaysOnHeight
+        case .warmth:
+            return OnboardingLayout.warmthHeight
+        case .allSet:
+            return OnboardingLayout.allSetHeight
+        }
+    }
+
     private var isShowingSunsetDetail: Bool {
         scheduleOption == .followSunset
     }
@@ -462,18 +506,22 @@ struct OnboardingView: View {
         guard option != scheduleOption else { return }
         scheduleRevealTask?.cancel()
         scheduleOption = option
-        let shouldRevealSunsetDetail = isShowingSunsetDetail
+        model.setScheduleMode(option.toScheduleMode())
+
+        let shouldShowDetail = option == .followSunset
+        guard !reduceMotion else {
+            sunsetDetailReveal = shouldShowDetail ? 1 : 0
+            return
+        }
+
         scheduleRevealTask = Task { @MainActor in
-            // Commit the stable header/switcher state first; the next frame animates only the lower detail
-            // height, so the fixed onboarding window never captures two schedule layouts at once.
             try? await Task.sleep(nanoseconds: 16_000_000)
             guard !Task.isCancelled else { return }
-            withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
-                sunsetDetailReveal = shouldRevealSunsetDetail ? 1 : 0
+            withAnimation(Theme.Motion.controlReveal(reduceMotion: false)) {
+                sunsetDetailReveal = shouldShowDetail ? 1 : 0
             }
             scheduleRevealTask = nil
         }
-        model.setScheduleMode(option.toScheduleMode())
     }
 
     private func advance() {

@@ -83,6 +83,7 @@ enum Theme {
         static let durFast: TimeInterval = 0.110   // motion.dur-fast
         static let durBase: TimeInterval = 0.140   // motion.dur-base
         static let durReveal: TimeInterval = 0.220 // motion.dur-reveal
+        static let durOnboardingResize: TimeInterval = 0.380
 
         /// Approximation of the `ease-warm` cubic-bezier as a SwiftUI timing curve.
         static let warm = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durBase)

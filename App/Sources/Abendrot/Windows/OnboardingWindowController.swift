@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 // MARK: - OnboardingWindowController
@@ -22,7 +23,10 @@ import SwiftUI
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private static var shared: OnboardingWindowController?
-    private static let windowSize = OnboardingLayout.windowSize
+    private static let initialContentSize = OnboardingLayout.initialContentSize
+    private var hasFitContent = false
+    private var pendingResize: (height: CGFloat, animated: Bool)?
+    private var resizeTask: Task<Void, Never>?
 
     /// Open (or re-focus) the onboarding window for the given model.
     static func show(model: AppModel) {
@@ -41,10 +45,14 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    static func fitContentHeight(_ height: CGFloat, animated: Bool) {
+        shared?.fitContentHeight(height, animated: animated)
+    }
+
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: Self.windowSize),
-            // `.fullSizeContentView` MUST be present at creation for the glass chrome. A fixed card:
+            contentRect: NSRect(origin: .zero, size: Self.initialContentSize),
+            // `.fullSizeContentView` MUST be present at creation for the glass chrome. A controlled card:
             // no `.resizable`/`.miniaturizable` — the only traffic light is close.
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
@@ -53,8 +61,6 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         window.title = "Welcome to Abendrot"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.contentMinSize = Self.windowSize
-        window.contentMaxSize = Self.windowSize
         // A normal frosted window (matches Settings): the content fills it via `FrostBackground`, the OS
         // rounds the corners, and the traffic-light buttons integrate cleanly into the transparent title
         // bar. (Previously a CLEAR floating glass card, which left the traffic lights detached with a weird
@@ -64,14 +70,32 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
         // `onFinish` just closes the window; all completion bookkeeping lives in `windowWillClose`
         // so the finish path and the close-button path converge on one site.
-        let hosting = NSHostingController(
-            rootView: OnboardingView(model: model) { [weak window] in window?.close() }
+        let contentView = NSView(frame: NSRect(origin: .zero, size: Self.initialContentSize))
+        contentView.autoresizesSubviews = true
+        contentView.wantsLayer = true
+        contentView.layer?.masksToBounds = true
+
+        let hosting = NSHostingView(
+            rootView: OnboardingView(
+                model: model,
+                onFinish: { [weak window] in window?.close() },
+                onHeightChange: { height, animated in
+                    OnboardingWindowController.fitContentHeight(height, animated: animated)
+                }
+            )
         )
-        // This window should not auto-hug SwiftUI's changing ideal height. The schedule step owns its
-        // internal reveal animation, and the NSWindow backing store stays stable throughout.
+        hosting.frame = contentView.bounds
+        hosting.autoresizingMask = [.width, .height]
         hosting.sizingOptions = []
-        window.contentViewController = hosting
-        window.setContentSize(Self.windowSize)
+        hosting.wantsLayer = true
+        hosting.layer?.masksToBounds = true
+        contentView.addSubview(hosting)
+
+        // Do not install the SwiftUI host as `contentViewController`: on macOS 26 its window-layout
+        // observer can try to auto-resize the NSWindow from inside AppKit's display cycle. The plain AppKit
+        // content view owns the backing size; SwiftUI only fills that box.
+        window.contentView = contentView
+        window.setContentSize(Self.initialContentSize)
         window.center()
 
         super.init(window: window)
@@ -80,6 +104,54 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    private func fitContentHeight(_ height: CGFloat, animated: Bool) {
+        guard height > 1 else { return }
+        pendingResize = (height, animated)
+        resizeTask?.cancel()
+        resizeTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self?.applyPendingResize()
+        }
+    }
+
+    private func applyPendingResize() {
+        guard let pendingResize else { return }
+        self.pendingResize = nil
+        resizeTask = nil
+        let shouldCenter = !hasFitContent
+        resizeContent(to: pendingResize.height, animated: pendingResize.animated && hasFitContent, center: shouldCenter)
+        hasFitContent = true
+    }
+
+    private func resizeContent(to height: CGFloat, animated: Bool, center: Bool) {
+        guard let window else { return }
+        let contentHeight = min(
+            max(height, OnboardingLayout.minimumContentHeight),
+            OnboardingLayout.maximumContentHeight
+        )
+        var frame = window.frame
+        guard abs(frame.height - contentHeight) > 0.5 || abs(frame.width - OnboardingLayout.contentWidth) > 0.5 else { return }
+
+        frame.origin.y = frame.maxY - contentHeight
+        frame.size = NSSize(width: OnboardingLayout.contentWidth, height: contentHeight)
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Theme.Motion.durOnboardingResize
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 0.86, 0.28, 1)
+                context.allowsImplicitAnimation = true
+                window.animator().setFrame(frame, display: true)
+            } completionHandler: {
+                Task { @MainActor in
+                    window.contentView?.needsDisplay = true
+                }
+            }
+        } else {
+            window.setFrame(frame, display: true)
+            if center { window.center() }
+        }
+    }
 
     // Front the window. The activation-policy `enter()` is owned by `show()` (once per open), NOT
     // here — `focus()` runs on every re-focus and must stay balanced against the single `leave()`.
@@ -94,6 +166,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     // MARK: NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        resizeTask?.cancel()
         // Mark onboarding done whether the user finished or just closed it — never nag twice.
         UserDefaults.standard.set(true, forKey: AppModel.hasCompletedOnboardingKey)
         AppActivationPolicy.leave()
