@@ -116,39 +116,53 @@ private enum SoundToggleOption: String, CaseIterable, Identifiable, Sendable {
 private struct MorphingSpeakerIcon: View {
     let isOn: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var progress: CGFloat = 1
 
     var body: some View {
+        let wave = progress
+        let slash = 1 - progress
+
         ZStack {
             SpeakerBodyShape()
                 .stroke(style: StrokeStyle(lineWidth: 1.9, lineCap: .round, lineJoin: .round))
-                .scaleEffect(x: isOn ? 1 : 0.96, y: 1, anchor: .leading)
+                .scaleEffect(x: 0.96 + (0.04 * progress), y: 1, anchor: .leading)
+                .offset(x: -1.5 * slash)
 
             SpeakerWaveShape(kind: .inner)
-                .trim(from: 0, to: isOn ? 1 : 0.12)
+                .trim(from: 0, to: 0.12 + (0.88 * wave))
                 .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                .opacity(isOn ? 1 : 0)
-                .offset(x: isOn ? 0 : -2)
-                .scaleEffect(isOn ? 1 : 0.72, anchor: .leading)
+                .opacity(wave)
+                .offset(x: -2 * slash)
+                .scaleEffect(0.72 + (0.28 * wave), anchor: .leading)
 
             SpeakerWaveShape(kind: .outer)
-                .trim(from: 0, to: isOn ? 1 : 0.08)
+                .trim(from: 0, to: 0.08 + (0.92 * wave))
                 .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                .opacity(isOn ? 0.86 : 0)
-                .offset(x: isOn ? 0 : -3)
-                .scaleEffect(isOn ? 1 : 0.64, anchor: .leading)
+                .opacity(0.86 * wave)
+                .offset(x: -3 * slash)
+                .scaleEffect(0.64 + (0.36 * wave), anchor: .leading)
 
             SpeakerSlashShape()
-                .trim(from: 0, to: isOn ? 0 : 1)
+                .trim(from: 0, to: slash)
                 .stroke(style: StrokeStyle(lineWidth: 1.9, lineCap: .round, lineJoin: .round))
-                .opacity(isOn ? 0 : 1)
-                .scaleEffect(isOn ? 0.84 : 1, anchor: .center)
+                .opacity(slash)
+                .scaleEffect(0.84 + (0.16 * slash), anchor: .center)
         }
-        .animation(iconAnimation, value: isOn)
+        .onAppear { progress = isOn ? 1 : 0 }
+        .onChange(of: isOn) { _, newValue in
+            guard !reduceMotion else {
+                progress = newValue ? 1 : 0
+                return
+            }
+            withAnimation(iconAnimation) {
+                progress = newValue ? 1 : 0
+            }
+        }
         .accessibilityHidden(true)
     }
 
-    private var iconAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.78, blendDuration: 0.04)
+    private var iconAnimation: Animation {
+        .spring(response: 0.34, dampingFraction: 0.72, blendDuration: 0.04)
     }
 }
 
