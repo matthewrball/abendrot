@@ -43,6 +43,7 @@ release-scratch/
 *.iml
 
 # Agent / tooling state (internal — never publish)
+.omx/
 .omc/
 .baton/
 outputs/
