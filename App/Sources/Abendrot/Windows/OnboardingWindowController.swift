@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 // MARK: - OnboardingWindowController
@@ -24,6 +25,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     private static var shared: OnboardingWindowController?
     /// First fit (on open) is instant; later fits (step / mode changes) animate.
     private var hasFitContent = false
+    private var resizeTask: Task<Void, Never>?
 
     /// Resize the window so it hugs `contentHeight` — the onboarding card's natural height for the current
     /// step/mode (measured in OnboardingView). Keeps the width + TOP edge fixed (grows/shrinks downward), so
@@ -34,17 +36,81 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
         let target = contentHeight + titlebar
         let current = win.frame
-        guard abs(current.height - target) > 1 else { return }
-        var f = current
-        f.size.height = target
+        guard abs(current.height - target) > 0.5 else {
+            ctrl.hasFitContent = true
+            return
+        }
         if ctrl.hasFitContent {
-            f.origin.y = current.maxY - target              // later fits: keep the TOP edge fixed (heading stays put)
-            win.setFrame(f, display: true, animate: true)
+            ctrl.setFrameHeight(target)
         } else {
-            win.setFrame(f, display: true, animate: false)  // first fit (on open): size to content…
-            win.center()                                    // …then center on the main display
+            ctrl.resizeTask?.cancel()
+            ctrl.resizeTask = Task { @MainActor [weak ctrl, weak win] in
+                guard let ctrl, let win else { return }
+                try? await Task.sleep(nanoseconds: 1_000_000)
+                guard !Task.isCancelled else { return }
+                var f = win.frame
+                f.size.height = target
+                win.setFrame(f, display: false, animate: false)  // first fit (on open): size to content…
+                win.center()                                     // …then center on the main display
+                ctrl.hasFitContent = true
+                ctrl.resizeTask = nil
+            }
+            return
         }
         ctrl.hasFitContent = true
+    }
+
+    private func setFrameHeight(_ target: CGFloat) {
+        guard let win = window else { return }
+        resizeTask?.cancel()
+
+        resizeTask = Task { @MainActor [weak self, weak win] in
+            guard let self, let win else { return }
+            // Preference updates are emitted during SwiftUI/AppKit layout. Mutating the NSWindow frame
+            // inside that same display cycle can trip AppKit's constraint re-entrancy guard.
+            try? await Task.sleep(nanoseconds: 1_000_000)
+            guard !Task.isCancelled else { return }
+
+            let current = win.frame
+            let delta = abs(current.height - target)
+            if delta < 8 {
+                var f = current
+                f.size.height = target
+                f.origin.y = current.maxY - target          // keep the top edge fixed
+                win.setFrame(f, display: false, animate: false)
+                self.resizeTask = nil
+                return
+            }
+
+            let startFrame = current
+            let startHeight = current.height
+            let pinnedTop = current.maxY
+            let duration: TimeInterval = 0.35
+            let start = CACurrentMediaTime()
+
+            while !Task.isCancelled {
+                let elapsed = CACurrentMediaTime() - start
+                let progress = min(1, max(0, elapsed / duration))
+                let eased = Self.easeWarm(progress)
+                let height = startHeight + (target - startHeight) * eased
+
+                var f = startFrame
+                f.size.height = height
+                f.origin.y = pinnedTop - height
+                win.setFrame(f, display: false, animate: false)
+
+                if progress >= 1 { break }
+                try? await Task.sleep(nanoseconds: 16_000_000)
+            }
+
+            if !Task.isCancelled { self.resizeTask = nil }
+        }
+    }
+
+    private static func easeWarm(_ t: TimeInterval) -> CGFloat {
+        let p = max(0, min(1, t))
+        let u = 1 - p
+        return CGFloat((3 * u * u * p * 0.61) + (3 * u * p * p) + (p * p * p))
     }
 
     /// Open (or re-focus) the onboarding window for the given model.
