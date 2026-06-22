@@ -49,8 +49,8 @@ struct AdvancedExpansion: View {
                     HStack(spacing: 3) {
                         Text("Manage")
                             .font(Theme.Typography.ui(11))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 8, weight: .semibold))
                     }
                     .foregroundStyle(Theme.Color.accent)
                 }
