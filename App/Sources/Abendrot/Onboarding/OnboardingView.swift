@@ -88,7 +88,9 @@ struct OnboardingView: View {
         // the traffic-light buttons sit cleanly on the frost in the transparent title bar, and there is no
         // detached floating-card border and no gray bar.
         .background(FrostBackground())
-        .onPreferenceChange(OnboardingHeightKey.self) { OnboardingWindowController.fitContentHeight($0) }
+        .onPreferenceChange(OnboardingHeightKey.self) { height in
+            Task { @MainActor in OnboardingWindowController.fitContentHeight(height) }
+        }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
 
