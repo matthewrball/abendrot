@@ -4,8 +4,6 @@
 
 <h1 align="center">Abendrot</h1>
 
-<p align="center"><code>v0.1.0-beta.1</code></p>
-
 <p align="center">
   <strong>A macOS app for your circadian rhythm.</strong><br>
   Your Mac's screen warms with the evening — on <em>every</em> display — so your nights stay calm and your mornings stay sharp.<br>
