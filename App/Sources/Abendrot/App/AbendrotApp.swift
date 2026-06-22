@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 import WarmthKit
 
 // MARK: - AbendrotApp
@@ -17,6 +18,7 @@ struct AbendrotApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
+        _ = UpdateManager.shared
         // Hand the model to the delegate so the app-quit hook can neutral-reset displays.
         appDelegate.bind(model: model)
     }
@@ -41,6 +43,9 @@ struct AbendrotApp: App {
                 Button("About Abendrot") {
                     AboutWindowController.show(model: model)
                 }
+            }
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView()
             }
         }
 
@@ -137,6 +142,7 @@ private struct SettingsHostWindowDismisser: NSViewRepresentable {
 /// Owns app-level lifecycle the SwiftUI `App` can't express directly: engine start on
 /// launch, neutral-reset on quit, and the menu-bar-only activation policy.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let launchAtLoginDefaultRegisteredKey = "launchAtLoginDefaultRegistered"
     private weak var model: AppModel?
 
     @MainActor
@@ -147,9 +153,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Start as a menu-bar-only agent; windows raise it via AppActivationPolicy.
         NSApp.setActivationPolicy(.accessory)
+        registerLaunchAtLoginByDefaultIfNeeded()
         Task { @MainActor in
             model?.start()
         }
+    }
+
+    private func registerLaunchAtLoginByDefaultIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Self.launchAtLoginDefaultRegisteredKey) == nil else { return }
+
+        do {
+            if SMAppService.mainApp.status != .enabled {
+                try SMAppService.mainApp.register()
+            }
+            defaults.set(true, forKey: "launchAtLogin")
+        } catch {
+            defaults.set(SMAppService.mainApp.status == .enabled, forKey: "launchAtLogin")
+        }
+        defaults.set(true, forKey: Self.launchAtLoginDefaultRegisteredKey)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

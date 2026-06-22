@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - SettingsTab
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, displays, advanced, privacy, statistics, about
+    case general, displays, advanced, privacy, statistics, updates, about
     var id: String { rawValue }
 
     var title: String {
@@ -13,6 +13,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .advanced: return "Advanced"
         case .privacy: return "Privacy"
         case .statistics: return "Statistics"
+        case .updates: return "Updates"
         case .about: return "About"
         }
     }
@@ -24,6 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .advanced: return "slider.horizontal.3"
         case .privacy: return "hand.raised"
         case .statistics: return "chart.bar.xaxis"
+        case .updates: return "arrow.down.circle"
         case .about: return "info.circle"
         }
     }
@@ -45,13 +47,23 @@ struct SettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        HStack(spacing: 0) {
             VStack(spacing: 0) {
-                List(SettingsTab.allCases, selection: $model.settingsTab) { tab in
-                    Label(tab.title, systemImage: tab.icon)
-                        .tag(tab)
+                VStack(spacing: 4) {
+                    ForEach(SettingsTab.allCases) { tab in
+                        SettingsSidebarButton(
+                            tab: tab,
+                            isSelected: model.settingsTab == tab,
+                            reduceMotion: reduceMotion
+                        ) {
+                            withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
+                                model.settingsTab = tab
+                            }
+                        }
+                    }
                 }
-                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
 
                 Spacer(minLength: 12)
                 // Hide the sidebar branding on About (it duplicates the About-page header). Animate
@@ -68,9 +80,11 @@ struct SettingsView: View {
                     .accessibilityHidden(model.settingsTab == .about)   // off-screen: leave the focus order
                     .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.settingsTab)
             }
-            .navigationSplitViewColumnWidth(min: 172, ideal: 180)
-            .toolbar(removing: .sidebarToggle)
-        } detail: {
+            .frame(width: 180)
+            .frame(maxHeight: .infinity)
+
+            Divider()
+
             ScrollView {
                 tabBody
                     .padding(24)
@@ -84,6 +98,7 @@ struct SettingsView: View {
             .onPreferenceChange(SettingsContentHeightKey.self) { height in
                 Task { @MainActor in SettingsWindowController.fitDetailContentHeight(height) }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 680, minHeight: 480)
         .background(FrostBackground())
@@ -97,6 +112,7 @@ struct SettingsView: View {
         case .advanced: AdvancedTab(model: model)
         case .privacy: PrivacyTab(model: model)
         case .statistics: StatisticsTab(model: model)
+        case .updates: UpdatesTab()
         case .about: AboutTab()
         }
     }
@@ -108,6 +124,53 @@ struct SettingsView: View {
 private struct SettingsContentHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+// MARK: - Sidebar row
+
+private struct SettingsSidebarButton: View {
+    let tab: SettingsTab
+    let isSelected: Bool
+    let reduceMotion: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Label {
+                Text(tab.title)
+                    .font(Theme.Typography.ui(13, weight: .semibold))
+                    .lineLimit(1)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: true, vertical: false)
+            } icon: {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 24)
+            }
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(isSelected ? Theme.Color.inkOnAccent : Theme.Color.textPrimary)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+            .padding(.horizontal, 10)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(backgroundFill)
+        )
+        .onHover { isHovered = $0 }
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isSelected)
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isHovered)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var backgroundFill: Color {
+        if isSelected { return Theme.Color.accent }
+        if isHovered { return Theme.Color.textPrimary.opacity(0.08) }
+        return .clear
+    }
 }
 
 // MARK: - Tab header

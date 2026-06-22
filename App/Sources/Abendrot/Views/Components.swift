@@ -21,7 +21,7 @@ import WarmthKit
 /// tooltip opens down-and-left (trailing-anchored) so it stays on-screen even when the icon sits to the
 /// right of a centered title.
 struct KelvinInfoButton: View {
-    static let explanation = "Kelvin is colour temperature — lower numbers are warmer and give off less blue light."
+    static let explanation = "Kelvin is color temperature — lower numbers are warmer and give off less blue light."
     @State private var show = false
 
     var body: some View {
@@ -67,13 +67,15 @@ struct KelvinInfoButton: View {
 // The "≈X% less blue light" accent metric, shared by the Warmth ticker and onboarding. Sound basis:
 // the EXACT attenuation the app applies to the blue channel vs the neutral 6500K white point —
 // `rgbGain(for:).blue` is 1.0 at 6500K and falls toward 0 as it warms, so (1 − blueGain) is the
-// fraction of blue-channel light removed — already ~1.0 by ~1900K (blue hits 0 there), so the everyday
-// warmest setting (Cozy off) AND the deepest Cozy end both land at the 0.95 cap. Capped at 0.95 to
-// acknowledge residual blue (backlight / panel leakage) — never a claim of total elimination. An estimate of emitted blue vs the standard
-// white point, NOT a measured melanopic/circadian dose (that needs the panel's spectrum, which we
-// don't have).
+// fraction of blue-channel light removed — already ~1.0 by ~1900K (blue hits 0 there). The cap stops
+// short of a "total elimination" claim (residual backlight / panel leakage): the everyday warmest
+// setting (Cozy off) reads 95%, while Cozy's deepest ember reads 99% (founder — the deeper glow earns
+// a higher number). An estimate of emitted blue vs the standard white point, NOT a measured
+// melanopic/circadian dose (that needs the panel's spectrum, which we don't have).
 struct BlueLightReductionLabel: View {
     let kelvin: Kelvin
+    /// Cozy mode active — lifts the cap from 0.95 to 0.99 so the deepest ember reads "99% less blue light".
+    var cozy: Bool = false
     /// When false (e.g. live-dragging), the value updates instantly instead of rolling — rapid
     /// changes otherwise glitch the numericText transition.
     var animated: Bool = true
@@ -81,12 +83,13 @@ struct BlueLightReductionLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var percent: Int {
-        let reduction = min(0.95, max(0, 1 - rgbGain(for: kelvin).blue))
+        let cap = cozy ? 0.99 : 0.95
+        let reduction = min(cap, max(0, 1 - rgbGain(for: kelvin).blue))
         return Int((reduction * 100).rounded())
     }
 
     private var infoText: String {
-        "Estimated reduction in your display's blue-channel light versus its standard 6500 K white point. Warmer settings emit less short-wavelength (blue) light. This is an estimate from the colour shift applied — not a measured melanopic dose."
+        "Estimated reduction in your display's blue-channel light versus its standard 6500 K white point. Warmer settings emit less short-wavelength (blue) light. This is an estimate from the color shift applied — not a measured melanopic dose."
     }
 
     var body: some View {
@@ -168,7 +171,7 @@ struct DisplayRow: View {
 
     private var tintOnlyExplanation: String {
         tintOnly
-            ? "Abendrot can only add a warm colour tint to this display on this Mac — true warming (removing blue light) isn’t available for it."
+            ? "Abendrot can only add a warm color tint to this display on this Mac — true warming (removing blue light) isn’t available for it."
             : subtitle
     }
 

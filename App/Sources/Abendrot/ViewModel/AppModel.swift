@@ -101,6 +101,7 @@ final class AppModel {
 
     /// Live initializer — owns a real engine. Call `start()` from the App entry.
     init(configuration: EngineConfiguration = EngineConfiguration()) {
+        UserDefaults.standard.register(defaults: ["softConfirmationTone": true])
         let engine = WarmthEngine(configuration: configuration)
         self.engine = engine
         self.state = WarmthState(scheduleMode: configuration.defaultScheduleMode)
@@ -933,4 +934,3 @@ extension Kelvin {
     /// UI shows — and it stops the readout jittering by 1s as the slider drags. (Founder.)
     var displayValue: Int { ((value + 5) / 10) * 10 }
 }
-

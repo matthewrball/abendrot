@@ -40,6 +40,9 @@ settings:
 packages:
   WarmthKit:
     path: WarmthKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.9.3"
 
 targets:
   Abendrot:
@@ -56,6 +59,8 @@ targets:
       # DTOs) the app uses to observe + apply CLI/AI control messages and write state.json.
       - package: WarmthKit
         product: AbendrotControl
+      - package: Sparkle
+        product: Sparkle
     info:
       path: App/Resources/Info.plist
       properties:
@@ -75,15 +80,18 @@ targets:
         # authority). The appcast lives at the raw GitHub URL; Sparkle reads it to
         # discover updates.
         SUFeedURL: "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
+        # Opt-in by default: users can enable daily background checks and automatic
+        # install from Settings. Manual "Check for Updates" always remains available.
+        SUEnableAutomaticChecks: false
+        SUAutomaticallyUpdate: false
+        SUScheduledCheckInterval: 86400
+        SUVerifyUpdateBeforeExtraction: true
         # PLACEHOLDER — the REAL EdDSA public key is injected at release time from the
         # keypair whose PRIVATE half lives ONLY in the founder's login keychain
         # (RELEASE.md §4). `generate_keys` prints the public key; never commit a
         # private key. Until then this placeholder keeps the bundle key present so the
         # plist schema is stable.
         SUPublicEDKey: "INJECTED_AT_RELEASE_PUBLIC_ED_KEY_PLACEHOLDER"
-        # Required so Sparkle's installer can run its privileged launcher service when
-        # applying an update (Sparkle 2.x with the XPC installer services).
-        SUEnableInstallerLauncherService: true
     settings:
       base:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentBase

@@ -6,7 +6,7 @@ struct GeneralTab: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("softConfirmationTone") private var softTone = false
+    @AppStorage("softConfirmationTone") private var softTone = true
     @State private var launchAtLoginError: String?
 
     var body: some View {
@@ -29,18 +29,30 @@ struct GeneralTab: View {
                     .labelsHidden()
                 }
                 if model.state.isEnabled {
+                    // Sunset: the slider shows the LIVE current warmth and locks (the clock owns it), exactly
+                    // like the menu bar. Always-on: it stays editable (your warmth IS your maximum).
+                    let locked = model.isWarmthLockedInSunset
                     WarmSlider(
-                        strength: Binding(
-                            get: { model.state.globalWarmth.strength },
-                            set: { model.setGlobalWarmth($0) }
-                        ),
+                        strength: locked
+                            ? Binding(get: { model.state.resolvedWarmth.strength }, set: { _ in })
+                            : Binding(get: { model.state.globalWarmth.strength }, set: { model.setGlobalWarmth($0) }),
                         model: model,
-                        kelvin: model.globalKelvin
+                        kelvin: locked ? model.liveKelvin : model.globalKelvin,
+                        isLocked: locked
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+
+                    // Sunset locks the live slider, so this SEPARATE "Maximum warmth" ticker is how you set
+                    // your evening peak here (what the popover's "Change your maximum in Settings" points at).
+                    // Hidden in Always-on, where the editable slider already IS your maximum.
+                    if locked {
+                        MaximumWarmthControl(model: model)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                    }
                 }
             }
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.isEnabled)
+            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: ScheduleModeOption(model.state.scheduleMode))
 
             // Schedule MODE lives here (founder): the menu-bar popover groups on/off + warmth + mode as
             // one "how it warms" unit, so General is its full desktop twin. The Mode selector now hides

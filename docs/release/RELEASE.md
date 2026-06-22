@@ -19,7 +19,7 @@ decisions. Where §21 refines earlier prose, **§21 wins**.
 | DMG | `plain-dmg.sh` (scripted `hdiutil`, headless) | `pretty-dmg.sh` (branded) or `plain-dmg.sh` |
 | Gatekeeper on other Macs | right-click → Open / `xattr -dr` | passes silently |
 | Release gate | UNSIGNED pre-release allowed | **≥1 notarized + stapled DMG required (§21.2)** |
-| Sparkle appcast | `--unsigned`: item written, **edSignature attribute omitted** | item written + EdDSA-signed (missing signature = hard fail) |
+| Sparkle appcast | `--unsigned`: item written, **edSignature attribute omitted** | item written + EdDSA-signed (missing signature or placeholder public key = hard fail) |
 
 ```
 # Mode B smoke (works right now, no account):
@@ -55,7 +55,7 @@ Releases ship as **signed public betas** before the branded 1.0:
 |---|---|---|
 | `0.1` | overlay + hotkey + schedule + DMG + notarization | Mode A *expected* by here (buy the account before 0.1 public) |
 | `0.2` | DDC opt-in + Restore Displays tooling | Mode A |
-| `0.3` | Sparkle auto-update live | Mode A (EdDSA signing mandatory) |
+| `0.3` | Sparkle auto-update dogfood + release polish | Mode A (EdDSA signing mandatory) |
 | `1.0` | branded launch, after the hardware matrix passes | Mode A |
 
 Internal/local dogfood builds before `0.1` may be **Mode B / unsigned**. Any
@@ -88,9 +88,9 @@ missing/failing — it does not skip-pass. No secrets.
   --timestamp"`, then `-exportArchive` with
   `scripts/release/ExportOptions-DeveloperID.plist`.
 - **Hardened Runtime YES, App Sandbox NO** (§9 — sandbox blocks private-framework
-  `dlopen` + IOAVService). Sign nested Sparkle bundles (XPC, Autoupdate/Updater)
-  inside-out with the same identity (Lane A wires the build phase / `codesign`
-  order).
+  `dlopen` + IOAVService). The app uses Sparkle 2 via SPM and the standard
+  updater controller. Do **not** enable Sparkle's sandbox-only XPC service plist
+  keys unless the app is ever sandboxed.
 
 ### 3.3 Package the DMG
 - **`scripts/dmg/plain-dmg.sh`** — scripted `hdiutil`, headless-safe, the
@@ -109,7 +109,8 @@ missing/failing — it does not skip-pass. No secrets.
 a clear message and exits 0 when no Apple credentials are configured** (Mode B).
 
 ### 3.5 Sparkle-sign + appcast + publish (`scripts/release/release.sh`)
-Reads version/build from the exported app, warns on duplicate build numbers,
+Reads version/build from the exported app, rejects signed releases whose
+`SUPublicEDKey` is still the placeholder, warns on duplicate build numbers,
 builds the DMG, notarizes (Mode A), **Sparkle `sign_update`** (EdDSA), **updates
 `appcast.xml` preserving existing items**, then `gh release create` (guarded by
 `RELEASE_PUBLISH=1`). Commit the updated `appcast.xml` so the raw GitHub URL
@@ -142,7 +143,8 @@ login keychain — never in the repo, never in CI secrets.**
 - **Setup (once, when starting Sparkle / `0.3`):**
   1. `generate_keys` (Sparkle tool) → creates the EdDSA keypair; the **private
      key is stored in the login keychain**, the **public key** is printed.
-  2. Put the public key in the app's `Info.plist` as `SUPublicEDKey` (Lane A).
+  2. Put the public key in the app's `Info.plist` as `SUPublicEDKey` before the
+     first signed release; `release.sh` aborts while the placeholder remains.
   3. Set `SUFeedURL` to the raw appcast URL
      `https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml`.
   4. Back up the private key **once** to an offline password manager / encrypted
@@ -249,8 +251,8 @@ Actions); keep the Sparkle key **out of CI** (§4).
 Then:
 1. Set the six CI secrets above → the `sign-notarize` job activates automatically.
 2. Replace `TEAMID_PLACEHOLDER` in the ExportOptions plist.
-3. Confirm Lane A set `ENABLE_HARDENED_RUNTIME=YES`, no App Sandbox, and the
-   nested-Sparkle codesign order.
+3. Confirm `ENABLE_HARDENED_RUNTIME=YES`, no App Sandbox, and that Xcode
+   archive/export embeds and signs Sparkle.
 4. Run `release.sh --app <exported app>` locally to produce the first
    notarized+stapled, Sparkle-signed `0.1`.
 
@@ -264,8 +266,8 @@ Then:
 - **Lane A (engine):** finalize `Package.swift` + `Abendrot.xcodeproj` scheme /
   target / bundle-id names. CI references them as placeholders
   (`ABENDROT_APP_SCHEME=Abendrot`, `WARMTHKIT_TEST_TARGET=WarmthCoreTests`,
-  bundle id `app.abendrot.Abendrot`). Set `ENABLE_HARDENED_RUNTIME`, no sandbox,
-  `SUFeedURL`/`SUPublicEDKey`, and the nested-Sparkle signing order.
+  bundle id `app.abendrot.Abendrot`). Keep `ENABLE_HARDENED_RUNTIME`, no sandbox,
+  and replace the placeholder `SUPublicEDKey` before the first signed release.
 - **Lane C (brand):** deliver the split-screen cold→warm DMG background
   (`scripts/dmg/assets/`) per the geometry in `pretty-dmg.sh`; volume `.icns`
   optional.

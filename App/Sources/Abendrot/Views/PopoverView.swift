@@ -35,20 +35,20 @@ struct PopoverView: View {
                 // header and footer dividers (each contributes 14pt) instead of bottom-heavy.
                 .padding(.bottom, model.state.isEnabled ? 16 : 0)
 
-            // The warmth slider + the schedule Mode control are only meaningful while warming is on
+            // The warmth readout + the schedule Mode control are only meaningful while warming is on
             // — the master toggle owns on/off — so they hide and re-reveal together with a soft
             // scale-fade. (Per-display "Override" rows live in the Advanced section now.)
             if model.state.isEnabled {
                 let locked = model.isWarmthLockedInSunset
                 VStack(alignment: .leading, spacing: 0) {
-                    // In Sunset mode the slider is LIVE + locked: it shows the warmth being applied
-                    // right now (which ramps with the time of day) and points to Settings for the max.
-                    // Always-on keeps it editable.
+                    // In Sunset mode the readout stays LIVE but the slider disappears: the clock owns
+                    // the current warmth, and Settings owns the maximum. Always-on keeps it editable.
                     WarmSlider(
                         strength: locked ? sunsetLiveBinding : globalWarmthBinding,
                         model: model,
                         kelvin: locked ? model.liveKelvin : model.globalKelvin,
-                        isLocked: locked
+                        showsTrack: !locked,
+                        cozy: isCozy
                     )
                     if locked {
                         sunsetLockCaption
@@ -57,9 +57,16 @@ struct PopoverView: View {
                     }
                     modeSection
                         .padding(.top, 16)
+                    // Cozy mode (the maximum-warmth control) right under Mode — the bare card, no section
+                    // header / science note (those live in Settings). Shares `model.setCozy`, so it can
+                    // never disagree with the Settings card, onboarding, or the `abendrot cozy` CLI.
+                    CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
+                        .padding(.top, 16)
+                        // Match Sunset's natural height so the popover shell does not resize.
+                        .padding(.bottom, locked ? 0 : 7)
                 }
                 .transition(.softReveal)
-                // Caption + lock badge crossfade and the popover re-heights smoothly when the mode flips.
+                // Caption crossfades while the popover shell keeps a steady natural height.
                 .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: locked)
             }
 
@@ -158,17 +165,12 @@ struct PopoverView: View {
                 compact: true,
                 onChange: { _ in }
             )
-            // One-line subtitle describing the selected mode — fixes "Sunset" reading as
-            // under-descriptive (dual-advisor pick: keep the clean label, add the subtitle).
-            Text(modeSubtitle)
-                .font(Theme.Typography.ui(11))
-                .foregroundStyle(Theme.Color.textFaint)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    /// Plain-language description of the currently-selected schedule mode, shown under the Mode control.
-    private var modeSubtitle: String { ScheduleModeOption(model.state.scheduleMode).subtitle }
+    /// Cozy mode on when the warmest point dips below the everyday 1900K ceiling — drives the slider's
+    /// fireball thumb / "Warmest" label / 99% reading so the slider agrees with the Cozy card below it.
+    private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
 
     // MARK: Incompatibility ("can only be tinted") detection — §25.J (DRAFT)
 
@@ -259,8 +261,8 @@ struct PopoverView: View {
             Button { SettingsWindowController.show(model: model) } label: {
                 HStack(spacing: 3) {
                     Text("Change your maximum in Settings")
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 8, weight: .semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
                         .accessibilityHidden(true)
                 }
                 .font(Theme.Typography.ui(11, weight: .medium))
@@ -315,7 +317,7 @@ private struct IncompatibilityNotice: View {
 
     private let ink = Theme.Color.inkOnAccent
     private let summary = "This Mac can only tint your displays"
-    private let explanation = "True warming isn’t available on this Mac, so Abendrot can only add a warm colour tint to your displays — a known limitation on some Apple-silicon chips and macOS versions."
+    private let explanation = "True warming isn’t available on this Mac, so Abendrot can only add a warm color tint to your displays — a known limitation on some Apple-silicon chips and macOS versions."
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -352,7 +354,7 @@ private struct IncompatibilityNotice: View {
             }
 
             if showWhy {
-                Text("Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s colour at the system level, so here Abendrot can only lay a warm tint over the screen — it can’t remove blue light the way it does on other Macs. Nothing is broken; it’s a macOS limitation. An external monitor with its own colour controls can still be truly warmed via Hardware control (Settings → Displays).")
+                Text("Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s color at the system level, so here Abendrot can only lay a warm tint over the screen — it can’t remove blue light the way it does on other Macs. Nothing is broken; it’s a macOS limitation. An external monitor with its own color controls can still be truly warmed via Hardware control (Settings → Displays).")
                     .font(Theme.Typography.ui(10.5))
                     .foregroundStyle(ink.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)

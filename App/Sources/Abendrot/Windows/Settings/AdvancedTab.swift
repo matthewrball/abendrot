@@ -17,7 +17,7 @@ struct AdvancedTab: View {
             // Maximum warmth (founder). Click the field to rebind; default ⌥⌘T.
             VStack(alignment: .leading, spacing: 12) {
                 SectionLabel("Reveal True Color")
-                Text("Instantly see your screen's true colours — bound to a keyboard shortcut.")
+                Text("Instantly see your screen's true colors — bound to a keyboard shortcut.")
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(Theme.Color.textMuted)
 
@@ -49,7 +49,7 @@ struct AdvancedTab: View {
 
                 // Hold vs Toggle (§3 locked: ship both, default hold) — on-brand glass switcher.
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Behaviour")
+                    Text("Behavior")
                         .font(Theme.Typography.ui(12, weight: .medium))
                         .foregroundStyle(Theme.Color.textMuted)
                     HStack {
@@ -62,8 +62,8 @@ struct AdvancedTab: View {
                         Spacer()
                     }
                     Text(model.revealMode == .hold
-                         ? "Hold the shortcut to reveal true colour; release to ease warmth back."
-                         : "Press the shortcut to reveal true colour; press again to ease it back.")
+                         ? "Hold the shortcut to reveal true color; release to ease warmth back."
+                         : "Press the shortcut to reveal true color; press again to ease it back.")
                         .font(Theme.Typography.ui(12))
                         .foregroundStyle(Theme.Color.textMuted)
                 }
@@ -91,7 +91,7 @@ struct AdvancedTab: View {
 // MARK: - Excluded apps (suspend-while-frontmost picker)
 
 /// Settings → Advanced → Excluded apps. While one of these apps is the frontmost app, Abendrot
-/// suspends warming across all displays (true colour) — for colour-critical work. The list is the
+/// suspends warming across all displays (true color) — for color-critical work. The list is the
 /// observed `model.excludedApps`; rows resolve a friendly name + icon from the bundle id, and "Add
 /// app…" picks an `.app` via `NSOpenPanel` (the app is not sandboxed, so no entitlement is needed).
 private struct ExcludedAppsControl: View {
@@ -100,7 +100,7 @@ private struct ExcludedAppsControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             SectionLabel("Excluded apps")
-            Text("Abendrot pauses warming (shows true colour) while one of these apps is frontmost — for colour-critical work.")
+            Text("Abendrot pauses warming (shows true color) while one of these apps is frontmost — for color-critical work.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
 

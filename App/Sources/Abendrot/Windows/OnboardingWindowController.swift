@@ -1,6 +1,6 @@
 import AppKit
-import SwiftUI
 import QuartzCore
+import SwiftUI
 
 // MARK: - OnboardingWindowController
 //
@@ -23,36 +23,75 @@ import QuartzCore
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private static var shared: OnboardingWindowController?
-    /// First fit (on open) is instant; later fits (step / mode changes) animate.
+    private static let defaultHeight: CGFloat = 399
+    /// First fit (on open) is instant; later fits follow SwiftUI's measured height.
     private var hasFitContent = false
+    private var resizeTask: Task<Void, Never>?
 
-    /// Resize the window so it hugs `contentHeight` — the onboarding card's natural height for the current
-    /// step/mode (measured in OnboardingView). Keeps the width + TOP edge fixed (grows/shrinks downward), so
-    /// the heading + switcher never move and Always-on compresses. First fit (open) is instant; later fits
-    /// animate. Mirrors `SettingsWindowController.fitDetailContentHeight`.
+    /// Resize the window so it hugs `contentHeight`, keeping the width + TOP edge fixed.
+    /// Small SwiftUI height ticks are applied directly; larger jumps are interpolated top-pinned.
     static func fitContentHeight(_ contentHeight: CGFloat) {
         guard contentHeight > 1, let ctrl = shared, let win = ctrl.window else { return }
         let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
-        let target = contentHeight + titlebar
+        let target = max(contentHeight + titlebar, defaultHeight)
         let current = win.frame
-        guard abs(current.height - target) > 1 else { return }
-        var f = current
-        f.size.height = target
+        guard abs(current.height - target) > 0.5 else { return }
         if ctrl.hasFitContent {
-            f.origin.y = current.maxY - target              // later fits: keep the TOP edge fixed (heading stays put)
-            // Glide on the brand ease (motion.ease-warm), slower than a control tick so a step/mode change
-            // reads as ONE smooth expansion. Must match the content animation in OnboardingView.scheduleStep
-            // (same bezier + 0.38s) — otherwise AppKit's default resize curve fights the SwiftUI content.
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.38
-                ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 0.61, 0.36, 1)
-                win.animator().setFrame(f, display: true)
-            }
+            ctrl.setFrameHeight(target, from: current)
         } else {
+            var f = current
+            f.size.height = target
             win.setFrame(f, display: true, animate: false)  // first fit (on open): size to content…
             win.center()                                    // …then center on the main display
         }
         ctrl.hasFitContent = true
+    }
+
+    private func setFrameHeight(_ target: CGFloat, from current: NSRect) {
+        guard let win = window else { return }
+        resizeTask?.cancel()
+
+        let delta = abs(current.height - target)
+        if delta < 8 {
+            var f = current
+            f.size.height = target
+            f.origin.y = current.maxY - target              // keep the top edge fixed
+            win.setFrame(f, display: true, animate: false)
+            return
+        }
+
+        let startFrame = current
+        let startHeight = current.height
+        let pinnedTop = current.maxY
+        let duration: TimeInterval = 0.35
+
+        resizeTask = Task { @MainActor [weak self, weak win] in
+            guard let self, let win else { return }
+            let start = CACurrentMediaTime()
+
+            while !Task.isCancelled {
+                let elapsed = CACurrentMediaTime() - start
+                let progress = min(1, max(0, elapsed / duration))
+                let eased = Self.easeWarm(progress)
+                let height = startHeight + (target - startHeight) * eased
+
+                var f = startFrame
+                f.size.height = height
+                f.origin.y = pinnedTop - height
+                win.setFrame(f, display: true, animate: false)
+
+                if progress >= 1 { break }
+                try? await Task.sleep(nanoseconds: 16_000_000)
+            }
+
+            if !Task.isCancelled { self.resizeTask = nil }
+        }
+    }
+
+    private static func easeWarm(_ t: TimeInterval) -> CGFloat {
+        let p = max(0, min(1, t))
+        let u = 1 - p
+        return CGFloat((3 * u * u * p * 0.61) + (3 * u * p * p) + (p * p * p))
     }
 
     /// Open (or re-focus) the onboarding window for the given model.
@@ -74,7 +113,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: Self.defaultHeight),
             // `.fullSizeContentView` MUST be present at creation for the glass chrome. A fixed card:
             // no `.resizable`/`.miniaturizable` — the only traffic light is close.
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -119,6 +158,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     // MARK: NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        resizeTask?.cancel()
         // Mark onboarding done whether the user finished or just closed it — never nag twice.
         UserDefaults.standard.set(true, forKey: AppModel.hasCompletedOnboardingKey)
         AppActivationPolicy.leave()

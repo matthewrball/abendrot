@@ -38,7 +38,7 @@ struct AboutTab: View {
             // The science — hedged, general-wellness only (§13 binding; grounded in evidence-base.md).
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel("The science")
-                Text("Your body clock is set mainly by short-wavelength blue light (around 480 nm), sensed by a dedicated set of cells in the eye. Abendrot warms the display by removing that blue first — reaching zero blue output at its everyday warmest (~1900 K). For the calmest evening light, pair warming with lower screen brightness: the effect is driven by intensity as much as colour, and people’s sensitivity to evening light varies widely.")
+                Text("Your body clock is set mainly by short-wavelength blue light (around 480 nm), sensed by a dedicated set of cells in the eye. Abendrot warms the display by removing that blue first — reaching zero blue output at its everyday warmest (~1900 K). For the calmest evening light, pair warming with lower screen brightness: the effect is driven by intensity as much as color, and people’s sensitivity to evening light varies widely.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(Theme.Color.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

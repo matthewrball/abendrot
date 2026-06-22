@@ -4,9 +4,8 @@ import WarmthKit
 // MARK: - WarmSlider
 
 /// The signature warm-tinted "Softer ⟷ Warmer" strength slider (plan §4.1). Strength is the
-/// canonical control; the Kelvin readout now lives only in the popover header (one animated
-/// number), not beside the slider. Wraps the system `Slider` for accessibility + keyboard,
-/// restyled with the ember track.
+/// canonical control; the Kelvin readout lives above the track as one animated number. Wraps
+/// the system `Slider` for accessibility + keyboard, restyled with the ember track.
 struct WarmSlider: View {
     @Binding var strength: Double
     /// The view-model. (Slider click sounds were removed; kept for callers + any future view-model needs.)
@@ -19,6 +18,9 @@ struct WarmSlider: View {
     /// false — its step already shows a big Kelvin readout + a "Set your warmth" heading, so the label is
     /// redundant — while keeping the full-size (non-compact) track + thumb.
     var showsHeader: Bool = true
+    /// Show the draggable track. The popover hides it in Sunset mode because the clock owns warmth then,
+    /// but still reuses the live Kelvin readout.
+    var showsTrack: Bool = true
     /// Cozy mode active — the thumb crossfades into a glowing fireball and the warm end reads "Warmest"
     /// (founder). Set live by the onboarding warmth step; the popover/Settings sliders leave it false.
     var cozy: Bool = false
@@ -26,6 +28,9 @@ struct WarmSlider: View {
     /// shows the live value but can't be dragged. The track keeps its full warm colour (the value must
     /// stay honest); a lock badge rides the thumb and a hover tooltip explains why. Editable elsewhere.
     var isLocked: Bool = false
+    /// Reports the press/drag state outward (onboarding suppresses the blue-light % roll during a live
+    /// drag but lets it animate on discrete changes like Cozy on→99). Default no-op for other callers.
+    var onPressingChanged: (Bool) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// True while the thumb is being pressed/dragged — drives the Liquid-Glass "grab" feedback
@@ -51,23 +56,25 @@ struct WarmSlider: View {
                 warmthTicker
             }
 
-            // "Softer" / "Warmer" flank the slider inline (founder) instead of sitting beneath it —
-            // tighter, and the words read as the two ends of the track. `fixedSize` keeps the labels
-            // intact so the slider takes the middle.
-            HStack(spacing: 10) {
-                Text("Softer")
-                    .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(Theme.Color.textMuted)
-                    .fixedSize()
-                gradientSlider
-                // Cozy unlocks the deepest end, so the warm label glows up to "Warmest" (founder). Fixed
-                // width (fits "Warmest") so swapping the word never resizes the slider — only a crossfade.
-                Text(cozy ? "Warmest" : "Warmer")
-                    .font(Theme.Typography.ui(11.5, weight: cozy ? .semibold : .regular))
-                    .foregroundStyle(cozy ? Theme.Color.accentHighlight : Theme.Color.textMuted)
-                    .contentTransition(.opacity)
-                    .frame(width: 58, alignment: .leading)
-                    .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: cozy)
+            if showsTrack {
+                // "Softer" / "Warmer" flank the slider inline (founder) instead of sitting beneath it —
+                // tighter, and the words read as the two ends of the track. `fixedSize` keeps the labels
+                // intact so the slider takes the middle.
+                HStack(spacing: 10) {
+                    Text("Softer")
+                        .font(Theme.Typography.ui(11.5))
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .fixedSize()
+                    gradientSlider
+                    // Cozy unlocks the deepest end, so the warm label glows up to "Warmest" (founder). Fixed
+                    // width (fits "Warmest") so swapping the word never resizes the slider — only a crossfade.
+                    Text(cozy ? "Warmest" : "Warmer")
+                        .font(Theme.Typography.ui(11.5, weight: cozy ? .semibold : .regular))
+                        .foregroundStyle(cozy ? Theme.Color.accentHighlight : Theme.Color.textMuted)
+                        .contentTransition(.opacity)
+                        .frame(width: 58, alignment: .leading)
+                        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: cozy)
+                }
             }
         }
         .overlay(alignment: .topLeading) {
@@ -79,6 +86,9 @@ struct WarmSlider: View {
             }
         }
         .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showKelvinInfo)
+        // Surface the press/drag state so callers can gate animations (onboarding silences the
+        // blue-light % roll during a live drag, but lets it animate on discrete changes like Cozy on→99).
+        .onChange(of: isPressing) { _, pressing in onPressingChanged(pressing) }
     }
 
     // MARK: Warmth ticker (big "gas-price" Kelvin readout + info tooltip, above the slider)
@@ -113,7 +123,7 @@ struct WarmSlider: View {
                 .accessibilityLabel("Warmth \(kelvin.displayValue) Kelvin")
 
                 // Accent metric: estimated blue-light reduction (instant during a live drag).
-                BlueLightReductionLabel(kelvin: kelvin, animated: !isPressing)
+                BlueLightReductionLabel(kelvin: kelvin, cozy: cozy, animated: !isPressing)
                     .padding(.top, 3)
             }
         }
@@ -340,8 +350,8 @@ struct WarmSlider: View {
                     center: .init(x: 0.5, y: 0.34), startRadius: 0, endRadius: thumbSize * 0.78))
             Image(systemName: "flame.fill")
                 .font(.system(size: thumbSize * 0.6, weight: .bold))
-                .foregroundStyle(LinearGradient(colors: [.white, Theme.Color.accentHi],
-                                                startPoint: .top, endPoint: .bottom))
+                // Match the Cozy-toggle flame (CozyModeControl): the dark ground ink, not a light gradient.
+                .foregroundStyle(Theme.Color.groundIndigo)
                 .shadow(color: .black.opacity(0.18), radius: 0.5)
         }
         .overlay(Circle().strokeBorder(.white.opacity(pressed ? 0.95 : 0.7), lineWidth: 0.5))

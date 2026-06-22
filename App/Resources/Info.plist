@@ -26,11 +26,17 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Abendrot. Soften into the evening.</string>
-	<key>SUEnableInstallerLauncherService</key>
-	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>INJECTED_AT_RELEASE_PUBLIC_ED_KEY_PLACEHOLDER</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 </dict>
 </plist>

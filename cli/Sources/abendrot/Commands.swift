@@ -211,7 +211,7 @@ struct SetMaxWarmth: ParsableCommand {
 }
 
 struct SetRevealMode: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "reveal-mode", abstract: "Set reveal behaviour: hold | toggle.")
+    static let configuration = CommandConfiguration(commandName: "reveal-mode", abstract: "Set reveal behavior: hold | toggle.")
     @Argument(help: "hold | toggle") var mode: String
     @Flag(name: .long) var json = false
 

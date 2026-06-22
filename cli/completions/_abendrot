@@ -151,7 +151,7 @@ _abendrot_set() {
             'warmth:Set global warmth 0.0–1.0, or target a Kelvin with --kelvin.'
             'mode:Set schedule mode: sunset | always-on | off.'
             'max-warmth:Set the warmest-point ceiling in Kelvin (500–6500).'
-            'reveal-mode:Set reveal behaviour: hold | toggle.'
+            'reveal-mode:Set reveal behavior: hold | toggle.'
             'location:Set manual sunset location <lat> <lon>, or --auto to clear it.'
         )
         _describe -V subcommand subcommands && ret=0
