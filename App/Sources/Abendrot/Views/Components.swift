@@ -14,9 +14,41 @@ import WarmthKit
 // §26 de-jargon pass — warming method is now expressed in plain language in the popover rows and
 // Settings → Displays → Advanced, never as a raw badge.
 
+// MARK: - Tooltip
+
+struct AbendrotTooltipText: View {
+    let text: String
+    var width: CGFloat = 200
+
+    init(_ text: String, width: CGFloat = 200) {
+        self.text = text
+        self.width = width
+    }
+
+    var body: some View {
+        Text(text)
+            .font(Theme.Typography.ui(11))
+            .foregroundStyle(Theme.Color.textPrimary)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: width, alignment: .leading)
+            .padding(11)
+            // Solid fill: tooltips must block the UI behind them, not behave like glass.
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.Color.inkOnAccent)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+    }
+}
+
 // MARK: - KelvinInfoButton
 
-/// A small ⓘ button that reveals a frosted "what is Kelvin?" explainer on hover — the popover Warmth
+/// A small ⓘ button that reveals a solid "what is Kelvin?" explainer on hover — the popover Warmth
 /// header's helper, made reusable so the onboarding warmth step can show it beside its title. The
 /// tooltip opens down-and-left (trailing-anchored) so it stays on-screen even when the icon sits to the
 /// right of a centered title.
@@ -33,26 +65,7 @@ struct KelvinInfoButton: View {
             .accessibilityHint(Self.explanation)
             .overlay(alignment: .topTrailing) {
                 if show {
-                    Text(Self.explanation)
-                        .font(Theme.Typography.ui(11))
-                        .foregroundStyle(Theme.Color.textPrimary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(width: 200, alignment: .leading)
-                        .padding(11)
-                        // FULLY OPAQUE — a single solid fill, no glass, no frost gradient. Both of those carry
-                        // alpha, so even over a dark window the tooltip read as translucent frosted glass and
-                        // the subtitle behind it showed through. inkOnAccent is the deep, fully-opaque plum
-                        // (opacity 1); a plain solid fill blocks everything behind it.
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Theme.Color.inkOnAccent)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
-                        )
-                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+                    AbendrotTooltipText(Self.explanation)
                         .offset(y: 26)
                         .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
                         .zIndex(2)

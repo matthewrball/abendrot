@@ -229,7 +229,7 @@ private struct WarmingMethodPicker: View {
 /// Plain-language names for the per-display warming method (Settings → Displays → Advanced). Maps to
 /// the engine's `DisplayMethod` override: Standard = gamma (the OS white-point true-warm), Screen
 /// tint = overlay, Hardware control = DDC.
-private enum WarmingMethodChoice: String, CaseIterable, Identifiable {
+private enum WarmingMethodChoice: String, CaseIterable, Identifiable, Sendable {
     case standard, screenTint, hardwareControl
     var id: String { rawValue }
 

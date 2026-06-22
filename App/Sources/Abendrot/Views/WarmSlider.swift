@@ -11,6 +11,8 @@ struct WarmSlider: View {
     /// The view-model. (Slider click sounds were removed; kept for callers + any future view-model needs.)
     var model: AppModel
     var compact: Bool = false
+    /// Header/accessibility label for this slider. Settings uses the same control for the Sunset peak.
+    var headerTitle: String = "Warmth"
     /// When provided (the popover's main slider), the Warmth row shows this Kelvin readout inline,
     /// with an info tooltip. Other callers pass nil (they have their own readouts).
     var kelvin: Kelvin?
@@ -82,9 +84,9 @@ struct WarmSlider: View {
                 kelvinTooltip
                     .offset(y: 88)
                     .transition(.scale(scale: 0.9, anchor: .topLeading).combined(with: .opacity))
-                    .zIndex(1)
             }
         }
+        .zIndex(showKelvinInfo ? 10 : 0)
         .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showKelvinInfo)
         // Surface the press/drag state so callers can gate animations (onboarding silences the
         // blue-light % roll during a live drag, but lets it animate on discrete changes like Cozy on→99).
@@ -95,7 +97,7 @@ struct WarmSlider: View {
 
     private var warmthTicker: some View {
         VStack(alignment: .leading, spacing: 2) {
-            SectionLabel("Warmth")
+            SectionLabel(headerTitle)
             if let kelvin {
                 // Big lit "price-board" numerals — tabular so the value ticks cleanly as you drag. The
                 // "what is Kelvin?" ⓘ sits to the RIGHT of the K (founder), with the readout it explains.
@@ -120,7 +122,7 @@ struct WarmSlider: View {
                 // Instant while dragging (rapid changes otherwise glitch the digit-roll); smooth roll otherwise.
                 .animation(isPressing ? nil : Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin.displayValue)
                 .accessibilityElement()
-                .accessibilityLabel("Warmth \(kelvin.displayValue) Kelvin")
+                .accessibilityLabel("\(headerTitle) \(kelvin.displayValue) Kelvin")
 
                 // Accent metric: estimated blue-light reduction (instant during a live drag).
                 BlueLightReductionLabel(kelvin: kelvin, cozy: cozy, animated: !isPressing)
@@ -131,16 +133,9 @@ struct WarmSlider: View {
 
     private var kelvinInfoText: String { KelvinInfoButton.explanation }
 
-    /// A small frosted-glass card explaining the Kelvin readout, animated in on hover.
+    /// A solid card explaining the Kelvin readout, animated in on hover.
     private var kelvinTooltip: some View {
-        Text(kelvinInfoText)
-            .font(Theme.Typography.ui(11))
-            .foregroundStyle(Theme.Color.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(width: 188, alignment: .leading)
-            .padding(11)
-            .glassSurface(.frost, cornerRadius: 12)
-            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+        AbendrotTooltipText(kelvinInfoText, width: 188)
     }
 
     // MARK: Custom gradient slider
@@ -250,7 +245,7 @@ struct WarmSlider: View {
         // No `.focusable()`: a menu-bar NSPopover doesn't do tab-traversal, so it only produced a
         // stray focus ring on click. VoiceOver still adjusts via the action below.
         .accessibilityElement()
-        .accessibilityLabel("Warmth")
+        .accessibilityLabel(headerTitle)
         .accessibilityValue(isLocked
             ? "\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent, locked — set automatically in Sunset mode"
             : "\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent")
