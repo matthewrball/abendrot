@@ -90,6 +90,7 @@ struct ModeControl: View {
             RoundedRectangle(cornerRadius: trackRadius, style: .continuous)
                 .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
         )
+        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: selection)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Schedule mode")
     }
@@ -137,7 +138,7 @@ struct ModeControl: View {
     private func select(_ option: ScheduleModeOption) {
         // Fires only on a real change → the glyph flourish never re-fires on no-op taps (audit fix).
         guard option != selection else { return }
-        withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) { selection = option }
+        selection = option
         onChange(option)
     }
 

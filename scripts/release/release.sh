@@ -86,6 +86,26 @@ BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw "$PLIST" 2>/dev/null || ec
 echo "release: $APP_DISPLAY_NAME version=$VERSION build=$BUILD prerelease=$PRERELEASE"
 TAG="v$VERSION"
 
+# Signed Sparkle releases must carry the real public key that matches the EdDSA
+# private key in the release machine's login keychain. Shipping the placeholder
+# would strand users on a build that can never validate future updates.
+SPARKLE_PUBLIC_KEY="$(/usr/bin/plutil -extract SUPublicEDKey raw "$PLIST" 2>/dev/null || echo '')"
+SPARKLE_FEED_URL="$(/usr/bin/plutil -extract SUFeedURL raw "$PLIST" 2>/dev/null || echo '')"
+if [ "$UNSIGNED" != "true" ]; then
+  case "$SPARKLE_PUBLIC_KEY" in
+    ""|*PLACEHOLDER*)
+      echo "release: ABORT — signed release requires a real SUPublicEDKey in the exported app." >&2
+      echo "         Run Sparkle generate_keys once, inject the printed public key, and keep" >&2
+      echo "         the private key in the release machine's login keychain." >&2
+      exit 6
+      ;;
+  esac
+  [ -n "$SPARKLE_FEED_URL" ] || {
+    echo "release: ABORT — signed release requires SUFeedURL in the exported app." >&2
+    exit 6
+  }
+fi
+
 # --- 2. Duplicate/decreasing build guard vs existing appcast ----------------
 # The appcast uses the ELEMENT form (<sparkle:version>BUILD</sparkle:version>),
 # written in step 6 below and in appcast.template.xml — NOT the attribute form.
