@@ -49,7 +49,9 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            topBar
+            // Skip the top bar on the closing all-set step — it has no stepper or chevron there, so the
+            // empty slot plus the stack spacing would leave a dead gap above the checkmark.
+            if step != .allSet { topBar }
 
             Group {
                 switch step {
@@ -102,14 +104,14 @@ struct OnboardingView: View {
         }
     }
 
-    // A leading back chevron, shown on the warmth step AND the closing all-set step, layered over the
-    // centered stepper, so users can step back. Earlier steps need no back (welcome is the entry; the
-    // mode step's onAppear re-applies the chosen mode on return).
+    // A leading back chevron, shown only on the warmth step, layered over the centered stepper, so users
+    // can return to step 2 and change their mode. Earlier steps need no back (welcome is the entry; the
+    // mode step's onAppear re-applies the chosen mode on return); the closing all-set step has none.
     @ViewBuilder
     private var topBar: some View {
         ZStack {
             stepIndicator
-            if step == .warmth || step == .allSet {
+            if step == .warmth {
                 HStack {
                     Button { goBack() } label: {
                         Image(systemName: "chevron.left")
@@ -162,13 +164,16 @@ struct OnboardingView: View {
                 // the step title, since this step no longer shows the slider's own "Warmth" header.
                 KelvinInfoButton()
             }
+            // Lift the heading (and its hover tooltip) above the rows below, so the tooltip renders ON TOP
+            // of the subtitle / Kelvin readout instead of those later VStack siblings painting over it.
+            .zIndex(1)
             // The slider sets everyday warmth STRENGTH (not the Advanced "Maximum warmth" ceiling /
             // warmestPoint). Sunset shows "maximum warmth once the sun begins to set" — it names the peak the
             // evening ramp climbs to AND explains the cool-down on finish (daytime → neutral until sunset),
             // so the restore doesn't read as a glitch. Always-on needs no subtitle (the big Kelvin readout +
             // slider are self-explanatory).
             if scheduleOption == .followSunset {
-                Text("Set your maximum warmth once the sun begins to set.")
+                Text("Set your maximum warmth.")
                     .font(Theme.Typography.ui(12.5))
                     .foregroundStyle(Theme.Color.textMuted)
                     .multilineTextAlignment(.center)
