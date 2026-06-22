@@ -50,6 +50,10 @@ struct PopoverView: View {
                         showsTrack: !locked,
                         cozy: isCozy
                     )
+                    .zIndex(1)
+                    // Always-on's slider path is 7pt shorter than Sunset's caption path; reserve it here
+                    // so Mode, Cozy mode, and the footer share one y-position across modes.
+                    .padding(.bottom, locked ? 0 : 7)
                     if locked {
                         sunsetLockCaption
                             .padding(.top, 10)
@@ -62,8 +66,6 @@ struct PopoverView: View {
                     // never disagree with the Settings card, onboarding, or the `abendrot cozy` CLI.
                     CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
                         .padding(.top, 16)
-                        // Match Sunset's natural height so the popover shell does not resize.
-                        .padding(.bottom, locked ? 0 : 7)
                 }
                 .transition(.softReveal)
                 // Caption crossfades while the popover shell keeps a steady natural height.
@@ -91,7 +93,7 @@ struct PopoverView: View {
         // `footer`. The Quit ⎋ (bottom-LEFT) is deliberately NOT enlarged — an intentional, hard-to-undo
         // action we must not invite by accident.
         .overlay(alignment: .topTrailing) {
-            Button { SettingsWindowController.show(model: model) } label: {
+            Button { SettingsWindowController.show(model: model, tab: .general) } label: {
                 Color.clear.frame(width: 96, height: 52).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -206,7 +208,7 @@ struct PopoverView: View {
 
             // Subtle reveal hint — only while warming is on (reveal does nothing when off).
             if model.state.isEnabled {
-                Text("Reveal True Color: ⌥⌘T (hold)")
+                Text("Reveal True Color: ⌥⌘T (\(model.revealMode.rawValue))")
                     .font(Theme.Typography.ui(10.5))
                     .foregroundStyle(Theme.Color.textFaint)
             }

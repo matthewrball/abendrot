@@ -13,9 +13,9 @@ struct GeneralTab: View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "General", subtitle: "How Abendrot behaves day to day.")
 
-            // The primary control, first and consistent with the menu-bar popover: the
-            // master toggle + the SAME liquid-glass WarmSlider (Warmth label, inline Kelvin + ⓘ,
-            // Softer/Warmer). The slider reveals with the toggle, exactly like the popover.
+            // The primary control, first and consistent with the menu-bar popover:
+            // master toggle + the SAME liquid-glass WarmSlider. In Sunset this edits the evening
+            // maximum; the menu bar only shows the live, clock-owned warmth.
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Warm my displays")
@@ -29,26 +29,17 @@ struct GeneralTab: View {
                     .labelsHidden()
                 }
                 if model.state.isEnabled {
-                    // Sunset: the slider shows the LIVE current warmth and locks (the clock owns it), exactly
-                    // like the menu bar. Always-on: it stays editable (your warmth IS your maximum).
-                    let locked = model.isWarmthLockedInSunset
                     WarmSlider(
-                        strength: locked
-                            ? Binding(get: { model.state.resolvedWarmth.strength }, set: { _ in })
-                            : Binding(get: { model.state.globalWarmth.strength }, set: { model.setGlobalWarmth($0) }),
+                        strength: Binding(
+                            get: { model.state.globalWarmth.strength },
+                            set: { model.setGlobalWarmth($0) }
+                        ),
                         model: model,
-                        kelvin: locked ? model.liveKelvin : model.globalKelvin,
-                        isLocked: locked
+                        headerTitle: "Maximum warmth",
+                        kelvin: model.globalKelvin,
+                        cozy: isCozy
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-
-                    // Sunset locks the live slider, so this SEPARATE "Maximum warmth" ticker is how you set
-                    // your evening peak here (what the popover's "Change your maximum in Settings" points at).
-                    // Hidden in Always-on, where the editable slider already IS your maximum.
-                    if locked {
-                        MaximumWarmthControl(model: model)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-                    }
                 }
             }
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.isEnabled)
@@ -158,5 +149,9 @@ struct GeneralTab: View {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             launchAtLoginError = "Couldn't \(enable ? "enable" : "disable") launch at login: \(error.localizedDescription)"
         }
+    }
+
+    private var isCozy: Bool {
+        model.state.warmestPoint.value < Kelvin.everydayWarmest.value
     }
 }

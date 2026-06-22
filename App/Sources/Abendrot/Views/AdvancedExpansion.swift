@@ -15,6 +15,7 @@ import WarmthKit
 // "Displays → (per-display) Advanced" compatibility section.
 struct AdvancedExpansion: View {
     @Bindable var model: AppModel
+    @AppStorage("softConfirmationTone") private var softTone = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -33,6 +34,11 @@ struct AdvancedExpansion: View {
 
                 DividerLine()
             }
+
+            revealModeRow
+            soundsRow
+
+            DividerLine()
 
             // Per-app exclusions — the popover is the quick surface; the full picker lives in
             // Settings → Advanced. This row opens it there directly (deep-links the tab).
@@ -59,7 +65,48 @@ struct AdvancedExpansion: View {
             .buttonStyle(.plain)
             .pointerStyle(.link)
         }
+        .toggleStyle(.switch)
+        .tint(Theme.Color.accent)
     }
+
+    private var revealModeRow: some View {
+        HStack(spacing: 12) {
+            Label("Reveal behavior", systemImage: "eye")
+                .font(Theme.Typography.ui(12))
+                .foregroundStyle(Theme.Color.textMuted)
+            Spacer()
+            BrandSegmentedControl(
+                options: RevealMode.allCases,
+                selection: Binding(get: { model.revealMode }, set: { model.setRevealMode($0) }),
+                label: { $0 == .hold ? "Hold" : "Toggle" }
+            )
+            .frame(width: 132)
+        }
+    }
+
+    private var soundsRow: some View {
+        HStack {
+            Label("Sounds", systemImage: softTone ? "speaker.wave.2" : "speaker.slash")
+                .font(Theme.Typography.ui(12))
+                .foregroundStyle(Theme.Color.textMuted)
+            Spacer()
+            BrandSegmentedControl(
+                options: SoundToggleOption.allCases,
+                selection: Binding(
+                    get: { softTone ? .on : .off },
+                    set: { softTone = $0 == .on }
+                ),
+                label: { $0.label }
+            )
+            .frame(width: 132)
+        }
+    }
+}
+
+private enum SoundToggleOption: String, CaseIterable, Identifiable, Sendable {
+    case off, on
+    var id: String { rawValue }
+    var label: String { self == .on ? "On" : "Off" }
 }
 
 // MARK: - Preview
