@@ -90,6 +90,9 @@ enum MockWarmthState {
             isScheduleActiveNow: true,
             isRevealing: false,
             globalWarmth: WarmthLevel(strength: 0.62),
+            // Sunset active (fully ramped) → applied warmth == configured peak, so the locked Sunset
+            // slider/readout in the popover preview reads warm, not neutral.
+            resolvedWarmth: WarmthLevel(strength: 0.62),
             privateAPIsEnabled: true,
             displays: [builtInXDR(), studioDisplay(), dellMonitor()]
         )
