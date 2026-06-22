@@ -23,7 +23,7 @@ import SwiftUI
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private static var shared: OnboardingWindowController?
-    private static let defaultHeight: CGFloat = 399
+    private static let defaultHeight: CGFloat = 355
     /// First fit (on open) is instant; later fits follow SwiftUI's measured height.
     private var hasFitContent = false
     private var resizeTask: Task<Void, Never>?
