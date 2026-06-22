@@ -101,45 +101,48 @@ struct ModeControl: View {
         let isSelected = option == selection
         // Dark ink on the bright gradient (the app's high-contrast convention); muted on the track.
         let ink = isSelected ? Theme.Color.inkOnAccent : Theme.Color.textMuted
-        return VStack(spacing: stackGap) {
-            ModeGlyph(size: glyphSize, ink: ink, option: option,
-                      isSelected: isSelected, reduceMotion: reduceMotion)
-                .frame(width: glyphSize, height: glyphSize)
-            Text(option.label)
-                .font(Theme.Typography.ui(labelSize, weight: isSelected ? .bold : .semibold))
-                .foregroundStyle(ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(.vertical, vPad)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity)
-        .background {
-            if isSelected {
-                selectedPill.matchedGeometryEffect(id: "modePill", in: pillNamespace)
-            } else if hovered == option {
-                // Native hover highlight on the unselected segment.
-                RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
-                    .fill(.white.opacity(0.06))
+        return Button {
+            select(option)
+        } label: {
+            VStack(spacing: stackGap) {
+                ModeGlyph(size: glyphSize, ink: ink, option: option,
+                          isSelected: isSelected, reduceMotion: reduceMotion)
+                    .frame(width: glyphSize, height: glyphSize)
+                Text(option.label)
+                    .font(Theme.Typography.ui(labelSize, weight: isSelected ? .bold : .semibold))
+                    .foregroundStyle(ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
+            .padding(.vertical, vPad)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
+            .background {
+                if isSelected {
+                    selectedPill.matchedGeometryEffect(id: "modePill", in: pillNamespace)
+                } else if hovered == option {
+                    // Native hover highlight on the unselected segment.
+                    RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
+                        .fill(.white.opacity(0.06))
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: pillRadius, style: .continuous))
         }
-        .contentShape(RoundedRectangle(cornerRadius: pillRadius, style: .continuous))
-        .onTapGesture { select(option) }
+        .buttonStyle(.plain)
         .onHover { inside in
             withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
                 if inside { hovered = option } else if hovered == option { hovered = nil }
             }
         }
-        .accessibilityElement()
         .accessibilityLabel(option.label)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func select(_ option: ScheduleModeOption) {
         // Fires only on a real change → the glyph flourish never re-fires on no-op taps (audit fix).
         guard option != selection else { return }
-        selection = option
         onChange(option)
+        selection = option
     }
 
     // MARK: Brand surfaces
@@ -267,7 +270,7 @@ private struct ModeGlyph: View {
 
 /// Reusable liquid-glass segmented control for small brand choices. Keeps Mode and Settings'
 /// warming-method picker visually identical without falling back to the system segmented picker.
-struct BrandSegmentedControl<Option: Identifiable & Equatable>: View {
+struct BrandSegmentedControl<Option: Identifiable & Equatable & Sendable>: View {
     let options: [Option]
     @Binding var selection: Option
     let label: (Option) -> String
@@ -275,6 +278,7 @@ struct BrandSegmentedControl<Option: Identifiable & Equatable>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pillNamespace
+    @State private var hovered: Option?
 
     var body: some View {
         HStack(spacing: 2) {
@@ -285,64 +289,108 @@ struct BrandSegmentedControl<Option: Identifiable & Equatable>: View {
         .padding(3)
         .background(track)
         .clipShape(Capsule(style: .continuous))
+        .animation(segmentAnimation, value: selection)
+        .animation(segmentAnimation, value: hovered)
     }
 
     // MARK: Segments
 
     private func segment(_ option: Option) -> some View {
         let isSelected = option == selection
-        return Text(label(option))
-            .font(Theme.Typography.ui(12, weight: isSelected ? .bold : .medium))
-            // Dark ink on the bright gradient (the app's high-contrast convention) — cream/white on
-            // the light-gold top of the ramp fails contrast. Muted on the dark track when unselected.
-            .foregroundStyle(isSelected ? Theme.Color.inkOnAccent : Theme.Color.textMuted)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity)
-            .background {
-                if isSelected {
-                    selectedPill.matchedGeometryEffect(id: "selectedPill", in: pillNamespace)
+        return Button {
+            select(option)
+        } label: {
+            Text(label(option))
+                .font(Theme.Typography.ui(12, weight: isSelected ? .bold : .medium))
+                // Dark ink on the bright gradient (the app's high-contrast convention) — cream/white on
+                // the light-gold top of the ramp fails contrast. Muted on the dark track when unselected.
+                .foregroundStyle(isSelected ? Theme.Color.inkOnAccent : Theme.Color.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity)
+                .background {
+                    if isSelected {
+                        selectedPill.matchedGeometryEffect(id: "selectedPill", in: pillNamespace)
+                    } else if hovered == option {
+                        Capsule(style: .continuous)
+                            .fill(.white.opacity(0.055))
+                    }
                 }
-            }
-            .contentShape(Capsule(style: .continuous))
-            .onTapGesture { select(option) }
-            .accessibilityElement()
-            .accessibilityLabel(label(option))
-            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            hovered = inside ? option : (hovered == option ? nil : hovered)
+        }
+        .accessibilityElement()
+        .accessibilityLabel(label(option))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     private func select(_ option: Option) {
         guard option != selection else { return }
-        withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) { selection = option }
+        withAnimation(segmentAnimation) { selection = option }
         onChange(option)
     }
 
     // MARK: Brand surfaces
 
     /// The selected segment: the sunset gradient with a top sheen + soft warm glow → liquid glass.
+    @ViewBuilder
     private var selectedPill: some View {
+        if reduceMotion {
+            selectedPillBase
+        } else {
+            selectedPillBase
+                .keyframeAnimator(initialValue: Stretch(), trigger: selection) { pill, stretch in
+                    pill.scaleEffect(x: stretch.x, y: stretch.y)
+                } keyframes: { _ in
+                    KeyframeTrack(\.x) {
+                        CubicKeyframe(1.08, duration: 0.12)
+                        SpringKeyframe(1.0, duration: 0.24, spring: .snappy)
+                    }
+                    KeyframeTrack(\.y) {
+                        CubicKeyframe(0.94, duration: 0.12)
+                        SpringKeyframe(1.0, duration: 0.24, spring: .snappy)
+                    }
+                }
+        }
+    }
+
+    private var selectedPillBase: some View {
         Capsule(style: .continuous)
-            .fill(Theme.Gradient.sunset)
-            .overlay(
-                // Specular top sheen so the fill reads as wet glass, not flat paint.
+            .fill(Theme.Gradient.sunsetHorizontal)
+            .overlay {
                 Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.32), .white.opacity(0.04), .clear],
-                            startPoint: .top, endPoint: .bottom
-                        )
-                    )
+                    .fill(LinearGradient(colors: [.white.opacity(0.42), .white.opacity(0.08), .clear],
+                                         startPoint: .top, endPoint: .bottom))
                     .blendMode(.softLight)
-            )
-            .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
-            .shadow(color: Theme.Color.accentDeep.opacity(0.45), radius: 5, y: 1.5)
+            }
+            .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
+            .shadow(color: Theme.Color.accentDeep.opacity(0.42), radius: 5, y: 1.5)
+            .shadow(color: Theme.Color.accent.opacity(0.24), radius: 12)
     }
 
     /// The recessed track the segments sit in — a subtle dark glass capsule.
     private var track: some View {
         Capsule(style: .continuous)
             .fill(Theme.Color.line.opacity(0.5))
+            .overlay(
+                Capsule(style: .continuous)
+                    .fill(LinearGradient(colors: [.white.opacity(0.055), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    .blendMode(.softLight)
+            )
             .overlay(Capsule(style: .continuous).strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5))
+    }
+
+    private var segmentAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.76, blendDuration: 0.06)
+    }
+
+    private struct Stretch {
+        var x: CGFloat = 1
+        var y: CGFloat = 1
     }
 }
