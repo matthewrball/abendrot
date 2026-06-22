@@ -457,41 +457,81 @@ struct PrimaryButton: View {
 
 // MARK: - OnboardingStepper
 //
-// A minimal, animated progress indicator that replaces "Step N of 3": a row of small dim capsules, the
-// CURRENT one stretched into a glowing ember pill — the brand's sunset gradient + a specular glass sheen +
-// a soft ember glow, the same Liquid-Glass language as the ModeControl segment and the WarmSlider thumb.
-// The pill morphs/flows between positions on a spring as the step changes, so advancing feels fluid;
-// completed steps read a touch brighter than upcoming ones. Reduce-Motion drops the spring.
+// A minimal, animated progress indicator that replaces "Step N of 3". Instead of per-dot capsules that
+// each resize in place (which read as a teleport, with the gradient fill popping mid-spring), it's a
+// FIXED dim-dot rail with a SINGLE ember pill — the brand's sunset gradient + a specular glass sheen +
+// a soft ember glow, the same Liquid-Glass language as the ModeControl pill and the WarmSlider thumb —
+// that GLIDES from dot to dot. As it travels it squash-stretches along the axis and settles with a faint
+// overshoot (the liquid-glass "blob"), so advancing feels fluid and alive rather than abrupt. Completed
+// dots read a touch brighter than upcoming ones. Reduce-Motion drops both the glide and the stretch (the
+// filled pill still marks the active step). Onboarding is seen only a few times, so the bounce never tires.
 private struct OnboardingStepper: View {
     let current: Int        // 1-based
     let total: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private let dot: CGFloat = 7        // inactive dot diameter
+    private let gap: CGFloat = 13       // gap between dots — roomy enough the pill never crowds the next dot
+    private let pillW: CGFloat = 20     // the traveling ember lozenge (a gentle elongation, not a bar)
+    private let pillH: CGFloat = 8
+    private var stride: CGFloat { dot + gap }
+    private var overhang: CGFloat { (pillW - dot) / 2 }   // keeps the pill in-bounds at both ends
+    private var pillOffset: CGFloat { CGFloat(current - 1) * stride }
+
     var body: some View {
-        HStack(spacing: 7) {
-            ForEach(1...total, id: \.self) { i in
-                let active = i == current
-                Capsule(style: .continuous)
-                    .fill(active
-                          ? AnyShapeStyle(Theme.Gradient.sunsetHorizontal)
-                          : AnyShapeStyle(Theme.Color.textFaint.opacity(i < current ? 0.5 : 0.25)))
-                    .overlay {
-                        if active {
-                            // Specular highlight — the liquid-glass sheen (matches the WarmSlider thumb).
-                            Capsule(style: .continuous)
-                                .fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.06), .clear],
-                                                     startPoint: .top, endPoint: .bottom))
-                                .blendMode(.softLight)
-                        }
-                    }
-                    .frame(width: active ? 26 : 7, height: 7)
-                    .shadow(color: active ? Theme.Color.accent.opacity(0.5) : .clear, radius: 6)   // ember glow
+        ZStack(alignment: .leading) {
+            // The rail — dim dots that never reflow; completed ones read a touch brighter.
+            HStack(spacing: gap) {
+                ForEach(1...total, id: \.self) { i in
+                    Circle()
+                        .fill(Theme.Color.textFaint.opacity(i < current ? 0.5 : 0.25))
+                        .frame(width: dot, height: dot)
+                }
             }
+            .padding(.horizontal, overhang)
+
+            // The ember pill — gradient + sheen + glow ride as ONE view, so nothing pops.
+            emberPill
+                .frame(width: pillW, height: pillH)
+                .offset(x: pillOffset)
+                .animation(travel, value: current)   // springy, faintly-overshooting glide
+                // Squash-stretch along the travel axis on each step change, then settle — the liquid delight.
+                .keyframeAnimator(initialValue: Stretch(), trigger: reduceMotion ? 0 : current) { pill, s in
+                    pill.scaleEffect(x: s.x, y: s.y, anchor: .center)
+                } keyframes: { _ in
+                    KeyframeTrack(\.x) {
+                        CubicKeyframe(1.25, duration: 0.20)
+                        SpringKeyframe(1.0, duration: 0.36, spring: .snappy)
+                    }
+                    KeyframeTrack(\.y) {
+                        CubicKeyframe(0.82, duration: 0.20)
+                        SpringKeyframe(1.0, duration: 0.36, spring: .snappy)
+                    }
+                }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.76), value: current)
         .accessibilityElement()
         .accessibilityLabel("Step \(current) of \(total)")
     }
+
+    private var travel: Animation? {
+        reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.66)
+    }
+
+    private var emberPill: some View {
+        Capsule(style: .continuous)
+            .fill(Theme.Gradient.sunsetHorizontal)
+            .overlay {
+                // Specular highlight — the liquid-glass sheen (matches the WarmSlider thumb).
+                Capsule(style: .continuous)
+                    .fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.06), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    .blendMode(.softLight)
+            }
+            .shadow(color: Theme.Color.accent.opacity(0.55), radius: 6)   // ember glow travels with it
+    }
+
+    /// Horizontal/vertical scale for the travel squash-stretch (settles back to 1×1).
+    private struct Stretch { var x: CGFloat = 1; var y: CGFloat = 1 }
 }
 
 // MARK: - WindowDraggableBackground
