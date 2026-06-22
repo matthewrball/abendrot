@@ -45,11 +45,17 @@ struct OnboardingView: View {
     /// The "You're all set" CTA is two-step: first "Open menu bar" (reveals the popover so the user sees
     /// where Abendrot lives), then "Done" (finishes). Flips true after the first tap.
     @State private var didOpenMenuBar = false
+    /// Mirrors the warmth slider's press state: the blue-light % rolls on discrete changes (Cozy on→99)
+    /// but stays silent during a live drag, where rapid numericText changes glitch. Fed by WarmSlider.
+    @State private var sliderPressing = false
+    @State private var sunsetDetailHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 18) {
-            topBar
+            // Skip the top bar on the closing all-set step — it has no stepper or chevron there, so the
+            // empty slot plus the stack spacing would leave a dead gap above the checkmark.
+            if step != .allSet { topBar }
 
             Group {
                 switch step {
@@ -62,12 +68,10 @@ struct OnboardingView: View {
             .transition(.opacity)
         }
         .padding(24)
-        .frame(width: 320)                 // fixed WIDTH; the height hugs each step/mode's content and the
-        .fixedSize(horizontal: false, vertical: true)   // window self-sizes to it (top edge fixed — see
-                                           // OnboardingWindowController.fitContentHeight), so Always-on
-                                           // compresses and the heading + switcher stay put at the top.
-        // Report the natural content height so the window hugs each step/mode (top edge fixed): Always-on
-        // compresses, Sunset grows, the heading stays put. Measured HERE — on the fixed-size card, BEFORE
+        .frame(width: 320)
+        .fixedSize(horizontal: false, vertical: true)
+        // Report the natural content height so the window can grow for taller step/mode content. Measured
+        // HERE — on the fixed-size card, BEFORE
         // the fill frame below — so it reports the card's true height, not the filled window. Mirrors the
         // self-sizing Settings window.
         .background(GeometryReader { proxy in
@@ -97,17 +101,14 @@ struct OnboardingView: View {
     @ViewBuilder
     private var stepIndicator: some View {
         if let n = step.numberedIndex {
-            Text("Step \(n) of \(OnboardingStep.numberedTotal)")
-                .font(Theme.Typography.ui(11, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Theme.Color.accent)
+            OnboardingStepper(current: n, total: OnboardingStep.numberedTotal)
                 .frame(maxWidth: .infinity)
         }
     }
 
-    // A leading back chevron, shown only on the warmth step, layered over the centered step indicator,
-    // so users can return to step 2 and change their mode. Earlier steps need no back (welcome is the
-    // entry; the mode step's onAppear re-applies the chosen mode on return).
+    // A leading back chevron, shown only on the warmth step, layered over the centered stepper, so users
+    // can return to step 2 and change their mode. Earlier steps need no back (welcome is the entry; the
+    // mode step's onAppear re-applies the chosen mode on return); the closing all-set step has none.
     @ViewBuilder
     private var topBar: some View {
         ZStack {
@@ -158,20 +159,23 @@ struct OnboardingView: View {
     private var warmthStep: some View {
         VStack(spacing: 14) {
             HStack(spacing: 6) {
-                Text(scheduleOption == .followSunset ? "How warm should it get?" : "Set your warmth")
+                Text("How warm should we get?")
                     .font(Theme.Typography.serif(19))
                     .foregroundStyle(Theme.Color.textPrimary)
                 // Ported from the popover Warmth header — the "what is Kelvin?" helper beside
                 // the step title, since this step no longer shows the slider's own "Warmth" header.
                 KelvinInfoButton()
             }
+            // Lift the heading (and its hover tooltip) above the rows below, so the tooltip renders ON TOP
+            // of the subtitle / Kelvin readout instead of those later VStack siblings painting over it.
+            .zIndex(1)
             // The slider sets everyday warmth STRENGTH (not the Advanced "Maximum warmth" ceiling /
             // warmestPoint). Sunset shows "maximum warmth once the sun begins to set" — it names the peak the
             // evening ramp climbs to AND explains the cool-down on finish (daytime → neutral until sunset),
             // so the restore doesn't read as a glitch. Always-on needs no subtitle (the big Kelvin readout +
             // slider are self-explanatory).
             if scheduleOption == .followSunset {
-                Text("Set your maximum warmth once the sun begins to set.")
+                Text("Set your maximum warmth level.")
                     .font(Theme.Typography.ui(12.5))
                     .foregroundStyle(Theme.Color.textMuted)
                     .multilineTextAlignment(.center)
@@ -186,12 +190,13 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.Color.accentHighlight)
 
             // Same science-backed accent metric as the popover ticker (instant updates here).
-            BlueLightReductionLabel(kelvin: model.globalKelvin, animated: false)
+            BlueLightReductionLabel(kelvin: model.globalKelvin, cozy: isCozy, animated: !sliderPressing)
 
             WarmSlider(strength: Binding(
                 get: { model.state.globalWarmth.strength },
                 set: { model.setGlobalWarmth($0) }
-            ), model: model, showsHeader: false, cozy: isCozy)
+            ), model: model, showsHeader: false, cozy: isCozy,
+            onPressingChanged: { sliderPressing = $0 })
 
             // Cozy mode (the warmest candle & ember, below 1900 K) offered right here — the Settings →
             // Advanced control, compact (no section header / science caption). Enabling runs the slider all
@@ -228,24 +233,13 @@ struct OnboardingView: View {
 
     private var scheduleStep: some View {
         VStack(spacing: 13) {
-            Text("When should it warm?")
+            Text("When should we warm?")
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            // A FIXED-HEIGHT subtitle slot under the heading, crossfading the Sunset status line and the
-            // Always-on description, so the switcher below NEVER moves when toggling modes (by preference: the
-            // switcher must stay put). Both modes fill the same slot.
-            ZStack {
-                if scheduleOption == .followSunset {
-                    Text(model.isWarmingActive
-                         ? "The sun has set — your screen is warming now."
-                         : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
-                        .transition(.opacity)
-                } else {
-                    Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
-                        .transition(.opacity)
-                }
-            }
+            // A fixed-height subtitle slot under the heading. The copy swaps in place, so the switcher
+            // below never moves when toggling modes.
+            Text(scheduleSubtitle)
             .font(Theme.Typography.ui(11.5))
             .foregroundStyle(Theme.Color.textMuted)
             .multilineTextAlignment(.center)
@@ -260,24 +254,27 @@ struct OnboardingView: View {
                 model.setScheduleMode(option.toScheduleMode())
             }
 
-            // Sunset-only detail BELOW the switcher; its presence/absence can't move the switcher above it.
-            if scheduleOption == .followSunset {
-                VStack(alignment: .leading, spacing: 11) {
-                    sunsetScienceCard
-                    VStack(alignment: .leading, spacing: 6) {
-                        CityAutocomplete(model: model, opensUpward: true)
-                        Text(model.todaysSunsetReadout)
-                            .font(Theme.Typography.ui(12, weight: .semibold))
-                            .foregroundStyle(Theme.Color.accentHighlight)
-                    }
+            VStack(spacing: 0) {
+                ZStack(alignment: .top) {
+                    sunsetDetailMeasure
+                    sunsetDetailWithBottomGap
+                        .frame(height: sunsetDetailFrameHeight, alignment: .top)
+                        .mask(alignment: .top) {
+                            Rectangle().frame(height: sunsetDetailMaskHeight)
+                        }
+                        .opacity(scheduleOption == .followSunset ? 1 : 0)
+                        .clipped()
+                        .allowsHitTesting(scheduleOption == .followSunset)
+                        .accessibilityHidden(scheduleOption != .followSunset)
+                        .animation(reduceMotion ? nil : .timingCurve(0.22, 0.61, 0.36, 1, duration: 0.35),
+                                   value: scheduleOption)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.opacity)
-            }
 
-            PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
+                PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
+            }
         }
-        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: scheduleOption)
+        // The Sunset detail animates only its clipped height; the outer AppKit panel follows that size.
+        .onPreferenceChange(SunsetDetailHeightKey.self) { sunsetDetailHeight = $0 }
         // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
         // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
         // "Abendrot is now active"; the mode tick then plays on each toggle.
@@ -389,6 +386,52 @@ struct OnboardingView: View {
     /// the fireball thumb + "Warmest" label on the step-3 slider.
     private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
 
+    private var scheduleSubtitle: String {
+        if scheduleOption == .alwaysOn { return "Warms continuously, day\u{00A0}and\u{00A0}night." }
+        return model.isWarmingActive
+            ? "The sun has set — your screen is warming now."
+            : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset."
+    }
+
+    private var sunsetDetailFrameHeight: CGFloat? {
+        guard scheduleOption == .followSunset else { return 0 }
+        return sunsetDetailHeight > 0 ? sunsetDetailHeight : nil
+    }
+
+    private var sunsetDetailMaskHeight: CGFloat {
+        if scheduleOption == .alwaysOn { return 0 }
+        return sunsetDetailHeight > 0 ? sunsetDetailHeight : 1_000
+    }
+
+    private var sunsetDetail: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            sunsetScienceCard
+            VStack(alignment: .leading, spacing: 6) {
+                CityAutocomplete(model: model, opensUpward: true)
+                Text(model.todaysSunsetReadout)
+                    .font(Theme.Typography.ui(12, weight: .semibold))
+                    .foregroundStyle(Theme.Color.accentHighlight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sunsetDetailWithBottomGap: some View {
+        sunsetDetail.padding(.bottom, 13)
+    }
+
+    private var sunsetDetailMeasure: some View {
+        sunsetDetailWithBottomGap
+            .hidden()
+            .opacity(0)
+            .background(GeometryReader { proxy in
+                Color.clear.preference(key: SunsetDetailHeightKey.self, value: proxy.size.height)
+            })
+            .frame(height: 0)
+            .clipped()
+            .accessibilityHidden(true)
+    }
+
     private func advance() {
         guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
             onFinish()
@@ -453,6 +496,85 @@ struct PrimaryButton: View {
     }
 }
 
+// MARK: - OnboardingStepper
+//
+// A minimal, animated progress indicator that replaces "Step N of 3". Instead of per-dot capsules that
+// each resize in place (which read as a teleport, with the gradient fill popping mid-spring), it's a
+// FIXED dim-dot rail with a SINGLE ember pill — the brand's sunset gradient + a specular glass sheen +
+// a soft ember glow, the same Liquid-Glass language as the ModeControl pill and the WarmSlider thumb —
+// that GLIDES from dot to dot. As it travels it squash-stretches along the axis and settles with a faint
+// overshoot (the liquid-glass "blob"), so advancing feels fluid and alive rather than abrupt. Completed
+// dots read a touch brighter than upcoming ones. Reduce-Motion drops both the glide and the stretch (the
+// filled pill still marks the active step). Onboarding is seen only a few times, so the bounce never tires.
+private struct OnboardingStepper: View {
+    let current: Int        // 1-based
+    let total: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let dot: CGFloat = 7        // inactive dot diameter
+    private let gap: CGFloat = 13       // gap between dots — roomy enough the pill never crowds the next dot
+    private let pillW: CGFloat = 20     // the traveling ember lozenge (a gentle elongation, not a bar)
+    private let pillH: CGFloat = 8
+    private var stride: CGFloat { dot + gap }
+    private var overhang: CGFloat { (pillW - dot) / 2 }   // keeps the pill in-bounds at both ends
+    private var pillOffset: CGFloat { CGFloat(current - 1) * stride }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // The rail — dim dots that never reflow; completed ones read a touch brighter.
+            HStack(spacing: gap) {
+                ForEach(1...total, id: \.self) { i in
+                    Circle()
+                        .fill(Theme.Color.textFaint.opacity(i < current ? 0.5 : 0.25))
+                        .frame(width: dot, height: dot)
+                }
+            }
+            .padding(.horizontal, overhang)
+
+            // The ember pill — gradient + sheen + glow ride as ONE view, so nothing pops.
+            emberPill
+                .frame(width: pillW, height: pillH)
+                .offset(x: pillOffset)
+                .animation(travel, value: current)   // springy, faintly-overshooting glide
+                // Squash-stretch along the travel axis on each step change, then settle — the liquid delight.
+                .keyframeAnimator(initialValue: Stretch(), trigger: reduceMotion ? 0 : current) { pill, s in
+                    pill.scaleEffect(x: s.x, y: s.y, anchor: .center)
+                } keyframes: { _ in
+                    KeyframeTrack(\.x) {
+                        CubicKeyframe(1.25, duration: 0.20)
+                        SpringKeyframe(1.0, duration: 0.36, spring: .snappy)
+                    }
+                    KeyframeTrack(\.y) {
+                        CubicKeyframe(0.82, duration: 0.20)
+                        SpringKeyframe(1.0, duration: 0.36, spring: .snappy)
+                    }
+                }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Step \(current) of \(total)")
+    }
+
+    private var travel: Animation? {
+        reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.66)
+    }
+
+    private var emberPill: some View {
+        Capsule(style: .continuous)
+            .fill(Theme.Gradient.sunsetHorizontal)
+            .overlay {
+                // Specular highlight — the liquid-glass sheen (matches the WarmSlider thumb).
+                Capsule(style: .continuous)
+                    .fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.06), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    .blendMode(.softLight)
+            }
+            .shadow(color: Theme.Color.accent.opacity(0.55), radius: 6)   // ember glow travels with it
+    }
+
+    /// Horizontal/vertical scale for the travel squash-stretch (settles back to 1×1).
+    private struct Stretch { var x: CGFloat = 1; var y: CGFloat = 1 }
+}
+
 // MARK: - WindowDraggableBackground
 //
 // A transparent NSView that lets the user drag the whole onboarding card from any empty area, not just the
@@ -476,6 +598,11 @@ private struct WindowDraggableBackground: NSViewRepresentable {
 private struct OnboardingHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct SunsetDetailHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 // MARK: - Preview

@@ -37,7 +37,11 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    # `main` is intentionally NOT listed: it only ever fast-forwards a green `dev` SHA, and CI results
+    # attach to the SHA — so branch protection on `main` is already satisfied by the `dev` run, and
+    # re-running on the promote push would just duplicate it. A direct push of a fresh commit to `main`
+    # is still rejected (that SHA has no green checks). Staging happens on `dev`; PRs are covered below.
+    branches: [dev]
   pull_request:
   workflow_dispatch:
     inputs:
