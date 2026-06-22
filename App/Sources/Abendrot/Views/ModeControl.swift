@@ -63,6 +63,7 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
 struct ModeControl: View {
     @Binding var selection: ScheduleModeOption
     var compact: Bool = false
+    var animatesSelection: Bool = true
     var onChange: (ScheduleModeOption) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -90,7 +91,10 @@ struct ModeControl: View {
             RoundedRectangle(cornerRadius: trackRadius, style: .continuous)
                 .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
         )
-        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: selection)
+        .animation(selectionAnimation, value: selection)
+        .transaction { transaction in
+            if !animatesSelection { transaction.animation = nil }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Schedule mode")
     }
@@ -106,7 +110,7 @@ struct ModeControl: View {
         } label: {
             VStack(spacing: stackGap) {
                 ModeGlyph(size: glyphSize, ink: ink, option: option,
-                          isSelected: isSelected, reduceMotion: reduceMotion)
+                          isSelected: isSelected, reduceMotion: reduceMotion || !animatesSelection)
                     .frame(width: glyphSize, height: glyphSize)
                 Text(option.label)
                     .font(Theme.Typography.ui(labelSize, weight: isSelected ? .bold : .semibold))
@@ -119,7 +123,11 @@ struct ModeControl: View {
             .frame(maxWidth: .infinity)
             .background {
                 if isSelected {
-                    selectedPill.matchedGeometryEffect(id: "modePill", in: pillNamespace)
+                    if animatesSelection {
+                        selectedPill.matchedGeometryEffect(id: "modePill", in: pillNamespace)
+                    } else {
+                        selectedPill
+                    }
                 } else if hovered == option {
                     // Native hover highlight on the unselected segment.
                     RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
@@ -130,7 +138,7 @@ struct ModeControl: View {
         }
         .buttonStyle(.plain)
         .onHover { inside in
-            withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
+            withAnimation(selectionAnimation) {
                 if inside { hovered = option } else if hovered == option { hovered = nil }
             }
         }
@@ -165,6 +173,10 @@ struct ModeControl: View {
                 .strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
             .shadow(color: Theme.Color.accentDeep.opacity(0.42), radius: 6, y: 1.5)
             .shadow(color: Theme.Color.accent.opacity(0.30), radius: 14)   // soft ember glow
+    }
+
+    private var selectionAnimation: Animation? {
+        animatesSelection ? Theme.Motion.warm(reduceMotion: reduceMotion) : nil
     }
 }
 
