@@ -141,8 +141,8 @@ struct ModeControl: View {
     private func select(_ option: ScheduleModeOption) {
         // Fires only on a real change → the glyph flourish never re-fires on no-op taps (audit fix).
         guard option != selection else { return }
-        onChange(option)
         selection = option
+        onChange(option)
     }
 
     // MARK: Brand surfaces

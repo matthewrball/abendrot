@@ -53,7 +53,7 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 38) {
             // Skip the top bar on the closing all-set step — it has no stepper or chevron there, so the
             // empty slot plus the stack spacing would leave a dead gap above the checkmark.
             if step != .allSet { topBar }
@@ -253,9 +253,7 @@ struct OnboardingView: View {
             // warms the screen now; Sunset (in daylight) eases back to neutral. `setScheduleMode` also
             // plays the soft mode tick (gated by the sound pref). The switcher sits at a CONSTANT y — the
             // heading + fixed subtitle slot above it never change height.
-            ModeControl(selection: $scheduleOption) { option in
-                applyScheduleOption(option)
-            }
+            ModeControl(selection: scheduleSelection) { _ in }
 
             VStack(spacing: 0) {
                 ZStack(alignment: .top) {
@@ -398,6 +396,13 @@ struct OnboardingView: View {
             : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset."
     }
 
+    private var scheduleSelection: Binding<ScheduleModeOption> {
+        Binding(
+            get: { scheduleOption },
+            set: { applyScheduleOption($0) }
+        )
+    }
+
     private var sunsetDetailFrameHeight: CGFloat? {
         guard sunsetDetailHeight > 0 else {
             return sunsetDetailReveal > 0 ? nil : 0
@@ -452,7 +457,9 @@ struct OnboardingView: View {
     }
 
     private func applyScheduleOption(_ option: ScheduleModeOption) {
+        guard option != scheduleOption else { return }
         withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
+            scheduleOption = option
             sunsetDetailReveal = option == .followSunset ? 1 : 0
         }
         model.setScheduleMode(option.toScheduleMode())

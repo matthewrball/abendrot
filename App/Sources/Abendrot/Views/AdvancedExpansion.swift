@@ -86,9 +86,13 @@ struct AdvancedExpansion: View {
 
     private var soundsRow: some View {
         HStack {
-            Label("Sounds", systemImage: softTone ? "speaker.wave.2" : "speaker.slash")
-                .font(Theme.Typography.ui(12))
-                .foregroundStyle(Theme.Color.textMuted)
+            HStack(spacing: 10) {
+                MorphingSpeakerIcon(isOn: softTone)
+                    .frame(width: 24, height: 20)
+                Text("Sounds")
+                    .font(Theme.Typography.ui(12))
+            }
+            .foregroundStyle(Theme.Color.textMuted)
             Spacer()
             BrandSegmentedControl(
                 options: SoundToggleOption.allCases,
@@ -107,6 +111,100 @@ private enum SoundToggleOption: String, CaseIterable, Identifiable, Sendable {
     case off, on
     var id: String { rawValue }
     var label: String { self == .on ? "On" : "Off" }
+}
+
+private struct MorphingSpeakerIcon: View {
+    let isOn: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            SpeakerBodyShape()
+                .stroke(style: StrokeStyle(lineWidth: 1.9, lineCap: .round, lineJoin: .round))
+                .scaleEffect(x: isOn ? 1 : 0.96, y: 1, anchor: .leading)
+
+            SpeakerWaveShape(kind: .inner)
+                .trim(from: 0, to: isOn ? 1 : 0.12)
+                .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                .opacity(isOn ? 1 : 0)
+                .offset(x: isOn ? 0 : -2)
+                .scaleEffect(isOn ? 1 : 0.72, anchor: .leading)
+
+            SpeakerWaveShape(kind: .outer)
+                .trim(from: 0, to: isOn ? 1 : 0.08)
+                .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                .opacity(isOn ? 0.86 : 0)
+                .offset(x: isOn ? 0 : -3)
+                .scaleEffect(isOn ? 1 : 0.64, anchor: .leading)
+
+            SpeakerSlashShape()
+                .trim(from: 0, to: isOn ? 0 : 1)
+                .stroke(style: StrokeStyle(lineWidth: 1.9, lineCap: .round, lineJoin: .round))
+                .opacity(isOn ? 0 : 1)
+                .scaleEffect(isOn ? 0.84 : 1, anchor: .center)
+        }
+        .animation(iconAnimation, value: isOn)
+        .accessibilityHidden(true)
+    }
+
+    private var iconAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.78, blendDuration: 0.04)
+    }
+}
+
+private struct SpeakerBodyShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let x = rect.width / 24
+        let y = rect.height / 20
+        var path = Path()
+        path.move(to: CGPoint(x: 3 * x, y: 8 * y))
+        path.addLine(to: CGPoint(x: 7 * x, y: 8 * y))
+        path.addLine(to: CGPoint(x: 12 * x, y: 4 * y))
+        path.addLine(to: CGPoint(x: 12 * x, y: 16 * y))
+        path.addLine(to: CGPoint(x: 7 * x, y: 12 * y))
+        path.addLine(to: CGPoint(x: 3 * x, y: 12 * y))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct SpeakerWaveShape: Shape {
+    enum Kind { case inner, outer }
+    let kind: Kind
+
+    func path(in rect: CGRect) -> Path {
+        let x = rect.width / 24
+        let y = rect.height / 20
+        var path = Path()
+        switch kind {
+        case .inner:
+            path.move(to: CGPoint(x: 15 * x, y: 7.5 * y))
+            path.addCurve(
+                to: CGPoint(x: 15 * x, y: 12.5 * y),
+                control1: CGPoint(x: 17 * x, y: 8.8 * y),
+                control2: CGPoint(x: 17 * x, y: 11.2 * y)
+            )
+        case .outer:
+            path.move(to: CGPoint(x: 17 * x, y: 4.6 * y))
+            path.addCurve(
+                to: CGPoint(x: 17 * x, y: 15.4 * y),
+                control1: CGPoint(x: 22 * x, y: 7.2 * y),
+                control2: CGPoint(x: 22 * x, y: 12.8 * y)
+            )
+        }
+        return path
+    }
+}
+
+private struct SpeakerSlashShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let x = rect.width / 24
+        let y = rect.height / 20
+        var path = Path()
+        path.move(to: CGPoint(x: 3.5 * x, y: 4 * y))
+        path.addLine(to: CGPoint(x: 20.5 * x, y: 16 * y))
+        return path
+    }
 }
 
 // MARK: - Preview
