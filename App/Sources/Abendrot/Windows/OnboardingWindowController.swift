@@ -29,44 +29,62 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     private var resizeTask: Task<Void, Never>?
 
     /// Resize the window so it hugs `contentHeight`, keeping the width + TOP edge fixed.
-    /// Small SwiftUI height ticks are applied directly; larger jumps are interpolated top-pinned.
+    /// SwiftUI reports start/end layout sizes here; larger jumps are interpolated top-pinned.
     static func fitContentHeight(_ contentHeight: CGFloat) {
         guard contentHeight > 1, let ctrl = shared, let win = ctrl.window else { return }
         let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
         let target = max(contentHeight + titlebar, defaultHeight)
         let current = win.frame
-        guard abs(current.height - target) > 0.5 else { return }
+        guard abs(current.height - target) > 0.5 else {
+            ctrl.hasFitContent = true
+            return
+        }
         if ctrl.hasFitContent {
-            ctrl.setFrameHeight(target, from: current)
+            ctrl.setFrameHeight(target)
         } else {
-            var f = current
-            f.size.height = target
-            win.setFrame(f, display: true, animate: false)  // first fit (on open): size to content…
-            win.center()                                    // …then center on the main display
+            ctrl.resizeTask?.cancel()
+            ctrl.resizeTask = Task { @MainActor [weak ctrl, weak win] in
+                guard let ctrl, let win else { return }
+                try? await Task.sleep(nanoseconds: 1_000_000)
+                guard !Task.isCancelled else { return }
+                var f = win.frame
+                f.size.height = target
+                win.setFrame(f, display: false, animate: false)  // first fit (on open): size to content…
+                win.center()                                     // …then center on the main display
+                ctrl.hasFitContent = true
+                ctrl.resizeTask = nil
+            }
+            return
         }
         ctrl.hasFitContent = true
     }
 
-    private func setFrameHeight(_ target: CGFloat, from current: NSRect) {
+    private func setFrameHeight(_ target: CGFloat) {
         guard let win = window else { return }
         resizeTask?.cancel()
 
-        let delta = abs(current.height - target)
-        if delta < 8 {
-            var f = current
-            f.size.height = target
-            f.origin.y = current.maxY - target              // keep the top edge fixed
-            win.setFrame(f, display: true, animate: false)
-            return
-        }
-
-        let startFrame = current
-        let startHeight = current.height
-        let pinnedTop = current.maxY
-        let duration: TimeInterval = 0.35
-
         resizeTask = Task { @MainActor [weak self, weak win] in
             guard let self, let win else { return }
+            // Preference updates are emitted during SwiftUI/AppKit layout. Mutating the NSWindow frame
+            // inside that same display cycle can trip AppKit's constraint re-entrancy guard.
+            try? await Task.sleep(nanoseconds: 1_000_000)
+            guard !Task.isCancelled else { return }
+
+            let current = win.frame
+            let delta = abs(current.height - target)
+            if delta < 8 {
+                var f = current
+                f.size.height = target
+                f.origin.y = current.maxY - target          // keep the top edge fixed
+                win.setFrame(f, display: false, animate: false)
+                self.resizeTask = nil
+                return
+            }
+
+            let startFrame = current
+            let startHeight = current.height
+            let pinnedTop = current.maxY
+            let duration: TimeInterval = 0.38
             let start = CACurrentMediaTime()
 
             while !Task.isCancelled {
@@ -78,7 +96,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
                 var f = startFrame
                 f.size.height = height
                 f.origin.y = pinnedTop - height
-                win.setFrame(f, display: true, animate: false)
+                win.setFrame(f, display: false, animate: false)
 
                 if progress >= 1 { break }
                 try? await Task.sleep(nanoseconds: 16_000_000)

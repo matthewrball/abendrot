@@ -92,7 +92,9 @@ struct OnboardingView: View {
         // the traffic-light buttons sit cleanly on the frost in the transparent title bar, and there is no
         // detached floating-card border and no gray bar.
         .background(FrostBackground())
-        .onPreferenceChange(OnboardingHeightKey.self) { OnboardingWindowController.fitContentHeight($0) }
+        .onPreferenceChange(OnboardingHeightKey.self) { height in
+            Task { @MainActor in OnboardingWindowController.fitContentHeight(height) }
+        }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
 
@@ -266,8 +268,7 @@ struct OnboardingView: View {
                         .clipped()
                         .allowsHitTesting(scheduleOption == .followSunset)
                         .accessibilityHidden(scheduleOption != .followSunset)
-                        .animation(reduceMotion ? nil : .timingCurve(0.22, 0.61, 0.36, 1, duration: 0.35),
-                                   value: scheduleOption)
+                        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: scheduleOption)
                 }
 
                 PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
@@ -332,6 +333,11 @@ struct OnboardingView: View {
     // the evening) — the approved "supports healthy evening light habits" framing. NO medical/sleep claim,
     // no "improves sleep". Wording from the evidence base, claim #5 (Brown et al. 2022).
     private var sunsetScienceCard: some View {
+        sunsetScienceCardContent
+            .glassSurface(.frost, cornerRadius: Theme.Radius.control)
+    }
+
+    private var sunsetScienceCardContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Why we recommend Sunset", systemImage: "moon.stars.fill")
                 .font(Theme.Typography.ui(11.5, weight: .semibold))
@@ -352,7 +358,6 @@ struct OnboardingView: View {
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.frost, cornerRadius: Theme.Radius.control)
     }
 
     // Brief, beautiful privacy reassurance — the closing note. Reuses the Privacy settings page's
@@ -406,14 +411,26 @@ struct OnboardingView: View {
     private var sunsetDetail: some View {
         VStack(alignment: .leading, spacing: 11) {
             sunsetScienceCard
-            VStack(alignment: .leading, spacing: 6) {
-                CityAutocomplete(model: model, opensUpward: true)
-                Text(model.todaysSunsetReadout)
-                    .font(Theme.Typography.ui(12, weight: .semibold))
-                    .foregroundStyle(Theme.Color.accentHighlight)
-            }
+            sunsetLocationFields
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sunsetDetailForMeasurement: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            sunsetScienceCardContent
+            sunsetLocationFields
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sunsetLocationFields: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            CityAutocomplete(model: model, opensUpward: true)
+            Text(model.todaysSunsetReadout)
+                .font(Theme.Typography.ui(12, weight: .semibold))
+                .foregroundStyle(Theme.Color.accentHighlight)
+        }
     }
 
     private var sunsetDetailWithBottomGap: some View {
@@ -421,7 +438,8 @@ struct OnboardingView: View {
     }
 
     private var sunsetDetailMeasure: some View {
-        sunsetDetailWithBottomGap
+        sunsetDetailForMeasurement
+            .padding(.bottom, 13)
             .hidden()
             .opacity(0)
             .background(GeometryReader { proxy in
