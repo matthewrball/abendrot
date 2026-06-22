@@ -49,6 +49,7 @@ struct OnboardingView: View {
     /// but stays silent during a live drag, where rapid numericText changes glitch. Fed by WarmSlider.
     @State private var sliderPressing = false
     @State private var sunsetDetailHeight: CGFloat = 0
+    @State private var sunsetDetailReveal: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -253,7 +254,7 @@ struct OnboardingView: View {
             // plays the soft mode tick (gated by the sound pref). The switcher sits at a CONSTANT y — the
             // heading + fixed subtitle slot above it never change height.
             ModeControl(selection: $scheduleOption) { option in
-                model.setScheduleMode(option.toScheduleMode())
+                applyScheduleOption(option)
             }
 
             VStack(spacing: 0) {
@@ -261,14 +262,10 @@ struct OnboardingView: View {
                     sunsetDetailMeasure
                     sunsetDetailWithBottomGap
                         .frame(height: sunsetDetailFrameHeight, alignment: .top)
-                        .mask(alignment: .top) {
-                            Rectangle().frame(height: sunsetDetailMaskHeight)
-                        }
-                        .opacity(scheduleOption == .followSunset ? 1 : 0)
+                        .opacity(sunsetDetailOpacity)
                         .clipped()
-                        .allowsHitTesting(scheduleOption == .followSunset)
-                        .accessibilityHidden(scheduleOption != .followSunset)
-                        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: scheduleOption)
+                        .allowsHitTesting(sunsetDetailReveal >= 1)
+                        .accessibilityHidden(sunsetDetailReveal < 1)
                 }
 
                 PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
@@ -280,6 +277,9 @@ struct OnboardingView: View {
         // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
         // "Abendrot is now active"; the mode tick then plays on each toggle.
         .onAppear {
+            let showSunsetDetail = scheduleOption == .followSunset
+            sunsetDetailReveal = showSunsetDetail ? 1 : 0
+
             // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
             // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
             // ONCE only — on a return visit (back from the warmth step) we must NOT re-slam 1.0, or an
@@ -399,13 +399,14 @@ struct OnboardingView: View {
     }
 
     private var sunsetDetailFrameHeight: CGFloat? {
-        guard scheduleOption == .followSunset else { return 0 }
-        return sunsetDetailHeight > 0 ? sunsetDetailHeight : nil
+        guard sunsetDetailHeight > 0 else {
+            return sunsetDetailReveal > 0 ? nil : 0
+        }
+        return sunsetDetailHeight * sunsetDetailReveal
     }
 
-    private var sunsetDetailMaskHeight: CGFloat {
-        if scheduleOption == .alwaysOn { return 0 }
-        return sunsetDetailHeight > 0 ? sunsetDetailHeight : 1_000
+    private var sunsetDetailOpacity: Double {
+        Double(max(0, min(1, sunsetDetailReveal * 1.35)))
     }
 
     private var sunsetDetail: some View {
@@ -448,6 +449,13 @@ struct OnboardingView: View {
             .frame(height: 0)
             .clipped()
             .accessibilityHidden(true)
+    }
+
+    private func applyScheduleOption(_ option: ScheduleModeOption) {
+        withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
+            sunsetDetailReveal = option == .followSunset ? 1 : 0
+        }
+        model.setScheduleMode(option.toScheduleMode())
     }
 
     private func advance() {
