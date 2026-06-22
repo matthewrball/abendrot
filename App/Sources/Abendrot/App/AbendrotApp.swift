@@ -22,7 +22,7 @@ struct AbendrotApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $model.showInMenuBar) {
             PopoverView(model: model)
         } label: {
             // "One Ripple" sunset-arc glyph: a monochrome template at rest, ember-amber filled while
@@ -44,11 +44,9 @@ struct AbendrotApp: App {
             }
         }
 
-        // TODO(pre-release): REMOVE before shipping — a DEV-ONLY menu-bar item to replay the onboarding
-        // flow on demand for testing (founder request, Session 11). Deliberately a SEPARATE menu-bar item
-        // (default `.menu` style → a small ✨ pull-down) so it stays OUT of the main popover and doesn't
-        // clutter the UI under test. Delete this whole scene to remove. NOT gated behind `#if DEBUG`
-        // because the founder dogfoods the Release build.
+        #if DEBUG
+        // Developer-only menu-bar item to replay the onboarding flow on demand for testing. Deliberately
+        // separate from the main popover so it stays out of the product UI.
         MenuBarExtra("Replay onboarding", systemImage: "sparkles") {
             Button("Relaunch (latest build)") {
                 relaunchFromLatestBuild()
@@ -71,6 +69,7 @@ struct AbendrotApp: App {
                 relaunchFromLatestBuild(force: true)
             }
         }
+        #endif
 
         // A SwiftUI Settings scene only so ⌘, / `openSettings()` resolve; the real glass
         // window is the programmatic one. This scene routes to it.

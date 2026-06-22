@@ -39,12 +39,28 @@ struct PopoverView: View {
             // — the master toggle owns on/off — so they hide and re-reveal together with a soft
             // scale-fade. (Per-display "Override" rows live in the Advanced section now.)
             if model.state.isEnabled {
+                let locked = model.isWarmthLockedInSunset
                 VStack(alignment: .leading, spacing: 0) {
-                    WarmSlider(strength: globalWarmthBinding, model: model, kelvin: model.globalKelvin)
-                        .padding(.bottom, 16)
+                    // In Sunset mode the slider is LIVE + locked: it shows the warmth being applied
+                    // right now (which ramps with the time of day) and points to Settings for the max.
+                    // Always-on keeps it editable.
+                    WarmSlider(
+                        strength: locked ? sunsetLiveBinding : globalWarmthBinding,
+                        model: model,
+                        kelvin: locked ? model.liveKelvin : model.globalKelvin,
+                        isLocked: locked
+                    )
+                    if locked {
+                        sunsetLockCaption
+                            .padding(.top, 10)
+                            .transition(.opacity)
+                    }
                     modeSection
+                        .padding(.top, 16)
                 }
                 .transition(.softReveal)
+                // Caption + lock badge crossfade and the popover re-heights smoothly when the mode flips.
+                .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: locked)
             }
 
             // Advanced "liquid expansion" — the glass grows to hold power rows.
@@ -222,6 +238,38 @@ struct PopoverView: View {
 
     private var globalWarmthBinding: Binding<Double> {
         Binding(get: { model.state.globalWarmth.strength }, set: { model.setGlobalWarmth($0) })
+    }
+
+    /// Read-only binding for the locked Sunset slider — tracks the warmth being applied right now
+    /// (the time-of-day ramp). The setter is a no-op: warmth isn't hand-set from the popover in Sunset.
+    private var sunsetLiveBinding: Binding<Double> {
+        Binding(get: { model.state.resolvedWarmth.strength }, set: { _ in })
+    }
+
+    /// Explains the locked slider and links to the editable maximum (Settings → General). Leads with the
+    /// live state (warming now vs. eases in at sunset) so the daytime "neutral now" reading isn't a puzzle.
+    private var sunsetLockCaption: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(model.isWarmingActive
+                 ? "Sunset is setting your warmth automatically."
+                 : "Warmth eases in around your local sunset.")
+                .font(Theme.Typography.ui(11))
+                .foregroundStyle(Theme.Color.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+            Button { SettingsWindowController.show(model: model) } label: {
+                HStack(spacing: 3) {
+                    Text("Change your maximum in Settings")
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
+                .font(Theme.Typography.ui(11, weight: .medium))
+                .foregroundStyle(Theme.Color.accent)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens Settings to change your maximum warmth")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

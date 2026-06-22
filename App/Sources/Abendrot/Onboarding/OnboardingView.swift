@@ -279,7 +279,12 @@ struct OnboardingView: View {
 
             PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
         }
-        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: scheduleOption)
+        // Reveal the Sunset detail on the SAME curve + duration as the window glide (see
+        // OnboardingWindowController.fitContentHeight) so switching modes reads as one smooth expansion
+        // rather than the content snapping while the window lumbers behind it. Slower than the 140ms
+        // control tick on purpose — this is a reveal, not a tap. The switcher stays put (fixed subtitle
+        // slot above it); only the window grows. The mode pill keeps its own snappy slide.
+        .animation(reduceMotion ? nil : .timingCurve(0.22, 0.61, 0.36, 1, duration: 0.38), value: scheduleOption)
         // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
         // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
         // — "Abendrot is now active"; the mode tick then plays on each toggle.

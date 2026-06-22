@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import QuartzCore
 
 // MARK: - OnboardingWindowController
 //
@@ -39,7 +40,14 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         f.size.height = target
         if ctrl.hasFitContent {
             f.origin.y = current.maxY - target              // later fits: keep the TOP edge fixed (heading stays put)
-            win.setFrame(f, display: true, animate: true)
+            // Glide on the brand ease (motion.ease-warm), slower than a control tick so a step/mode change
+            // reads as ONE smooth expansion. Must match the content animation in OnboardingView.scheduleStep
+            // (same bezier + 0.38s) — otherwise AppKit's default resize curve fights the SwiftUI content.
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.38
+                ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 0.61, 0.36, 1)
+                win.animator().setFrame(f, display: true)
+            }
         } else {
             win.setFrame(f, display: true, animate: false)  // first fit (on open): size to content…
             win.center()                                    // …then center on the main display

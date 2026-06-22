@@ -879,6 +879,20 @@ final class AppModel {
         state.globalWarmth.kelvin(warmestPoint: state.warmestPoint)
     }
 
+    /// The Kelvin the engine is ACTUALLY applying right now (the ramped target), vs `globalKelvin`
+    /// which is the configured peak. Equal in Always-on; in Sunset it tracks the time-of-day ramp
+    /// (neutral by day → peak by night). Drives the live, locked popover readout.
+    var liveKelvin: Kelvin {
+        state.resolvedWarmth.kelvin(warmestPoint: state.warmestPoint)
+    }
+
+    /// In Sunset mode the popover warmth slider is LOCKED: warmth is set automatically by time of
+    /// day, so the menu-bar control shows the live value read-only and points to Settings for the
+    /// maximum. (Always-on keeps the slider editable; off hides it.)
+    var isWarmthLockedInSunset: Bool {
+        state.isEnabled && ScheduleModeOption(state.scheduleMode) == .followSunset
+    }
+
     /// True when the screen is actually being warmed right now — drives the menu-bar icon's amber
     /// "active" state. Mirrors the `warmingNow` stats signal (minus the analytics-only `statsEnabled`
     /// gate): enabled, the schedule says warm now, and not mid-reveal.

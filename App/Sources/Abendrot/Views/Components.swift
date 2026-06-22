@@ -35,6 +35,10 @@ struct WarmSlider: View {
     /// Cozy mode active — the thumb crossfades into a glowing fireball and the warm end reads "Warmest"
     /// (founder). Set live by the onboarding warmth step; the popover/Settings sliders leave it false.
     var cozy: Bool = false
+    /// Locked (read-only): Sunset mode sets warmth automatically by time of day, so the popover slider
+    /// shows the live value but can't be dragged. The track keeps its full warm colour (the value must
+    /// stay honest); a lock badge rides the thumb and a hover tooltip explains why. Editable elsewhere.
+    var isLocked: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// True while the thumb is being pressed/dragged — drives the Liquid-Glass "grab" feedback
@@ -185,7 +189,17 @@ struct WarmSlider: View {
 
                 thumbView
                     .frame(width: thumbSize, height: thumbSize)
-                    .scaleEffect(isPressing ? 1.12 : 1.0)
+                    // Lock badge rides the thumb in Sunset mode (read-only). Dark plum reads on the
+                    // cream glass thumb; crossfades in so toggling modes doesn't pop.
+                    .overlay {
+                        if isLocked {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: thumbSize * 0.46, weight: .bold))
+                                .foregroundStyle(Theme.Color.inkOnAccent)
+                                .transition(.opacity)
+                        }
+                    }
+                    .scaleEffect((isPressing && !isLocked) ? 1.12 : 1.0)
                     // Snappy, well-damped press feedback — settles fast so rapid clicks don't throb.
                     .animation(.spring(response: 0.2, dampingFraction: 0.86), value: isPressing)
                     // Visual "click": a quick scale pop on each detent (multiplies with the press scale
@@ -211,6 +225,7 @@ struct WarmSlider: View {
                 DragGesture(minimumDistance: 0)
                     .updating($isPressing) { _, state, _ in state = true }
                     .onChanged { value in
+                        guard !isLocked else { return }   // Sunset: read-only, warmth is set by time of day
                         let target = Double((value.location.x - thumbSize / 2) / usable).clamped01
                         // Detent = which notch line the thumb has PASSED (floor, not round): the thumb pop
                         // fires the instant the thumb CENTER crosses a notch, exactly in line with the marks.
@@ -233,12 +248,17 @@ struct WarmSlider: View {
             )
         }
         .frame(height: max(thumbSize, 22))
+        // Native hover tooltip explaining the lock (reinforces the popover's visible caption).
+        .help(isLocked ? "In Sunset mode, Abendrot sets your warmth automatically by time of day. Change your maximum in Settings." : "")
         // No `.focusable()`: a menu-bar NSPopover doesn't do tab-traversal, so it only produced a
         // stray focus ring on click. VoiceOver still adjusts via the action below.
         .accessibilityElement()
         .accessibilityLabel("Warmth")
-        .accessibilityValue("\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent")
+        .accessibilityValue(isLocked
+            ? "\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent, locked — set automatically in Sunset mode"
+            : "\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent")
         .accessibilityAdjustableAction { direction in
+            guard !isLocked else { return }   // Sunset: read-only
             switch direction {
             case .increment: nudge(0.05)
             case .decrement: nudge(-0.05)

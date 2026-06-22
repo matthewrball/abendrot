@@ -292,8 +292,9 @@ struct ExcludeRemove: ParsableCommand {
     @Flag(name: .long) var json = false
 
     func run() throws {
+        let id = try validatedBundleID(bundleID)
         let current = Control.configuredExcludedApps()
-        let next = Set(current).subtracting([bundleID]).sorted()
+        let next = Set(current).subtracting([id]).sorted()
         try applySettings(SettingsPatch(excludedApps: next), json: json)
     }
 }

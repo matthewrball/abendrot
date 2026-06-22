@@ -697,6 +697,9 @@ public actor WarmthEngine {
             solarCoordinate: solarCoordinate
         )
         box.value.isScheduleActiveNow = decision.isActiveNow
+        // Publish the warmth actually being applied (the ramped target) so the popover can show a
+        // live, locked Sunset readout: `.off` (neutral) by day, ramping to `globalWarmth` by night.
+        box.value.resolvedWarmth = decision.target
 
         // Global gates (master enable, schedule, hold-to-reveal). The excluded-app suspend is applied
         // PER DISPLAY below, so on a multi-monitor setup only the display(s) the excluded app occupies

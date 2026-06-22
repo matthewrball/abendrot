@@ -37,6 +37,13 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(next, ["com.a.app"])
     }
 
+    func testExcludeRemoveUsesValidatedID() throws {
+        let current = ["com.a.app", "com.figma.Desktop"]
+        let id = try validatedBundleID("  com.figma.Desktop  ")
+        let next = Set(current).subtracting([id]).sorted()
+        XCTAssertEqual(next, ["com.a.app"])
+    }
+
     // MARK: Kelvin → strength curve (must invert WarmthLevel.kelvin and stay monotonic)
 
     func testWarmthCurveEndpoints() {
