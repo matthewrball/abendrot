@@ -45,3 +45,4 @@ release-scratch/
 # Agent / tooling state (internal — never publish)
 .omc/
 .baton/
+outputs/
