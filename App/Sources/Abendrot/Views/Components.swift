@@ -401,8 +401,8 @@ struct KelvinInfoButton: View {
 // the EXACT attenuation the app applies to the blue channel vs the neutral 6500K white point —
 // `rgbGain(for:).blue` is 1.0 at 6500K and falls toward 0 as it warms, so (1 − blueGain) is the
 // fraction of blue-channel light removed — already ~1.0 by ~1900K (blue hits 0 there), so the everyday
-// warmest setting AND all of Cozy sit at the cap. Capped at 0.99 to keep a 1% nod to residual blue
-// (backlight / panel leakage) — never a claim of TOTAL elimination. An estimate of emitted blue vs the standard
+// warmest setting (Cozy off) AND the deepest Cozy end both land at the 0.95 cap. Capped at 0.95 to
+// acknowledge residual blue (backlight / panel leakage) — never a claim of total elimination. An estimate of emitted blue vs the standard
 // white point, NOT a measured melanopic/circadian dose (that needs the panel's spectrum, which we
 // don't have).
 struct BlueLightReductionLabel: View {
@@ -414,7 +414,7 @@ struct BlueLightReductionLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var percent: Int {
-        let reduction = min(0.99, max(0, 1 - rgbGain(for: kelvin).blue))
+        let reduction = min(0.95, max(0, 1 - rgbGain(for: kelvin).blue))
         return Int((reduction * 100).rounded())
     }
 
