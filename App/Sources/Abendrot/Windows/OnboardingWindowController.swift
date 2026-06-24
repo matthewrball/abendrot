@@ -23,94 +23,10 @@ import SwiftUI
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private static var shared: OnboardingWindowController?
-    private static let defaultHeight: CGFloat = 355
-    /// First fit (on open) is instant; later fits follow SwiftUI's measured height.
+    private static let initialContentSize = OnboardingLayout.initialContentSize
     private var hasFitContent = false
+    private var pendingResize: (height: CGFloat, animated: Bool)?
     private var resizeTask: Task<Void, Never>?
-
-    /// Resize the window so it hugs `contentHeight`, keeping the width + TOP edge fixed.
-    /// SwiftUI reports start/end layout sizes here; larger jumps are interpolated top-pinned.
-    static func fitContentHeight(_ contentHeight: CGFloat) {
-        guard contentHeight > 1, let ctrl = shared, let win = ctrl.window else { return }
-        let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
-        let target = max(contentHeight + titlebar, defaultHeight)
-        let current = win.frame
-        guard abs(current.height - target) > 0.5 else {
-            ctrl.hasFitContent = true
-            return
-        }
-        if ctrl.hasFitContent {
-            ctrl.setFrameHeight(target)
-        } else {
-            ctrl.resizeTask?.cancel()
-            ctrl.resizeTask = Task { @MainActor [weak ctrl, weak win] in
-                guard let ctrl, let win else { return }
-                try? await Task.sleep(nanoseconds: 1_000_000)
-                guard !Task.isCancelled else { return }
-                var f = win.frame
-                f.size.height = target
-                win.setFrame(f, display: false, animate: false)  // first fit (on open): size to content…
-                win.center()                                     // …then center on the main display
-                ctrl.hasFitContent = true
-                ctrl.resizeTask = nil
-            }
-            return
-        }
-        ctrl.hasFitContent = true
-    }
-
-    private func setFrameHeight(_ target: CGFloat) {
-        guard let win = window else { return }
-        resizeTask?.cancel()
-
-        resizeTask = Task { @MainActor [weak self, weak win] in
-            guard let self, let win else { return }
-            // Preference updates are emitted during SwiftUI/AppKit layout. Mutating the NSWindow frame
-            // inside that same display cycle can trip AppKit's constraint re-entrancy guard.
-            try? await Task.sleep(nanoseconds: 1_000_000)
-            guard !Task.isCancelled else { return }
-
-            let current = win.frame
-            let delta = abs(current.height - target)
-            if delta < 8 {
-                var f = current
-                f.size.height = target
-                f.origin.y = current.maxY - target          // keep the top edge fixed
-                win.setFrame(f, display: false, animate: false)
-                self.resizeTask = nil
-                return
-            }
-
-            let startFrame = current
-            let startHeight = current.height
-            let pinnedTop = current.maxY
-            let duration: TimeInterval = 0.38
-            let start = CACurrentMediaTime()
-
-            while !Task.isCancelled {
-                let elapsed = CACurrentMediaTime() - start
-                let progress = min(1, max(0, elapsed / duration))
-                let eased = Self.easeWarm(progress)
-                let height = startHeight + (target - startHeight) * eased
-
-                var f = startFrame
-                f.size.height = height
-                f.origin.y = pinnedTop - height
-                win.setFrame(f, display: false, animate: false)
-
-                if progress >= 1 { break }
-                try? await Task.sleep(nanoseconds: 16_000_000)
-            }
-
-            if !Task.isCancelled { self.resizeTask = nil }
-        }
-    }
-
-    private static func easeWarm(_ t: TimeInterval) -> CGFloat {
-        let p = max(0, min(1, t))
-        let u = 1 - p
-        return CGFloat((3 * u * u * p * 0.61) + (3 * u * p * p) + (p * p * p))
-    }
 
     /// Open (or re-focus) the onboarding window for the given model.
     static func show(model: AppModel) {
@@ -129,10 +45,14 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    static func fitContentHeight(_ height: CGFloat, animated: Bool) {
+        shared?.fitContentHeight(height, animated: animated)
+    }
+
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: Self.defaultHeight),
-            // `.fullSizeContentView` MUST be present at creation for the glass chrome. A fixed card:
+            contentRect: NSRect(origin: .zero, size: Self.initialContentSize),
+            // `.fullSizeContentView` MUST be present at creation for the glass chrome. A controlled card:
             // no `.resizable`/`.miniaturizable` — the only traffic light is close.
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
@@ -147,14 +67,36 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         // double border.) Dragging is handled by a SwiftUI drag background in OnboardingView (grab-anywhere,
         // slider-safe), so the window stays NOT movable-by-background — that would steal the WarmSlider's drag.
         window.isMovableByWindowBackground = false
-        window.center()
 
         // `onFinish` just closes the window; all completion bookkeeping lives in `windowWillClose`
         // so the finish path and the close-button path converge on one site.
-        let hosting = NSHostingController(
-            rootView: OnboardingView(model: model) { [weak window] in window?.close() }
+        let contentView = NSView(frame: NSRect(origin: .zero, size: Self.initialContentSize))
+        contentView.autoresizesSubviews = true
+        contentView.wantsLayer = true
+        contentView.layer?.masksToBounds = true
+
+        let hosting = NSHostingView(
+            rootView: OnboardingView(
+                model: model,
+                onFinish: { [weak window] in window?.close() },
+                onHeightChange: { height, animated in
+                    OnboardingWindowController.fitContentHeight(height, animated: animated)
+                }
+            )
         )
-        window.contentViewController = hosting
+        hosting.frame = contentView.bounds
+        hosting.autoresizingMask = [.width, .height]
+        hosting.sizingOptions = []
+        hosting.wantsLayer = true
+        hosting.layer?.masksToBounds = true
+        contentView.addSubview(hosting)
+
+        // Do not install the SwiftUI host as `contentViewController`: on macOS 26 its window-layout
+        // observer can try to auto-resize the NSWindow from inside AppKit's display cycle. The plain AppKit
+        // content view owns the backing size; SwiftUI only fills that box.
+        window.contentView = contentView
+        window.setContentSize(Self.initialContentSize)
+        window.center()
 
         super.init(window: window)
         window.delegate = self
@@ -162,6 +104,54 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    private func fitContentHeight(_ height: CGFloat, animated: Bool) {
+        guard height > 1 else { return }
+        pendingResize = (height, animated)
+        resizeTask?.cancel()
+        resizeTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self?.applyPendingResize()
+        }
+    }
+
+    private func applyPendingResize() {
+        guard let pendingResize else { return }
+        self.pendingResize = nil
+        resizeTask = nil
+        let shouldCenter = !hasFitContent
+        resizeContent(to: pendingResize.height, animated: pendingResize.animated && hasFitContent, center: shouldCenter)
+        hasFitContent = true
+    }
+
+    private func resizeContent(to height: CGFloat, animated: Bool, center: Bool) {
+        guard let window else { return }
+        let contentHeight = min(
+            max(height, OnboardingLayout.minimumContentHeight),
+            OnboardingLayout.maximumContentHeight
+        )
+        var frame = window.frame
+        guard abs(frame.height - contentHeight) > 0.5 || abs(frame.width - OnboardingLayout.contentWidth) > 0.5 else { return }
+
+        frame.origin.y = frame.maxY - contentHeight
+        frame.size = NSSize(width: OnboardingLayout.contentWidth, height: contentHeight)
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Theme.Motion.durOnboardingResize
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 0.86, 0.28, 1)
+                context.allowsImplicitAnimation = true
+                window.animator().setFrame(frame, display: true)
+            } completionHandler: {
+                Task { @MainActor in
+                    window.contentView?.needsDisplay = true
+                }
+            }
+        } else {
+            window.setFrame(frame, display: true)
+            if center { window.center() }
+        }
+    }
 
     // Front the window. The activation-policy `enter()` is owned by `show()` (once per open), NOT
     // here — `focus()` runs on every re-focus and must stay balanced against the single `leave()`.

@@ -44,6 +44,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 // marked TODO and wired in a later milestone.
 struct SettingsView: View {
     @Bindable var model: AppModel
+    /// Screenshot harness only: render the detail column WITHOUT its ScrollView so the view hugs the
+    /// tab's natural height (the live window does this via `fitDetailContentHeight`; ImageRenderer can't).
+    var scrolls: Bool = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -53,6 +56,7 @@ struct SettingsView: View {
                     ForEach(SettingsTab.allCases) { tab in
                         SettingsSidebarButton(
                             tab: tab,
+                            titleText: tab == .displays && model.state.displays.count == 1 ? "Display" : tab.title,
                             isSelected: model.settingsTab == tab,
                             reduceMotion: reduceMotion
                         ) {
@@ -85,23 +89,30 @@ struct SettingsView: View {
 
             Divider()
 
-            ScrollView {
-                tabBody
-                    .padding(24)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(GeometryReader { proxy in
-                        // Report the current tab's natural content height so the window can hug it.
-                        Color.clear.preference(key: SettingsContentHeightKey.self, value: proxy.size.height)
-                    })
+            if scrolls {
+                ScrollView { detailColumn }
+                    .scrollContentBackground(.hidden)
+                    .onPreferenceChange(SettingsContentHeightKey.self) { height in
+                        Task { @MainActor in SettingsWindowController.fitDetailContentHeight(height) }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                detailColumn
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .scrollContentBackground(.hidden)
-            .onPreferenceChange(SettingsContentHeightKey.self) { height in
-                Task { @MainActor in SettingsWindowController.fitDetailContentHeight(height) }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 680, minHeight: 480)
         .background(FrostBackground())
+    }
+
+    private var detailColumn: some View {
+        tabBody
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(GeometryReader { proxy in
+                // Report the current tab's natural content height so the window can hug it.
+                Color.clear.preference(key: SettingsContentHeightKey.self, value: proxy.size.height)
+            })
     }
 
     @ViewBuilder
@@ -130,6 +141,7 @@ private struct SettingsContentHeightKey: PreferenceKey {
 
 private struct SettingsSidebarButton: View {
     let tab: SettingsTab
+    let titleText: String
     let isSelected: Bool
     let reduceMotion: Bool
     let action: () -> Void
@@ -138,7 +150,7 @@ private struct SettingsSidebarButton: View {
     var body: some View {
         Button(action: action) {
             Label {
-                Text(tab.title)
+                Text(titleText)
                     .font(Theme.Typography.ui(13, weight: .semibold))
                     .lineLimit(1)
                     .allowsTightening(true)

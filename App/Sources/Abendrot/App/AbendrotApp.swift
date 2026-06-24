@@ -151,6 +151,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Marketing/dev screenshot harness: if ABENDROT_SHOTS=<dir> is set, render every product screen to
+        // PNGs and exit BEFORE any engine / menu-bar / login-item setup runs. No-op for normal launches.
+        MainActor.assumeIsolated { ScreenshotHarness.runIfRequested() }
         // Start as a menu-bar-only agent; windows raise it via AppActivationPolicy.
         NSApp.setActivationPolicy(.accessory)
         registerLaunchAtLoginByDefaultIfNeeded()
@@ -187,5 +190,96 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
+    }
+}
+
+// MARK: - Screenshot harness (marketing / dev)
+//
+// Launch with ABENDROT_SHOTS=<dir> to render every product screen — the popover, each Settings
+// tab, and each onboarding step — to PNGs via ImageRenderer, then exit. Hooked at the very top of
+// `applicationDidFinishLaunching`, so it runs BEFORE the engine / menu bar / login item. Uses the
+// side-effect-free `AppModel(previewState:)` (the same path #Previews use) and forces the
+// Reduce-Transparency SOLID ember fallback so the glass surfaces render opaque — ImageRenderer
+// can't capture the live `NSVisualEffectView` material. Dressed onto the brand backdrop downstream.
+@MainActor
+enum ScreenshotHarness {
+    static func runIfRequested() {
+        guard let dir = ProcessInfo.processInfo.environment["ABENDROT_SHOTS"], !dir.isEmpty else { return }
+        let out = URL(fileURLWithPath: dir, isDirectory: true)
+        try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+
+        NSApp.activate(ignoringOtherApps: true)
+        shot("popover", width: 330, into: out) {
+            PopoverView(model: AppModel(previewState: MockWarmthState.warming))
+        }
+        for tab in SettingsTab.allCases {
+            let model = AppModel(previewState: MockWarmthState.warming)
+            model.settingsTab = tab
+            shot("settings-\(tab.rawValue)", width: 720, into: out) {
+                SettingsView(model: model, scrolls: false)
+            }
+        }
+        for (name, step, scheduleOption) in [("welcome", OnboardingStep.welcome, ScheduleModeOption.followSunset),
+                                             ("schedule", .schedule, .followSunset),
+                                             ("schedule-alwayson", .schedule, .alwaysOn),
+                                             ("warmth", .warmth, .followSunset),
+                                             ("allset", .allSet, .followSunset)] {
+            shot("onboarding-\(name)", width: 320, into: out) {
+                OnboardingView(model: AppModel(previewState: MockWarmthState.warming),
+                               onFinish: {}, initialStep: step, initialScheduleOption: scheduleOption)
+            }
+        }
+        FileHandle.standardError.write(Data("[shots] done -> \(dir)\n".utf8))
+        exit(0)
+    }
+
+    private static func shot<V: View>(_ name: String, width: CGFloat, into dir: URL,
+                                      @ViewBuilder _ make: () -> V) {
+        let root = make()
+            .frame(width: width)
+            .fixedSize(horizontal: false, vertical: true)
+            .environment(\.colorScheme, .dark)
+            // Uniform window rounding for the product-shot series — continuous corners at the popover's
+            // own radius (Theme.Radius.card = 22), so every screen reads as one macOS window. The light
+            // rim border + shadow are added downstream in compose_shots.py.
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        let hosting = NSHostingView(rootView: AnyView(root))
+        hosting.layoutSubtreeIfNeeded()
+        let size = hosting.fittingSize
+        guard size.width > 1, size.height > 1 else {
+            FileHandle.standardError.write(Data("[shots] FAILED \(name): zero size\n".utf8)); return
+        }
+        hosting.frame = NSRect(origin: .zero, size: size)
+
+        // Host in a REAL on-screen window (bottom-left of the main display, so it adopts the 2x backing
+        // scale) — native controls (NSSwitch, search fields) only lay out and DRAW inside a live window.
+        // ImageRenderer renders those as broken placeholders; AppKit's cacheDisplay draws them for real.
+        let origin = NSScreen.main?.frame.origin ?? .zero
+        let window = NSWindow(contentRect: NSRect(origin: origin, size: size),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = hosting
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = false
+        window.orderFrontRegardless()
+        // Don't let a text field (e.g. the city autocomplete) grab focus and pop its dropdown open over
+        // the content — product shots want every field at rest.
+        window.makeFirstResponder(nil)
+
+        // Let SwiftUI commit the hosting tree + its native subviews AND let any on-appear animations
+        // (the rolling blue-light %, the slider settling) finish before capturing — else they're caught mid-roll.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.7))
+        window.makeFirstResponder(nil)
+        hosting.layoutSubtreeIfNeeded()
+
+        guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
+            FileHandle.standardError.write(Data("[shots] FAILED \(name): no rep\n".utf8)); window.orderOut(nil); return
+        }
+        hosting.cacheDisplay(in: hosting.bounds, to: rep)
+        window.orderOut(nil)
+        if let data = rep.representation(using: NSBitmapImageRep.FileType.png, properties: [:]) {
+            try? data.write(to: dir.appendingPathComponent("\(name).png"))
+            FileHandle.standardError.write(Data("[shots] \(name): \(rep.pixelsWide)x\(rep.pixelsHigh)\n".utf8))
+        }
     }
 }
