@@ -517,7 +517,10 @@ private var manualDetail: some View {
 
     private func applyScheduleOption(_ option: ScheduleModeOption) {
         guard option != scheduleOption else { return }
-        scheduleOption = option
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            scheduleOption = option
+        }
         model.setScheduleMode(option.toScheduleMode())
     }
 
