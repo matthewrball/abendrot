@@ -27,10 +27,8 @@ enum OnboardingStep: Int, CaseIterable {
 enum OnboardingLayout {
     static let contentWidth: CGFloat = 320
     static let welcomeHeight: CGFloat = 395
-    static let scheduleAlwaysOnHeight: CGFloat = 380
     static let scheduleSunsetHeight: CGFloat = 600
     static let scheduleHeaderHeight: CGFloat = 210
-    static let scheduleDetailHeight: CGFloat = 215
     static let warmthHeight: CGFloat = 520
     static let allSetHeight: CGFloat = 516
     static let minimumContentHeight: CGFloat = 300
