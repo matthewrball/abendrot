@@ -290,6 +290,7 @@ struct OnboardingView: View {
             PrimaryButton(title: isShowingSunsetDetail ? "Continue" : "Looks right") { advance() }
                 .padding(.bottom, 20)
         }
+        .frame(maxHeight: .infinity)
     }
     .frame(maxHeight: .infinity, alignment: .top)
     .onAppear {
