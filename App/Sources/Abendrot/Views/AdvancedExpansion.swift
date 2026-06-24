@@ -71,7 +71,7 @@ struct AdvancedExpansion: View {
 
     private var revealModeRow: some View {
         HStack(spacing: 12) {
-            Label("Reveal behavior", systemImage: "eye")
+            Label("Reveal mode", systemImage: "eye")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
             Spacer()

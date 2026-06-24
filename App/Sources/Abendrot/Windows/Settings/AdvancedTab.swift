@@ -49,9 +49,6 @@ struct AdvancedTab: View {
 
                 // Hold vs Toggle — on-brand glass switcher.
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Behavior")
-                        .font(Theme.Typography.ui(12, weight: .medium))
-                        .foregroundStyle(Theme.Color.textMuted)
                     HStack {
                         BrandSegmentedControl(
                             options: RevealMode.allCases,
@@ -72,18 +69,19 @@ struct AdvancedTab: View {
             DividerLine()
             ExcludedAppsControl(model: model)
 
-            DividerLine()
-            // Emergency reset, relocated from the Displays page: the forceful gamma/DDC
-            // restore kept as a quiet safety net without cluttering the main Displays view.
-            Button(role: .destructive) {
-                model.setEnabled(false)
-                model.restoreAllDisplays()
-            } label: {
-                Label("Restore all displays to neutral", systemImage: "arrow.counterclockwise")
+            if model.state.isEnabled {
+                DividerLine()
+                // Emergency reset, relocated from the Displays page: the forceful gamma/DDC
+                // restore kept as a quiet safety net without cluttering the main Displays view.
+                Button(role: .destructive) {
+                    model.setEnabled(false)
+                    model.restoreAllDisplays()
+                } label: {
+                    let multiple = model.state.displays.count > 1
+                    Label(multiple ? "Restore all displays to True Color" : "Restore display to True Color", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.liquidGlass)
             }
-            Text("Restore every display to true color. Disable warming.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textFaint)
         }
     }
 }
@@ -123,6 +121,7 @@ private struct ExcludedAppsControl: View {
             } label: {
                 Label("Add app…", systemImage: "plus")
             }
+            .buttonStyle(.liquidGlass)
             .padding(.top, 2)
         }
     }

@@ -21,6 +21,13 @@ struct CityAutocomplete: View {
     /// so settling the field text (which recomputes `filteredCities`) can't reflow the list mid-fade.
     @State private var closingSnapshot: [MajorCities.City]?
 
+    private var autoLabel: String {
+        if let abbreviation = TimeZone.current.abbreviation() {
+            return "Auto - \(abbreviation)"
+        }
+        return "Auto"
+    }
+
     /// Sentinel id for the pinned "Auto (from time zone)" row so it joins the keyboard highlight cycle.
     private let autoID = "__auto__"
 
@@ -137,7 +144,7 @@ struct CityAutocomplete: View {
 
     private var dropdown: some View {
         VStack(spacing: 4) {
-            cityRow(title: "Auto", systemImage: "globe",
+            cityRow(title: autoLabel, systemImage: "globe",
                     selected: selectedCity == nil, highlighted: highlightedID == autoID) {
                 selectAuto()
             }
@@ -260,7 +267,7 @@ struct CityAutocomplete: View {
         // Show the neutral "Auto (from time zone)" by default — NOT the derived representative city, which
         // can read as wrong (e.g. "Los Angeles" to an SF user) and overstates precision. Users opt in to a
         // city for accuracy. Matches the dropdown's own "Auto" row.
-        return "Auto"
+        return autoLabel
     }
 
     private var filteredCities: [MajorCities.City] {
