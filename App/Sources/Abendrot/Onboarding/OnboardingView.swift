@@ -26,13 +26,11 @@ enum OnboardingStep: Int, CaseIterable {
 
 enum OnboardingLayout {
     static let contentWidth: CGFloat = 320
-    static let welcomeHeight: CGFloat = 395
-    static let scheduleAlwaysOnHeight: CGFloat = 380
-    static let scheduleSunsetHeight: CGFloat = 570
+    static let welcomeHeight: CGFloat = 375
+    static let scheduleSunsetHeight: CGFloat = 580
     static let scheduleHeaderHeight: CGFloat = 210
-    static let scheduleDetailHeight: CGFloat = 215
-    static let warmthHeight: CGFloat = 520
-    static let allSetHeight: CGFloat = 516
+    static let warmthHeight: CGFloat = 500
+    static let allSetHeight: CGFloat = 496
     static let minimumContentHeight: CGFloat = 300
     static let maximumContentHeight: CGFloat = 665
 
@@ -65,10 +63,12 @@ struct OnboardingView: View {
         self.onHeightChange = onHeightChange
         self._step = State(initialValue: initialStep)
         self._scheduleOption = State(initialValue: initialScheduleOption)
+        self._presentationScheduleOption = State(initialValue: initialScheduleOption)
     }
 
     @State private var step: OnboardingStep
     @State private var scheduleOption: ScheduleModeOption = .followSunset
+    @State private var presentationScheduleOption: ScheduleModeOption = .followSunset
     // Warmth defaults to the warmest ONCE (first time the schedule step appears), so a return visit doesn't
     // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
     // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
@@ -179,7 +179,6 @@ struct OnboardingView: View {
             Spacer(minLength: 0)
 
             PrimaryButton(title: "Get started") { advance() }
-                .padding(.bottom, 20)
         }
     }
 
@@ -243,7 +242,6 @@ struct OnboardingView: View {
                 model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
                 advance()
             }
-            .padding(.bottom, 20)
         }
         // Force the warm preview so the screen blooms regardless of the chosen mode/time — the one
         // guaranteed "this is what warm looks like" moment, starting at the warmest. Warming is already
@@ -267,7 +265,6 @@ struct OnboardingView: View {
         ZStack(alignment: .top) {
             scheduleHeader
                 .frame(height: OnboardingLayout.scheduleHeaderHeight, alignment: .top)
-                .transaction { $0.animation = nil }
 
             VStack(spacing: 0) {
                 Color.clear.frame(height: OnboardingLayout.scheduleHeaderHeight + 13)
@@ -287,8 +284,7 @@ struct OnboardingView: View {
 
             Spacer(minLength: 0)
 
-            PrimaryButton(title: isShowingSunsetDetail ? "Continue" : "Looks right") { advance() }
-                .padding(.bottom, 20)
+            PrimaryButton(title: presentationScheduleOption == .followSunset ? "Continue" : "Looks right") { advance() }
         }
         .frame(maxHeight: .infinity)
     }
@@ -334,12 +330,26 @@ private var manualDetail: some View {
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            Text(scheduleSubtitle)
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textMuted)
-                .multilineTextAlignment(.center)
-                .frame(height: 40)
-                .frame(maxWidth: .infinity)
+            ZStack {
+                Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
+                    .opacity(presentationScheduleOption == .alwaysOn ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
+
+                Text("The sun has set — your screen is warming now.")
+                    .opacity(presentationScheduleOption != .alwaysOn && model.isWarmingActive ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
+                    .animation(.easeInOut(duration: 0.25), value: model.isWarmingActive)
+
+                Text("It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
+                    .opacity(presentationScheduleOption != .alwaysOn && !model.isWarmingActive ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
+                    .animation(.easeInOut(duration: 0.25), value: model.isWarmingActive)
+            }
+            .font(Theme.Typography.ui(11.5))
+            .foregroundStyle(Theme.Color.textMuted)
+            .multilineTextAlignment(.center)
+            .frame(height: 40)
+            .frame(maxWidth: .infinity)
 
             ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
         }
@@ -401,7 +411,6 @@ private var manualDetail: some View {
                 }
             }
             .padding(.top, 2)
-            .padding(.bottom, 20)
         }
     }
 
@@ -518,7 +527,23 @@ private var manualDetail: some View {
 
     private func applyScheduleOption(_ option: ScheduleModeOption) {
         guard option != scheduleOption else { return }
-        scheduleOption = option
+        
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        // ModeControl strips animations from its tap events to protect its own layout.
+        // We break out of its transaction synchronously so our UI updates can crossfade.
+        DispatchQueue.main.async {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                scheduleOption = option
+            }
+        }
+        
+        // Decouple text crossfades from the window resize layout pass to guarantee they animate:
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                presentationScheduleOption = option
+            }
+        }
+        
         model.setScheduleMode(option.toScheduleMode())
     }
 
@@ -577,12 +602,24 @@ struct PrimaryButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(Theme.Typography.ui(13, weight: .semibold))
-                .foregroundStyle(Theme.Color.inkOnAccent)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(
+            ZStack {
+                Text("Continue")
+                    .opacity(title == "Continue" ? 1 : 0)
+                Text("Looks right")
+                    .opacity(title == "Looks right" ? 1 : 0)
+                Text("Open menu bar")
+                    .opacity(title == "Open menu bar" ? 1 : 0)
+                Text("Done")
+                    .opacity(title == "Done" ? 1 : 0)
+                Text("Get started")
+                    .opacity(title == "Get started" ? 1 : 0)
+            }
+            .font(Theme.Typography.ui(13, weight: .semibold))
+            .foregroundStyle(Theme.Color.inkOnAccent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .animation(.easeInOut(duration: 0.25), value: title)
+            .background(
                     LinearGradient(
                         colors: [Theme.Color.accentHighlight, Theme.Color.accent],
                         startPoint: .top, endPoint: .bottom
