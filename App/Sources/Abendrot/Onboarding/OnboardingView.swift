@@ -283,11 +283,6 @@ struct OnboardingView: View {
                     .allowsHitTesting(!isShowingSunsetDetail)
                     .accessibilityHidden(isShowingSunsetDetail)
             }
-            .frame(
-                height: 240,
-                alignment: .top
-            )
-            .clipped()
             .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isShowingSunsetDetail)
 
             Spacer(minLength: 0)

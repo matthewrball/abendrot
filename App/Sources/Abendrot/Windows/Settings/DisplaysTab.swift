@@ -7,7 +7,7 @@ struct DisplaysTab: View {
     @Bindable var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: "Displays", subtitle: "Each connected display and how it's warmed.")
+            TabHeader(title: model.state.displays.count == 1 ? "Display" : "Displays", subtitle: "Each connected display and how it's warmed.")
             VStack(spacing: 12) {
                 ForEach(model.state.displays) { display in
                     DisplayConfigRow(display: display, model: model)
