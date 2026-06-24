@@ -329,9 +329,13 @@ private var manualDetail: some View {
                 .foregroundStyle(Theme.Color.textPrimary)
 
             ZStack {
-                Text(scheduleSubtitle)
-                    .id(scheduleSubtitle)
-                    .transition(.opacity)
+                Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
+                    .opacity(scheduleOption == .alwaysOn ? 1 : 0)
+
+                Text(model.isWarmingActive
+                     ? "The sun has set — your screen is warming now."
+                     : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
+                    .opacity(scheduleOption == .alwaysOn ? 0 : 1)
             }
             .font(Theme.Typography.ui(11.5))
             .foregroundStyle(Theme.Color.textMuted)
@@ -580,9 +584,18 @@ struct PrimaryButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                Text(title)
-                    .id(title)
-                    .transition(.opacity)
+                // If it's a known toggle title, explicitly fade them against each other
+                // Otherwise fallback to just showing the title
+                Text("Continue")
+                    .opacity(title == "Continue" ? 1 : 0)
+                Text("Looks right")
+                    .opacity(title == "Looks right" ? 1 : 0)
+                Text("Open menu bar")
+                    .opacity(title == "Open menu bar" ? 1 : 0)
+                Text("Done")
+                    .opacity(title == "Done" ? 1 : 0)
+                Text("Get started")
+                    .opacity(title == "Get started" ? 1 : 0)
             }
             .font(Theme.Typography.ui(13, weight: .semibold))
             .foregroundStyle(Theme.Color.inkOnAccent)
