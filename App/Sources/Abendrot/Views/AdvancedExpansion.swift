@@ -86,13 +86,15 @@ struct AdvancedExpansion: View {
 
     private var soundsRow: some View {
         HStack {
-            HStack(spacing: 10) {
-                Image(systemName: softTone ? "speaker.wave.2" : "speaker.slash")
-                    .frame(width: 24)
-                    .contentTransition(.symbolEffect(.replace))
-                Text("Sounds")
-                    .font(Theme.Typography.ui(12))
-            }
+            Label(
+                title: { Text("Sounds") },
+                icon: {
+                    Image(systemName: softTone ? "speaker.wave.2" : "speaker.slash")
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 16)
+                }
+            )
+            .font(Theme.Typography.ui(12))
             .foregroundStyle(Theme.Color.textMuted)
             Spacer()
             BrandSegmentedControl(

@@ -26,13 +26,13 @@ enum OnboardingStep: Int, CaseIterable {
 
 enum OnboardingLayout {
     static let contentWidth: CGFloat = 320
-    static let welcomeHeight: CGFloat = 375
+    static let welcomeHeight: CGFloat = 395
     static let scheduleAlwaysOnHeight: CGFloat = 380
     static let scheduleSunsetHeight: CGFloat = 600
     static let scheduleHeaderHeight: CGFloat = 210
     static let scheduleDetailHeight: CGFloat = 215
-    static let warmthHeight: CGFloat = 500
-    static let allSetHeight: CGFloat = 496
+    static let warmthHeight: CGFloat = 520
+    static let allSetHeight: CGFloat = 516
     static let minimumContentHeight: CGFloat = 300
     static let maximumContentHeight: CGFloat = 665
 
@@ -176,7 +176,10 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
+            Spacer(minLength: 0)
+
             PrimaryButton(title: "Get started") { advance() }
+                .padding(.bottom, 20)
         }
     }
 
@@ -231,6 +234,8 @@ struct OnboardingView: View {
             CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
                             enablesAtWarmest: true)
 
+            Spacer(minLength: 0)
+
             PrimaryButton(title: "Looks right") {
                 // Restore the schedule chosen in step 2 (this step forced Always-on so the screen could
                 // bloom regardless of time). Sunset users ease back to neutral in daylight — expected,
@@ -238,6 +243,7 @@ struct OnboardingView: View {
                 model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
                 advance()
             }
+            .padding(.bottom, 20)
         }
         // Force the warm preview so the screen blooms regardless of the chosen mode/time — the one
         // guaranteed "this is what warm looks like" moment, starting at the warmest. Warming is already
@@ -303,10 +309,15 @@ struct OnboardingView: View {
 
 private var manualDetail: some View {
     VStack(spacing: 14) {
-        Text("\(model.globalKelvin.displayValue) K")
-            .font(Theme.Typography.serif(30))
-            .monospacedDigit()
-            .foregroundStyle(Theme.Color.accentHighlight)
+        HStack(spacing: 6) {
+            Text("\(model.globalKelvin.displayValue) K")
+                .font(Theme.Typography.serif(30))
+                .monospacedDigit()
+                .foregroundStyle(Theme.Color.accentHighlight)
+            
+            KelvinInfoButton()
+        }
+        .zIndex(1)
 
         BlueLightReductionLabel(kelvin: model.globalKelvin, cozy: isCozy, animated: !sliderPressing)
 
@@ -359,6 +370,8 @@ private var manualDetail: some View {
             privacyNote
                 .padding(.top, 6)
 
+            Spacer(minLength: 0)
+
             // Two-step CTA: first reveal the menu-bar popover (so the user SEES where Abendrot lives), then
             // finish (founder). The title swaps to "Done" after the first tap.
             VStack(spacing: 10) {
@@ -376,6 +389,7 @@ private var manualDetail: some View {
                 }
             }
             .padding(.top, 2)
+            .padding(.bottom, 20)
         }
     }
 
