@@ -342,7 +342,7 @@ private var manualDetail: some View {
             .multilineTextAlignment(.center)
             .frame(height: 40)
             .frame(maxWidth: .infinity)
-            .animation(.easeInOut(duration: 0.2), value: scheduleSubtitle)
+            .animation(.easeInOut(duration: 0.25), value: scheduleOption)
 
             ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
         }
