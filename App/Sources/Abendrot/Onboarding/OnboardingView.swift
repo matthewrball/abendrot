@@ -63,10 +63,12 @@ struct OnboardingView: View {
         self.onHeightChange = onHeightChange
         self._step = State(initialValue: initialStep)
         self._scheduleOption = State(initialValue: initialScheduleOption)
+        self._presentationScheduleOption = State(initialValue: initialScheduleOption)
     }
 
     @State private var step: OnboardingStep
     @State private var scheduleOption: ScheduleModeOption = .followSunset
+    @State private var presentationScheduleOption: ScheduleModeOption = .followSunset
     // Warmth defaults to the warmest ONCE (first time the schedule step appears), so a return visit doesn't
     // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
     // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
@@ -282,7 +284,7 @@ struct OnboardingView: View {
 
             Spacer(minLength: 0)
 
-            PrimaryButton(title: isShowingSunsetDetail ? "Continue" : "Looks right") { advance() }
+            PrimaryButton(title: presentationScheduleOption == .followSunset ? "Continue" : "Looks right") { advance() }
         }
         .frame(maxHeight: .infinity)
     }
@@ -330,17 +332,17 @@ private var manualDetail: some View {
 
             ZStack {
                 Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
-                    .opacity(scheduleOption == .alwaysOn ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.25), value: scheduleOption)
+                    .opacity(presentationScheduleOption == .alwaysOn ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
 
                 Text("The sun has set — your screen is warming now.")
-                    .opacity(scheduleOption != .alwaysOn && model.isWarmingActive ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.25), value: scheduleOption)
+                    .opacity(presentationScheduleOption != .alwaysOn && model.isWarmingActive ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
                     .animation(.easeInOut(duration: 0.25), value: model.isWarmingActive)
 
                 Text("It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
-                    .opacity(scheduleOption != .alwaysOn && !model.isWarmingActive ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.25), value: scheduleOption)
+                    .opacity(presentationScheduleOption != .alwaysOn && !model.isWarmingActive ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
                     .animation(.easeInOut(duration: 0.25), value: model.isWarmingActive)
             }
             .font(Theme.Typography.ui(11.5))
@@ -532,6 +534,13 @@ private var manualDetail: some View {
         DispatchQueue.main.async {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
                 scheduleOption = option
+            }
+        }
+        
+        // Decouple text crossfades from the window resize layout pass to guarantee they animate:
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                presentationScheduleOption = option
             }
         }
         
