@@ -24,7 +24,7 @@
 
 ---
 
-**Abendrot** (German: *the red glow of sunset*) warms your screen's color temperature across **every** display — built-in *and* external — to support your circadian rhythm in the evening. It has an instant **Reveal True Color** hotkey for color-critical work, a Liquid Glass interface, and zero telemetry by default.
+**Abendrot** warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.
 
 It's the f.lux / Night Shift successor built to do the thing the incumbents quietly fail at: reliably warm **external monitors** and the **buttonless Apple displays** — Studio Display, Pro Display XDR, LG UltraFine — and keep working on the newest Apple Silicon Macs, where the classic gamma trick silently stops warming. Without tracking you.
 
@@ -81,7 +81,7 @@ abendrot reveal --hold 10      # momentary true-color peek, then ease back
 | Turn warming on / off | `abendrot on` · `abendrot off` |
 | Set the schedule mode | `abendrot set mode sunset` *(or `always-on` / `off`)* |
 | Set the warmest point the slider maps to | `abendrot set max-warmth 1900` |
-| Toggle cozy mode (the deepest candle/ember warmth) | `abendrot cozy on` · `abendrot cozy off` |
+| Toggle cozy mode (reaching deep candle/ember warmth) | `abendrot cozy on` · `abendrot cozy off` |
 | Choose hold vs toggle for reveal | `abendrot set reveal-mode hold` *(or `toggle`)* |
 | Set location for the sunset schedule | `abendrot set location --auto` *(or `<lat> <lon>`)* |
 | Exclude an app from warming | `abendrot exclude add com.apple.FinalCut` |
@@ -97,10 +97,10 @@ Machine-readable everywhere: every command takes `--json`, and exit codes are sc
 | | **Abendrot** | Apple Night Shift | f.lux | Redshift |
 |---|---|---|---|---|
 | Platform | macOS 26+ | macOS / iOS | macOS / Windows / Linux | Linux / X11 |
-| Warmest setting | **~1900 K** — the warming curve takes the blue channel to its practical minimum | ~2700–3400 K <sup>1</sup> (Apple publishes no value); never reaches ~1900 K | ~1900 K ("Candle") | Configurable |
-| Blue at the warmest setting | Driven to its practical zero | Reduced, but not eliminated <sup>2</sup> | Deep (candle) | Depends on setting |
+| Warmest setting | Down to 500 K in Cozy mode | ~2700–3400 K <sup>1</sup> (Apple publishes no value); never reaches ~1900 K | ~1900 K ("Candle") | Configurable |
+| Blue at the warmest setting | Driven to zero by 1900 K | Reduced, but not eliminated <sup>2</sup> | Deep (candle) | Depends on setting |
 | Warms Apple's buttonless displays (Studio Display, Pro Display XDR) | Yes | Yes (Apple's own) | No | No |
-| Reliable on third-party external monitors | Yes (layered, with fallback) | Inconsistent <sup>1</sup> | Gamma only; unreliable | X11 only |
+| External & multiple displays | Warms external monitors at the hardware level (DDC), with gamma + overlay fallback - and re-applies when you plug or unplug a screen | Inconsistent <sup>1</sup> | Gamma only; unreliable | X11 only |
 | Shows the actual color temperature + method, per display | Yes | No — a "Less / More Warm" slider | No | Per-output |
 | Reveal-true-color hotkey | Yes (hold) | No | No | Toggle only |
 | Scriptable CLI / AI control | Yes (`abendrot`, `--json`) | No | No | Partial (CLI) |
@@ -122,12 +122,11 @@ Machine-readable everywhere: every command takes `--json`, and exit codes are sc
 
 Abendrot makes no health claims of its own — it links the research and lets you read it. A few starting points, all peer-reviewed:
 
-- The human melatonin-suppression action spectrum peaks in the blue (~459–464 nm) — [Brainard et al., 2001, *J Neurosci*](https://doi.org/10.1523/JNEUROSCI.21-16-06405.2001); [Thapan et al., 2001, *J Physiol*](https://doi.org/10.1111/j.1469-7793.2001.t01-1-00261.x).
-- It's the melanopic (short-wavelength) content of evening screen light that drives the effect — more than overall brightness — [Schoellhorn et al., 2023, *Communications Biology*](https://doi.org/10.1038/s42003-023-04598-4).
-- An expert consensus on supportive evening/night light targets (measured in melanopic terms, not Kelvin) — [Brown et al., 2022, *PLoS Biology*](https://doi.org/10.1371/journal.pbio.3001571).
-- Melatonin suppression is also driven by **light intensity**, with much of the effect at modest indoor levels — so dimming matters too — [Zeitzer et al., 2000, *J Physiol*](https://doi.org/10.1111/j.1469-7793.2000.00695.x).
-- Individual sensitivity to evening light varies more than **50-fold**, so there's no single "correct" setting — [Phillips et al., 2019, *PNAS*](https://doi.org/10.1073/pnas.1901824116).
-- On eye strain: ophthalmologists find no good evidence that screen blue light damages your eyes — blinking, breaks, and the 20‑20‑20 habit help — [American Academy of Ophthalmology, 2024](https://www.aao.org/eye-health/tips-prevention/should-you-be-worried-about-blue-light).
+- **Your clock reads blue differently than your eyes do.** The human melatonin-suppression action spectrum peaks in the blue (~459–464 nm) — [Brainard et al., 2001, *J Neurosci*](https://doi.org/10.1523/JNEUROSCI.21-16-06405.2001); [Thapan et al., 2001, *J Physiol*](https://doi.org/10.1111/j.1469-7793.2001.t01-1-00261.x).
+- **Warmth is a spectral edit, not a sleep claim.** An expert consensus on supportive evening/night light targets (measured in melanopic terms, not Kelvin) — [Brown et al., 2022, *PLoS Biology*](https://doi.org/10.1371/journal.pbio.3001571).
+- **Melanopic load is the better evening word than brightness.** It's the melanopic (short-wavelength) content of evening screen light that drives the effect — more than overall brightness — [Schoellhorn et al., 2023, *Communications Biology*](https://doi.org/10.1038/s42003-023-04598-4).
+- **Dim still matters.** Melatonin suppression is also driven by **light intensity**, with much of the effect at modest indoor levels — so dimming matters too — [Zeitzer et al., 2000, *J Physiol*](https://doi.org/10.1111/j.1469-7793.2000.00695.x).
+- **There is no perfect setting for everyone.** Individual sensitivity to evening light varies more than **50-fold**, so there's no single "correct" setting — [Phillips et al., 2019, *PNAS*](https://doi.org/10.1073/pnas.1901824116).
 
 > Individual responses to light vary widely; these are general-wellness references, not a promise of any outcome. Pair warmth with lower brightness for the biggest reduction in evening light exposure.
 
