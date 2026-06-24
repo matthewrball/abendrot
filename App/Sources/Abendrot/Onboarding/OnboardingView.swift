@@ -263,7 +263,6 @@ struct OnboardingView: View {
         ZStack(alignment: .top) {
             scheduleHeader
                 .frame(height: OnboardingLayout.scheduleHeaderHeight, alignment: .top)
-                .transaction { $0.animation = nil }
 
             VStack(spacing: 0) {
                 Color.clear.frame(height: OnboardingLayout.scheduleHeaderHeight + 13)
@@ -335,8 +334,11 @@ private var manualDetail: some View {
                 .multilineTextAlignment(.center)
                 .frame(height: 40)
                 .frame(maxWidth: .infinity)
+                .contentTransition(.opacity)
+                .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: scheduleSubtitle)
 
             ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
+                .transaction { $0.animation = nil }
         }
     }
 
@@ -576,6 +578,8 @@ struct PrimaryButton: View {
                 .foregroundStyle(Theme.Color.inkOnAccent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: title)
                 .background(
                     LinearGradient(
                         colors: [Theme.Color.accentHighlight, Theme.Color.accent],
