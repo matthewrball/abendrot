@@ -5,7 +5,7 @@ import WarmthKit
 //
 // A UI-facing projection of the contract's `ScheduleMode` (which carries associated
 // values that don't fit a segmented control). Exposes the two user-selectable modes —
-// Sunset · Always on — while the engine's other ScheduleMode cases stay dormant.
+// Sunset · Manual — while the engine's other ScheduleMode cases stay dormant.
 enum ScheduleModeOption: String, CaseIterable, Identifiable {
     case followSunset
     case alwaysOn
@@ -15,7 +15,7 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .followSunset: return "Sunset"
-        case .alwaysOn: return "Always on"
+        case .alwaysOn: return "Manual"
         }
     }
 
@@ -24,7 +24,7 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .followSunset: return "Warms automatically around your local sunset."
-        case .alwaysOn: return "Warms continuously, day and night."
+        case .alwaysOn: return "Stays warm until you turn it off."
         }
     }
 
@@ -51,7 +51,7 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
 
 // MARK: - ModeControl  (A3 "Living Glyph" — chosen finalist)
 //
-// The Schedule either-or (Sunset · Always on) as a larger Liquid-Glass segmented control whose
+// The Schedule either-or (Sunset · Manual) as a larger Liquid-Glass segmented control whose
 // SELECTED segment's glyph comes alive once and then HOLDS: the Sunset sun dips below a horizon;
 // the Always-on sun blooms its rays and settles (no perpetual motion). The selection slides on the
 // brand's warm ease and the chosen segment wears the sunset gradient as lit glass.
@@ -242,7 +242,7 @@ private struct ModeGlyph: View {
         }
     }
 
-    // MARK: Always on — rays bloom and settle (one-shot)
+    // MARK: Manual — rays bloom and settle (one-shot)
 
     private var alwaysGlyph: some View {
         ZStack {

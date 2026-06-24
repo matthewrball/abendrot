@@ -507,7 +507,7 @@ final class AppModel {
         confirmationChime?.play(pitchCents: warming ? 0 : -500, volume: 0.7)   // ~0.35 effective vs the 0.5 master
     }
 
-    /// A soft tick when the user switches Schedule mode (Sunset · Always on), gated by the SAME
+    /// A soft tick when the user switches Schedule mode (Sunset · Manual), gated by the SAME
     /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the Glass graph but
     /// QUIETER and pitched UP into a light "selection" tick — not the warming bloom — and each mode
     /// gets its OWN note (Always-on brighter/higher, Sunset lower), so you hear WHICH mode you picked:
@@ -567,7 +567,7 @@ final class AppModel {
     }
 
     func setScheduleMode(_ mode: ScheduleMode, userInitiated: Bool = true) {
-        // Compare at the UI grain (Sunset · Always on): the dormant cases (.solar/.custom/...) all read
+        // Compare at the UI grain (Sunset · Manual): the dormant cases (.solar/.custom/...) all read
         // as Sunset, so re-selecting one is not a user-visible change and must not tick.
         let changed = ScheduleModeOption(mode) != ScheduleModeOption(state.scheduleMode)
         state.scheduleMode = mode

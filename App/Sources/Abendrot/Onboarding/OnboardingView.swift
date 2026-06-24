@@ -32,9 +32,9 @@ enum OnboardingLayout {
     static let scheduleHeaderHeight: CGFloat = 210
     static let scheduleDetailHeight: CGFloat = 215
     static let warmthHeight: CGFloat = 500
-    static let allSetHeight: CGFloat = 420
+    static let allSetHeight: CGFloat = 465
     static let minimumContentHeight: CGFloat = 300
-    static let maximumContentHeight: CGFloat = 620
+    static let maximumContentHeight: CGFloat = 665
 
     static let initialContentSize = NSSize(width: contentWidth, height: welcomeHeight)
 }
@@ -83,9 +83,9 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 38) {
-            // Skip the top bar on the closing all-set step — it has no stepper or chevron there, so the
-            // empty slot plus the stack spacing would leave a dead gap above the checkmark.
-            if step != .allSet { topBar }
+            // The top bar (stepper + back button). On the closing all-set step, the stepper is hidden
+            // but we still show the back chevron so users can return.
+            topBar
 
             Group {
                 switch step {
@@ -139,7 +139,7 @@ struct OnboardingView: View {
     private var topBar: some View {
         ZStack {
             stepIndicator
-            if step == .warmth {
+            if step == .warmth || step == .allSet {
                 HStack {
                     Button { goBack() } label: {
                         Image(systemName: "chevron.left")
@@ -266,40 +266,60 @@ struct OnboardingView: View {
             VStack(spacing: 0) {
                 Color.clear.frame(height: OnboardingLayout.scheduleHeaderHeight + 13)
 
+            ZStack(alignment: .top) {
                 sunsetDetail
                     .opacity(isShowingSunsetDetail ? 1 : 0)
-                    .frame(
-                        height: isShowingSunsetDetail ? OnboardingLayout.scheduleDetailHeight : 0,
-                        alignment: .top
-                    )
-                    .clipped()
-                    .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isShowingSunsetDetail)
                     .allowsHitTesting(isShowingSunsetDetail)
                     .accessibilityHidden(!isShowingSunsetDetail)
 
-                Spacer(minLength: 0)
+                manualDetail
+                    .opacity(isShowingSunsetDetail ? 0 : 1)
+                    .allowsHitTesting(!isShowingSunsetDetail)
+                    .accessibilityHidden(isShowingSunsetDetail)
+            }
+            .frame(
+                height: isShowingSunsetDetail ? OnboardingLayout.scheduleDetailHeight : 240,
+                alignment: .top
+            )
+            .clipped()
+            .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isShowingSunsetDetail)
 
-                PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
-                    .padding(.bottom, 20)
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-        // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
-        // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
-        // — "Abendrot is now active"; the mode tick then plays on each toggle.
-        .onAppear {
-            // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
-            // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
-            // ONCE only — on a return visit (back from the warmth step) we must NOT re-slam 1.0, or an
-            // Always-on user's dialed warmth would be lost the moment they step back to change the mode.
-            model.setEnabled(true, userInitiated: true)
-            if !hasInitializedWarmth {
-                model.setGlobalWarmth(1.0)
-                hasInitializedWarmth = true
-            }
-            model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+            Spacer(minLength: 0)
+
+            PrimaryButton(title: isShowingSunsetDetail ? "Continue" : "Looks right") { advance() }
+                .padding(.bottom, 20)
         }
     }
+    .frame(maxHeight: .infinity, alignment: .top)
+    .onAppear {
+        model.setEnabled(true, userInitiated: false)
+        if !hasInitializedWarmth {
+            model.setGlobalWarmth(1.0)
+            hasInitializedWarmth = true
+        }
+        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+    }
+}
+
+private var manualDetail: some View {
+    VStack(spacing: 14) {
+        Text("\(model.globalKelvin.displayValue) K")
+            .font(Theme.Typography.serif(30))
+            .monospacedDigit()
+            .foregroundStyle(Theme.Color.accentHighlight)
+
+        BlueLightReductionLabel(kelvin: model.globalKelvin, cozy: isCozy, animated: !sliderPressing)
+
+        WarmSlider(strength: Binding(
+            get: { model.state.globalWarmth.strength },
+            set: { model.setGlobalWarmth($0) }
+        ), model: model, showsHeader: false, cozy: isCozy,
+        onPressingChanged: { sliderPressing = $0 })
+
+        CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
+                        enablesAtWarmest: true)
+    }
+}
 
     private var scheduleHeader: some View {
         VStack(spacing: 13) {
@@ -341,12 +361,18 @@ struct OnboardingView: View {
 
             // Two-step CTA: first reveal the menu-bar popover (so the user SEES where Abendrot lives), then
             // finish (founder). The title swaps to "Done" after the first tap.
-            PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
-                if didOpenMenuBar {
-                    onFinish()
-                } else {
-                    openMenuBarPopover()
-                    didOpenMenuBar = true
+            VStack(spacing: 10) {
+                SecondaryButton(title: "Star on GitHub", icon: "star") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/matthewrball/abendrot")!)
+                }
+
+                PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
+                    if didOpenMenuBar {
+                        onFinish()
+                    } else {
+                        openMenuBarPopover()
+                        didOpenMenuBar = true
+                    }
                 }
             }
             .padding(.top, 2)
@@ -437,7 +463,7 @@ struct OnboardingView: View {
         case .schedule:
             return isShowingSunsetDetail
                 ? OnboardingLayout.scheduleSunsetHeight
-                : OnboardingLayout.scheduleAlwaysOnHeight
+                : 570
         case .warmth:
             return OnboardingLayout.warmthHeight
         case .allSet:
@@ -473,6 +499,10 @@ struct OnboardingView: View {
     }
 
     private func advance() {
+        if step == .schedule && scheduleOption == .alwaysOn {
+            step = .allSet
+            return
+        }
         guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
             onFinish()
             return
@@ -481,11 +511,15 @@ struct OnboardingView: View {
     }
 
     private func goBack() {
+        if step == .allSet && scheduleOption == .alwaysOn {
+            step = .schedule
+            return
+        }
         guard let prev = OnboardingStep(rawValue: step.rawValue - 1) else { return }
         // The warmth step forces an Always-on PREVIEW so the screen blooms regardless of time. Undo it on
         // the way back too — the "Looks right" forward path already restores the real mode — so a Sunset
         // user eases back to neutral in daylight instead of the preview warming lingering on the mode step.
-        // (Back only ever shows on the warmth step.)
+        // (Back only ever shows on the warmth and allSet steps.)
         if step == .warmth {
             model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         }
@@ -531,6 +565,36 @@ struct PrimaryButton: View {
                     ),
                     in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous)
                 )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - SecondaryButton
+
+/// A secondary CTA with a frosted glass background and optional icon.
+struct SecondaryButton: View {
+    let title: String
+    var icon: String? = nil
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                }
+                Text(title)
+            }
+            .font(Theme.Typography.ui(13, weight: .medium))
+            .foregroundStyle(Theme.Color.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .glassSurface(.frost, cornerRadius: Theme.Radius.control - 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous)
+                    .strokeBorder(Theme.Color.line.opacity(0.5), lineWidth: 0.5)
+            )
         }
         .buttonStyle(.plain)
     }

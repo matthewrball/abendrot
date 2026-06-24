@@ -70,7 +70,7 @@ struct GeneralTab: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
                 }
 
-                // Location only matters for Sunset (it estimates your sunset time); hidden for Always on.
+                // Location only matters for Sunset (it estimates your sunset time); hidden for Manual.
                 // Kept visible even when warming is off — a standing preference (founder).
                 if ScheduleModeOption(model.state.scheduleMode) == .followSunset {
                     VStack(alignment: .leading, spacing: 7) {

@@ -243,7 +243,7 @@ struct WarmSlider: View {
         }
         .frame(height: max(thumbSize, 22))
         // Native hover tooltip explaining the lock (reinforces the popover's visible caption).
-        .help(isLocked ? "In Sunset mode, Abendrot sets your warmth automatically by time of day. Change your maximum in Settings." : "")
+        .help(isLocked ? "In Sunset mode, Abendrot sets your warmth automatically by time of day. Adjust your maximum in Settings." : "")
         // No `.focusable()`: a menu-bar NSPopover doesn't do tab-traversal, so it only produced a
         // stray focus ring on click. VoiceOver still adjusts via the action below.
         .accessibilityElement()

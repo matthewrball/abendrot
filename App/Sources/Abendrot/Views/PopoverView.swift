@@ -262,7 +262,7 @@ struct PopoverView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Button { SettingsWindowController.show(model: model) } label: {
                 HStack(spacing: 3) {
-                    Text("Change your maximum in Settings")
+                    Text("Adjust your maximum in Settings")
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 8, weight: .semibold))
                         .accessibilityHidden(true)
@@ -271,7 +271,7 @@ struct PopoverView: View {
                 .foregroundStyle(Theme.Color.accent)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opens Settings to change your maximum warmth")
+            .accessibilityHint("Opens Settings to adjust your maximum warmth")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
