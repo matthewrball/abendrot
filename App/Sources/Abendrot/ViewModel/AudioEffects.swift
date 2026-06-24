@@ -36,7 +36,7 @@ final class ConfirmationChime {
 
 // MARK: - CozyFireSound
 
-/// Quiet native cues for Cozy mode: a small ignition pop on ON, a soft blow on OFF.
+/// Quiet native cues for Cozy mode: a soft blow on ON, a small ignition pop on OFF.
 @MainActor
 final class CozyFireSound {
     private let ignite: NSSound
@@ -53,7 +53,7 @@ final class CozyFireSound {
     }
 
     func play(starting: Bool) {
-        let sound = starting ? ignite : snuff
+        let sound = starting ? snuff : ignite
         sound.stop()
         sound.currentTime = 0
         sound.play()

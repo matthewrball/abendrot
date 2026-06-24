@@ -46,12 +46,11 @@ struct GeneralTab: View {
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: ScheduleModeOption(model.state.scheduleMode))
 
             // Schedule MODE lives here (founder): the menu-bar popover groups on/off + warmth + mode as
-            // one "how it warms" unit, so General is its full desktop twin. The Mode selector now hides
-            // with the master toggle (popover parity); Location stays visible (a standing preference).
+            // one "how it warms" unit, so General is its full desktop twin. The Mode selector and Location
+            // now hide with the master toggle.
             VStack(alignment: .leading, spacing: 12) {
                 // Mode selector hides when warming is off (popover parity — on/off + warmth + mode are one
-                // unit). Location stays visible regardless: a standing preference (where to estimate sunset),
-                // useful even while warming is off (founder).
+                // unit). Location also hides when warming is off.
                 if model.state.isEnabled {
                     VStack(alignment: .leading, spacing: 12) {
                         SectionLabel("Mode")
@@ -71,8 +70,8 @@ struct GeneralTab: View {
                 }
 
                 // Location only matters for Sunset (it estimates your sunset time); hidden for Manual.
-                // Kept visible even when warming is off — a standing preference (founder).
-                if ScheduleModeOption(model.state.scheduleMode) == .followSunset {
+                // Hides when warming is off.
+                if model.state.isEnabled && ScheduleModeOption(model.state.scheduleMode) == .followSunset {
                     VStack(alignment: .leading, spacing: 7) {
                         SectionLabel("Location")
                         Text("Used to estimate your sunset. No location permission required.")
@@ -112,11 +111,7 @@ struct GeneralTab: View {
                 Spacer()
                 Toggle("", isOn: $model.showInMenuBar).labelsHidden()
             }
-            if !model.showInMenuBar {
-                Text("Hidden from the menu bar for this session. Relaunch Abendrot to bring it back.")
-                    .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(Theme.Color.textFaint)
-            }
+
             HStack {
                 Text("Sounds").font(Theme.Typography.ui(13))
                 Spacer()

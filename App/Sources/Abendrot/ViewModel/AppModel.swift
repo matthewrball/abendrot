@@ -532,7 +532,8 @@ final class AppModel {
         expandSwoosh?.play(opening: isAdvancedExpanded, volume: 0.03)
     }
 
-    private func playCozyFireSound(starting: Bool) {
+    /// Internal (not private) so onboarding can play the fire sound when its custom Cozy toggle is flipped.
+    func playCozyFireSound(starting: Bool) {
         guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
         cozyFireSound?.play(starting: starting)
     }

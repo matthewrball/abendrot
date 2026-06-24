@@ -111,6 +111,7 @@ struct CozyModeControl: View {
             // Onboarding: Cozy means "give me the coziest." Turning ON unlocks the deepest ember AND runs the
             // slider all the way to the warmest, so the screen blooms to the maximum instead of holding a
             // mid-slider spot; OFF restores the everyday 1900K ceiling. Animated so the thumb glides to the end.
+            model.playCozyFireSound(starting: !isCozy)
             withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
                 if isCozy {
                     model.setWarmestPoint(Kelvin.everydayWarmest)

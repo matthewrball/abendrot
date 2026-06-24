@@ -49,9 +49,6 @@ struct AdvancedTab: View {
 
                 // Hold vs Toggle (§3 locked: ship both, default hold) — on-brand glass switcher.
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Behavior")
-                        .font(Theme.Typography.ui(12, weight: .medium))
-                        .foregroundStyle(Theme.Color.textMuted)
                     HStack {
                         BrandSegmentedControl(
                             options: RevealMode.allCases,
@@ -72,17 +69,19 @@ struct AdvancedTab: View {
             DividerLine()
             ExcludedAppsControl(model: model)
 
-            DividerLine()
-            // Emergency reset, relocated from the Displays page (founder): the forceful gamma/DDC
-            // restore kept as a quiet safety net without cluttering the main Displays view.
-            Button(role: .destructive) {
-                model.setEnabled(false)
-                model.restoreAllDisplays()
-            } label: {
-                let multiple = model.state.displays.count > 1
-                Label(multiple ? "Restore all displays to True Color" : "Restore display to True Color", systemImage: "arrow.counterclockwise")
+            if model.state.isEnabled {
+                DividerLine()
+                // Emergency reset, relocated from the Displays page (founder): the forceful gamma/DDC
+                // restore kept as a quiet safety net without cluttering the main Displays view.
+                Button(role: .destructive) {
+                    model.setEnabled(false)
+                    model.restoreAllDisplays()
+                } label: {
+                    let multiple = model.state.displays.count > 1
+                    Label(multiple ? "Restore all displays to True Color" : "Restore display to True Color", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.liquidGlass)
             }
-            .buttonStyle(.liquidGlass)
         }
     }
 }
