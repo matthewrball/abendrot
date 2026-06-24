@@ -328,14 +328,17 @@ private var manualDetail: some View {
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            Text(scheduleSubtitle)
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textMuted)
-                .multilineTextAlignment(.center)
-                .frame(height: 40)
-                .frame(maxWidth: .infinity)
-                .contentTransition(.opacity)
-                .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: scheduleSubtitle)
+            ZStack {
+                Text(scheduleSubtitle)
+                    .id(scheduleSubtitle)
+                    .transition(.opacity)
+            }
+            .font(Theme.Typography.ui(11.5))
+            .foregroundStyle(Theme.Color.textMuted)
+            .multilineTextAlignment(.center)
+            .frame(height: 40)
+            .frame(maxWidth: .infinity)
+            .animation(.easeInOut(duration: 0.2), value: scheduleSubtitle)
 
             ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
                 .transaction { $0.animation = nil }
@@ -573,14 +576,17 @@ struct PrimaryButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(Theme.Typography.ui(13, weight: .semibold))
-                .foregroundStyle(Theme.Color.inkOnAccent)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: title)
-                .background(
+            ZStack {
+                Text(title)
+                    .id(title)
+                    .transition(.opacity)
+            }
+            .font(Theme.Typography.ui(13, weight: .semibold))
+            .foregroundStyle(Theme.Color.inkOnAccent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .animation(.easeInOut(duration: 0.2), value: title)
+            .background(
                     LinearGradient(
                         colors: [Theme.Color.accentHighlight, Theme.Color.accent],
                         startPoint: .top, endPoint: .bottom
