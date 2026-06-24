@@ -26,11 +26,11 @@ enum OnboardingStep: Int, CaseIterable {
 
 enum OnboardingLayout {
     static let contentWidth: CGFloat = 320
-    static let welcomeHeight: CGFloat = 395
-    static let scheduleSunsetHeight: CGFloat = 600
+    static let welcomeHeight: CGFloat = 375
+    static let scheduleSunsetHeight: CGFloat = 580
     static let scheduleHeaderHeight: CGFloat = 210
-    static let warmthHeight: CGFloat = 520
-    static let allSetHeight: CGFloat = 516
+    static let warmthHeight: CGFloat = 500
+    static let allSetHeight: CGFloat = 496
     static let minimumContentHeight: CGFloat = 300
     static let maximumContentHeight: CGFloat = 665
 
@@ -177,7 +177,6 @@ struct OnboardingView: View {
             Spacer(minLength: 0)
 
             PrimaryButton(title: "Get started") { advance() }
-                .padding(.bottom, 20)
         }
     }
 
@@ -241,7 +240,6 @@ struct OnboardingView: View {
                 model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
                 advance()
             }
-            .padding(.bottom, 20)
         }
         // Force the warm preview so the screen blooms regardless of the chosen mode/time — the one
         // guaranteed "this is what warm looks like" moment, starting at the warmest. Warming is already
@@ -286,7 +284,6 @@ struct OnboardingView: View {
             Spacer(minLength: 0)
 
             PrimaryButton(title: isShowingSunsetDetail ? "Continue" : "Looks right") { advance() }
-                .padding(.bottom, 20)
         }
         .frame(maxHeight: .infinity)
     }
@@ -399,7 +396,6 @@ private var manualDetail: some View {
                 }
             }
             .padding(.top, 2)
-            .padding(.bottom, 20)
         }
     }
 
