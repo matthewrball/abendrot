@@ -32,7 +32,7 @@ enum OnboardingLayout {
     static let scheduleHeaderHeight: CGFloat = 210
     static let scheduleDetailHeight: CGFloat = 215
     static let warmthHeight: CGFloat = 500
-    static let allSetHeight: CGFloat = 465
+    static let allSetHeight: CGFloat = 496
     static let minimumContentHeight: CGFloat = 300
     static let maximumContentHeight: CGFloat = 665
 
@@ -82,7 +82,7 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 38) {
+        VStack(spacing: step == .allSet ? 10 : 38) {
             // The top bar (stepper + back button). On the closing all-set step, the stepper is hidden
             // but we still show the back chevron so users can return.
             topBar
@@ -278,7 +278,7 @@ struct OnboardingView: View {
                     .accessibilityHidden(isShowingSunsetDetail)
             }
             .frame(
-                height: isShowingSunsetDetail ? OnboardingLayout.scheduleDetailHeight : 240,
+                height: 240,
                 alignment: .top
             )
             .clipped()
@@ -461,9 +461,7 @@ private var manualDetail: some View {
         case .welcome:
             return OnboardingLayout.welcomeHeight
         case .schedule:
-            return isShowingSunsetDetail
-                ? OnboardingLayout.scheduleSunsetHeight
-                : 570
+            return OnboardingLayout.scheduleSunsetHeight
         case .warmth:
             return OnboardingLayout.warmthHeight
         case .allSet:
