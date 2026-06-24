@@ -91,7 +91,7 @@ struct AdvancedExpansion: View {
                 icon: {
                     Image(systemName: softTone ? "speaker.wave.2" : "speaker.slash")
                         .contentTransition(.symbolEffect(.replace))
-                        .frame(width: 16)
+                        .frame(width: 16, height: 16)
                 }
             )
             .font(Theme.Typography.ui(12))

@@ -28,7 +28,7 @@ enum OnboardingLayout {
     static let contentWidth: CGFloat = 320
     static let welcomeHeight: CGFloat = 395
     static let scheduleAlwaysOnHeight: CGFloat = 380
-    static let scheduleSunsetHeight: CGFloat = 600
+    static let scheduleSunsetHeight: CGFloat = 570
     static let scheduleHeaderHeight: CGFloat = 210
     static let scheduleDetailHeight: CGFloat = 215
     static let warmthHeight: CGFloat = 520
@@ -82,10 +82,10 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: step == .allSet ? 10 : 38) {
-            // The top bar (stepper + back button). On the closing all-set step, the stepper is hidden
-            // but we still show the back chevron so users can return.
-            topBar
+        VStack(spacing: 38) {
+            // Skip the top bar on the closing all-set step — it has no stepper or chevron there, so the
+            // empty slot plus the stack spacing would leave a dead gap above the checkmark.
+            if step != .allSet { topBar }
 
             Group {
                 switch step {
@@ -139,7 +139,7 @@ struct OnboardingView: View {
     private var topBar: some View {
         ZStack {
             stepIndicator
-            if step == .warmth || step == .allSet {
+            if step == .warmth {
                 HStack {
                     Button { goBack() } label: {
                         Image(systemName: "chevron.left")
@@ -352,11 +352,27 @@ private var manualDetail: some View {
     // MARK: Step 4 — closing confirmation (not numbered) — privacy reassurance lives here now
     private var allSetStep: some View {
         VStack(spacing: 18) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 46, weight: .light))
-                .foregroundStyle(Theme.Color.accentHighlight)
-                .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
-                .accessibilityHidden(true)
+            ZStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 46, weight: .light))
+                    .foregroundStyle(Theme.Color.accentHighlight)
+                    .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
+                    .accessibilityHidden(true)
+                
+                HStack {
+                    Button { goBack() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.textMuted)
+                            .padding(.vertical, 4)
+                            .padding(.trailing, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back")
+                    Spacer()
+                }
+            }
 
             Text("You’re all set")
                 .font(Theme.Typography.serif(22))
@@ -428,12 +444,12 @@ private var manualDetail: some View {
     // Brief, beautiful privacy reassurance — the closing note. Reuses the Privacy settings page's
     // checkmark.shield icon. A general promise (not just location), since it's the parting word.
     private var privacyNote: some View {
-        VStack(spacing: 9) {
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 19, weight: .medium))
-                .foregroundStyle(Theme.Color.accentHighlight)
-                .accessibilityHidden(true)
-            Text("Private by default. Nothing about you or your displays ever leaves this Mac — no account, no tracking, no telemetry.")
+        VStack(spacing: 4) {
+            Text("Private by default")
+                .font(Theme.Typography.ui(11.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.textPrimary)
+            
+            Text("Nothing about you or your displays ever leaves this Mac — no account, no tracking, no telemetry.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
