@@ -25,7 +25,18 @@ enum OnboardingStep: Int, CaseIterable {
 }
 
 enum OnboardingLayout {
-    static let windowSize = NSSize(width: 320, height: 580)
+    static let contentWidth: CGFloat = 320
+    static let welcomeHeight: CGFloat = 395
+    static let scheduleAlwaysOnHeight: CGFloat = 380
+    static let scheduleSunsetHeight: CGFloat = 570
+    static let scheduleHeaderHeight: CGFloat = 210
+    static let scheduleDetailHeight: CGFloat = 215
+    static let warmthHeight: CGFloat = 520
+    static let allSetHeight: CGFloat = 516
+    static let minimumContentHeight: CGFloat = 300
+    static let maximumContentHeight: CGFloat = 665
+
+    static let initialContentSize = NSSize(width: contentWidth, height: welcomeHeight)
 }
 
 // MARK: - OnboardingView
@@ -40,11 +51,20 @@ enum OnboardingLayout {
 struct OnboardingView: View {
     @Bindable var model: AppModel
     var onFinish: () -> Void
+    var onHeightChange: (CGFloat, Bool) -> Void
 
-    init(model: AppModel, onFinish: @escaping () -> Void, initialStep: OnboardingStep = .welcome) {
+    init(
+        model: AppModel,
+        onFinish: @escaping () -> Void,
+        initialStep: OnboardingStep = .welcome,
+        initialScheduleOption: ScheduleModeOption = .followSunset,
+        onHeightChange: @escaping (CGFloat, Bool) -> Void = { _, _ in }
+    ) {
         self._model = Bindable(wrappedValue: model)
         self.onFinish = onFinish
+        self.onHeightChange = onHeightChange
         self._step = State(initialValue: initialStep)
+        self._scheduleOption = State(initialValue: initialScheduleOption)
     }
 
     @State private var step: OnboardingStep
@@ -59,9 +79,6 @@ struct OnboardingView: View {
     /// Mirrors the warmth slider's press state: the blue-light % rolls on discrete changes (Cozy on→99)
     /// but stays silent during a live drag, where rapid numericText changes glitch. Fed by WarmSlider.
     @State private var sliderPressing = false
-    @State private var sunsetDetailHeight: CGFloat = 0
-    @State private var sunsetDetailReveal: CGFloat = 1
-    @State private var scheduleRevealTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -79,13 +96,14 @@ struct OnboardingView: View {
                 }
             }
             .transition(.opacity)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .padding(24)
-        // This onboarding host is intentionally fixed-size: schedule changes animate the lower detail
-        // area inside the window, while the title/header/switcher keep their screen position.
-        .frame(width: OnboardingLayout.windowSize.width,
-               height: OnboardingLayout.windowSize.height,
-               alignment: .top)
+        // The NSWindow owns the resize. SwiftUI fills the live AppKit host height, so controls move with
+        // the actual window edge instead of jumping straight to the final target height.
+        .frame(width: OnboardingLayout.contentWidth, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .clipped()
         // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
         // miss. `performDrag` only fires for clicks that fall THROUGH to this background, so interactive
         // controls (slider, buttons, mode control, city picker) keep their own drags. (This is why we keep
@@ -95,6 +113,12 @@ struct OnboardingView: View {
         // the traffic-light buttons sit cleanly on the frost in the transparent title bar, and there is no
         // detached floating-card border and no gray bar.
         .background(FrostBackground())
+        .onAppear {
+            onHeightChange(targetContentHeight, false)
+        }
+        .onChange(of: targetContentHeight) { _, height in
+            onHeightChange(height, !reduceMotion)
+        }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
     }
 
@@ -152,7 +176,10 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
+            Spacer(minLength: 0)
+
             PrimaryButton(title: "Get started") { advance() }
+                .padding(.bottom, 20)
         }
     }
 
@@ -207,6 +234,8 @@ struct OnboardingView: View {
             CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
                             enablesAtWarmest: true)
 
+            Spacer(minLength: 0)
+
             PrimaryButton(title: "Looks right") {
                 // Restore the schedule chosen in step 2 (this step forced Always-on so the screen could
                 // bloom regardless of time). Sunset users ease back to neutral in daylight — expected,
@@ -214,6 +243,7 @@ struct OnboardingView: View {
                 model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
                 advance()
             }
+            .padding(.bottom, 20)
         }
         // Force the warm preview so the screen blooms regardless of the chosen mode/time — the one
         // guaranteed "this is what warm looks like" moment, starting at the warmest. Warming is already
@@ -234,69 +264,110 @@ struct OnboardingView: View {
     // MARK: Step 2 — choose the schedule (mode FIRST, applied live so its effect is visible)
 
     private var scheduleStep: some View {
+        ZStack(alignment: .top) {
+            scheduleHeader
+                .frame(height: OnboardingLayout.scheduleHeaderHeight, alignment: .top)
+                .transaction { $0.animation = nil }
+
+            VStack(spacing: 0) {
+                Color.clear.frame(height: OnboardingLayout.scheduleHeaderHeight + 13)
+
+            ZStack(alignment: .top) {
+                sunsetDetail
+                    .opacity(isShowingSunsetDetail ? 1 : 0)
+                    .allowsHitTesting(isShowingSunsetDetail)
+                    .accessibilityHidden(!isShowingSunsetDetail)
+
+                manualDetail
+                    .opacity(isShowingSunsetDetail ? 0 : 1)
+                    .allowsHitTesting(!isShowingSunsetDetail)
+                    .accessibilityHidden(isShowingSunsetDetail)
+            }
+            .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isShowingSunsetDetail)
+
+            Spacer(minLength: 0)
+
+            PrimaryButton(title: isShowingSunsetDetail ? "Continue" : "Looks right") { advance() }
+                .padding(.bottom, 20)
+        }
+    }
+    .frame(maxHeight: .infinity, alignment: .top)
+    .onAppear {
+        model.setEnabled(true, userInitiated: false)
+        if !hasInitializedWarmth {
+            model.setGlobalWarmth(1.0)
+            hasInitializedWarmth = true
+        }
+        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
+    }
+}
+
+private var manualDetail: some View {
+    VStack(spacing: 14) {
+        HStack(spacing: 6) {
+            Text("\(model.globalKelvin.displayValue) K")
+                .font(Theme.Typography.serif(30))
+                .monospacedDigit()
+                .foregroundStyle(Theme.Color.accentHighlight)
+            
+            KelvinInfoButton()
+        }
+        .zIndex(1)
+
+        BlueLightReductionLabel(kelvin: model.globalKelvin, cozy: isCozy, animated: !sliderPressing)
+
+        WarmSlider(strength: Binding(
+            get: { model.state.globalWarmth.strength },
+            set: { model.setGlobalWarmth($0) }
+        ), model: model, showsHeader: false, cozy: isCozy,
+        onPressingChanged: { sliderPressing = $0 })
+
+        CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
+                        enablesAtWarmest: true)
+    }
+}
+
+    private var scheduleHeader: some View {
         VStack(spacing: 13) {
             Text("When should we warm?")
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            // A fixed-height subtitle slot under the heading. The copy swaps in place, so the switcher
-            // below never moves when toggling modes.
             Text(scheduleSubtitle)
-            .font(Theme.Typography.ui(11.5))
-            .foregroundStyle(Theme.Color.textMuted)
-            .multilineTextAlignment(.center)
-            .frame(height: 40)
-            .frame(maxWidth: .infinity)
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textMuted)
+                .multilineTextAlignment(.center)
+                .frame(height: 40)
+                .frame(maxWidth: .infinity)
 
-            // Apply the mode LIVE on each toggle so the user feels the difference immediately: Always-on
-            // warms the screen now; Sunset (in daylight) eases back to neutral. `setScheduleMode` also
-            // plays the soft mode tick (gated by the sound pref). The switcher sits at a CONSTANT y — the
-            // heading + fixed subtitle slot above it never change height.
             ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
-
-            VStack(spacing: 0) {
-                ZStack(alignment: .top) {
-                    sunsetDetailMeasure
-                    sunsetDetailWithBottomGap
-                        .frame(height: sunsetDetailFrameHeight, alignment: .top)
-                        .opacity(sunsetDetailOpacity)
-                        .clipped()
-                        .allowsHitTesting(sunsetDetailReveal >= 1)
-                        .accessibilityHidden(sunsetDetailReveal < 1)
-                }
-
-                PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
-            }
-        }
-        // The Sunset detail animates only its clipped height; the outer AppKit panel stays fixed.
-        .onPreferenceChange(SunsetDetailHeightKey.self) { sunsetDetailHeight = $0 }
-        // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
-        // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
-        // "Abendrot is now active"; the mode tick then plays on each toggle.
-        .onAppear {
-            sunsetDetailReveal = isShowingSunsetDetail ? 1 : 0
-
-            // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
-            // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
-            // ONCE only — on a return visit (back from the warmth step) we must NOT re-slam 1.0, or an
-            // Always-on user's dialed warmth would be lost the moment they step back to change the mode.
-            model.setEnabled(true, userInitiated: true)
-            if !hasInitializedWarmth {
-                model.setGlobalWarmth(1.0)
-                hasInitializedWarmth = true
-            }
-            model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         }
     }
 
     // MARK: Step 4 — closing confirmation (not numbered) — privacy reassurance lives here now
     private var allSetStep: some View {
         VStack(spacing: 18) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 46, weight: .light))
-                .foregroundStyle(Theme.Color.accentHighlight)
-                .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
-                .accessibilityHidden(true)
+            ZStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 46, weight: .light))
+                    .foregroundStyle(Theme.Color.accentHighlight)
+                    .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
+                    .accessibilityHidden(true)
+                
+                HStack {
+                    Button { goBack() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.textMuted)
+                            .padding(.vertical, 4)
+                            .padding(.trailing, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back")
+                    Spacer()
+                }
+            }
 
             Text("You’re all set")
                 .font(Theme.Typography.serif(22))
@@ -310,17 +381,26 @@ struct OnboardingView: View {
             privacyNote
                 .padding(.top, 6)
 
+            Spacer(minLength: 0)
+
             // Two-step CTA: first reveal the menu-bar popover (so the user SEES where Abendrot lives), then
             // finish . The title swaps to "Done" after the first tap.
-            PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
-                if didOpenMenuBar {
-                    onFinish()
-                } else {
-                    openMenuBarPopover()
-                    didOpenMenuBar = true
+            VStack(spacing: 10) {
+                SecondaryButton(title: "Star on GitHub", icon: "star") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/matthewrball/abendrot")!)
+                }
+
+                PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
+                    if didOpenMenuBar {
+                        onFinish()
+                    } else {
+                        openMenuBarPopover()
+                        didOpenMenuBar = true
+                    }
                 }
             }
             .padding(.top, 2)
+            .padding(.bottom, 20)
         }
     }
 
@@ -359,12 +439,12 @@ struct OnboardingView: View {
     // Brief, beautiful privacy reassurance — the closing note. Reuses the Privacy settings page's
     // checkmark.shield icon. A general promise (not just location), since it's the parting word.
     private var privacyNote: some View {
-        VStack(spacing: 9) {
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 19, weight: .medium))
-                .foregroundStyle(Theme.Color.accentHighlight)
-                .accessibilityHidden(true)
-            Text("Private by default. Nothing about you or your displays ever leaves this Mac — no account, no tracking, no telemetry.")
+        VStack(spacing: 4) {
+            Text("Private by default")
+                .font(Theme.Typography.ui(11.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.textPrimary)
+            
+            Text("Nothing about you or your displays ever leaves this Mac — no account, no tracking, no telemetry.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
@@ -401,32 +481,26 @@ struct OnboardingView: View {
         )
     }
 
+    private var targetContentHeight: CGFloat {
+        switch step {
+        case .welcome:
+            return OnboardingLayout.welcomeHeight
+        case .schedule:
+            return OnboardingLayout.scheduleSunsetHeight
+        case .warmth:
+            return OnboardingLayout.warmthHeight
+        case .allSet:
+            return OnboardingLayout.allSetHeight
+        }
+    }
+
     private var isShowingSunsetDetail: Bool {
         scheduleOption == .followSunset
-    }
-
-    private var sunsetDetailFrameHeight: CGFloat? {
-        guard sunsetDetailHeight > 0 else {
-            return sunsetDetailReveal > 0 ? nil : 0
-        }
-        return sunsetDetailHeight * sunsetDetailReveal
-    }
-
-    private var sunsetDetailOpacity: Double {
-        Double(max(0, min(1, sunsetDetailReveal * 1.35)))
     }
 
     private var sunsetDetail: some View {
         VStack(alignment: .leading, spacing: 11) {
             sunsetScienceCard
-            sunsetLocationFields
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var sunsetDetailForMeasurement: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            sunsetScienceCardContent
             sunsetLocationFields
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -441,42 +515,17 @@ struct OnboardingView: View {
         }
     }
 
-    private var sunsetDetailWithBottomGap: some View {
-        sunsetDetail.padding(.bottom, 13)
-    }
-
-    private var sunsetDetailMeasure: some View {
-        sunsetDetailForMeasurement
-            .padding(.bottom, 13)
-            .hidden()
-            .opacity(0)
-            .background(GeometryReader { proxy in
-                Color.clear.preference(key: SunsetDetailHeightKey.self, value: proxy.size.height)
-            })
-            .frame(height: 0)
-            .clipped()
-            .accessibilityHidden(true)
-    }
-
     private func applyScheduleOption(_ option: ScheduleModeOption) {
         guard option != scheduleOption else { return }
-        scheduleRevealTask?.cancel()
         scheduleOption = option
-        let shouldRevealSunsetDetail = isShowingSunsetDetail
-        scheduleRevealTask = Task { @MainActor in
-            // Commit the stable header/switcher state first; the next frame animates only the lower detail
-            // height, so the fixed onboarding window never captures two schedule layouts at once.
-            try? await Task.sleep(nanoseconds: 16_000_000)
-            guard !Task.isCancelled else { return }
-            withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
-                sunsetDetailReveal = shouldRevealSunsetDetail ? 1 : 0
-            }
-            scheduleRevealTask = nil
-        }
         model.setScheduleMode(option.toScheduleMode())
     }
 
     private func advance() {
+        if step == .schedule && scheduleOption == .alwaysOn {
+            step = .allSet
+            return
+        }
         guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
             onFinish()
             return
@@ -485,11 +534,15 @@ struct OnboardingView: View {
     }
 
     private func goBack() {
+        if step == .allSet && scheduleOption == .alwaysOn {
+            step = .schedule
+            return
+        }
         guard let prev = OnboardingStep(rawValue: step.rawValue - 1) else { return }
         // The warmth step forces an Always-on PREVIEW so the screen blooms regardless of time. Undo it on
         // the way back too — the "Looks right" forward path already restores the real mode — so a Sunset
         // user eases back to neutral in daylight instead of the preview warming lingering on the mode step.
-        // (Back only ever shows on the warmth step.)
+        // (Back only ever shows on the warmth and allSet steps.)
         if step == .warmth {
             model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         }
@@ -535,6 +588,36 @@ struct PrimaryButton: View {
                     ),
                     in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous)
                 )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - SecondaryButton
+
+/// A secondary CTA with a frosted glass background and optional icon.
+struct SecondaryButton: View {
+    let title: String
+    var icon: String? = nil
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                }
+                Text(title)
+            }
+            .font(Theme.Typography.ui(13, weight: .medium))
+            .foregroundStyle(Theme.Color.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .glassSurface(.frost, cornerRadius: Theme.Radius.control - 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous)
+                    .strokeBorder(Theme.Color.line.opacity(0.5), lineWidth: 0.5)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -633,11 +716,6 @@ private struct WindowDraggableBackground: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
-}
-
-private struct SunsetDetailHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 // MARK: - Preview

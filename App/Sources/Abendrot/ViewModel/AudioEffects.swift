@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AppKit
 
 // MARK: - ConfirmationChime
 
@@ -30,6 +31,32 @@ final class ConfirmationChime {
         pitch.pitch = pitchCents
         // per-play loudness; warming = 1.0, mode tick = quieter. Engine idles 3s after the (sub-2s) chime.
         core.fire(file: file, volume: volume, idleAfter: 3)
+    }
+}
+
+// MARK: - CozyFireSound
+
+/// Quiet native cues for Cozy mode: a small ignition pop on ON, a soft blow on OFF.
+@MainActor
+final class CozyFireSound {
+    private let ignite: NSSound
+    private let snuff: NSSound
+
+    init?() {
+        guard let ignite = NSSound(contentsOfFile: "/System/Library/Sounds/Pop.aiff", byReference: true),
+              let snuff = NSSound(contentsOfFile: "/System/Library/Sounds/Blow.aiff", byReference: true)
+        else { return nil }
+        self.ignite = ignite
+        self.snuff = snuff
+        self.ignite.volume = 0.12
+        self.snuff.volume = 0.08
+    }
+
+    func play(starting: Bool) {
+        let sound = starting ? ignite : snuff
+        sound.stop()
+        sound.currentTime = 0
+        sound.play()
     }
 }
 

@@ -65,7 +65,7 @@ struct KelvinInfoButton: View {
             .accessibilityHint(Self.explanation)
             .overlay(alignment: .topTrailing) {
                 if show {
-                    AbendrotTooltipText(Self.explanation)
+                    AbendrotTooltipText(Self.explanation, width: 160)
                         .offset(y: 26)
                         .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
                         .zIndex(2)

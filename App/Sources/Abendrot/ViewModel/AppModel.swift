@@ -73,6 +73,9 @@ final class AppModel {
     /// Built lazily on first toggle; nil only if the audio buffers can't be allocated. See `toggleAdvanced()`.
     @ObservationIgnored private lazy var expandSwoosh: SwooshSound? = SwooshSound()
 
+    /// Soft native fire cues for Cozy mode — ignite on ON, snuff on OFF.
+    @ObservationIgnored private lazy var cozyFireSound: CozyFireSound? = CozyFireSound()
+
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
@@ -386,7 +389,7 @@ final class AppModel {
         // the raw `warmestPointKelvin` setter so, in the (CLI never sends this) both-set case, the cozy
         // toggle's ceiling wins. No validation needed — it's a plain Bool master toggle.
         if let cozy = patch.cozy {
-            setCozy(cozy)
+            setCozy(cozy, userInitiated: false)
         }
         // Enabled last (mild nicety; the engine recomputes from the whole box regardless).
         if let enabled = patch.isEnabled {
@@ -504,7 +507,7 @@ final class AppModel {
         confirmationChime?.play(pitchCents: warming ? 0 : -500, volume: 0.7)   // ~0.35 effective vs the 0.5 master
     }
 
-    /// A soft tick when the user switches Schedule mode (Sunset · Always on), gated by the SAME
+    /// A soft tick when the user switches Schedule mode (Sunset · Manual), gated by the SAME
     /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the Glass graph but
     /// QUIETER and pitched UP into a light "selection" tick — not the warming bloom — and each mode
     /// gets its OWN note (Always-on brighter/higher, Sunset lower), so you hear WHICH mode you picked:
@@ -527,6 +530,11 @@ final class AppModel {
         guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
         // ponytail: quiet by ear; tune with the synth knobs in SwooshSound.
         expandSwoosh?.play(opening: isAdvancedExpanded, volume: 0.03)
+    }
+
+    private func playCozyFireSound(starting: Bool) {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        cozyFireSound?.play(starting: starting)
     }
 
 
@@ -559,7 +567,7 @@ final class AppModel {
     }
 
     func setScheduleMode(_ mode: ScheduleMode, userInitiated: Bool = true) {
-        // Compare at the UI grain (Sunset · Always on): the dormant cases (.solar/.custom/...) all read
+        // Compare at the UI grain (Sunset · Manual): the dormant cases (.solar/.custom/...) all read
         // as Sunset, so re-selecting one is not a user-visible change and must not tick.
         let changed = ScheduleModeOption(mode) != ScheduleModeOption(state.scheduleMode)
         state.scheduleMode = mode
@@ -621,7 +629,8 @@ final class AppModel {
     /// then re-pin the screen to that same Kelvin via `setGlobalWarmthToKelvin` — so expanding the
     /// range never jumps the picture. The one richer-than-pin nuance is Always-on turning cozy ON:
     /// there the screen warms straight to the new maximum (1.0), matching the Settings card today.
-    func setCozy(_ on: Bool) {
+    func setCozy(_ on: Bool, userInitiated: Bool = true) {
+        let changed = on != (state.warmestPoint.value < Kelvin.everydayWarmest.value)
         if on {
             // Turning ON: unlock the deepest candle & ember (~500K). In Always-on, warm to that maximum
             // right away; otherwise keep the current warmth exactly where it is and just hand over the
@@ -640,6 +649,7 @@ final class AppModel {
             setWarmestPoint(Kelvin.everydayWarmest)
             setGlobalWarmthToKelvin(restore)
         }
+        if userInitiated, changed { playCozyFireSound(starting: on) }
     }
 
     // MARK: ── Reveal True Color ─────────────────────────────────────────────

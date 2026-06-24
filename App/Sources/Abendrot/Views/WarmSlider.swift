@@ -51,6 +51,8 @@ struct WarmSlider: View {
     /// Detents spanning the track — the notch count AND the click cadence, kept in one place so the
     /// marks you see line up exactly with the clicks you hear. More = finer/denser mini ticks.
     private let detentCount = 110
+    /// Left edge of the visible slider: still soft, not true off. True off lives in the master toggle.
+    private let minimumSoftStrength = 0.12
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 12) {
@@ -241,14 +243,14 @@ struct WarmSlider: View {
         }
         .frame(height: max(thumbSize, 22))
         // Native hover tooltip explaining the lock (reinforces the popover's visible caption).
-        .help(isLocked ? "In Sunset mode, Abendrot sets your warmth automatically by time of day. Change your maximum in Settings." : "")
+        .help(isLocked ? "In Sunset mode, Abendrot sets your warmth automatically by time of day. Adjust your maximum in Settings." : "")
         // No `.focusable()`: a menu-bar NSPopover doesn't do tab-traversal, so it only produced a
         // stray focus ring on click. VoiceOver still adjusts via the action below.
         .accessibilityElement()
         .accessibilityLabel(headerTitle)
         .accessibilityValue(isLocked
-            ? "\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent, locked — set automatically in Sunset mode"
-            : "\(Int((thumbPosition(forStrength: strength) * 100).rounded())) percent")
+            ? "\(Int((strength.clamped01 * 100).rounded())) percent, locked — set automatically in Sunset mode"
+            : "\(Int((strength.clamped01 * 100).rounded())) percent")
         .accessibilityAdjustableAction { direction in
             guard !isLocked else { return }   // Sunset: read-only
             switch direction {
@@ -284,23 +286,25 @@ struct WarmSlider: View {
         return 1 - (0.62 * g.green + 0.38 * g.blue)
     }
 
-    /// Thumb position (0…1) for an engine strength. Identity unless Cozy.
+    /// Thumb position (0…1) for an engine strength, with the soft floor folded into the scale.
     private func thumbPosition(forStrength s: Double) -> Double {
-        guard cozy else { return s.clamped01 }
+        guard cozy else { return sliderPosition(forStrength: s) }
         let wp = model.state.warmestPoint
+        let floor = warmthProgress(WarmthLevel(strength: minimumSoftStrength).kelvin(warmestPoint: wp))
         let full = warmthProgress(wp)
-        guard full > 0 else { return s.clamped01 }
+        guard full > floor else { return sliderPosition(forStrength: s) }
         let k = WarmthLevel(strength: s.clamped01).kelvin(warmestPoint: wp)
-        return (warmthProgress(k) / full).clamped01
+        return ((warmthProgress(k) - floor) / (full - floor)).clamped01
     }
 
     /// Engine strength for a thumb position (0…1) — the inverse of `thumbPosition(forStrength:)`.
     private func engineStrength(forPosition p: Double) -> Double {
-        guard cozy else { return p.clamped01 }
+        guard cozy else { return strength(forSliderPosition: p) }
         let wp = model.state.warmestPoint
+        let floor = warmthProgress(WarmthLevel(strength: minimumSoftStrength).kelvin(warmestPoint: wp))
         let full = warmthProgress(wp)
-        guard full > 0 else { return p.clamped01 }
-        let target = p.clamped01 * full
+        guard full > floor else { return strength(forSliderPosition: p) }
+        let target = floor + p.clamped01 * (full - floor)
         // Bisect the Kelvin whose progress matches (progress falls monotonically as K rises), then map that
         // Kelvin back to strength through the engine's own mired curve so the slider and engine never drift.
         var loK = Double(wp.value), hiK = Double(Kelvin.neutral.value)
@@ -314,6 +318,14 @@ struct WarmSlider: View {
         let mired = 1_000_000.0 / Double(k.value)
         guard warmestMired != neutralMired else { return 0 }
         return ((mired - neutralMired) / (warmestMired - neutralMired)).clamped01
+    }
+
+    private func sliderPosition(forStrength s: Double) -> Double {
+        ((s.clamped01 - minimumSoftStrength) / (1 - minimumSoftStrength)).clamped01
+    }
+
+    private func strength(forSliderPosition p: Double) -> Double {
+        minimumSoftStrength + p.clamped01 * (1 - minimumSoftStrength)
     }
 
     /// A glassy thumb: a bright warm-white core, a hairline rim, and a soft ember glow. On press the

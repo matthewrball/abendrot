@@ -219,11 +219,14 @@ enum ScreenshotHarness {
                 SettingsView(model: model, scrolls: false)
             }
         }
-        for (name, step) in [("welcome", OnboardingStep.welcome), ("schedule", .schedule),
-                             ("warmth", .warmth), ("allset", .allSet)] {
+        for (name, step, scheduleOption) in [("welcome", OnboardingStep.welcome, ScheduleModeOption.followSunset),
+                                             ("schedule", .schedule, .followSunset),
+                                             ("schedule-alwayson", .schedule, .alwaysOn),
+                                             ("warmth", .warmth, .followSunset),
+                                             ("allset", .allSet, .followSunset)] {
             shot("onboarding-\(name)", width: 320, into: out) {
                 OnboardingView(model: AppModel(previewState: MockWarmthState.warming),
-                               onFinish: {}, initialStep: step)
+                               onFinish: {}, initialStep: step, initialScheduleOption: scheduleOption)
             }
         }
         FileHandle.standardError.write(Data("[shots] done -> \(dir)\n".utf8))

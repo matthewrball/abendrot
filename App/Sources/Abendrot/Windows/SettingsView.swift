@@ -56,6 +56,7 @@ struct SettingsView: View {
                     ForEach(SettingsTab.allCases) { tab in
                         SettingsSidebarButton(
                             tab: tab,
+                            titleText: tab == .displays && model.state.displays.count == 1 ? "Display" : tab.title,
                             isSelected: model.settingsTab == tab,
                             reduceMotion: reduceMotion
                         ) {
@@ -140,6 +141,7 @@ private struct SettingsContentHeightKey: PreferenceKey {
 
 private struct SettingsSidebarButton: View {
     let tab: SettingsTab
+    let titleText: String
     let isSelected: Bool
     let reduceMotion: Bool
     let action: () -> Void
@@ -148,7 +150,7 @@ private struct SettingsSidebarButton: View {
     var body: some View {
         Button(action: action) {
             Label {
-                Text(tab.title)
+                Text(titleText)
                     .font(Theme.Typography.ui(13, weight: .semibold))
                     .lineLimit(1)
                     .allowsTightening(true)

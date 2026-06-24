@@ -86,19 +86,26 @@ struct AdvancedExpansion: View {
 
     private var soundsRow: some View {
         HStack {
-            HStack(spacing: 10) {
-                MorphingSpeakerIcon(isOn: softTone)
-                    .frame(width: 24, height: 20)
-                Text("Sounds")
-                    .font(Theme.Typography.ui(12))
-            }
+            Label(
+                title: { Text("Sounds") },
+                icon: {
+                    Image(systemName: softTone ? "speaker.wave.2" : "speaker.slash")
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 16, height: 16)
+                }
+            )
+            .font(Theme.Typography.ui(12))
             .foregroundStyle(Theme.Color.textMuted)
             Spacer()
             BrandSegmentedControl(
                 options: SoundToggleOption.allCases,
                 selection: Binding(
                     get: { softTone ? .on : .off },
-                    set: { softTone = $0 == .on }
+                    set: { newValue in
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+                            softTone = newValue == .on
+                        }
+                    }
                 ),
                 label: { $0.label }
             )
@@ -111,114 +118,6 @@ private enum SoundToggleOption: String, CaseIterable, Identifiable, Sendable {
     case off, on
     var id: String { rawValue }
     var label: String { self == .on ? "On" : "Off" }
-}
-
-private struct MorphingSpeakerIcon: View {
-    let isOn: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var progress: CGFloat = 1
-
-    var body: some View {
-        let wave = progress
-        let slash = 1 - progress
-
-        ZStack {
-            SpeakerBodyShape()
-                .stroke(style: StrokeStyle(lineWidth: 1.9, lineCap: .round, lineJoin: .round))
-                .scaleEffect(x: 0.96 + (0.04 * progress), y: 1, anchor: .leading)
-                .offset(x: -1.5 * slash)
-
-            SpeakerWaveShape(kind: .inner)
-                .trim(from: 0, to: 0.12 + (0.88 * wave))
-                .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                .opacity(wave)
-                .offset(x: -2 * slash)
-                .scaleEffect(0.72 + (0.28 * wave), anchor: .leading)
-
-            SpeakerWaveShape(kind: .outer)
-                .trim(from: 0, to: 0.08 + (0.92 * wave))
-                .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                .opacity(0.86 * wave)
-                .offset(x: -3 * slash)
-                .scaleEffect(0.64 + (0.36 * wave), anchor: .leading)
-
-            SpeakerSlashShape()
-                .trim(from: 0, to: slash)
-                .stroke(style: StrokeStyle(lineWidth: 1.9, lineCap: .round, lineJoin: .round))
-                .opacity(slash)
-                .scaleEffect(0.84 + (0.16 * slash), anchor: .center)
-        }
-        .onAppear { progress = isOn ? 1 : 0 }
-        .onChange(of: isOn) { _, newValue in
-            guard !reduceMotion else {
-                progress = newValue ? 1 : 0
-                return
-            }
-            withAnimation(iconAnimation) {
-                progress = newValue ? 1 : 0
-            }
-        }
-        .accessibilityHidden(true)
-    }
-
-    private var iconAnimation: Animation {
-        .spring(response: 0.34, dampingFraction: 0.72, blendDuration: 0.04)
-    }
-}
-
-private struct SpeakerBodyShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let x = rect.width / 24
-        let y = rect.height / 20
-        var path = Path()
-        path.move(to: CGPoint(x: 3 * x, y: 8 * y))
-        path.addLine(to: CGPoint(x: 7 * x, y: 8 * y))
-        path.addLine(to: CGPoint(x: 12 * x, y: 4 * y))
-        path.addLine(to: CGPoint(x: 12 * x, y: 16 * y))
-        path.addLine(to: CGPoint(x: 7 * x, y: 12 * y))
-        path.addLine(to: CGPoint(x: 3 * x, y: 12 * y))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct SpeakerWaveShape: Shape {
-    enum Kind { case inner, outer }
-    let kind: Kind
-
-    func path(in rect: CGRect) -> Path {
-        let x = rect.width / 24
-        let y = rect.height / 20
-        var path = Path()
-        switch kind {
-        case .inner:
-            path.move(to: CGPoint(x: 15 * x, y: 7.5 * y))
-            path.addCurve(
-                to: CGPoint(x: 15 * x, y: 12.5 * y),
-                control1: CGPoint(x: 17 * x, y: 8.8 * y),
-                control2: CGPoint(x: 17 * x, y: 11.2 * y)
-            )
-        case .outer:
-            path.move(to: CGPoint(x: 17 * x, y: 4.6 * y))
-            path.addCurve(
-                to: CGPoint(x: 17 * x, y: 15.4 * y),
-                control1: CGPoint(x: 22 * x, y: 7.2 * y),
-                control2: CGPoint(x: 22 * x, y: 12.8 * y)
-            )
-        }
-        return path
-    }
-}
-
-private struct SpeakerSlashShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let x = rect.width / 24
-        let y = rect.height / 20
-        var path = Path()
-        path.move(to: CGPoint(x: 3.5 * x, y: 4 * y))
-        path.addLine(to: CGPoint(x: 20.5 * x, y: 16 * y))
-        return path
-    }
 }
 
 // MARK: - Preview
