@@ -345,7 +345,6 @@ private var manualDetail: some View {
             .animation(.easeInOut(duration: 0.2), value: scheduleSubtitle)
 
             ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
-                .transaction { $0.animation = nil }
         }
     }
 
@@ -521,10 +520,16 @@ private var manualDetail: some View {
 
     private func applyScheduleOption(_ option: ScheduleModeOption) {
         guard option != scheduleOption else { return }
+        
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-            scheduleOption = option
+        // ModeControl strips animations from its tap events to protect its own layout.
+        // We break out of its transaction synchronously so our UI updates can crossfade.
+        DispatchQueue.main.async {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                scheduleOption = option
+            }
         }
+        
         model.setScheduleMode(option.toScheduleMode())
     }
 
