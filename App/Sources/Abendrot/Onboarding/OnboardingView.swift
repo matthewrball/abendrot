@@ -328,21 +328,14 @@ private var manualDetail: some View {
                 .font(Theme.Typography.serif(19))
                 .foregroundStyle(Theme.Color.textPrimary)
 
-            ZStack {
-                Text("Warms continuously, day\u{00A0}and\u{00A0}night.")
-                    .opacity(scheduleOption == .alwaysOn ? 1 : 0)
-
-                Text(model.isWarmingActive
-                     ? "The sun has set — your screen is warming now."
-                     : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset.")
-                    .opacity(scheduleOption == .alwaysOn ? 0 : 1)
-            }
-            .font(Theme.Typography.ui(11.5))
-            .foregroundStyle(Theme.Color.textMuted)
-            .multilineTextAlignment(.center)
-            .frame(height: 40)
-            .frame(maxWidth: .infinity)
-            .animation(.easeInOut(duration: 0.25), value: scheduleOption)
+            Text(scheduleSubtitle)
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textMuted)
+                .multilineTextAlignment(.center)
+                .frame(height: 40)
+                .frame(maxWidth: .infinity)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: scheduleSubtitle)
 
             ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
         }
@@ -588,25 +581,13 @@ struct PrimaryButton: View {
 
     var body: some View {
         Button(action: action) {
-            ZStack {
-                // If it's a known toggle title, explicitly fade them against each other
-                // Otherwise fallback to just showing the title
-                Text("Continue")
-                    .opacity(title == "Continue" ? 1 : 0)
-                Text("Looks right")
-                    .opacity(title == "Looks right" ? 1 : 0)
-                Text("Open menu bar")
-                    .opacity(title == "Open menu bar" ? 1 : 0)
-                Text("Done")
-                    .opacity(title == "Done" ? 1 : 0)
-                Text("Get started")
-                    .opacity(title == "Get started" ? 1 : 0)
-            }
-            .font(Theme.Typography.ui(13, weight: .semibold))
-            .foregroundStyle(Theme.Color.inkOnAccent)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
-            .animation(.easeInOut(duration: 0.2), value: title)
+            Text(title)
+                .font(Theme.Typography.ui(13, weight: .semibold))
+                .foregroundStyle(Theme.Color.inkOnAccent)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: title)
             .background(
                     LinearGradient(
                         colors: [Theme.Color.accentHighlight, Theme.Color.accent],
