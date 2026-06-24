@@ -28,7 +28,9 @@ enum OnboardingLayout {
     static let contentWidth: CGFloat = 320
     static let welcomeHeight: CGFloat = 375
     static let scheduleAlwaysOnHeight: CGFloat = 380
-    static let scheduleSunsetHeight: CGFloat = 575
+    static let scheduleSunsetHeight: CGFloat = 600
+    static let scheduleHeaderHeight: CGFloat = 210
+    static let scheduleDetailHeight: CGFloat = 215
     static let warmthHeight: CGFloat = 500
     static let allSetHeight: CGFloat = 420
     static let minimumContentHeight: CGFloat = 300
@@ -55,12 +57,14 @@ struct OnboardingView: View {
         model: AppModel,
         onFinish: @escaping () -> Void,
         initialStep: OnboardingStep = .welcome,
+        initialScheduleOption: ScheduleModeOption = .followSunset,
         onHeightChange: @escaping (CGFloat, Bool) -> Void = { _, _ in }
     ) {
         self._model = Bindable(wrappedValue: model)
         self.onFinish = onFinish
         self.onHeightChange = onHeightChange
         self._step = State(initialValue: initialStep)
+        self._scheduleOption = State(initialValue: initialScheduleOption)
     }
 
     @State private var step: OnboardingStep
@@ -75,9 +79,6 @@ struct OnboardingView: View {
     /// Mirrors the warmth slider's press state: the blue-light % rolls on discrete changes (Cozy on→99)
     /// but stays silent during a live drag, where rapid numericText changes glitch. Fed by WarmSlider.
     @State private var sliderPressing = false
-    @State private var sunsetDetailHeight: CGFloat = 0
-    @State private var sunsetDetailReveal: CGFloat = 1
-    @State private var scheduleRevealTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -95,12 +96,12 @@ struct OnboardingView: View {
                 }
             }
             .transition(.opacity)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .padding(24)
-        // The NSWindow resizes dynamically, but the SwiftUI content is always laid out in the target
-        // step-height box and pinned to its top edge. That prevents the controls from recentering or
-        // "jumping" while AppKit animates the lower window edge.
-        .frame(width: OnboardingLayout.contentWidth, height: targetContentHeight, alignment: .top)
+        // The NSWindow owns the resize. SwiftUI fills the live AppKit host height, so controls move with
+        // the actual window edge instead of jumping straight to the final target height.
+        .frame(width: OnboardingLayout.contentWidth, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
         .clipped()
         // Drag the card from any empty area — the thin transparent title-bar strip alone was too easy to
@@ -257,50 +258,36 @@ struct OnboardingView: View {
     // MARK: Step 2 — choose the schedule (mode FIRST, applied live so its effect is visible)
 
     private var scheduleStep: some View {
-        VStack(spacing: 13) {
-            Text("When should we warm?")
-                .font(Theme.Typography.serif(19))
-                .foregroundStyle(Theme.Color.textPrimary)
-
-            // A fixed-height subtitle slot under the heading. The copy swaps in place, so the switcher
-            // below never moves when toggling modes.
-            Text(scheduleSubtitle)
-            .font(Theme.Typography.ui(11.5))
-            .foregroundStyle(Theme.Color.textMuted)
-            .multilineTextAlignment(.center)
-            .frame(height: 40)
-            .frame(maxWidth: .infinity)
-
-            // Apply the mode LIVE on each toggle so the user feels the difference immediately: Always-on
-            // warms the screen now; Sunset (in daylight) eases back to neutral. `setScheduleMode` also
-            // plays the soft mode tick (gated by the sound pref). The switcher sits at a CONSTANT y — the
-            // heading + fixed subtitle slot above it never change height.
-            ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
+        ZStack(alignment: .top) {
+            scheduleHeader
+                .frame(height: OnboardingLayout.scheduleHeaderHeight, alignment: .top)
+                .transaction { $0.animation = nil }
 
             VStack(spacing: 0) {
-                ZStack(alignment: .top) {
-                    sunsetDetailMeasure
-                    sunsetDetailWithBottomGap
-                        .frame(height: sunsetDetailFrameHeight, alignment: .top)
-                        .opacity(sunsetDetailOpacity)
-                        .clipped()
-                        .allowsHitTesting(sunsetDetailReveal >= 1)
-                        .accessibilityHidden(sunsetDetailReveal < 1)
-                }
+                Color.clear.frame(height: OnboardingLayout.scheduleHeaderHeight + 13)
+
+                sunsetDetail
+                    .opacity(isShowingSunsetDetail ? 1 : 0)
+                    .frame(
+                        height: isShowingSunsetDetail ? OnboardingLayout.scheduleDetailHeight : 0,
+                        alignment: .top
+                    )
+                    .clipped()
+                    .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isShowingSunsetDetail)
+                    .allowsHitTesting(isShowingSunsetDetail)
+                    .accessibilityHidden(!isShowingSunsetDetail)
+
+                Spacer(minLength: 0)
 
                 PrimaryButton(title: "Continue") { advance() }   // → the warmth preview (step 3)
+                    .padding(.bottom, 20)
             }
-            .padding(.bottom, 20)
         }
-        // The Sunset detail animates inside a top-pinned AppKit window whose height follows the mode.
-        .onPreferenceChange(SunsetDetailHeightKey.self) { sunsetDetailHeight = $0 }
+        .frame(maxHeight: .infinity, alignment: .top)
         // Turn warming on + reflect the pre-selected mode the moment this step appears, so Always-on warms
         // live and Sunset honours the gate. Enabling here plays the warm-on chime (gated by the sound pref)
         // — "Abendrot is now active"; the mode tick then plays on each toggle.
         .onAppear {
-            scheduleRevealTask?.cancel()
-            sunsetDetailReveal = isShowingSunsetDetail ? 1 : 0
-
             // Default to MAX warmth so picking Always-on here shows the FULL warm effect immediately
             // (Sunset stays gated to neutral in daylight; the warmth step lets either mode dial it back).
             // ONCE only — on a return visit (back from the warmth step) we must NOT re-slam 1.0, or an
@@ -312,9 +299,22 @@ struct OnboardingView: View {
             }
             model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         }
-        .onDisappear {
-            scheduleRevealTask?.cancel()
-            scheduleRevealTask = nil
+    }
+
+    private var scheduleHeader: some View {
+        VStack(spacing: 13) {
+            Text("When should we warm?")
+                .font(Theme.Typography.serif(19))
+                .foregroundStyle(Theme.Color.textPrimary)
+
+            Text(scheduleSubtitle)
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textMuted)
+                .multilineTextAlignment(.center)
+                .frame(height: 40)
+                .frame(maxWidth: .infinity)
+
+            ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
         }
     }
 
@@ -449,28 +449,9 @@ struct OnboardingView: View {
         scheduleOption == .followSunset
     }
 
-    private var sunsetDetailFrameHeight: CGFloat? {
-        guard sunsetDetailHeight > 0 else {
-            return sunsetDetailReveal > 0 ? nil : 0
-        }
-        return sunsetDetailHeight * sunsetDetailReveal
-    }
-
-    private var sunsetDetailOpacity: Double {
-        Double(max(0, min(1, sunsetDetailReveal * 1.35)))
-    }
-
     private var sunsetDetail: some View {
         VStack(alignment: .leading, spacing: 11) {
             sunsetScienceCard
-            sunsetLocationFields
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var sunsetDetailForMeasurement: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            sunsetScienceCardContent
             sunsetLocationFields
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -485,43 +466,10 @@ struct OnboardingView: View {
         }
     }
 
-    private var sunsetDetailWithBottomGap: some View {
-        sunsetDetail.padding(.bottom, 13)
-    }
-
-    private var sunsetDetailMeasure: some View {
-        sunsetDetailForMeasurement
-            .padding(.bottom, 13)
-            .hidden()
-            .opacity(0)
-            .background(GeometryReader { proxy in
-                Color.clear.preference(key: SunsetDetailHeightKey.self, value: proxy.size.height)
-            })
-            .frame(height: 0)
-            .clipped()
-            .accessibilityHidden(true)
-    }
-
     private func applyScheduleOption(_ option: ScheduleModeOption) {
         guard option != scheduleOption else { return }
-        scheduleRevealTask?.cancel()
         scheduleOption = option
         model.setScheduleMode(option.toScheduleMode())
-
-        let shouldShowDetail = option == .followSunset
-        guard !reduceMotion else {
-            sunsetDetailReveal = shouldShowDetail ? 1 : 0
-            return
-        }
-
-        scheduleRevealTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 16_000_000)
-            guard !Task.isCancelled else { return }
-            withAnimation(Theme.Motion.controlReveal(reduceMotion: false)) {
-                sunsetDetailReveal = shouldShowDetail ? 1 : 0
-            }
-            scheduleRevealTask = nil
-        }
     }
 
     private func advance() {
@@ -681,11 +629,6 @@ private struct WindowDraggableBackground: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
-}
-
-private struct SunsetDetailHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 // MARK: - Preview

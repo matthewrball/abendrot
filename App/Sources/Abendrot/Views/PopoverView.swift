@@ -208,7 +208,7 @@ struct PopoverView: View {
 
             // Subtle reveal hint — only while warming is on (reveal does nothing when off).
             if model.state.isEnabled {
-                Text("Reveal True Color: ⌥⌘T (\(model.revealMode.rawValue))")
+                Text("Reveal True Color: ⌥⌘T (\(model.revealMode.rawValue.capitalized))")
                     .font(Theme.Typography.ui(10.5))
                     .foregroundStyle(Theme.Color.textFaint)
             }

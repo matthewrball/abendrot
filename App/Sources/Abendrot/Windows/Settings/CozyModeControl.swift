@@ -76,7 +76,7 @@ struct CozyModeControl: View {
                     .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
                 // Two short words to a line so the narrow onboarding column wraps clean ("The warmest" /
                 // "ember glow.") instead of orphaning "glow." on a third line. Wide in Settings → one line.
-                Text("The warmest ember glow.")
+                Text("The warmest setting.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.82) : Theme.Color.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

@@ -73,6 +73,9 @@ final class AppModel {
     /// Built lazily on first toggle; nil only if the audio buffers can't be allocated. See `toggleAdvanced()`.
     @ObservationIgnored private lazy var expandSwoosh: SwooshSound? = SwooshSound()
 
+    /// Soft native fire cues for Cozy mode — ignite on ON, snuff on OFF.
+    @ObservationIgnored private lazy var cozyFireSound: CozyFireSound? = CozyFireSound()
+
     // MARK: Engine wiring (nil in previews)
 
     private let engine: WarmthEngine?
@@ -386,7 +389,7 @@ final class AppModel {
         // the raw `warmestPointKelvin` setter so, in the (CLI never sends this) both-set case, the cozy
         // toggle's ceiling wins. No validation needed — it's a plain Bool master toggle.
         if let cozy = patch.cozy {
-            setCozy(cozy)
+            setCozy(cozy, userInitiated: false)
         }
         // Enabled last (mild nicety; the engine recomputes from the whole box regardless).
         if let enabled = patch.isEnabled {
@@ -529,6 +532,11 @@ final class AppModel {
         expandSwoosh?.play(opening: isAdvancedExpanded, volume: 0.03)
     }
 
+    private func playCozyFireSound(starting: Bool) {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        cozyFireSound?.play(starting: starting)
+    }
+
 
     func setGlobalWarmth(_ strength: Double) {
         let level = WarmthLevel(strength: strength)
@@ -621,7 +629,8 @@ final class AppModel {
     /// then re-pin the screen to that same Kelvin via `setGlobalWarmthToKelvin` — so expanding the
     /// range never jumps the picture. The one richer-than-pin nuance is Always-on turning cozy ON:
     /// there the screen warms straight to the new maximum (1.0), matching the Settings card today.
-    func setCozy(_ on: Bool) {
+    func setCozy(_ on: Bool, userInitiated: Bool = true) {
+        let changed = on != (state.warmestPoint.value < Kelvin.everydayWarmest.value)
         if on {
             // Turning ON: unlock the deepest candle & ember (~500K). In Always-on, warm to that maximum
             // right away; otherwise keep the current warmth exactly where it is and just hand over the
@@ -640,6 +649,7 @@ final class AppModel {
             setWarmestPoint(Kelvin.everydayWarmest)
             setGlobalWarmthToKelvin(restore)
         }
+        if userInitiated, changed { playCozyFireSound(starting: on) }
     }
 
     // MARK: ── Reveal True Color ─────────────────────────────────────────────
