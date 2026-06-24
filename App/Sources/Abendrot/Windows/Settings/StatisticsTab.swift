@@ -30,6 +30,7 @@ struct StatisticsTab: View {
                 Button(role: .destructive) { model.resetStatistics() } label: {
                     Label("Reset statistics", systemImage: "arrow.counterclockwise")
                 }
+                .buttonStyle(.liquidGlass)
                 Spacer()
             }
 

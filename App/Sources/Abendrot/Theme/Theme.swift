@@ -134,3 +134,37 @@ enum Theme {
         }
     }
 }
+
+// MARK: - LiquidGlassButtonStyle
+
+/// A small, liquid-glass button style for settings and secondary actions.
+/// Aligns with the brand's Liquid Glass material and soft interaction model.
+struct LiquidGlassButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Theme.Typography.ui(12, weight: .medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background {
+                // The liquid glass surface
+                Color.clear
+                    .glassSurface(.popover, cornerRadius: 8)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1.0) : 0.4)
+            // Scale effect for the liquid feel
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(Theme.Motion.warm, value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == LiquidGlassButtonStyle {
+    static var liquidGlass: LiquidGlassButtonStyle {
+        LiquidGlassButtonStyle()
+    }
+}

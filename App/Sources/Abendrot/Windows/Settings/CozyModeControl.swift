@@ -63,12 +63,7 @@ struct CozyModeControl: View {
 
     private var card: some View {
         HStack(spacing: 14) {
-            Image(systemName: isCozy ? "flame.fill" : "flame")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textMuted)
-                .shadow(color: isCozy ? Theme.Color.accentHighlight.opacity(0.55) : .clear, radius: 8)
-                .scaleEffect(isCozy ? 1 : 0.9)
-                .frame(width: 28)
+            SparkingFlameIcon(isCozy: isCozy)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Cozy mode")
@@ -133,4 +128,108 @@ struct CozyModeControl: View {
             model.setCozy(!isCozy)
         }
     }
+}
+
+private struct SparkingFlameIcon: View {
+    var isCozy: Bool
+    
+    @State private var sparkTrigger = 0
+    
+    struct Spark: Identifiable {
+        let id: Int
+        let angle: Double
+        let distance: Double
+        let delay: Double
+    }
+    
+    let sparks: [Spark] = [
+        Spark(id: 0, angle: 105, distance: 16, delay: 0.0),
+        Spark(id: 1, angle: 90, distance: 22, delay: 0.05),
+        Spark(id: 2, angle: 75, distance: 16, delay: 0.1)
+    ]
+    
+    var body: some View {
+        ZStack {
+            // Sparks shooting out
+            ForEach(sparks) { spark in
+                Circle()
+                    .fill(Theme.Color.accentHighlight)
+                    .frame(width: 3.5, height: 3.5)
+                    .keyframeAnimator(initialValue: SparkAnimState(), trigger: sparkTrigger) { content, value in
+                        content
+                            .offset(x: value.travel * cos(spark.angle * .pi / 180),
+                                    y: -value.travel * sin(spark.angle * .pi / 180))
+                            .scaleEffect(value.scale)
+                            .opacity(value.opacity)
+                            .blur(radius: value.blur)
+                    } keyframes: { _ in
+                        KeyframeTrack(\.travel) {
+                            CubicKeyframe(0, duration: spark.delay)
+                            SpringKeyframe(spark.distance, duration: 0.5, spring: .smooth)
+                        }
+                        KeyframeTrack(\.scale) {
+                            CubicKeyframe(0, duration: spark.delay)
+                            CubicKeyframe(1.2, duration: 0.1)
+                            CubicKeyframe(0.0, duration: 0.4)
+                        }
+                        KeyframeTrack(\.opacity) {
+                            CubicKeyframe(0, duration: spark.delay)
+                            CubicKeyframe(1.0, duration: 0.1)
+                            CubicKeyframe(0.0, duration: 0.4)
+                        }
+                        KeyframeTrack(\.blur) {
+                            CubicKeyframe(0, duration: spark.delay)
+                            CubicKeyframe(0, duration: 0.2)
+                            CubicKeyframe(2.0, duration: 0.3)
+                        }
+                    }
+            }
+            
+            // The Flame itself
+            Image(systemName: isCozy ? "flame.fill" : "flame")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textMuted)
+                .contentTransition(.symbolEffect(.replace))
+                .keyframeAnimator(initialValue: FlameAnimState(scale: isCozy ? 1 : 0.9, glow: isCozy ? 0.55 : 0), trigger: sparkTrigger) { content, value in
+                    content
+                        .scaleEffect(value.scale)
+                        .shadow(color: Theme.Color.accentHighlight.opacity(value.glow), radius: value.glow * 15)
+                } keyframes: { _ in
+                    KeyframeTrack(\.scale) {
+                        if isCozy {
+                            SpringKeyframe(1.15, duration: 0.2, spring: .smooth)
+                            SpringKeyframe(1.0, duration: 0.4, spring: .smooth)
+                        } else {
+                            SpringKeyframe(0.9, duration: 0.3, spring: .smooth)
+                        }
+                    }
+                    KeyframeTrack(\.glow) {
+                        if isCozy {
+                            CubicKeyframe(1.0, duration: 0.2)
+                            CubicKeyframe(0.55, duration: 0.5)
+                        } else {
+                            CubicKeyframe(0.0, duration: 0.3)
+                        }
+                    }
+                }
+        }
+        .frame(width: 28)
+        .onChange(of: isCozy) { _, new in
+            if new {
+                sparkTrigger += 1
+            }
+        }
+    }
+}
+
+private struct SparkAnimState {
+    var travel: Double = 0
+    var scale: Double = 0
+    var opacity: Double = 0
+    var blur: Double = 0
+}
+
+private struct FlameAnimState {
+    var scale: Double = 0.9
+    var glow: Double = 0.0
 }

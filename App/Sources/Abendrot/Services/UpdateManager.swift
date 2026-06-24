@@ -121,6 +121,7 @@ struct UpdateSettingsView: View {
             } label: {
                 Label("Check for Updates...", systemImage: "arrow.down.circle")
             }
+            .buttonStyle(.liquidGlass)
             .disabled(!updates.canCheckForUpdates)
         }
         .onAppear { updates.refresh() }

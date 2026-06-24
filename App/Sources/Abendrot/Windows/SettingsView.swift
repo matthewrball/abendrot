@@ -49,11 +49,24 @@ struct SettingsView: View {
     var scrolls: Bool = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var visibleTabs: [SettingsTab] {
+        SettingsTab.allCases.filter { tab in
+            if tab == .displays {
+                if model.state.displays.count > 1 { return true }
+                if let singleDisplay = model.state.displays.first {
+                    return model.isTintOnly(singleDisplay)
+                }
+                return false
+            }
+            return true
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 VStack(spacing: 4) {
-                    ForEach(SettingsTab.allCases) { tab in
+                    ForEach(visibleTabs) { tab in
                         SettingsSidebarButton(
                             tab: tab,
                             titleText: tab == .displays && model.state.displays.count == 1 ? "Display" : tab.title,

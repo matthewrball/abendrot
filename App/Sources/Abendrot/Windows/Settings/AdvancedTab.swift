@@ -79,11 +79,10 @@ struct AdvancedTab: View {
                 model.setEnabled(false)
                 model.restoreAllDisplays()
             } label: {
-                Label("Restore all displays to neutral", systemImage: "arrow.counterclockwise")
+                let multiple = model.state.displays.count > 1
+                Label(multiple ? "Restore all displays to True Color" : "Restore display to True Color", systemImage: "arrow.counterclockwise")
             }
-            Text("Restore every display to true color. Disable warming.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textFaint)
+            .buttonStyle(.liquidGlass)
         }
     }
 }
@@ -123,6 +122,7 @@ private struct ExcludedAppsControl: View {
             } label: {
                 Label("Add app…", systemImage: "plus")
             }
+            .buttonStyle(.liquidGlass)
             .padding(.top, 2)
         }
     }
