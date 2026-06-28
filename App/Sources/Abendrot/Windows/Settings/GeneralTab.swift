@@ -8,6 +8,7 @@ struct GeneralTab: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("softConfirmationTone") private var softTone = true
     @State private var launchAtLoginError: String?
+    @State private var showsMaximumWarmthFocusCue = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -22,11 +23,7 @@ struct GeneralTab: View {
                         .font(Theme.Typography.ui(13, weight: .semibold))
                         .foregroundStyle(Theme.Color.textPrimary)
                     Spacer()
-                    Toggle("", isOn: Binding(
-                        get: { model.state.isEnabled },
-                        set: { model.setEnabled($0) }
-                    ))
-                    .labelsHidden()
+                    WarmthPowerSwitch(isOn: enabledBinding, accessibilityLabel: "Warm my displays")
                 }
                 if model.state.isEnabled {
                     WarmSlider(
@@ -42,8 +39,14 @@ struct GeneralTab: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
                 }
             }
-            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.isEnabled)
+            .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.state.isEnabled)
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: ScheduleModeOption(model.state.scheduleMode))
+            .background(maximumWarmthFocusCueFill)
+            .overlay(maximumWarmthFocusCueStroke)
+            .task(id: model.maximumWarmthFocusRequest) {
+                guard let request = model.maximumWarmthFocusRequest else { return }
+                await runMaximumWarmthFocusCue(request)
+            }
 
             // Schedule MODE lives here: the menu-bar popover groups on/off + warmth + mode as
             // one "how it warms" unit, so General is its full desktop twin. The Mode selector and Location
@@ -87,7 +90,7 @@ struct GeneralTab: View {
                 }
             }
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: ScheduleModeOption(model.state.scheduleMode))
-            .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.isEnabled)
+            .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.state.isEnabled)
 
             DividerLine()
 
@@ -96,9 +99,8 @@ struct GeneralTab: View {
             HStack {
                 Text("Launch at login").font(Theme.Typography.ui(13))
                 Spacer()
-                Toggle("", isOn: $launchAtLogin)
+                Toggle("", isOn: launchAtLoginBinding)
                     .labelsHidden()
-                    .onChange(of: launchAtLogin) { _, isOn in setLaunchAtLogin(isOn) }
             }
             if let launchAtLoginError {
                 Text(launchAtLoginError)
@@ -109,13 +111,13 @@ struct GeneralTab: View {
             HStack {
                 Text("Show icon in menu bar").font(Theme.Typography.ui(13))
                 Spacer()
-                Toggle("", isOn: $model.showInMenuBar).labelsHidden()
+                Toggle("", isOn: showInMenuBarBinding).labelsHidden()
             }
 
             HStack {
                 Text("Sounds").font(Theme.Typography.ui(13))
                 Spacer()
-                Toggle("", isOn: $softTone).labelsHidden()
+                Toggle("", isOn: soundsBinding).labelsHidden()
             }
         }
         .toggleStyle(.switch)
@@ -139,6 +141,7 @@ struct GeneralTab: View {
             } else {
                 try SMAppService.mainApp.unregister()
             }
+            model.playSoftToggleTone(on: enable)
         } catch {
             // Roll the toggle back to the system's actual state and explain why.
             launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -148,5 +151,79 @@ struct GeneralTab: View {
 
     private var isCozy: Bool {
         model.state.warmestPoint.value < Kelvin.everydayWarmest.value
+    }
+
+    private var enabledBinding: Binding<Bool> {
+        Binding(
+            get: { model.state.isEnabled },
+            set: { model.setEnabled($0) }
+        )
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(get: { launchAtLogin }, set: { newValue in
+            guard newValue != launchAtLogin else { return }
+            launchAtLogin = newValue
+            setLaunchAtLogin(newValue)
+        })
+    }
+
+    private var showInMenuBarBinding: Binding<Bool> {
+        Binding(get: { model.showInMenuBar }, set: { newValue in
+            guard newValue != model.showInMenuBar else { return }
+            model.showInMenuBar = newValue
+            model.playSoftToggleTone(on: newValue)
+        })
+    }
+
+    private var soundsBinding: Binding<Bool> {
+        Binding(get: { softTone }, set: { newValue in
+            guard newValue != softTone else { return }
+            if !newValue { model.playSoftToggleTone(on: false) }
+            softTone = newValue
+            if newValue { model.playSoftToggleTone(on: true) }
+        })
+    }
+
+    private var maximumWarmthFocusCueFill: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control + 4, style: .continuous)
+            .fill(Theme.Color.accent.opacity(0.12))
+            .opacity(showsMaximumWarmthFocusCue ? 1 : 0)
+            .padding(-10)
+    }
+
+    private var maximumWarmthFocusCueStroke: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control + 4, style: .continuous)
+            .stroke(Theme.Color.accent.opacity(0.7), lineWidth: 1)
+            .shadow(color: Theme.Color.accent.opacity(0.45), radius: 12)
+            .opacity(showsMaximumWarmthFocusCue ? 1 : 0)
+            .padding(-10)
+    }
+
+    @MainActor
+    private func runMaximumWarmthFocusCue(_ request: UUID) async {
+        if showsMaximumWarmthFocusCue {
+            withAnimation(nil) { showsMaximumWarmthFocusCue = false }
+            await Task.yield()
+        }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.18)) {
+            showsMaximumWarmthFocusCue = true
+        }
+        do {
+            try await Task.sleep(nanoseconds: 700_000_000)
+        } catch {
+            return
+        }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.42)) {
+            showsMaximumWarmthFocusCue = false
+        }
+        do {
+            try await Task.sleep(nanoseconds: reduceMotion ? 0 : 420_000_000)
+        } catch {
+            return
+        }
+        if model.maximumWarmthFocusRequest == request {
+            model.maximumWarmthFocusRequest = nil
+        }
     }
 }

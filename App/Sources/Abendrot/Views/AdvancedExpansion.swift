@@ -105,8 +105,11 @@ struct AdvancedExpansion: View {
                 selection: Binding(
                     get: { softTone ? .on : .off },
                     set: { newValue in
+                        guard (newValue == .on) != softTone else { return }
                         withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+                            if newValue == .off { model.playSoftToggleTone(on: false) }
                             softTone = newValue == .on
+                            if newValue == .on { model.playSoftToggleTone(on: true) }
                         }
                     }
                 ),

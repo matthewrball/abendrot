@@ -38,6 +38,9 @@ final class AppModel {
     /// One-shot focus cue for Settings -> Advanced -> Excluded apps.
     var excludedAppsFocusRequest: UUID?
 
+    /// One-shot focus cue for Settings -> General -> Maximum warmth.
+    var maximumWarmthFocusRequest: UUID?
+
     /// Whether the menu-bar icon is shown (Settings → General). When false the app
     /// keeps running and is reachable via the global hotkey + relaunch.
     var showInMenuBar: Bool = true
@@ -57,6 +60,7 @@ final class AppModel {
 
     @ObservationIgnored private var sunsetMaximumWarmth = WarmthLevel(strength: 0.7)
     @ObservationIgnored private var manualWarmth = WarmthLevel(strength: 0.7)
+    @ObservationIgnored private var pendingEnabled: Bool?
     @ObservationIgnored private var pendingScheduleMode: ScheduleModeOption?
 
     // MARK: Statistics (local-only — never leaves this Mac, "Private by default")
@@ -192,6 +196,13 @@ final class AppModel {
                 next.globalWarmth = state.globalWarmth
             }
         }
+        if let pending = pendingEnabled {
+            if snapshot.isEnabled == pending {
+                pendingEnabled = nil
+            } else {
+                next.isEnabled = state.isEnabled
+            }
+        }
         state = next
     }
 
@@ -302,7 +313,7 @@ final class AppModel {
         // Reveal behaviour. A fresh install keeps the default toggle.
         if let raw = cfPrefString(PreferenceKey.revealMode),
            let mode = RevealMode(rawValue: raw) {
-            setRevealMode(mode)
+            setRevealMode(mode, userInitiated: false)
         }
 
         // Excluded apps (suspend warmth while one is frontmost). Fresh install = none.
@@ -406,7 +417,7 @@ final class AppModel {
         if let revealRaw = patch.revealMode,
            let valid = try? ControlValidation.validatedRevealMode(revealRaw),
            let mode = RevealMode(rawValue: valid) {
-            setRevealMode(mode)
+            setRevealMode(mode, userInitiated: false)
         }
         if let apps = patch.excludedApps {
             setExcludedApps(Set(apps))
@@ -524,6 +535,7 @@ final class AppModel {
         // Optimistic UI (no spinners): reflect immediately, engine confirms.
         let changed = enabled != state.isEnabled
         state.isEnabled = enabled
+        pendingEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.isEnabledKey)
         Task { await engine?.setEnabled(enabled) }
         // Tone only on a real user toggle (not the launch-time restore, which passes userInitiated: false).
@@ -543,19 +555,18 @@ final class AppModel {
         confirmationChime?.play(pitchCents: warming ? 0 : -500, volume: 0.7)   // ~0.35 effective vs the 0.5 master
     }
 
+    /// Same Glass cue as the master toggle, just lower and darker for secondary toggles.
+    func playSoftToggleTone(on: Bool) {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        confirmationChime?.play(pitchCents: on ? -180 : -620, volume: 0.36)
+    }
+
     /// A soft tick when the user switches Schedule mode (Sunset · Manual), gated by the SAME
-    /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the Glass graph but
-    /// QUIETER and pitched UP into a light "selection" tick — not the warming bloom — and each mode
-    /// gets its OWN note (Always-on brighter/higher, Sunset lower), so you hear WHICH mode you picked:
-    /// a choice, not an on/off.
+    /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the secondary toggle
+    /// tone so mode changes stay quieter than the master warming bloom.
     /// Internal (not private) so onboarding can play the same mode tick when its picker is toggled.
     func playSoftModeTone(_ mode: ScheduleMode) {
-        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        // ponytail: taste-tune these three by ear — sound is sensory. Cents are vs. the Glass
-        // fundamental; both sit ABOVE the warming tones (0 / -500) so they read as a lighter tick, and
-        // a major third apart from each other.
-        let cents: Float = ScheduleModeOption(mode) == .alwaysOn ? 700 : 300
-        confirmationChime?.play(pitchCents: cents, volume: 0.22)   // ~0.11 effective vs the 0.5 master
+        playSoftToggleTone(on: ScheduleModeOption(mode) == .alwaysOn)
     }
 
     /// Flip the popover's advanced panel. Plays the airy swoosh — rising on EXPAND, falling on COLLAPSE
@@ -716,7 +727,7 @@ final class AppModel {
             setWarmestPoint(Kelvin.everydayWarmest)
             setGlobalWarmthToKelvin(restore)
         }
-        if userInitiated, changed { playCozyFireSound(starting: on) }
+        if userInitiated, changed { playSoftToggleTone(on: on) }
     }
 
     // MARK: ── Reveal True Color ─────────────────────────────────────────────
@@ -735,10 +746,12 @@ final class AppModel {
     /// this live in `handleKeyDown/Up`; this surfaces + persists the choice. The service call is a
     /// no-op in previews (no live hotkey), but the observed `revealMode` still updates so the picker
     /// tracks the selection.
-    func setRevealMode(_ mode: RevealMode) {
+    func setRevealMode(_ mode: RevealMode, userInitiated: Bool = true) {
+        let changed = mode != revealMode
         revealMode = mode
         hotkeyService?.mode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: Self.revealModeKey)
+        if userInitiated, changed { playSoftToggleTone(on: mode == .toggle) }
     }
 
     // MARK: ── Per-display intents ───────────────────────────────────────────
@@ -754,14 +767,17 @@ final class AppModel {
 
     /// Enable/disable a display's "Custom warmth" override. Off → the display follows the global
     /// warmth; on → it keeps its own value (seeded to the current global by the engine).
-    func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity) {
+    func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity, userInitiated: Bool = true) {
+        var changed = false
         if let i = state.displays.firstIndex(where: { $0.id == id }) {
+            changed = state.displays[i].warmthOverridden != enabled
             state.displays[i].warmthOverridden = enabled
             if enabled {
                 state.displays[i].warmth = state.globalWarmth
             }
         }
         Task { await engine?.setWarmthOverride(enabled, for: id) }
+        if userInitiated, changed { playSoftToggleTone(on: enabled) }
     }
 
     func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) {
@@ -775,11 +791,14 @@ final class AppModel {
         Task { await engine?.setPreferredMethod(method, for: id) }
     }
 
-    func setHardwareDDCEnabled(_ enabled: Bool, for id: DisplayIdentity) {
+    func setHardwareDDCEnabled(_ enabled: Bool, for id: DisplayIdentity, userInitiated: Bool = true) {
+        var changed = false
         if let i = state.displays.firstIndex(where: { $0.id == id }) {
+            changed = state.displays[i].isHardwareDDCEnabled != enabled
             state.displays[i].isHardwareDDCEnabled = enabled
         }
         Task { await engine?.setHardwareDDCEnabled(enabled, for: id) }
+        if userInitiated, changed { playSoftToggleTone(on: enabled) }
     }
 
     func setExcludedApps(_ bundleIDs: Set<String>) {
@@ -873,10 +892,12 @@ final class AppModel {
         return parts.joined(separator: " ")
     }
 
-    func setStatsEnabled(_ on: Bool) {
+    func setStatsEnabled(_ on: Bool, userInitiated: Bool = true) {
+        let changed = on != statsEnabled
         statsEnabled = on
         UserDefaults.standard.set(on, forKey: Self.statsEnabledKey)
         updateWarmingStats()   // off → closes any open session; on → resumes if currently warming
+        if userInitiated, changed { playSoftToggleTone(on: on) }
     }
 
     func resetStatistics() {

@@ -136,7 +136,7 @@ struct SettingsView: View {
         case .advanced: AdvancedTab(model: model)
         case .privacy: PrivacyTab(model: model)
         case .statistics: StatisticsTab(model: model)
-        case .updates: UpdatesTab()
+        case .updates: UpdatesTab(model: model)
         case .about: AboutTab()
         }
     }
