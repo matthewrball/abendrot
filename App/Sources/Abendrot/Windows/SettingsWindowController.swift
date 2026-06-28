@@ -30,7 +30,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     /// 2. Open / raise Settings on the NEXT main-actor turn, so the dropdown teardown settles before
     /// we front the window; `orderFrontRegardless` in `focus()` forces it up for this `.accessory`
     /// agent app.
-    static func show(model: AppModel, tab: SettingsTab? = nil) {
+    static func show(model: AppModel, tab: SettingsTab? = nil, focusExcludedApps: Bool = false) {
         // Close the dropdown now, while it's still key. Guard against closing the Settings window
         // itself (the re-focus path, where Settings may already be the key/last-key window).
         if let dropdown = NSApp.keyWindow, dropdown !== shared?.window {
@@ -40,6 +40,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             // Set the tab BEFORE the early return so re-focusing an already-open window also
             // deep-links (clicking "Manage…" while Settings is open jumps it to Advanced).
             if let tab { model.settingsTab = tab }
+            if focusExcludedApps { model.excludedAppsFocusRequest = UUID() }
             if let existing = shared {
                 existing.focus()
                 return

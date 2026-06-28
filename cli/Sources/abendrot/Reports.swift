@@ -81,7 +81,7 @@ enum StatusReport {
     static func humanFromPreferences(running: Bool = false) -> String {
         let enabled = Control.configuredBool(PreferenceKey.isEnabled) ?? false
         let mode = Control.configuredScheduleMode().rawValue
-        let strength = Control.configuredDouble(PreferenceKey.globalWarmthStrength)
+        let strength = Control.configuredWarmthStrength()
         let maxWarmth = Control.configuredInt(PreferenceKey.warmestPointKelvin) ?? Kelvin.everydayWarmest.value
         let header = running
             ? "Abendrot — running (newer app; showing saved settings)"
@@ -112,7 +112,7 @@ enum StatusReport {
         var fields: [String: Any] = [:]
         fields["isEnabled"] = Control.configuredBool(PreferenceKey.isEnabled) ?? false
         fields["scheduleMode"] = Control.configuredScheduleMode().rawValue
-        if let strength = Control.configuredDouble(PreferenceKey.globalWarmthStrength) {
+        if let strength = Control.configuredWarmthStrength() {
             fields["globalWarmthStrength"] = strength
         }
         let maxWarmth = Control.configuredInt(PreferenceKey.warmestPointKelvin) ?? Kelvin.everydayWarmest.value
@@ -135,7 +135,7 @@ enum GetReport {
     static func value(forKey key: String) -> (label: String, value: String)? {
         switch key {
         case "warmth":
-            if let strength = Control.configuredDouble(PreferenceKey.globalWarmthStrength) {
+            if let strength = Control.configuredWarmthStrength() {
                 return ("warmth", String(format: "%.2f", strength))
             }
             return ("warmth", "default")
@@ -177,7 +177,7 @@ enum GetReport {
     static func jsonObject(forKey key: String) -> String? {
         switch key {
         case "warmth":
-            if let strength = Control.configuredDouble(PreferenceKey.globalWarmthStrength) {
+            if let strength = Control.configuredWarmthStrength() {
                 return "{\"warmth\":\(jsonNumber(strength))}"
             }
             return "{\"warmth\":\"default\"}"

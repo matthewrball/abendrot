@@ -113,7 +113,8 @@ struct ModeControl: View {
                           isSelected: isSelected, reduceMotion: reduceMotion || !animatesSelection)
                     .frame(width: glyphSize, height: glyphSize)
                 Text(option.label)
-                    .font(Theme.Typography.ui(labelSize, weight: isSelected ? .bold : .semibold))
+                    // Keep label metrics stable; the moving pill and ink color carry selection.
+                    .font(Theme.Typography.ui(labelSize, weight: .semibold))
                     .foregroundStyle(ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -313,12 +314,12 @@ struct BrandSegmentedControl<Option: Identifiable & Equatable & Sendable>: View 
             select(option)
         } label: {
             Text(label(option))
-                .font(Theme.Typography.ui(12, weight: isSelected ? .bold : .medium))
+                // Keep label metrics stable; the moving pill and ink color carry selection.
+                .font(Theme.Typography.ui(12, weight: .semibold))
                 // Dark ink on the bright gradient (the app's high-contrast convention) — cream/white on
                 // the light-gold top of the ramp fails contrast. Muted on the dark track when unselected.
                 .foregroundStyle(isSelected ? Theme.Color.inkOnAccent : Theme.Color.textMuted)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
                 .padding(.vertical, 7)
                 .frame(maxWidth: .infinity)
                 .background {
@@ -349,25 +350,8 @@ struct BrandSegmentedControl<Option: Identifiable & Equatable & Sendable>: View 
     // MARK: Brand surfaces
 
     /// The selected segment: the sunset gradient with a top sheen + soft warm glow → liquid glass.
-    @ViewBuilder
     private var selectedPill: some View {
-        if reduceMotion {
-            selectedPillBase
-        } else {
-            selectedPillBase
-                .keyframeAnimator(initialValue: Stretch(), trigger: selection) { pill, stretch in
-                    pill.scaleEffect(x: stretch.x, y: stretch.y)
-                } keyframes: { _ in
-                    KeyframeTrack(\.x) {
-                        CubicKeyframe(1.08, duration: 0.12)
-                        SpringKeyframe(1.0, duration: 0.24, spring: .snappy)
-                    }
-                    KeyframeTrack(\.y) {
-                        CubicKeyframe(0.94, duration: 0.12)
-                        SpringKeyframe(1.0, duration: 0.24, spring: .snappy)
-                    }
-                }
-        }
+        selectedPillBase
     }
 
     private var selectedPillBase: some View {
@@ -399,10 +383,5 @@ struct BrandSegmentedControl<Option: Identifiable & Equatable & Sendable>: View 
 
     private var segmentAnimation: Animation? {
         reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.76, blendDuration: 0.06)
-    }
-
-    private struct Stretch {
-        var x: CGFloat = 1
-        var y: CGFloat = 1
     }
 }

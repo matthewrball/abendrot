@@ -35,7 +35,7 @@ struct GeneralTab: View {
                             set: { model.setGlobalWarmth($0) }
                         ),
                         model: model,
-                        headerTitle: "Maximum warmth",
+                        headerTitle: ScheduleModeOption(model.state.scheduleMode) == .alwaysOn ? "Warmth" : "Maximum warmth",
                         kelvin: model.globalKelvin,
                         cozy: isCozy
                     )

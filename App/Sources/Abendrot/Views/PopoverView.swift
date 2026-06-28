@@ -52,7 +52,7 @@ struct PopoverView: View {
                     )
                     .zIndex(1)
                     // Always-on's slider path is 7pt shorter than Sunset's caption path; reserve it here
-                    // so Mode, Cozy mode, and the footer share one y-position across modes.
+                    // so Mode and the footer share one y-position across modes.
                     .padding(.bottom, locked ? 0 : 7)
                     if locked {
                         sunsetLockCaption
@@ -61,11 +61,13 @@ struct PopoverView: View {
                     }
                     modeSection
                         .padding(.top, 16)
-                    // Cozy mode (the maximum-warmth control) right under Mode — the bare card, no section
-                    // header / science note (those live in Settings). Shares `model.setCozy`, so it can
-                    // never disagree with the Settings card, onboarding, or the `abendrot cozy` CLI.
-                    CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
-                        .padding(.top, 16)
+                    if !locked {
+                        // Cozy mode (the maximum-warmth control) right under Mode — hidden while Sunset
+                        // owns warmth and points users to Settings for the maximum.
+                        CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
+                            .padding(.top, 16)
+                            .transition(.opacity)
+                    }
                 }
                 .transition(.softReveal)
                 // Caption crossfades while the popover shell keeps a steady natural height.

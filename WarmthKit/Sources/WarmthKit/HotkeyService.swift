@@ -14,14 +14,16 @@ public enum RevealMode: String, Sendable, Codable, CaseIterable, Identifiable {
 /// Hold-to-reveal hotkey wrapper.
 ///
 /// Wraps `KeyboardShortcuts` (Carbon `RegisterEventHotKey`): no Accessibility permission,
-/// keyDown → `beginReveal()`, keyUp → `endReveal()`. The Carbon callback hops to the main
-/// actor. A watchdog guarantees warmth is never stuck-suspended if a key-up is lost (e.g. a
+/// keyDown → `beginReveal()`, keyUp → `endReveal()` in hold mode; toggle mode can route through
+/// the app's master warmth toggle so visible switches stay in sync. The Carbon callback hops to the
+/// main actor. A watchdog guarantees warmth is never stuck-suspended if a key-up is lost (e.g. a
 /// Space switch eats it): warmth auto-resumes after `watchdogTimeout`.
 @MainActor
 public final class HotkeyService {
     private let engine: WarmthEngine
+    private let toggleWarmth: (() -> Void)?
 
-    public var mode: RevealMode = .hold
+    public var mode: RevealMode = .toggle
 
     /// Watchdog: if a key-up is lost, auto-resume warmth after this interval. Default 8s.
     public var watchdogTimeout: Duration = .seconds(8)
@@ -29,8 +31,9 @@ public final class HotkeyService {
     private var watchdogTask: Task<Void, Never>?
     private var isRevealActive = false
 
-    public init(engine: WarmthEngine) {
+    public init(engine: WarmthEngine, toggleWarmth: (() -> Void)? = nil) {
         self.engine = engine
+        self.toggleWarmth = toggleWarmth
     }
 
     /// Install the reveal hotkey (default ⌥⌘T; configurable; supports HOLD and TOGGLE).
@@ -54,12 +57,16 @@ public final class HotkeyService {
 
     // MARK: Key handling
 
-    private func handleKeyDown() {
+    func handleKeyDown() {
         switch mode {
         case .hold:
             beginReveal()
             armWatchdog()
         case .toggle:
+            if let toggleWarmth {
+                toggleWarmth()
+                return
+            }
             if isRevealActive { endReveal() } else { beginReveal() }
         }
     }

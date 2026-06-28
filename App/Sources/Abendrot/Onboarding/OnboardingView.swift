@@ -222,7 +222,7 @@ struct OnboardingView: View {
 
             WarmSlider(strength: Binding(
                 get: { model.state.globalWarmth.strength },
-                set: { model.setGlobalWarmth($0) }
+                set: { setOnboardingWarmth($0) }
             ), model: model, showsHeader: false, cozy: isCozy,
             onPressingChanged: { sliderPressing = $0 })
 
@@ -231,7 +231,8 @@ struct OnboardingView: View {
             // the way to the warmest + ignites the fireball thumb (the deepest ember); the choice
             // (warmestPoint) persists past onboarding.
             CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
-                            enablesAtWarmest: true)
+                            enablesAtWarmest: true,
+                            mirrorsToSunsetMaximum: scheduleOption == .followSunset)
 
             Spacer(minLength: 0)
 
@@ -253,6 +254,7 @@ struct OnboardingView: View {
             // the user's REAL everyday warmth, so re-slamming 1.0 on back-nav would discard what they dialed
             // keep it.
             if scheduleOption != .alwaysOn {
+                model.setSunsetMaximumWarmth(1.0)
                 model.setGlobalWarmth(1.0)
             }
             model.setEnabled(true, userInitiated: false)
@@ -291,11 +293,11 @@ struct OnboardingView: View {
     .frame(maxHeight: .infinity, alignment: .top)
     .onAppear {
         model.setEnabled(true, userInitiated: false)
+        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         if !hasInitializedWarmth {
             model.setGlobalWarmth(1.0)
             hasInitializedWarmth = true
         }
-        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
     }
 }
 
@@ -545,6 +547,13 @@ private var manualDetail: some View {
         }
         
         model.setScheduleMode(option.toScheduleMode())
+    }
+
+    private func setOnboardingWarmth(_ strength: Double) {
+        if scheduleOption == .followSunset {
+            model.setSunsetMaximumWarmth(strength)
+        }
+        model.setGlobalWarmth(strength)
     }
 
     private func advance() {

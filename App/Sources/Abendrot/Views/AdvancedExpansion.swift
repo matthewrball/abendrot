@@ -18,16 +18,19 @@ struct AdvancedExpansion: View {
     @AppStorage("softConfirmationTone") private var softTone = true
 
     var body: some View {
+        let activeDisplays = model.state.displays.filter { $0.appliedMethod != .off }
+
         VStack(alignment: .leading, spacing: 12) {
             DividerLine()
 
             // Per-display "Override" rows — moved out of the simple popover. Shown ONLY with 2+
-            // displays (a lone screen needs no row); the app-level "can only tint" banner in the
-            // simple view still fires for a single incompatible display. The `tintOnly` test is the
-            // shared `model.isTintOnly` (single source of truth, also used by that banner).
-            if model.state.displays.count > 1 {
+            // actively warmed displays (a lone active screen needs no row); the app-level "can only
+            // tint" banner in the simple view still fires for a single incompatible display. The
+            // `tintOnly` test is the shared `model.isTintOnly` (single source of truth, also used by
+            // that banner).
+            if activeDisplays.count > 1 {
                 VStack(spacing: 8) {
-                    ForEach(model.state.displays) { display in
+                    ForEach(activeDisplays) { display in
                         DisplayRow(model: model, display: display, tintOnly: model.isTintOnly(display))
                     }
                 }
@@ -35,15 +38,15 @@ struct AdvancedExpansion: View {
                 DividerLine()
             }
 
-            revealModeRow
             soundsRow
+            revealModeRow
 
             DividerLine()
 
             // Per-app exclusions — the popover is the quick surface; the full picker lives in
             // Settings → Advanced. This row opens it there directly (deep-links the tab).
             Button {
-                SettingsWindowController.show(model: model, tab: .advanced)
+                SettingsWindowController.show(model: model, tab: .advanced, focusExcludedApps: true)
             } label: {
                 HStack {
                     Label("Per-app exclusions", systemImage: "app.badge.checkmark")

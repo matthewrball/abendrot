@@ -9,7 +9,6 @@ struct PrivacyTab: View {
             privacyPoint("No screen recording", "Display capabilities are classified, never measured by screen capture.")
             privacyPoint("No location data", "Your sunset is computed from your time zone — or a city you pick yourself — never your GPS. Abendrot never asks for location access.")
             privacyPoint("No sandbox surprises", "Warmth applies locally; nothing about your displays leaves the machine.")
-            privacyPoint("Manual reveal during captures", "Auto screenshot/recording suspend is out of scope for v1.0; reveal true color manually with the hotkey.")
         }
     }
 
