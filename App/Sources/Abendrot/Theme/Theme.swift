@@ -41,6 +41,7 @@ enum Theme {
 
         // Text
         static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .main)
+        static let textCream = SwiftUI.Color("TextCream", bundle: .main)
         static let textMuted = SwiftUI.Color("TextMuted", bundle: .main)
         static let textFaint = SwiftUI.Color("TextFaint", bundle: .main)
 

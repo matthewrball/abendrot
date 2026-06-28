@@ -43,6 +43,10 @@ struct WarmSlider: View {
     /// Last detent index the value crossed during a drag — drives the dial tick + thumb pop (one per
     /// detent), reset between presses. nil = not mid-manipulation.
     @State private var lastDetent: Int? = nil
+    /// Local interaction value that owns the thumb while the user is dragging. Engine snapshots can trail
+    /// behind rapid writes; this keeps the control from replaying those stale values under the pointer.
+    @State private var interactionStrength: Double? = nil
+    @State private var interactionReleaseTask: Task<Void, Never>? = nil
     /// Bumped on each detent crossing to fire the thumb's "pop" keyframe — the visual half of the click.
     @State private var popTrigger = 0
 
@@ -101,13 +105,16 @@ struct WarmSlider: View {
         VStack(alignment: .leading, spacing: 2) {
             SectionLabel(headerTitle)
             if let kelvin {
+                let displayKelvin = interactionStrength
+                    .map { WarmthLevel(strength: $0).kelvin(warmestPoint: model.state.warmestPoint) }
+                    ?? kelvin
                 // Big lit "price-board" numerals — tabular so the value ticks cleanly as you drag. The
                 // "what is Kelvin?" ⓘ sits to the RIGHT of the K, with the readout it explains.
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(kelvin.displayValue.formatted(.number))
+                    Text(displayKelvin.displayValue.formatted(.number))
                         .font(Theme.Typography.serif(42))
                         .monospacedDigit()
-                        .contentTransition(isPressing ? .identity : .numericText(value: Double(kelvin.displayValue)))
+                        .contentTransition(isPressing ? .identity : .numericText(value: Double(displayKelvin.displayValue)))
                     Text("K")
                         .font(Theme.Typography.serif(23))
                         .foregroundStyle(Theme.Color.accentHighlight.opacity(0.7))
@@ -122,12 +129,12 @@ struct WarmSlider: View {
                 .foregroundStyle(Theme.Color.accentHighlight)
                 .shadow(color: Theme.Color.accent.opacity(0.35), radius: 12, y: 1)   // lit-sign glow
                 // Instant while dragging (rapid changes otherwise glitch the digit-roll); smooth roll otherwise.
-                .animation(isPressing ? nil : Theme.Motion.warm(reduceMotion: reduceMotion), value: kelvin.displayValue)
+                .animation(isPressing ? nil : Theme.Motion.warm(reduceMotion: reduceMotion), value: displayKelvin.displayValue)
                 .accessibilityElement()
-                .accessibilityLabel("\(headerTitle) \(kelvin.displayValue) Kelvin")
+                .accessibilityLabel("\(headerTitle) \(displayKelvin.displayValue) Kelvin")
 
                 // Accent metric: estimated blue-light reduction (instant during a live drag).
-                BlueLightReductionLabel(kelvin: kelvin, cozy: cozy, animated: !isPressing)
+                BlueLightReductionLabel(kelvin: displayKelvin, cozy: cozy, animated: !isPressing)
                     .padding(.top, 3)
             }
         }
@@ -148,7 +155,8 @@ struct WarmSlider: View {
     private var gradientSlider: some View {
         GeometryReader { geo in
             let usable = max(geo.size.width - thumbSize, 1)
-            let thumbX = CGFloat(thumbPosition(forStrength: strength)) * usable
+            let displayStrength = interactionStrength ?? strength
+            let thumbX = CGFloat(thumbPosition(forStrength: displayStrength)) * usable
 
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)                       // unfilled groove
@@ -211,7 +219,7 @@ struct WarmSlider: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             // Thumb + fill glide to a tapped position; during an actual drag the per-update transaction
             // (below) disables this so the thumb tracks the finger 1:1 — no lag, no jitter.
-            .animation(reduceMotion ? nil : .smooth(duration: 0.16), value: strength)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.16), value: displayStrength)
             .contentShape(Rectangle())
             // Visual "dial" feedback: a thumb pop each time the thumb crosses a notch. Driven here (not
             // via onChange) so a 1:1 drag and a glide-on-tap are told apart. (Slider click sounds removed.)
@@ -221,24 +229,33 @@ struct WarmSlider: View {
                     .onChanged { value in
                         guard !isLocked else { return }   // Sunset: read-only, warmth is set by time of day
                         let target = Double((value.location.x - thumbSize / 2) / usable).clamped01
+                        let nextStrength = engineStrength(forPosition: target)
                         // Detent = which notch line the thumb has PASSED (floor, not round): the thumb pop
                         // fires the instant the thumb CENTER crosses a notch, exactly in line with the marks.
                         let toDetent = Int((target * Double(detentCount)).rounded(.down))
-                        if abs(value.translation.width) > 2 {
+                        interactionReleaseTask?.cancel()
+                        if hypot(value.translation.width, value.translation.height) > 2 {
                             var tx = Transaction(); tx.disablesAnimations = true   // drag: follow finger 1:1
-                            withTransaction(tx) { strength = engineStrength(forPosition: target) }
+                            withTransaction(tx) {
+                                interactionStrength = nextStrength
+                                strength = nextStrength
+                            }
                             // Thumb pop per notch the thumb crosses (the visual detent — no sound).
                             if let last = lastDetent, toDetent != last, !reduceMotion { popTrigger &+= 1 }
                         } else {
                             // Tap / press-down: the thumb GLIDES to target via .smooth(0.16) above.
-                            let fromDetent = Int((thumbPosition(forStrength: strength) * Double(detentCount)).rounded(.down))
-                            strength = engineStrength(forPosition: target)
+                            let fromDetent = Int((thumbPosition(forStrength: displayStrength) * Double(detentCount)).rounded(.down))
+                            interactionStrength = nextStrength
+                            strength = nextStrength
                             let movedNotches = lastDetent == nil && abs(toDetent - fromDetent) >= 1
                             if movedNotches, !reduceMotion { popTrigger &+= 1 }
                         }
                         lastDetent = toDetent
                     }
-                    .onEnded { _ in lastDetent = nil }
+                    .onEnded { _ in
+                        lastDetent = nil
+                        settleInteractionStrength()
+                    }
             )
         }
         .frame(height: max(thumbSize, 22))
@@ -249,8 +266,8 @@ struct WarmSlider: View {
         .accessibilityElement()
         .accessibilityLabel(headerTitle)
         .accessibilityValue(isLocked
-            ? "\(Int((strength.clamped01 * 100).rounded())) percent, locked — set automatically in Sunset mode"
-            : "\(Int((strength.clamped01 * 100).rounded())) percent")
+            ? "\(Int(((interactionStrength ?? strength).clamped01 * 100).rounded())) percent, locked — set automatically in Sunset mode"
+            : "\(Int(((interactionStrength ?? strength).clamped01 * 100).rounded())) percent")
         .accessibilityAdjustableAction { direction in
             guard !isLocked else { return }   // Sunset: read-only
             switch direction {
@@ -258,6 +275,17 @@ struct WarmSlider: View {
             case .decrement: nudge(-0.05)
             default: break
             }
+        }
+    }
+
+    private func settleInteractionStrength() {
+        guard interactionStrength != nil else { return }
+        interactionReleaseTask?.cancel()
+        interactionReleaseTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+            interactionStrength = nil
+            interactionReleaseTask = nil
         }
     }
 

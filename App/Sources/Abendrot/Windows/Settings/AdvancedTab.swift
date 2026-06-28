@@ -60,7 +60,7 @@ struct AdvancedTab: View {
                     }
                     Text(model.revealMode == .hold
                          ? "Hold the shortcut to reveal true color; release to ease warmth back."
-                         : "Press the shortcut to reveal true color; press again to ease it back.")
+                         : "Press the shortcut to toggle warming off/on.")
                         .font(Theme.Typography.ui(12))
                         .foregroundStyle(Theme.Color.textMuted)
                 }
@@ -94,6 +94,8 @@ struct AdvancedTab: View {
 /// app…" picks an `.app` via `NSOpenPanel` (the app is not sandboxed, so no entitlement is needed).
 private struct ExcludedAppsControl: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsFocusCue = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -123,6 +125,54 @@ private struct ExcludedAppsControl: View {
             }
             .buttonStyle(.liquidGlass)
             .padding(.top, 2)
+        }
+        .background(focusCueFill)
+        .overlay(focusCueStroke)
+        .task(id: model.excludedAppsFocusRequest) {
+            guard let request = model.excludedAppsFocusRequest else { return }
+            await runFocusCue(request)
+        }
+    }
+
+    private var focusCueFill: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control + 4, style: .continuous)
+            .fill(Theme.Color.accent.opacity(0.12))
+            .opacity(showsFocusCue ? 1 : 0)
+            .padding(-10)
+    }
+
+    private var focusCueStroke: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control + 4, style: .continuous)
+            .stroke(Theme.Color.accent.opacity(0.7), lineWidth: 1)
+            .shadow(color: Theme.Color.accent.opacity(0.45), radius: 12)
+            .opacity(showsFocusCue ? 1 : 0)
+            .padding(-10)
+    }
+
+    @MainActor
+    private func runFocusCue(_ request: UUID) async {
+        if showsFocusCue {
+            withAnimation(nil) { showsFocusCue = false }
+            await Task.yield()
+        }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.18)) {
+            showsFocusCue = true
+        }
+        do {
+            try await Task.sleep(nanoseconds: 700_000_000)
+        } catch {
+            return
+        }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.42)) {
+            showsFocusCue = false
+        }
+        do {
+            try await Task.sleep(nanoseconds: reduceMotion ? 0 : 420_000_000)
+        } catch {
+            return
+        }
+        if model.excludedAppsFocusRequest == request {
+            model.excludedAppsFocusRequest = nil
         }
     }
 

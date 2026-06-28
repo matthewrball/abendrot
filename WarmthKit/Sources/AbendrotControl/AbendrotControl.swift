@@ -43,7 +43,8 @@ public enum AbendrotControl {
 // there is one literal per setting across the whole codebase, with no chance of the two drifting.
 //
 // isEnabled Bool
-// globalWarmthStrength Double
+// globalWarmthStrength Double (Sunset maximum)
+// manualWarmthStrength Double
 // warmestPointKelvin Int
 // scheduleMode Data (Codable JSON of ScheduleMode — carries associated values)
 // revealMode String (RevealMode.rawValue: "hold" | "toggle")
@@ -53,6 +54,7 @@ public enum AbendrotControl {
 public enum PreferenceKey {
     public static let isEnabled = "isEnabled"
     public static let globalWarmthStrength = "globalWarmthStrength"
+    public static let manualWarmthStrength = "manualWarmthStrength"
     public static let warmestPointKelvin = "warmestPointKelvin"
     public static let scheduleMode = "scheduleMode"
     public static let revealMode = "revealMode"

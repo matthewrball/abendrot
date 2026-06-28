@@ -52,7 +52,7 @@ struct PopoverView: View {
                     )
                     .zIndex(1)
                     // Always-on's slider path is 7pt shorter than Sunset's caption path; reserve it here
-                    // so Mode, Cozy mode, and the footer share one y-position across modes.
+                    // so Mode and the footer share one y-position across modes.
                     .padding(.bottom, locked ? 0 : 7)
                     if locked {
                         sunsetLockCaption
@@ -61,11 +61,13 @@ struct PopoverView: View {
                     }
                     modeSection
                         .padding(.top, 16)
-                    // Cozy mode (the maximum-warmth control) right under Mode — the bare card, no section
-                    // header / science note (those live in Settings). Shares `model.setCozy`, so it can
-                    // never disagree with the Settings card, onboarding, or the `abendrot cozy` CLI.
-                    CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
-                        .padding(.top, 16)
+                    if !locked {
+                        // Cozy mode (the maximum-warmth control) right under Mode — hidden while Sunset
+                        // owns warmth and points users to Settings for the maximum.
+                        CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
+                            .padding(.top, 16)
+                            .transition(.opacity)
+                    }
                 }
                 .transition(.softReveal)
                 // Caption crossfades while the popover shell keeps a steady natural height.
@@ -111,6 +113,7 @@ struct PopoverView: View {
             .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
         }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.isAdvancedExpanded)
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.state.isEnabled)
         .glassSurface(.popover)
     }
 
@@ -143,10 +146,10 @@ struct PopoverView: View {
                 .font(Theme.Typography.ui(13, weight: .semibold))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
-            Toggle("", isOn: enabledBinding)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(Theme.Color.accent)
+            WarmthPowerSwitch(
+                isOn: enabledBinding,
+                accessibilityLabel: model.state.displays.count == 1 ? "Warm my display" : "Warm my displays"
+            )
         }
     }
 
@@ -230,13 +233,7 @@ struct PopoverView: View {
     private var enabledBinding: Binding<Bool> {
         Binding(
             get: { model.state.isEnabled },
-            // Animate so the schedule mode control reveals/hides with the soft spring (the optimistic
-            // `state.isEnabled` flips synchronously inside this transaction → the transition plays).
-            set: { newValue in
-                withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
-                    model.setEnabled(newValue)
-                }
-            }
+            set: { model.setEnabled($0) }
         )
     }
 
@@ -250,17 +247,19 @@ struct PopoverView: View {
         Binding(get: { model.state.resolvedWarmth.strength }, set: { _ in })
     }
 
-    /// Explains the locked slider and links to the editable maximum (Settings → General). Leads with the
-    /// live state (warming now vs. eases in at sunset) so the daytime "neutral now" reading isn't a puzzle.
+    /// Explains the locked slider and links to the editable maximum (Settings → General).
     private var sunsetLockCaption: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(model.isWarmingActive
-                 ? "Sunset is setting your warmth automatically."
+                 ? ScheduleModeOption.followSunset.subtitle
                  : "Warmth eases in around your local sunset.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
-            Button { SettingsWindowController.show(model: model) } label: {
+            Button {
+                model.maximumWarmthFocusRequest = UUID()
+                SettingsWindowController.show(model: model, tab: .general)
+            } label: {
                 HStack(spacing: 3) {
                     Text("Adjust your maximum in Settings")
                     Image(systemName: "arrow.up.right")

@@ -117,6 +117,55 @@ struct BlueLightReductionLabel: View {
     }
 }
 
+// MARK: - WarmthPowerSwitch
+
+/// Fast, interruptible master switch; native `.switch` ignores rapid re-clicks while its AppKit
+/// thumb animation is in flight.
+struct WarmthPowerSwitch: View {
+    @Binding private var isOn: Bool
+    let accessibilityLabel: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(isOn: Binding<Bool>, accessibilityLabel: String) {
+        self._isOn = isOn
+        self.accessibilityLabel = accessibilityLabel
+    }
+
+    var body: some View {
+        Button { isOn.toggle() } label: {
+            ZStack {
+                Capsule()
+                    .fill(trackFill)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Theme.Color.lineStrong.opacity(isOn ? 0.55 : 0.8), lineWidth: 0.6)
+                    )
+
+                Circle()
+                    .fill(Theme.Color.textCream)
+                    .frame(width: 24, height: 24)
+                    .shadow(color: .black.opacity(0.24), radius: 3, y: 1)
+                    .offset(x: isOn ? 14 : -14)
+            }
+            .frame(width: 58, height: 30)
+            .animation(reduceMotion ? nil : .interactiveSpring(response: 0.15, dampingFraction: 0.92, blendDuration: 0), value: isOn)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 66, height: 40)
+        .contentShape(Rectangle())
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityHint("Turns display warmth \(isOn ? "off" : "on")")
+    }
+
+    private var trackFill: AnyShapeStyle {
+        isOn
+            ? AnyShapeStyle(Theme.Gradient.sunsetHorizontal)
+            : AnyShapeStyle(Theme.Color.lineStrong.opacity(0.45))
+    }
+}
+
 // MARK: - DisplayRow (simple popover)
 
 /// A glanceable per-display row: name + method badge.

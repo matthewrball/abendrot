@@ -124,6 +124,14 @@ enum Control {
         return ControlScheduleMode(mode)
     }
 
+    static func configuredWarmthStrength() -> Double? {
+        if configuredScheduleMode() == .alwaysOn {
+            return configuredDouble(PreferenceKey.manualWarmthStrength)
+                ?? configuredDouble(PreferenceKey.globalWarmthStrength)
+        }
+        return configuredDouble(PreferenceKey.globalWarmthStrength)
+    }
+
     /// The persisted exclusion set (sorted), empty when unset.
     static func configuredExcludedApps() -> [String] {
         (preference(PreferenceKey.excludedApps) as? [String])?.sorted() ?? []
@@ -144,7 +152,9 @@ enum Control {
             setPreference(PreferenceKey.isEnabled, v as CFBoolean)
         }
         if let v = patch.globalWarmthStrength {
-            setPreference(PreferenceKey.globalWarmthStrength, v as CFNumber)
+            let mode = patch.scheduleMode ?? configuredScheduleMode()
+            let key = mode == .alwaysOn ? PreferenceKey.manualWarmthStrength : PreferenceKey.globalWarmthStrength
+            setPreference(key, v as CFNumber)
         }
         if let v = patch.warmestPointKelvin {
             setPreference(PreferenceKey.warmestPointKelvin, v as CFNumber)

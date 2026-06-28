@@ -73,9 +73,6 @@ struct OnboardingView: View {
     // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
     // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
     @State private var hasInitializedWarmth = false
-    /// The "You're all set" CTA is two-step: first "Open menu bar" (reveals the popover so the user sees
-    /// where Abendrot lives), then "Done" (finishes). Flips true after the first tap.
-    @State private var didOpenMenuBar = false
     /// Mirrors the warmth slider's press state: the blue-light % rolls on discrete changes (Cozy on→99)
     /// but stays silent during a live drag, where rapid numericText changes glitch. Fed by WarmSlider.
     @State private var sliderPressing = false
@@ -170,7 +167,7 @@ struct OnboardingView: View {
             Text("Welcome to Abendrot")
                 .font(Theme.Typography.serif(20))
                 .foregroundStyle(Theme.Color.textPrimary)
-            Text("Abendrot warms your screen as the day winds down — on every display, built-in and external. It lives quietly in your menu bar: no dock icon, no account.")
+            Text("Abendrot warms your displays around sunset, limiting blue light exposure and supporting healthy evening light habits.\n\nFree to use.\nNo account, no tracking.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
@@ -222,7 +219,7 @@ struct OnboardingView: View {
 
             WarmSlider(strength: Binding(
                 get: { model.state.globalWarmth.strength },
-                set: { model.setGlobalWarmth($0) }
+                set: { setOnboardingWarmth($0) }
             ), model: model, showsHeader: false, cozy: isCozy,
             onPressingChanged: { sliderPressing = $0 })
 
@@ -231,7 +228,8 @@ struct OnboardingView: View {
             // the way to the warmest + ignites the fireball thumb (the deepest ember); the choice
             // (warmestPoint) persists past onboarding.
             CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
-                            enablesAtWarmest: true)
+                            enablesAtWarmest: true,
+                            mirrorsToSunsetMaximum: scheduleOption == .followSunset)
 
             Spacer(minLength: 0)
 
@@ -253,6 +251,7 @@ struct OnboardingView: View {
             // the user's REAL everyday warmth, so re-slamming 1.0 on back-nav would discard what they dialed
             // keep it.
             if scheduleOption != .alwaysOn {
+                model.setSunsetMaximumWarmth(1.0)
                 model.setGlobalWarmth(1.0)
             }
             model.setEnabled(true, userInitiated: false)
@@ -291,11 +290,11 @@ struct OnboardingView: View {
     .frame(maxHeight: .infinity, alignment: .top)
     .onAppear {
         model.setEnabled(true, userInitiated: false)
+        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         if !hasInitializedWarmth {
             model.setGlobalWarmth(1.0)
             hasInitializedWarmth = true
         }
-        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
     }
 }
 
@@ -335,7 +334,7 @@ private var manualDetail: some View {
                     .opacity(presentationScheduleOption == .alwaysOn ? 1 : 0)
                     .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
 
-                Text("The sun has set — your screen is warming now.")
+                Text(ScheduleModeOption.followSunset.subtitle)
                     .opacity(presentationScheduleOption != .alwaysOn && model.isWarmingActive ? 1 : 0)
                     .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
                     .animation(.easeInOut(duration: 0.25), value: model.isWarmingActive)
@@ -394,21 +393,13 @@ private var manualDetail: some View {
 
             Spacer(minLength: 0)
 
-            // Two-step CTA: first reveal the menu-bar popover (so the user SEES where Abendrot lives), then
-            // finish . The title swaps to "Done" after the first tap.
             VStack(spacing: 10) {
                 SecondaryButton(title: "Star on GitHub", icon: "star") {
                     NSWorkspace.shared.open(URL(string: "https://github.com/matthewrball/abendrot")!)
                 }
 
-                PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
-                    if didOpenMenuBar {
-                        onFinish()
-                    } else {
-                        openMenuBarPopover()
-                        didOpenMenuBar = true
-                    }
-                }
+                // The old two-step flow made the second click land outside the popover and close it.
+                PrimaryButton(title: "Done") { finishByOpeningMenuBar() }
             }
             .padding(.top, 2)
         }
@@ -480,7 +471,7 @@ private var manualDetail: some View {
     private var scheduleSubtitle: String {
         if scheduleOption == .alwaysOn { return "Warms continuously, day\u{00A0}and\u{00A0}night." }
         return model.isWarmingActive
-            ? "The sun has set — your screen is warming now."
+            ? ScheduleModeOption.followSunset.subtitle
             : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset."
     }
 
@@ -547,6 +538,13 @@ private var manualDetail: some View {
         model.setScheduleMode(option.toScheduleMode())
     }
 
+    private func setOnboardingWarmth(_ strength: Double) {
+        if scheduleOption == .followSunset {
+            model.setSunsetMaximumWarmth(strength)
+        }
+        model.setGlobalWarmth(strength)
+    }
+
     private func advance() {
         if step == .schedule && scheduleOption == .alwaysOn {
             step = .allSet
@@ -575,21 +573,29 @@ private var manualDetail: some View {
         step = prev
     }
 
-    /// Reveal the menu-bar popover so the user sees where Abendrot lives. SwiftUI's `MenuBarExtra(.window)`
-    /// has no public "present" API, so we find its `NSStatusBarButton` in the app's windows and click it.
-    /// Best-effort — a no-op if the button can't be located (the user still has the "Done" tap to finish).
-    private func openMenuBarPopover() {
-        func find(in view: NSView) -> NSStatusBarButton? {
-            if let button = view as? NSStatusBarButton { return button }
-            for sub in view.subviews { if let button = find(in: sub) { return button } }
-            return nil
+    private func finishByOpeningMenuBar() {
+        let button = statusBarButton()
+        onFinish()
+        DispatchQueue.main.async {
+            button?.performClick(nil)
         }
+    }
+
+    private func statusBarButton() -> NSStatusBarButton? {
         for window in NSApp.windows {
-            if let content = window.contentView, let button = find(in: content) {
-                button.performClick(nil)
-                return
+            if let content = window.contentView, let button = findStatusBarButton(in: content) {
+                return button
             }
         }
+        return nil
+    }
+
+    private func findStatusBarButton(in view: NSView) -> NSStatusBarButton? {
+        if let button = view as? NSStatusBarButton { return button }
+        for subview in view.subviews {
+            if let button = findStatusBarButton(in: subview) { return button }
+        }
+        return nil
     }
 }
 
@@ -607,8 +613,6 @@ struct PrimaryButton: View {
                     .opacity(title == "Continue" ? 1 : 0)
                 Text("Looks right")
                     .opacity(title == "Looks right" ? 1 : 0)
-                Text("Open menu bar")
-                    .opacity(title == "Open menu bar" ? 1 : 0)
                 Text("Done")
                     .opacity(title == "Done" ? 1 : 0)
                 Text("Get started")
