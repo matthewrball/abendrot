@@ -28,6 +28,10 @@ public struct DDCNativeState: Codable, Equatable, Sendable {
         self.blue = blue
         self.preset = preset
     }
+
+    package var hasValidGains: Bool {
+        [red, green, blue].allSatisfy { $0.max > 0 && $0.current <= $0.max }
+    }
 }
 
 /// Per-display persisted state. `native` is written by the transport on first contact (and read
@@ -49,13 +53,13 @@ public struct DDCDisplaySnapshot: Codable, Equatable, Sendable {
 /// (recovery orchestration). Both go through the same actor-serialized store, keyed by
 /// `DisplayIdentity.persistentKey`.
 public protocol DDCSnapshotStore: Sendable {
-    func snapshot(for key: String) async -> DDCDisplaySnapshot?
+    func snapshot(for key: String) async throws -> DDCDisplaySnapshot?
     /// Transport: record a display's native gains (creates the record if absent; preserves dirty).
-    func saveNative(_ native: DDCNativeState, for key: String) async
+    func saveNative(_ native: DDCNativeState, for key: String) async throws
     /// Engine: set/clear the write-ahead dirty flag (creates the record if absent; preserves native).
-    func setDirty(_ dirty: Bool, for key: String) async
+    func setDirty(_ dirty: Bool, for key: String) async throws
     /// Keys whose snapshot is currently dirty — the launch-time recovery work-list.
-    func dirtyKeys() async -> Set<String>
+    func dirtyKeys() async throws -> Set<String>
 }
 
 // MARK: - InMemoryDDCSnapshotStore
@@ -114,36 +118,36 @@ public actor FileDDCSnapshotStore: DDCSnapshotStore {
             .appendingPathComponent("ddc-snapshots.json")
     }
 
-    public func snapshot(for key: String) -> DDCDisplaySnapshot? { load()[key] }
+    public func snapshot(for key: String) throws -> DDCDisplaySnapshot? { try load()[key] }
 
-    public func saveNative(_ native: DDCNativeState, for key: String) {
-        var map = load()
+    public func saveNative(_ native: DDCNativeState, for key: String) throws {
+        var map = try load()
         var snapshot = map[key] ?? DDCDisplaySnapshot()
         snapshot.native = native
         map[key] = snapshot
-        persist(map)
+        try persist(map)
     }
 
-    public func setDirty(_ dirty: Bool, for key: String) {
-        var map = load()
+    public func setDirty(_ dirty: Bool, for key: String) throws {
+        var map = try load()
         var snapshot = map[key] ?? DDCDisplaySnapshot()
         guard snapshot.isDirty != dirty else { return }   // no-op write avoidance
         snapshot.isDirty = dirty
         map[key] = snapshot
-        persist(map)
+        try persist(map)
     }
 
-    public func dirtyKeys() -> Set<String> {
-        Set(load().lazy.filter { $0.value.isDirty }.map(\.key))
+    public func dirtyKeys() throws -> Set<String> {
+        Set(try load().lazy.filter { $0.value.isDirty }.map(\.key))
     }
 
     // MARK: Disk I/O (actor-isolated)
 
-    private func load() -> [String: DDCDisplaySnapshot] {
+    private func load() throws -> [String: DDCDisplaySnapshot] {
         if let cache { return cache }
         let decoded: [String: DDCDisplaySnapshot]
-        if let data = try? Data(contentsOf: url),
-           let map = try? JSONDecoder().decode([String: DDCDisplaySnapshot].self, from: data) {
+        if let data = try SecureAtomicFileWriter.readRegularFileIfExists(from: url) {
+           let map = try JSONDecoder().decode([String: DDCDisplaySnapshot].self, from: data)
             decoded = map
         } else {
             decoded = [:]
@@ -152,16 +156,14 @@ public actor FileDDCSnapshotStore: DDCSnapshotStore {
         return decoded
     }
 
-    private func persist(_ map: [String: DDCDisplaySnapshot]) {
-        cache = map
+    private func persist(_ map: [String: DDCDisplaySnapshot]) throws {
+        let data = try JSONEncoder().encode(map)
         do {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true
-            )
-            let data = try JSONEncoder().encode(map)
-            try data.write(to: url, options: .atomic)
+            try SecureAtomicFileWriter.write(data, to: url)
         } catch {
             logger.error("Failed to persist DDC snapshot store: \(error.localizedDescription)")
+            throw error
         }
+        cache = map
     }
 }

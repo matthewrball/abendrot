@@ -11,6 +11,8 @@ public enum DDCError: Error, Sendable, Equatable {
     case busUnavailable
     /// Could not read the display's native gain — refuse to warm without a restore baseline.
     case nativeReadFailed
+    /// The durable recovery snapshot store could not be read or written safely.
+    case snapshotStoreUnavailable
     /// A set-VCP write did not verify by read-back after all retries.
     case verifyMismatch(code: UInt8, wrote: UInt16)
 }

@@ -84,7 +84,7 @@ public actor IOAVServiceDDCTransport: WarmthBackend {
         let key = identity.persistentKey
         // No snapshot → nothing was ever warmed; no service → can't restore now (it will be
         // restored when the display reconnects). Both are clean no-ops, never errors.
-        guard let native = await nativeState(key: key) else { return }
+        guard let native = try await nativeState(key: key) else { return }
         guard let bus = resolveBus(key, identity) else { return }
 
         // Restore the native preset first — some panels gate gain writes on the colour preset.
@@ -124,9 +124,19 @@ public actor IOAVServiceDDCTransport: WarmthBackend {
 
     // MARK: Native snapshot
 
-    private func nativeState(key: String) async -> DDCNativeState? {
-        if let cached = nativeCache[key] { return cached }
-        if let snapshot = await store.snapshot(for: key), let native = snapshot.native {
+    private func nativeState(key: String) async throws -> DDCNativeState? {
+        if let cached = nativeCache[key] {
+            guard cached.hasValidGains else { throw DDCError.nativeReadFailed }
+            return cached
+        }
+        let snapshot: DDCDisplaySnapshot?
+        do {
+            snapshot = try await store.snapshot(for: key)
+        } catch {
+            throw DDCError.snapshotStoreUnavailable
+        }
+        if let native = snapshot?.native {
+            guard native.hasValidGains else { throw DDCError.nativeReadFailed }
             nativeCache[key] = native
             return native
         }
@@ -137,10 +147,14 @@ public actor IOAVServiceDDCTransport: WarmthBackend {
     /// already-persisted snapshot over a fresh read so we never recapture OUR (or a competing app's)
     /// warmed gains as "native" after a relaunch.
     private func ensureNative(key: String, bus: any DDCBus) async throws -> DDCNativeState {
-        if let existing = await nativeState(key: key) { return existing }
+        if let existing = try await nativeState(key: key) { return existing }
         let native = try await readNativeState(bus: bus)
+        do {
+            try await store.saveNative(native, for: key)
+        } catch {
+            throw DDCError.snapshotStoreUnavailable
+        }
         nativeCache[key] = native
-        await store.saveNative(native, for: key)
         return native
     }
 
@@ -151,12 +165,14 @@ public actor IOAVServiceDDCTransport: WarmthBackend {
             throw DDCError.nativeReadFailed
         }
         let preset = await readVCPRetrying(code: DDCProtocol.vcpSelectColorPreset, on: bus)
-        return DDCNativeState(
+        let native = DDCNativeState(
             red: DDCChannelGain(current: red.current, max: red.max),
             green: DDCChannelGain(current: green.current, max: green.max),
             blue: DDCChannelGain(current: blue.current, max: blue.max),
             preset: preset?.current
         )
+        guard native.hasValidGains else { throw DDCError.nativeReadFailed }
+        return native
     }
 
     // MARK: Transactions
