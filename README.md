@@ -13,7 +13,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FD9228" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/macOS-26%20Tahoe-FD9228" alt="macOS 26 Tahoe">
-  <img src="https://img.shields.io/badge/Apple%20Silicon-native-FD9228" alt="Apple Silicon">
+  <img src="https://img.shields.io/badge/architecture-universal-FD9228" alt="Universal Apple Silicon and Intel">
   <img src="https://img.shields.io/badge/status-pre--release-C2310A" alt="Pre-release">
   <a href="https://github.com/matthewrball/abendrot/stargazers"><img src="https://img.shields.io/github/stars/matthewrball/abendrot?color=FD9228" alt="GitHub stars"></a>
 </p>
@@ -28,7 +28,7 @@
 
 It's the f.lux / Night Shift successor built to do the thing the incumbents quietly fail at: reliably warm **external monitors** and the **buttonless Apple displays** — Studio Display, Pro Display XDR, LG UltraFine — and keep working on the newest Apple Silicon Macs, where the classic gamma trick silently stops warming. Without tracking you.
 
-> **Status: pre-release.** The warmth engine is implemented and unit-tested (112 tests) and verified warming real hardware. There's no signed download yet — you can build it from source today (see [Build from source](#build-from-source)). The first notarized release lands here when it's ready.
+> **Status: pre-release.** The warmth engine and CLI have comprehensive headless test coverage. Signed/notarized distribution and the final physical-display release matrix are still pending, so there is no supported download yet. You can build it from source today (see [Build from source](#build-from-source)).
 
 ## Grounded in the science
 
@@ -44,7 +44,7 @@ Abendrot is designed around that: it attenuates the display's blue channel as it
 - **Reveal True Color.** Hold a global hotkey and warmth lifts across every display for color-critical work; release and it eases back. Built for designers and photographers.
 - **Scriptable & AI-controllable.** An `abendrot` CLI drives the running app from your terminal — or from an AI assistant like Claude Code, Codex, or Cursor. Read live state as JSON, set warmth, trigger a reveal. *(see [Scripting & AI control](#scripting--ai-control))*
 - **Health is the reason; reliability is the proof.** Abendrot helps you keep warmer, lower-blue light in the evening, and links the circadian research instead of making medical claims.
-- **Genuinely trustworthy.** MIT-licensed, no telemetry by default, no account, runs entirely on your Mac. The anti-NightOwl.
+- **Genuinely trustworthy.** MIT-licensed, no telemetry, no account, runs entirely on your Mac. The anti-NightOwl.
 
 ## How it works
 
@@ -105,7 +105,7 @@ Machine-readable everywhere: every command takes `--json`, and exit codes are sc
 | Reveal-true-color hotkey | Yes (hold) | No | No | Toggle only |
 | Scriptable CLI / AI control | Yes (`abendrot`, `--json`) | No | No | Partial (CLI) |
 | Open source | Yes (MIT) | No | No (freeware, closed) | Yes (GPL) |
-| Telemetry | None by default | Apple's | Unknown (closed-source) | None |
+| Telemetry | None | Apple's | Unknown (closed-source) | None |
 | Price | Free forever | Free (built in) | Free | Free |
 
 <sub>Night Shift is a fine, free, built-in option — especially on a MacBook's own display. Abendrot is for deeper warmth and reliable warming across **every** external display, with the actual Kelvin and warming method shown per screen.</sub>
@@ -114,9 +114,14 @@ Machine-readable everywhere: every command takes `--json`, and exit codes are sc
 
 ## Install
 
+**Manual download:** [latest release](https://github.com/matthewrball/abendrot/releases) *(available with v1.0)*
+
+> [!IMPORTANT]
+> Abendrot is free and open source under the MIT License. If Abendrot is useful to you, please star the repository — it helps visibility and keeps development going.
+
 > **Pre-release.** Abendrot isn't downloadable yet. Signed, notarized builds and a Homebrew cask arrive with **v1.0** — watch [Releases](https://github.com/matthewrball/abendrot/releases) or [abendrot.app](https://abendrot.app). Until then, build from source below.
 
-*Coming with v1.0:* download a `.dmg` from Releases, or `brew install --cask abendrot` (which also puts the `abendrot` CLI on your `PATH`). Requirements: macOS 26 "Tahoe" or later, Apple Silicon.
+*Coming with v1.0:* download a `.dmg` from Releases, or `brew install --cask abendrot` (which also puts the `abendrot` CLI on your `PATH`). Requirements: macOS 26 "Tahoe" or later, Apple Silicon or Intel.
 
 ## The science
 
@@ -139,7 +144,7 @@ git clone https://github.com/matthewrball/abendrot.git
 cd abendrot
 
 # Engine package — builds and tests headlessly, no app bundle needed
-swift test --package-path WarmthKit          # 112 tests / 22 suites
+swift test --package-path WarmthKit
 
 # The app
 xcodegen generate                            # generates Abendrot.xcodeproj from project.yml
@@ -154,11 +159,15 @@ It runs in the menu bar — look for the sunset arc. Quit from the popover foote
 
 ## Tech
 
-Native **Swift 6** (SwiftUI + AppKit), **macOS 26 "Tahoe"**, Apple Silicon. No Electron, no bundled runtime. The warmth engine lives in a standalone, unit-tested Swift package (`WarmthKit`); the app is a small menu-bar agent; the `abendrot` CLI is a separate thin client that talks to the running app.
+Native **Swift 6** (SwiftUI + AppKit), **macOS 26 "Tahoe"**, distributed as a
+universal Apple Silicon + Intel app. No Electron, no bundled runtime. The warmth
+engine lives in a standalone, unit-tested Swift package (`WarmthKit`); the app
+is a small menu-bar agent; the `abendrot` CLI is a separate thin client that
+talks to the running app.
 
 ## Privacy
 
-No telemetry by default. No account, no identifiers, nothing leaves your Mac unless you explicitly opt in to anonymous, aggregate usage stats later. See [`PRIVACY.md`](PRIVACY.md).
+No telemetry. No analytics SDK, account, or identifiers. Settings and usage statistics stay on your Mac; only update checks contact the release host. See [`PRIVACY.md`](PRIVACY.md).
 
 ## Contributing
 
