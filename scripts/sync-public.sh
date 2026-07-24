@@ -16,13 +16,18 @@ set -euo pipefail
 # The real sub-repos live INSIDE the umbrella workspace. Default to them directly
 # (NOT the parent workspace, which holds private planning material). Override with
 # BUILD=/path PUBLIC=/path for testing against copies.
-BUILD="${BUILD:-/Users/ball/Documents/abendrot/abendrot-build}"
-PUBLIC="${PUBLIC:-/Users/ball/Documents/abendrot/abendrot-public}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILD="${BUILD:-$REPO_ROOT}"
+PUBLIC="${PUBLIC:-$(dirname "$REPO_ROOT")/abendrot-public}"
 DRY=""
-[ "${1:-}" = "--dry-run" ] && DRY="-n"
+case "$#" in
+  0) ;;
+  1) [ "$1" = "--dry-run" ] || { echo "usage: sync-public.sh [--dry-run]" >&2; exit 2; }; DRY="-n" ;;
+  *) echo "usage: sync-public.sh [--dry-run]" >&2; exit 2 ;;
+esac
 
-[ -d "$BUILD/.git" ] || { echo "BUILD is not a git repo: $BUILD" >&2; exit 1; }
-[ -d "$PUBLIC/.git" ] || { echo "PUBLIC is not a git repo: $PUBLIC" >&2; exit 1; }
+git -C "$BUILD" rev-parse --git-dir >/dev/null 2>&1 || { echo "BUILD is not a git repo: $BUILD" >&2; exit 1; }
+git -C "$PUBLIC" rev-parse --git-dir >/dev/null 2>&1 || { echo "PUBLIC is not a git repo: $PUBLIC" >&2; exit 1; }
 
 # Common excludes: build artifacts + tooling state that must never reach public.
 EXCLUDES=(
@@ -56,8 +61,10 @@ SYNC_FILES=(
   "cli/Package.resolved"
   "AGENTS.md"
   "docs/abendrot.1"
-  # README.md is now canonical in the build repo (single source of truth) and synced to
-  # public; it is scrubbed + gated like every other synced text file.
+  "appcast.xml"
+  "PRIVACY.md"
+  # Public-facing policy and README are canonical in the build repo and synced to
+  # public; both are scrubbed + gated like every other synced text file.
   "README.md"
 )
 

@@ -35,6 +35,19 @@ TARGET="${1:-}"
 KEY_PATH="${ASC_API_KEY_P8:-}"
 KEY_ID="${ASC_API_KEY_ID:-}"
 ISSUER="${ASC_API_ISSUER_ID:-}"
+TEMP_KEY_PATH=""
+SUBMIT_LOG=""
+MOUNT_POINT=""
+
+cleanup() {
+  if [ -n "$MOUNT_POINT" ]; then
+    hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || true
+    rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$SUBMIT_LOG" ]; then rm -f -- "$SUBMIT_LOG"; fi
+  if [ -n "$TEMP_KEY_PATH" ]; then rm -f -- "$TEMP_KEY_PATH"; fi
+}
+trap cleanup EXIT
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -57,10 +70,10 @@ fi
 
 # If a base64 key blob is provided (CI secret) but no path, materialize it.
 if [ -z "$KEY_PATH" ] && [ -n "${ASC_API_KEY_P8_BASE64:-}" ]; then
-  KEY_PATH="$(mktemp "${TMPDIR:-/tmp}/asc_key.XXXXXX.p8")"
-  # shellcheck disable=SC2064
-  trap "rm -f '$KEY_PATH'" EXIT
-  echo "${ASC_API_KEY_P8_BASE64}" | base64 --decode > "$KEY_PATH"
+  TEMP_KEY_PATH="$(mktemp "${TMPDIR:-/tmp}/asc_key.XXXXXX.p8")"
+  KEY_PATH="$TEMP_KEY_PATH"
+  printf '%s' "${ASC_API_KEY_P8_BASE64}" | /usr/bin/base64 -D > "$KEY_PATH"
+  unset ASC_API_KEY_P8_BASE64
 fi
 
 # ---------------------------------------------------------------------------
@@ -138,13 +151,20 @@ xcrun stapler validate "$TARGET" || { echo "notarize: stapler validate failed." 
 echo "notarize: Gatekeeper verify (spctl -a -vvv)..."
 case "$TARGET" in
   *.dmg)
-    MNT="$(mktemp -d "${TMPDIR:-/tmp}/abendrot-verify.XXXXXX")"
-    hdiutil attach "$TARGET" -nobrowse -quiet -mountpoint "$MNT"
-    APP_IN_DMG="$(find "$MNT" -maxdepth 1 -name '*.app' -print -quit)"
-    if [ -n "$APP_IN_DMG" ]; then
-      spctl -a -vvv -t execute "$APP_IN_DMG" || { hdiutil detach "$MNT" -quiet; echo "notarize: spctl rejected app in DMG." >&2; exit 5; }
+    MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/abendrot-verify.XXXXXX")"
+    hdiutil attach "$TARGET" -nobrowse -quiet -mountpoint "$MOUNT_POINT" \
+      || { echo "notarize: could not mount notarized DMG for verification." >&2; exit 5; }
+    APPS=("$MOUNT_POINT"/*.app)
+    if [ "${#APPS[@]}" -ne 1 ] || [ ! -d "${APPS[0]}" ]; then
+      echo "notarize: expected exactly one app at the DMG root." >&2
+      exit 5
     fi
-    hdiutil detach "$MNT" -quiet
+    spctl -a -vvv -t execute "${APPS[0]}" \
+      || { echo "notarize: spctl rejected app in DMG." >&2; exit 5; }
+    hdiutil detach "$MOUNT_POINT" -quiet \
+      || { echo "notarize: could not detach verification DMG." >&2; exit 5; }
+    rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
+    MOUNT_POINT=""
     ;;
   *.app)
     spctl -a -vvv -t execute "$TARGET" || { echo "notarize: spctl rejected app." >&2; exit 5; }

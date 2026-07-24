@@ -33,6 +33,9 @@ settings:
     PRODUCT_BUNDLE_IDENTIFIER: app.abendrot.Abendrot
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+    # Release builds override this with `git rev-parse HEAD`. release.sh refuses
+    # to publish an artifact whose embedded source revision is missing or stale.
+    ABENDROT_SOURCE_COMMIT: "development"
     ENABLE_HARDENED_RUNTIME: YES
     COMBINE_HIDPI_IMAGES: YES
 
@@ -42,7 +45,7 @@ packages:
     path: WarmthKit
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    from: "2.9.3"
+    revision: b6496a74a087257ef5e6da1c5b29a447a60f5bd7 # Sparkle 2.9.4
 
 targets:
   Abendrot:
@@ -70,6 +73,7 @@ targets:
         CFBundleDisplayName: Abendrot
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        AbendrotSourceCommit: "$(ABENDROT_SOURCE_COMMIT)"
         LSMinimumSystemVersion: "26.0"
         NSHumanReadableCopyright: "Abendrot. Soften into the evening."
         # No camera/mic/location/accessibility usage strings — core function needs no
