@@ -139,27 +139,23 @@ package final class IOAVServiceBusProvider: DDCBusProvider, @unchecked Sendable 
         return dict["IODisplayLocation"] as? String
     }
 
-    /// Walk the IOService plane to the node whose path equals `location`, then continue on the same
-    /// iterator to its `DCPAVServiceProxy` descendant; return that proxy iff `Location == External`.
+    /// Resolve the IOService-plane node at `location`, then search only that node's descendants for
+    /// a `DCPAVServiceProxy`; return that proxy iff `Location == External`.
     /// All IOKit calls here are PUBLIC; only the eventual `IOAVServiceCreateWithService` is private.
     private func findExternalAVServiceProxy(matchingLocation location: String) -> io_service_t? {
-        let root = IORegistryGetRootEntry(kIOMainPortDefault)
-        guard root != 0 else { return nil }
-        defer { IOObjectRelease(root) }
+        let anchor = IORegistryEntryFromPath(kIOMainPortDefault, location)
+        guard anchor != 0 else { return nil }
+        defer { IOObjectRelease(anchor) }
 
         var iterator = io_iterator_t()
         guard IORegistryEntryCreateIterator(
-            root, kIOServicePlane, IOOptionBits(kIORegistryIterateRecursively), &iterator
+            anchor, kIOServicePlane, IOOptionBits(kIORegistryIterateRecursively), &iterator
         ) == KERN_SUCCESS else { return nil }
         defer { IOObjectRelease(iterator) }
 
-        var reachedLocation = false
         var entry = IOIteratorNext(iterator)
         while entry != 0 {
-            if !reachedLocation {
-                if entryPath(entry) == location { reachedLocation = true }
-                IOObjectRelease(entry)
-            } else if entryName(entry) == "DCPAVServiceProxy" {
+            if entryName(entry) == "DCPAVServiceProxy" {
                 if let loc = stringProperty(entry, "Location"), loc == "External" {
                     return entry            // retained; caller releases
                 }
@@ -172,13 +168,6 @@ package final class IOAVServiceBusProvider: DDCBusProvider, @unchecked Sendable 
         return nil
     }
 
-    private func entryPath(_ entry: io_service_t) -> String? {
-        // io_string_t is a fixed 512-byte C buffer — size it exactly to avoid a stack overflow.
-        var buffer = [CChar](repeating: 0, count: 512)
-        guard IORegistryEntryGetPath(entry, kIOServicePlane, &buffer) == KERN_SUCCESS else { return nil }
-        return buffer.withUnsafeBufferPointer { $0.baseAddress.map(String.init(cString:)) }
-    }
-
     private func entryName(_ entry: io_service_t) -> String? {
         // io_name_t is a fixed 128-byte C buffer.
         var buffer = [CChar](repeating: 0, count: 128)
@@ -187,10 +176,9 @@ package final class IOAVServiceBusProvider: DDCBusProvider, @unchecked Sendable 
     }
 
     private func stringProperty(_ entry: io_service_t, _ key: String) -> String? {
-        guard let prop = IORegistryEntrySearchCFProperty(
-            entry, kIOServicePlane, key as CFString, kCFAllocatorDefault,
-            IOOptionBits(kIORegistryIterateRecursively)
+        guard let prop = IORegistryEntryCreateCFProperty(
+            entry, key as CFString, kCFAllocatorDefault, 0
         ) else { return nil }
-        return prop as? String
+        return prop.takeRetainedValue() as? String
     }
 }

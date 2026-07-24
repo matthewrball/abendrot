@@ -1,4 +1,5 @@
 import XCTest
+import ArgumentParser
 import WarmthCore
 @testable import abendrot
 import AbendrotControl
@@ -10,7 +11,6 @@ import AbendrotControl
 // transport (CFPreferences + notification + ack) is exercised by the end-to-end round-trip against a
 // running app, not here.
 final class abendrotTests: XCTestCase {
-
     // MARK: exclude add/remove math (the CLI computes the FULL replacement set)
 
     func testExcludeAddProducesSortedUnion() {
@@ -39,7 +39,7 @@ final class abendrotTests: XCTestCase {
 
     func testExcludeRemoveUsesValidatedID() throws {
         let current = ["com.a.app", "com.figma.Desktop"]
-        let id = try validatedBundleID("  com.figma.Desktop  ")
+        let id = try ControlValidation.validatedBundleID("com.figma.Desktop")
         let next = Set(current).subtracting([id]).sorted()
         XCTAssertEqual(next, ["com.a.app"])
     }
@@ -113,26 +113,62 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(off.cozy, false)
     }
 
-    // MARK: exclude bundle-id validation (reject empty / whitespace / shapeless)
+    // MARK: set location argument shape
+
+    func testSetLocationRejectsAutoWithCoordinates() throws {
+        let command = try SetLocation.parse(["1", "2", "--auto"])
+        assertBadInput(try command.run())
+    }
+
+    func testSetLocationRejectsPartialCoordinates() throws {
+        let command = try SetLocation.parse(["1"])
+        assertBadInput(try command.run())
+    }
+
+    // MARK: exclude bundle-id validation
 
     func testValidatedBundleIDAcceptsRealIDs() throws {
-        XCTAssertEqual(try validatedBundleID("com.apple.dt.Xcode"), "com.apple.dt.Xcode")
-        // Lenient: unusual-but-dotted ids and surrounding whitespace (trimmed) pass.
-        XCTAssertEqual(try validatedBundleID("  com.figma.Desktop  "), "com.figma.Desktop")
-        XCTAssertEqual(try validatedBundleID("a.b"), "a.b")
+        XCTAssertEqual(try ControlValidation.validatedBundleID("com.apple.dt.Xcode"), "com.apple.dt.Xcode")
+        XCTAssertEqual(try ControlValidation.validatedBundleID("com.example.App-2"), "com.example.App-2")
+        XCTAssertEqual(try ControlValidation.validatedBundleID("a.b"), "a.b")
     }
 
-    func testValidatedBundleIDRejectsEmptyAndWhitespace() {
-        XCTAssertThrowsError(try validatedBundleID(""))
-        XCTAssertThrowsError(try validatedBundleID("   "))
-        XCTAssertThrowsError(try validatedBundleID("\t\n"))
+    func testValidatedBundleIDRejectsHostileInput() {
+        let overlength = "com." + String(repeating: "a", count: ControlValidation.maximumBundleIDBytes)
+        for bad in [
+            "",
+            "   ",
+            "\t\n",
+            "frobnicate",
+            "../../evil",
+            "com..example",
+            ".com.example",
+            "com.example.",
+            "com/example",
+            "com\\example",
+            "com.example\nbad",
+            "com.example\u{0001}bad",
+            "com.example;rm",
+            "com.bad id",
+            "com.exämple.App",
+            "com．example.App",
+            overlength,
+        ] {
+            XCTAssertThrowsError(try ControlValidation.validatedBundleID(bad), "accepted \(bad.debugDescription)")
+        }
     }
 
-    func testValidatedBundleIDRejectsShapelessInput() {
-        // No dot ⇒ not a plausible reverse-DNS id.
-        XCTAssertThrowsError(try validatedBundleID("frobnicate"))
-        // Internal whitespace ⇒ rejected even though it has a dot.
-        XCTAssertThrowsError(try validatedBundleID("com.bad id"))
+    func testPersistedBundleIDNormalizationSelfHealsNextMutationInput() {
+        XCTAssertEqual(
+            ControlValidation.normalizedPersistedBundleIDs([
+                "../../evil",
+                "com.apple.dt.Xcode",
+                "com.apple.dt.Xcode",
+                "org.example.App-2",
+                "com.example;rm",
+            ]),
+            ["com.apple.dt.Xcode", "org.example.App-2"]
+        )
     }
 
     // MARK: get --json structured shapes (lossless warmth, structured location)
@@ -177,5 +213,59 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(GetReport.jsonValue("0.80"), "0.80")
         XCTAssertEqual(GetReport.jsonValue("sunset"), "\"sunset\"")
         XCTAssertEqual(GetReport.jsonValue("auto"), "\"auto\"")
+    }
+
+    // MARK: state.json reads are bounded and no-follow
+
+    func testReadLivenessRejectsStateSymlink() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let referent = directory.appendingPathComponent("referent.json")
+        let state = directory.appendingPathComponent("state.json")
+        try JSONEncoder().encode(liveness()).write(to: referent)
+        try FileManager.default.createSymbolicLink(atPath: state.path, withDestinationPath: referent.path)
+
+        XCTAssertNil(Control.readLiveness(fileURL: state))
+    }
+
+    func testReadSnapshotRejectsCorruptStateFile() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let state = directory.appendingPathComponent("state.json")
+        try Data("not json".utf8).write(to: state)
+
+        XCTAssertNil(Control.readSnapshot(fileURL: state))
+    }
+
+    func testReadLivenessRejectsOversizedStateFile() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let state = directory.appendingPathComponent("state.json")
+        try Data(repeating: 0, count: SecureAtomicFileWriter.maxSnapshotBytes + 1).write(to: state)
+
+        XCTAssertNil(Control.readLiveness(fileURL: state))
+    }
+
+    private func assertBadInput(_ expression: @autoclosure () throws -> Void, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertThrowsError(try expression(), file: file, line: line) { error in
+            XCTAssertEqual(error as? ExitCode, ExitCode(CLIExit.badInput), file: file, line: line)
+        }
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("abendrot-cli-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        return directory
+    }
+
+    private func liveness() -> ControlLiveness {
+        ControlLiveness(
+            schemaVersion: AbendrotControl.schemaVersion,
+            pid: ProcessInfo.processInfo.processIdentifier,
+            appLaunchID: UUID().uuidString,
+            updatedAt: Date(),
+            lastAppliedRequestID: nil
+        )
     }
 }

@@ -10,7 +10,6 @@ import AbendrotControl
 // A thin client — never drives displays itself. All four pieces (persist / post / snapshot /
 // liveness) live here so every subcommand routes through one tested path.
 enum Control {
-
     // MARK: Liveness
 
     /// True iff a snapshot exists (in full OR minimal form) and its pid is alive. Used for the
@@ -33,10 +32,10 @@ enum Control {
     /// atomically, so a partial read should be rare, but a decode failure mid-replace is possible).
     /// Returns nil if the current shape no longer matches — callers that only need liveness/ack use
     /// `readLiveness()` instead, which tolerates a forward-incompatible (newer-app) snapshot.
-    static func readSnapshot() -> ControlStateSnapshot? {
-        let url = ControlStateSnapshot.fileURL()
+    static func readSnapshot(fileURL: URL? = nil) -> ControlStateSnapshot? {
+        let url = fileURL ?? ControlStateSnapshot.fileURL()
         for attempt in 0..<3 {
-            guard let data = try? Data(contentsOf: url) else { return nil }
+            guard let data = try? SecureAtomicFileWriter.readRegularFileIfExists(from: url) else { return nil }
             if let snapshot = try? JSONDecoder().decode(ControlStateSnapshot.self, from: data) {
                 return snapshot
             }
@@ -50,10 +49,10 @@ enum Control {
     /// `schemaVersion` — still reports `running` correctly and still lets a `set` confirm its ack.
     /// JSONDecoder ignores unknown keys; the real forward-incompat risk is a new *required* field on
     /// the full struct, which this minimal struct sidesteps. Same 3-try transient-read retry.
-    static func readLiveness() -> ControlLiveness? {
-        let url = ControlStateSnapshot.fileURL()
+    static func readLiveness(fileURL: URL? = nil) -> ControlLiveness? {
+        let url = fileURL ?? ControlStateSnapshot.fileURL()
         for attempt in 0..<3 {
-            guard let data = try? Data(contentsOf: url) else { return nil }
+            guard let data = try? SecureAtomicFileWriter.readRegularFileIfExists(from: url) else { return nil }
             if let liveness = try? JSONDecoder().decode(ControlLiveness.self, from: data) {
                 return liveness
             }
@@ -126,7 +125,8 @@ enum Control {
 
     /// The persisted exclusion set (sorted), empty when unset.
     static func configuredExcludedApps() -> [String] {
-        (preference(PreferenceKey.excludedApps) as? [String])?.sorted() ?? []
+        guard let apps = preference(PreferenceKey.excludedApps) as? [String] else { return [] }
+        return ControlValidation.normalizedPersistedBundleIDs(apps)
     }
 
     /// The persisted manual coordinate, or nil (= Auto).

@@ -250,8 +250,9 @@ final class AppModel {
         // Nightly warmth strength. A *missing* key stays the engine's 0.7 out-of-box default instead
         // of being clobbered to 0.0. A *persisted* 0.0 is a real user choice (slider dragged to off)
         // and is intentionally honored — distinct from unset.
-        if let strength = cfPrefDouble(PreferenceKey.globalWarmthStrength) {
-            setGlobalWarmth(strength)
+        if let strength = cfPrefDouble(PreferenceKey.globalWarmthStrength),
+           let valid = try? ControlValidation.validatedStrength(strength) {
+            setGlobalWarmth(valid)
         }
 
         // Master toggle last. The final converged engine state is order-independent — each setter
@@ -271,12 +272,16 @@ final class AppModel {
 
         // Excluded apps (suspend warmth while one is frontmost). Fresh install = none.
         if let arr = cfPrefStringArray(PreferenceKey.excludedApps) {
-            setExcludedApps(Set(arr))
+            let validApps = ControlValidation.normalizedPersistedBundleIDs(arr)
+            if !validApps.isEmpty || arr.isEmpty {
+                setExcludedApps(Set(validApps))
+            }
         }
 
         if let lat = cfPrefDouble(PreferenceKey.userLatitude),
-           let lon = cfPrefDouble(PreferenceKey.userLongitude) {
-            setUserCoordinate(.init(latitude: lat, longitude: lon))
+           let lon = cfPrefDouble(PreferenceKey.userLongitude),
+           let coordinate = try? ControlValidation.validatedCoordinate(lat: lat, lon: lon) {
+            setUserCoordinate(.init(latitude: coordinate.lat, longitude: coordinate.lon))
         }
     }
 
@@ -336,15 +341,18 @@ final class AppModel {
     }
 
     /// Apply a decoded control message through the SAME setters the UI uses (so the engine and the
-    /// published `state` converge exactly as a live interaction would), record the ack requestID,
-    /// and write a fresh snapshot. Pure model mutation — works in preview mode (engine nil).
+    /// published `state` converge exactly as a live interaction would). Only record the ack requestID
+    /// after at least one valid patch field/action was accepted; a malformed/no-op payload must not
+    /// look applied to the CLI just because it reached this process.
     func applyControlMessage(_ message: ControlMessage) {
+        var accepted = false
         if let patch = message.patch {
-            apply(patch)
+            accepted = apply(patch) || accepted
         }
         if let action = message.action {
-            apply(action)
+            accepted = apply(action) || accepted
         }
+        guard accepted else { return }
         lastAppliedRequestID = message.requestID
         writeControlSnapshot()
     }
@@ -352,10 +360,13 @@ final class AppModel {
     /// Apply a settings patch field-by-field. Each present field is validated (defense in depth —
     /// a malformed notification must not bypass the invariants the UI enforces) and routed through
     /// the existing setter with `userInitiated: false` so no tone/tick plays for a programmatic change.
-    private func apply(_ patch: SettingsPatch) {
+    @discardableResult
+    private func apply(_ patch: SettingsPatch) -> Bool {
+        var accepted = false
         if let strength = patch.globalWarmthStrength,
            let valid = try? ControlValidation.validatedStrength(strength) {
             setGlobalWarmth(valid)
+            accepted = true
         }
         if let kelvin = patch.warmestPointKelvin,
            let valid = try? ControlValidation.validatedKelvin(kelvin) {
@@ -363,26 +374,33 @@ final class AppModel {
             // point above `ceilingCoolBound` (3400K) neuters warming, so the live control path must
             // clamp to it too (validatedKelvin only guards the full 500…6500 type domain).
             setWarmestPoint(Kelvin(min(valid, Kelvin.ceilingCoolBound.value)))
+            accepted = true
         }
         if let mode = patch.scheduleMode {
             setScheduleMode(mode.toScheduleMode(), userInitiated: false)
+            accepted = true
         }
         if let revealRaw = patch.revealMode,
            let valid = try? ControlValidation.validatedRevealMode(revealRaw),
            let mode = RevealMode(rawValue: valid) {
             setRevealMode(mode)
+            accepted = true
         }
-        if let apps = patch.excludedApps {
-            setExcludedApps(Set(apps))
+        if let apps = patch.excludedApps,
+           let validApps = try? ControlValidation.validatedBundleIDs(apps) {
+            setExcludedApps(Set(validApps))
+            accepted = true
         }
         // Coordinate: an explicit clear wins; otherwise apply a complete, VALIDATED lat+lon pair.
         // Defense in depth — a non-finite/out-of-range value (e.g. 1e308) from a malformed control
         // message would otherwise trap downstream in `approximateTimeZone`'s mired/longitude math.
         if patch.clearUserCoordinate == true {
             setUserCoordinate(nil)
+            accepted = true
         } else if let lat = patch.userLatitude, let lon = patch.userLongitude,
                   let coord = try? ControlValidation.validatedCoordinate(lat: lat, lon: lon) {
             setUserCoordinate(.init(latitude: coord.lat, longitude: coord.lon))
+            accepted = true
         }
         // Cozy — the expanded-warmth master toggle — routes through `setCozy` (the SAME path the
         // Settings card uses), which moves the ceiling AND re-pins the on-screen warmth. Applied after
@@ -390,27 +408,34 @@ final class AppModel {
         // toggle's ceiling wins. No validation needed — it's a plain Bool master toggle.
         if let cozy = patch.cozy {
             setCozy(cozy, userInitiated: false)
+            accepted = true
         }
         // Enabled last (mild nicety; the engine recomputes from the whole box regardless).
         if let enabled = patch.isEnabled {
             setEnabled(enabled, userInitiated: false)
+            accepted = true
         }
+        return accepted
     }
 
     /// Apply a transient control action. Reveal is live-only (never persisted): begin the peek and
     /// schedule its end after `holdSeconds` (default 3s), superseding any in-flight reveal task.
-    private func apply(_ action: ControlAction) {
+    @discardableResult
+    private func apply(_ action: ControlAction) -> Bool {
         switch action {
         case .reveal(let holdSeconds):
-            let hold = holdSeconds ?? 3
+            guard let hold = try? ControlValidation.validatedRevealHold(
+                holdSeconds ?? ControlValidation.defaultRevealHoldSeconds
+            ) else { return false }
             beginReveal()
             controlRevealTask?.cancel()
             controlRevealTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(max(0, hold)))
+                try? await Task.sleep(for: .seconds(hold))
                 guard !Task.isCancelled else { return }
                 self?.endReveal()
                 self?.writeControlSnapshot()
             }
+            return true
         }
     }
 
@@ -449,19 +474,10 @@ final class AppModel {
             }
         )
         do {
-            let dir = ControlStateSnapshot.directoryURL()
-            try FileManager.default.createDirectory(
-                at: dir, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             let data = try encoder.encode(snapshot)
-            let fileURL = ControlStateSnapshot.fileURL()
-            try data.write(to: fileURL, options: .atomic)
-            // The atomic write lands at the default 0644 (world-readable); the dir is already 0700.
-            // Tighten the file to 0600 so only the owner can read the snapshot (it carries runtime
-            // state). Best-effort — a failed chmod must not disrupt warming.
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+            try SecureAtomicFileWriter.write(data, to: ControlStateSnapshot.fileURL())
         } catch {
             // Best-effort: a status-file failure must not affect the user's warming.
         }

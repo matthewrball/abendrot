@@ -153,8 +153,8 @@ when empty).
 .TP
 .B reveal \fR[\fB\-\-hold\fR \fIseconds\fR] [\fB\-\-json\fR]
 Momentary true-color peek: temporarily drop warmth to reveal real colors. This is live-only
-\(em it requires a running app and writes no persisted setting. Default hold is 3 seconds. If
-the app is not running, exits 3.
+\(em it requires a running app and writes no persisted setting. Hold must be a finite value
+from 0 through 300 seconds; the default is 3 seconds. If the app is not running, exits 3.
 .TP
 .B \-\-version
 Print the CLI version.
@@ -185,7 +185,8 @@ clear the manual coordinate.
 .B \-\-hold \fIseconds\fR
 For
 .BR reveal :
-hold the reveal for N seconds (default 3).
+hold the reveal for 0 through 300 seconds (default 3). Non-finite and out-of-range values
+are rejected with exit status 2.
 .SH EXIT STATUS
 .TP
 .B 0

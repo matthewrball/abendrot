@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import ServiceManagement
 import WarmthKit
 
 // MARK: - AbendrotApp
@@ -86,6 +85,7 @@ struct AbendrotApp: App {
 
 // MARK: - Dev relaunch (Session 11)
 
+#if DEBUG
 /// DEV-ONLY: kill this instance and reopen the freshly-built app from the founder's Release build path
 /// — the dogfooding "restart from latest build" the founder otherwise runs by hand. The `/bin/sh` child
 /// is reparented to launchd when the kill takes us down, so `open` still fires; the short sleep lets the
@@ -100,12 +100,20 @@ private func relaunchFromLatestBuild(force: Bool = false) {
     // Reopen the bundle we're running from (the local Release build path during testing). Derived rather
     // than hardcoded, so no absolute home path or private repo name lives in source to reach the mirror.
     let appPath = Bundle.main.bundlePath
-    let kill = force ? "killall -9 Abendrot 2>/dev/null" : "killall Abendrot 2>/dev/null"
+    let signal = force ? "-KILL" : "-TERM"
     let task = Process()
     task.executableURL = URL(fileURLWithPath: "/bin/sh")
-    task.arguments = ["-c", "\(kill); sleep 0.5; open \"\(appPath)\""]
+    task.arguments = [
+        "-c",
+        "kill \"$1\" \"$2\"; sleep 0.5; exec /usr/bin/open \"$3\"",
+        "abendrot-relaunch",
+        signal,
+        String(ProcessInfo.processInfo.processIdentifier),
+        appPath,
+    ]
     try? task.run()
 }
+#endif
 
 // MARK: - SettingsLauncher
 //
@@ -142,7 +150,6 @@ private struct SettingsHostWindowDismisser: NSViewRepresentable {
 /// Owns app-level lifecycle the SwiftUI `App` can't express directly: engine start on
 /// launch, neutral-reset on quit, and the menu-bar-only activation policy.
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private static let launchAtLoginDefaultRegisteredKey = "launchAtLoginDefaultRegistered"
     private weak var model: AppModel?
 
     @MainActor
@@ -151,30 +158,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
         // Marketing/dev screenshot harness: if ABENDROT_SHOTS=<dir> is set, render every product screen to
         // PNGs and exit BEFORE any engine / menu-bar / login-item setup runs. No-op for normal launches.
         MainActor.assumeIsolated { ScreenshotHarness.runIfRequested() }
+        #endif
         // Start as a menu-bar-only agent; windows raise it via AppActivationPolicy.
         NSApp.setActivationPolicy(.accessory)
-        registerLaunchAtLoginByDefaultIfNeeded()
         Task { @MainActor in
             model?.start()
         }
-    }
-
-    private func registerLaunchAtLoginByDefaultIfNeeded() {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: Self.launchAtLoginDefaultRegisteredKey) == nil else { return }
-
-        do {
-            if SMAppService.mainApp.status != .enabled {
-                try SMAppService.mainApp.register()
-            }
-            defaults.set(true, forKey: "launchAtLogin")
-        } catch {
-            defaults.set(SMAppService.mainApp.status == .enabled, forKey: "launchAtLogin")
-        }
-        defaults.set(true, forKey: Self.launchAtLoginDefaultRegisteredKey)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -201,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // side-effect-free `AppModel(previewState:)` (the same path #Previews use) and forces the
 // Reduce-Transparency SOLID ember fallback so the glass surfaces render opaque — ImageRenderer
 // can't capture the live `NSVisualEffectView` material. Dressed onto the brand backdrop downstream.
+#if DEBUG
 @MainActor
 enum ScreenshotHarness {
     static func runIfRequested() {
@@ -283,3 +277,4 @@ enum ScreenshotHarness {
         }
     }
 }
+#endif
