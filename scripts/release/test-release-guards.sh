@@ -919,6 +919,12 @@ SH
     local build="$1" origin="$2"
     git clone --quiet "$ROOT" "$build"
     git init --bare -q "$origin"
+    # GitHub Actions checks out pull-request merge commits with fetch-depth=1.
+    # A local clone of that checkout is shallow too, so its disposable bare
+    # remote must explicitly accept the shallow boundary for this test fixture.
+    # This changes only the temporary test remote; production remotes remain
+    # governed by their normal receive policy.
+    git -C "$origin" config receive.shallowUpdate true
     git -C "$build" remote remove origin || true
     git -C "$build" remote add origin "$origin"
     git -C "$build" push -q origin HEAD:refs/heads/dev
