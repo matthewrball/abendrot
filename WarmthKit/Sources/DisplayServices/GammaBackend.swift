@@ -38,6 +38,7 @@ public struct GammaBackend: WarmthBackend {
     /// truth ("gamma is broken on this OS") independent of the runtime toggle, and the UI can
     /// explain *why* it is unavailable.
     public func classify(_ identity: DisplayIdentity) async -> Capability<Void> {
+        #if DEBUG
         // DEV/preview hook: ABENDROT_FORCE_TINT_ONLY simulates an incompatible config (gamma
         // classified broken) on ANY Mac, so the "this display can only be tinted" UI can be
         // designed + tested without a Pro/Max device. With gamma forced off and DDC opt-in off,
@@ -45,6 +46,7 @@ public struct GammaBackend: WarmthBackend {
         if ProcessInfo.processInfo.environment["ABENDROT_FORCE_TINT_ONLY"] != nil {
             return .unsupported(reason: .gammaBrokenOnThisOS)
         }
+        #endif
         return GammaClassifier.classify(Self.currentEnvironment())
     }
 

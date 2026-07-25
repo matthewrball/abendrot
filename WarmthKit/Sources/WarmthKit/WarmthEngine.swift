@@ -200,7 +200,12 @@ public actor WarmthEngine {
         // SIGKILL) with DDC gain or gamma left altered; crash/exit handlers can't reliably do async
         // DDC, so we recover here. Capture the persisted dirty set, build display rows WITHOUT
         // applying, restore every stale display to native FIRST, then apply current settings.
-        staleKeys = await snapshotStore.dirtyKeys()
+        do {
+            staleKeys = try await snapshotStore.dirtyKeys()
+        } catch {
+            staleKeys = []
+            logger.notice("DDC dirty snapshot store could not be read; hardware writes will fall back until persistence works: \(String(describing: error))")
+        }
         await rebuildDisplayRows(for: currentDisplays())
         await recoverStaleDisplays()
         await reapply()
@@ -750,8 +755,8 @@ public actor WarmthEngine {
                 if layer == .hardware {
                     // Write-ahead the dirty flag BEFORE the DDC write: a crash mid-write is then
                     // recoverable on the next launch (the panel does not restore itself).
-                    await snapshotStore.setDirty(true, for: key)
                     do {
+                        try await snapshotStore.setDirty(true, for: key)
                         try await ddc.apply(kelvin, to: id)
                         appliedMethod = .hardware
                         lastError = nil
@@ -765,7 +770,7 @@ public actor WarmthEngine {
                         lastError = EngineErrorSummary(
                             method: .hardware,
                             reason: .ddcProbeFailed,
-                            message: "Hardware DDC didn’t verify; using overlay."
+                            message: "Hardware DDC unavailable; using overlay."
                         )
                     }
                 } else {
@@ -791,7 +796,11 @@ public actor WarmthEngine {
     private func restoreHardwareAndClearDirty(_ id: DisplayIdentity) async {
         do {
             try await ddc.reset(id)
-            await snapshotStore.setDirty(false, for: id.persistentKey)
+            do {
+                try await snapshotStore.setDirty(false, for: id.persistentKey)
+            } catch {
+                logger.notice("DDC restore verified but dirty flag could not be cleared; keeping dirty for recovery: \(String(describing: error))")
+            }
         } catch {
             logger.notice("DDC restore did not fully verify; keeping dirty for recovery: \(String(describing: error))")
         }

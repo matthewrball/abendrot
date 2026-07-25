@@ -23,7 +23,7 @@ public final class HotkeyService {
     private let engine: WarmthEngine
     private let toggleWarmth: (() -> Void)?
 
-    public var mode: RevealMode = .toggle
+    public var mode: RevealMode = .hold
 
     /// Watchdog: if a key-up is lost, auto-resume warmth after this interval. Default 8s.
     public var watchdogTimeout: Duration = .seconds(8)

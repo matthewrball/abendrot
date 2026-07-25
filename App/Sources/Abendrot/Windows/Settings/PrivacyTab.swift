@@ -4,10 +4,10 @@ struct PrivacyTab: View {
     @Bindable var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            TabHeader(title: "Privacy", subtitle: "Local-first. No account, no telemetry by default.")
+            TabHeader(title: "Privacy", subtitle: "Local-first. No account. No telemetry.")
             privacyPoint("No accessibility permission", "Hold-to-reveal uses a Carbon global hotkey — no accessibility access required.")
             privacyPoint("No screen recording", "Display capabilities are classified, never measured by screen capture.")
-            privacyPoint("No location data", "Your sunset is computed from your time zone — or a city you pick yourself — never your GPS. Abendrot never asks for location access.")
+            privacyPoint("No location permission", "Your sunset is computed from your time zone — or an optional city you pick yourself — never your GPS. Abendrot never asks for location access.")
             privacyPoint("No sandbox surprises", "Warmth applies locally; nothing about your displays leaves the machine.")
         }
     }

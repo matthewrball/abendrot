@@ -108,6 +108,9 @@ public extension ControlMessage {
     static let userInfoPayloadKey = "payload"
     static let userInfoSchemaKey = "schemaVersion"
     static let userInfoRequestIDKey = "requestID"
+    /// Distributed notifications are local, but still untrusted input. Keep the whole payload small
+    /// enough that one malformed notification cannot poison the app's capped state snapshot writes.
+    static let maximumUserInfoPayloadBytes = 64 * 1024
 
     /// Pack into a plist-safe `userInfo` dict. Throws only if JSON encoding fails (it won't for
     /// this fixed Codable shape, but the API is honest about it).
@@ -123,7 +126,21 @@ public extension ControlMessage {
     /// Unpack from a received `userInfo`. Returns nil if the payload is absent or undecodable —
     /// the app treats that as the raw-`defaults` fallback path (reload from disk).
     static func from(userInfo: [AnyHashable: Any]?) -> ControlMessage? {
-        guard let data = userInfo?[userInfoPayloadKey] as? Data else { return nil }
-        return try? JSONDecoder().decode(ControlMessage.self, from: data)
+        guard let userInfo,
+              (userInfo[userInfoSchemaKey] as? Int) == AbendrotControl.schemaVersion,
+              let envelopeRequestID = userInfo[userInfoRequestIDKey] as? String,
+              isCanonicalRequestID(envelopeRequestID),
+              let data = userInfo[userInfoPayloadKey] as? Data,
+              data.count <= maximumUserInfoPayloadBytes,
+              let message = try? JSONDecoder().decode(ControlMessage.self, from: data),
+              message.schemaVersion == AbendrotControl.schemaVersion,
+              message.requestID == envelopeRequestID,
+              isCanonicalRequestID(message.requestID)
+        else { return nil }
+        return message
+    }
+
+    private static func isCanonicalRequestID(_ raw: String) -> Bool {
+        UUID(uuidString: raw)?.uuidString == raw
     }
 }

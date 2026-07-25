@@ -3,7 +3,11 @@ import SwiftUI
 /// The screenshot harness (launched with ABENDROT_SHOTS set) forces the SOLID ember glass fallback so the
 /// captured PNGs have an opaque, on-brand surface — the live Liquid Glass material can't be captured by
 /// ImageRenderer/cacheDisplay (it renders clear). No effect on normal launches.
+#if DEBUG
 private let abendrotShootingSolidGlass = ProcessInfo.processInfo.environment["ABENDROT_SHOTS"] != nil
+#else
+private let abendrotShootingSolidGlass = false
+#endif
 
 // MARK: - GlassKind
 //

@@ -129,4 +129,34 @@ struct EngineRecoveryTests {
         #expect(state.displays.first?.id == display)
         #expect(state.displays.first?.warmth.strength == 0.7)                    // settings survived the unplug
     }
+
+    @Test("dirty write-ahead failure skips hardware apply and falls back to overlay")
+    func dirtyWriteFailureSkipsHardwareApply() async throws {
+        let store = FailingDirtyStore()
+        let display = DisplayIdentity.fixture()
+        let ddc = FaultInjectingBackend(method: .hardware)
+
+        let engine = WarmthEngine.test(backends: [ddc], store: store, displays: [display])
+        await engine.start()
+        await engine.setHardwareDDCEnabled(true, for: display)
+        await engine.setEnabled(true)
+        await engine.setScheduleMode(.alwaysOn)
+        await engine.setWarmth(WarmthLevel(strength: 0.7), for: display)
+
+        #expect(await ddc.callLog.filter { $0 == "apply" }.isEmpty)
+        let row = try #require(await engine.state.displays.first)
+        #expect(row.appliedMethod == .overlay)
+        #expect(row.lastError != nil)
+    }
+}
+
+private actor FailingDirtyStore: DDCSnapshotStore {
+    enum StoreError: Error { case failed }
+
+    func snapshot(for key: String) async throws -> DDCDisplaySnapshot? { nil }
+    func saveNative(_ native: DDCNativeState, for key: String) async throws {}
+    func setDirty(_ dirty: Bool, for key: String) async throws {
+        if dirty { throw StoreError.failed }
+    }
+    func dirtyKeys() async throws -> Set<String> { [] }
 }

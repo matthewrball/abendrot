@@ -263,6 +263,63 @@ final class AbendrotControlTests: XCTestCase {
         XCTAssertNil(ControlMessage.from(userInfo: ["unrelated": "value"]))
     }
 
+    func testControlMessageFromUserInfoRejectsOversizedPayload() {
+        let userInfo: [String: Any] = [
+            ControlMessage.userInfoSchemaKey: AbendrotControl.schemaVersion,
+            ControlMessage.userInfoRequestIDKey: UUID().uuidString,
+            ControlMessage.userInfoPayloadKey: Data(
+                count: ControlMessage.maximumUserInfoPayloadBytes + 1),
+        ]
+        XCTAssertNil(ControlMessage.from(userInfo: userInfo))
+    }
+
+    func testControlMessageFromUserInfoRejectsWrongSchema() throws {
+        let message = ControlMessage(
+            requestID: UUID().uuidString,
+            writtenAt: Date(timeIntervalSince1970: 1_700_000_000),
+            patch: SettingsPatch(isEnabled: true)
+        )
+        var topLevelWrong = try message.toUserInfo()
+        topLevelWrong[ControlMessage.userInfoSchemaKey] = AbendrotControl.schemaVersion + 1
+        XCTAssertNil(ControlMessage.from(userInfo: topLevelWrong))
+
+        var payloadWrong = message
+        payloadWrong.schemaVersion = AbendrotControl.schemaVersion + 1
+        var payloadWrongUserInfo = try payloadWrong.toUserInfo()
+        payloadWrongUserInfo[ControlMessage.userInfoSchemaKey] = AbendrotControl.schemaVersion
+        XCTAssertNil(ControlMessage.from(userInfo: payloadWrongUserInfo))
+    }
+
+    func testControlMessageFromUserInfoRejectsMalformedOrOversizedRequestID() throws {
+        let valid = ControlMessage(
+            requestID: UUID().uuidString,
+            writtenAt: Date(timeIntervalSince1970: 1_700_000_000),
+            patch: SettingsPatch(isEnabled: true)
+        )
+        var malformed = try valid.toUserInfo()
+        malformed[ControlMessage.userInfoRequestIDKey] = "not-a-uuid"
+        XCTAssertNil(ControlMessage.from(userInfo: malformed))
+
+        let oversizedID = String(repeating: "A", count: 70_000)
+        let oversized = ControlMessage(
+            requestID: oversizedID,
+            writtenAt: Date(timeIntervalSince1970: 1_700_000_000),
+            patch: SettingsPatch(isEnabled: true)
+        )
+        let oversizedUserInfo = try oversized.toUserInfo()
+        XCTAssertNil(ControlMessage.from(userInfo: oversizedUserInfo))
+    }
+
+    func testControlMessageFromUserInfoAcceptsCanonicalUUID() throws {
+        let original = ControlMessage(
+            requestID: UUID().uuidString,
+            writtenAt: Date(timeIntervalSince1970: 1_700_000_000),
+            patch: SettingsPatch(isEnabled: true)
+        )
+        let decoded = try XCTUnwrap(ControlMessage.from(userInfo: try original.toUserInfo()))
+        XCTAssertEqual(decoded, original)
+    }
+
     func testRevealActionMessageRoundTrip() throws {
         let original = ControlMessage(
             requestID: UUID().uuidString,
@@ -316,6 +373,13 @@ final class AbendrotControlTests: XCTestCase {
         XCTAssertEqual(try ControlValidation.validatedRevealMode("hold"), "hold")
         XCTAssertEqual(try ControlValidation.validatedRevealMode("toggle"), "toggle")
         XCTAssertThrowsError(try ControlValidation.validatedRevealMode("flash"))
+
+        XCTAssertEqual(try ControlValidation.validatedRevealHold(0), 0)
+        XCTAssertEqual(try ControlValidation.validatedRevealHold(300), 300)
+        XCTAssertThrowsError(try ControlValidation.validatedRevealHold(-0.1))
+        XCTAssertThrowsError(try ControlValidation.validatedRevealHold(300.1))
+        XCTAssertThrowsError(try ControlValidation.validatedRevealHold(.infinity))
+        XCTAssertThrowsError(try ControlValidation.validatedRevealHold(.nan))
     }
 
     func testControlErrorCarriesMessage() {
@@ -338,5 +402,54 @@ final class AbendrotControlTests: XCTestCase {
         XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: 0, lon: 1e308))
         XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: 999, lon: 0))
         XCTAssertThrowsError(try ControlValidation.validatedCoordinate(lat: 0, lon: 999))
+    }
+
+    func testValidatedBundleIDAcceptsAppleCompatibleASCIIShape() throws {
+        XCTAssertEqual(try ControlValidation.validatedBundleID("com.apple.dt.Xcode"), "com.apple.dt.Xcode")
+        XCTAssertEqual(try ControlValidation.validatedBundleID("com.example.App-2"), "com.example.App-2")
+        XCTAssertEqual(try ControlValidation.validatedBundleIDs(["com.apple.dt.Xcode", "org.example.App-2"]),
+                       ["com.apple.dt.Xcode", "org.example.App-2"])
+    }
+
+    func testValidatedBundleIDRejectsHostileOrAmbiguousInput() {
+        let overlength = "com." + String(repeating: "a", count: ControlValidation.maximumBundleIDBytes)
+        for bad in [
+            "",
+            "../../evil",
+            "com..example",
+            ".com.example",
+            "com.example.",
+            "com/example",
+            "com\\example",
+            "com.example\nbad",
+            "com.example\u{0001}bad",
+            "com.example;rm",
+            "com.example bad",
+            "com.exämple.App",
+            "com．example.App",
+            "example",
+            overlength,
+        ] {
+            XCTAssertThrowsError(try ControlValidation.validatedBundleID(bad), "accepted \(bad.debugDescription)")
+        }
+    }
+
+    func testValidatedBundleIDsRejectsEntireListWhenAnyIDIsBad() {
+        XCTAssertThrowsError(try ControlValidation.validatedBundleIDs(["com.apple.dt.Xcode", "../../evil"]))
+    }
+
+    func testNormalizedPersistedBundleIDsFiltersDeduplicatesAndSortsLegacyValues() {
+        XCTAssertEqual(
+            ControlValidation.normalizedPersistedBundleIDs([
+                "../../evil",
+                "org.example.App-2",
+                "com.apple.dt.Xcode",
+                "org.example.App-2",
+                "com..bad",
+                "com.exämple.App",
+            ]),
+            ["com.apple.dt.Xcode", "org.example.App-2"]
+        )
+        XCTAssertEqual(ControlValidation.normalizedPersistedBundleIDs(["../../evil", "com..bad"]), [])
     }
 }

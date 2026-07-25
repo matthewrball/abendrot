@@ -1,47 +1,36 @@
 # Abendrot — Continuous Integration
 #
-# Release engineering & CI. This workflow runs in TWO modes:
+# This workflow has two execution paths:
 #
-# Default (runs TODAY, no Apple account):
-# lint -> WarmthKit headless tests -> SPM build -> plain (hdiutil) DMG.
+# Default CI (no Apple account):
+# lint -> complete WarmthKit + CLI headless tests -> app build -> plain DMG.
 # Works on forked PRs and on a repo with ZERO secrets configured.
 #
-# Signing path (activates ONLY when signing secrets are present):
+# Manual release validation:
 # adds: import Developer ID cert into a temp keychain -> archive/export
-# (Developer ID) -> notarize -> staple -> verify. Every Mode-A step is
-# guarded by a `secrets present` job output so credential-less and
-# forked-PR runs still go green.
+# (Developer ID) -> notarize -> staple -> verify. It runs only from
+# workflow_dispatch on exact `main`, behind the `release-signing`
+# environment, and fails if any required signing/notarization secret is
+# absent.
 #
-# A SEPARATE, self-hosted "display-matrix" job (PLANNED — NOT A GATE) documents
-# the physical-hardware test matrix. It is manual-dispatch
-# ONLY, never runs on push/PR, never sees fork secrets, and is explicitly not a
-# passing check: a green CI never implies the hardware matrix ran. The acceptance
-# of physical-display behavior is tracked outside CI until real hardware runners
-# exist (the release runbook). The ONLY hosted test gate is the WarmthCore
-# headless suite (`test-warmthcore`), which runs on every push/PR.
+# A separate, self-hosted `display-matrix` job reserves the shape of future
+# physical-hardware testing. It is manual-dispatch only, never runs on push/PR,
+# never sees fork secrets, and intentionally cannot pass until real hardware
+# runners and tests exist. The hosted `test-warmthcore` check runs the complete
+# headless WarmthKit and CLI suites on every push/PR.
 #
-# Secret-handling rule: secrets are read ONLY inside jobs that
-# cannot be triggered by a fork. `pull_request` from a fork cannot read repo
-# secrets in GitHub Actions, so the signing job additionally self-checks and
-# no-ops when the secret bundle is empty — defense in depth.
-#
-# Placeholder note: the Xcode/SPM scheme is NOT finalized and
-# target names. This file references them through env vars at the top
-# (ABENDROT_APP_SCHEME, WARMTHKIT_PACKAGE_PATH, WARMTHKIT_TEST_TARGET). Update
-# those once Package.swift / Abendrot.xcodeproj land. Steps that depend on an
-# Xcode project (archive/export) are written but guarded with
-# `continue-on-error`-free existence checks so they fail loudly only once the
-# project actually exists.
+# Repository signing/ASC secrets are read only inside `sign-notarize`, which
+# can run only for manual dispatch on exact
+# `refs/heads/main` after the `release-signing` environment gate. Push and PR
+# jobs never reference signing secrets.
 
 name: CI
 
 on:
   push:
-    # `main` is intentionally NOT listed: it only ever fast-forwards a green `dev` SHA, and CI results
-    # attach to the SHA — so branch protection on `main` is already satisfied by the `dev` run, and
-    # re-running on the promote push would just duplicate it. A direct push of a fresh commit to `main`
-    # is still rejected (that SHA has no green checks). Staging happens on `dev`; PRs are covered below.
-    branches: [dev]
+    # `main` only fast-forwards a green `public-dev` SHA. Source work continues on
+    # `dev`; scrubbed publication snapshots run the same gates on `public-dev`.
+    branches: [dev, public-dev]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -60,67 +49,38 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # ---- PLACEHOLDERS: confirm once Package.swift / xcodeproj land ----
-  ABENDROT_APP_SCHEME: Abendrot              # Xcode scheme for the .app (TBD)
-  WARMTHKIT_PACKAGE_PATH: WarmthKit          # SPM package dir (exists, Package.swift TBD)
-  WARMTHKIT_TEST_TARGET: WarmthCoreTests     # headless unit test target (TBD)
-  # -----------------------------------------------------------------------------
-  # macOS 26 "Tahoe" runner image + Xcode 26. `macos-latest` may lag; pin once
-  # GitHub publishes a Tahoe image label. Requires a macOS 26 runner.
+  ABENDROT_APP_SCHEME: Abendrot
+  WARMTHKIT_PACKAGE_PATH: WarmthKit
+  # Keep the runner on the supported macOS/Xcode generation instead of floating
+  # on `macos-latest`.
   MACOS_RUNNER: macos-26
   DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  XCODEGEN_VERSION: 2.46.0
+  XCODEGEN_URL: https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+  XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 0. Detect whether signing/notarization secrets are configured.
-  # Output drives every Mode-A step. Fork PRs receive empty secrets, so this
-  # naturally reports `false` for them.
-  # ---------------------------------------------------------------------------
-  detect-secrets:
-    runs-on: ubuntu-latest
-    outputs:
-      signing: ${{ steps.check.outputs.signing }}
-    steps:
-      - id: check
-        env:
-          CERT: ${{ secrets.DEVELOPER_ID_APP_CERT_P12_BASE64 }}
-          ASC_KEY: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
-        run: |
-          if [ -n "$CERT" ] && [ -n "$ASC_KEY" ]; then
-            echo "signing=true" >> "$GITHUB_OUTPUT"
-            echo "Signing secrets present -> signing path available."
-          else
-            echo "signing=false" >> "$GITHUB_OUTPUT"
-            echo "No signing secrets -> unsigned, plain DMG only."
-          fi
-
-  # ---------------------------------------------------------------------------
-  # 1. Lint (always; hosted; no secrets). swift-format --lint + SwiftLint.
+  # 1. Lint (always; hosted; no secrets). Advisory toolchain swift-format only.
   # ---------------------------------------------------------------------------
   lint:
     runs-on: macos-26
     # Advisory, NON-BLOCKING: runs the formatters and surfaces findings, but never gates CI.
     # There is no committed style config yet, so a style nit must not turn the whole board red.
     # The real required gates are test-warmthcore + build-app-unsigned. Make this strict + remove
-    # continue-on-error once a .swift-format / .swiftlint.yml config is agreed and the tree is clean.
+    # continue-on-error once a .swift-format config is agreed and the tree is clean.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Install lint tools
-        run: |
-          # swift-format ships with the Swift 6 toolchain (Xcode 26). SwiftLint
-          # via Homebrew (preinstalled on GitHub macOS images).
-          brew list swiftlint >/dev/null 2>&1 || brew install swiftlint
-          # swift-format is the Swift 6 toolchain subcommand: `swift format` (not a standalone binary).
-          swift format --version || true
-          swiftlint version || true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: swift-format --lint
         run: |
+          # swift-format is the Swift 6 toolchain subcommand: `swift format`
+          # (not a standalone binary).
+          swift format --version || true
           # Lint the SPM package + app sources. `--recursive` walks the tree.
-          # Config: .swift-format at repo root (defaults used
-          # if absent). Non-zero exit fails the job.
+          # Config: .swift-format at repo root when present; otherwise use the
+          # toolchain defaults.
           if [ -f .swift-format ]; then
             CFG="--configuration .swift-format"
           else
@@ -136,53 +96,64 @@ jobs:
             fi
           done
 
-      - name: SwiftLint
-        run: |
-          # Advisory: report findings but never fail the (already non-blocking) lint job.
-          if [ -f .swiftlint.yml ]; then
-            swiftlint lint --strict || true
-          else
-            echo "::notice::No .swiftlint.yml; running with defaults (non-strict)."
-            swiftlint lint || true
-          fi
-
   # ---------------------------------------------------------------------------
-  # 2. WarmthCore headless unit tests — THE REAL REQUIRED GATE (always; hosted;
-  # no secrets). These are the pure WarmthCore tests (Kelvin<->gain math,
-  # schedule parsing, state machine, identity keying, watchdog).
-  # NO real displays, NO DDC/gamma — that hardware work is the manual-dispatch
-  # PLANNED job below, which is explicitly NOT a gate.
+  # 2. Complete headless unit tests — THE REAL REQUIRED GATE (always; hosted;
+  # no secrets). This runs pure engine math/state tests, fake-backed DDC
+  # transaction/recovery tests, shared control validation, and CLI tests.
+  # NO real displays or private-framework calls — physical hardware work is
+  # the manual-dispatch PLANNED job below, which is explicitly NOT a gate.
   #
   # This job runs on EVERY push/PR (including forks) and FAILS hard if the
-  # package or the WarmthCore tests are missing or failing. It does not
-  # skip-pass: a green CI here means the headless suite actually ran and passed.
+  # package or tests are missing/failing. It does not skip-pass: a green CI
+  # here means every local headless suite actually ran and passed.
   # ---------------------------------------------------------------------------
   test-warmthcore:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Show toolchain
         run: |
           xcodebuild -version || true
           swift --version || true
 
-      - name: Build + test WarmthCore (SPM, headless)
+      - name: Build + test WarmthKit (SPM, headless)
         working-directory: ${{ env.WARMTHKIT_PACKAGE_PATH }}
         run: |
           set -euo pipefail
           if [ ! -f Package.swift ]; then
             echo "::error::${WARMTHKIT_PACKAGE_PATH}/Package.swift is missing — the"
-            echo "::error::required WarmthCore headless test gate cannot run. Failing."
+            echo "::error::required headless test gate cannot run. Failing."
             exit 1
           fi
-          # Pure-Swift package: `swift test` is headless and needs no GUI/displays.
-          # WarmthCore must remain free of AppKit/IOKit so this stays hosted-safe
-          # (module split: WarmthCore is "pure, no AppKit/IOKit").
-          swift build
-          # Scope to the WarmthCore test target so this gate is exactly the pure,
-          # headless suite and never silently depends on display targets.
-          swift test --parallel --filter "${WARMTHKIT_TEST_TARGET}"
+          # Fake-backed DDC tests load no private framework and touch no display,
+          # so the complete package remains deterministic and hosted-safe.
+          swift test --parallel
+
+      - name: Build + test CLI (SPM, headless)
+        working-directory: cli
+        run: |
+          set -euo pipefail
+          [ -f Package.swift ] || {
+            echo "::error::cli/Package.swift is missing — required CLI tests cannot run."
+            exit 1
+          }
+          swift test --parallel
+
+  shell-release-guards:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Shell syntax
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' script; do
+            bash -n "$script"
+          done < <(find scripts -type f -name '*.sh' -print0)
+
+      - name: Release guard tests
+        run: scripts/release/test-release-guards.sh
 
   # ---------------------------------------------------------------------------
   # 3. App build (unsigned compile) — REQUIRED gate, always, no secrets.
@@ -197,13 +168,16 @@ jobs:
     # finding can never block the real app-build gate.
     needs: [test-warmthcore]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Install XcodeGen
+      - name: Install verified XcodeGen
         run: |
           set -euo pipefail
-          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
-          xcodegen --version
+          curl -fsSL "$XCODEGEN_URL" -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" --version | grep -qx "Version: $XCODEGEN_VERSION"
 
       - name: Generate Abendrot.xcodeproj from project.yml
         run: |
@@ -232,9 +206,10 @@ jobs:
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
+            ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \
             build
 
-      - name: Build plain DMG (default)
+      - name: Build plain DMG
         run: |
           set -euo pipefail
           # The unsigned build above placed the app under the derived-data Release
@@ -246,38 +221,221 @@ jobs:
             echo "::error::Expected built app at $APP_PATH but it is absent."
             exit 1
           fi
+          SOURCE_COMMIT="$(/usr/bin/plutil -extract AbendrotSourceCommit raw \
+            "$APP_PATH/Contents/Info.plist" 2>/dev/null || true)"
+          [ "$SOURCE_COMMIT" = "$GITHUB_SHA" ] || {
+            echo "::error::Built app is not bound to the checked-out source commit."
+            exit 1
+          }
           mkdir -p build
           ./scripts/dmg/plain-dmg.sh \
             --app "$APP_PATH" \
             --out "build/${ABENDROT_APP_SCHEME}-ci.dmg" \
             --volname "Abendrot"
 
-      - name: Upload unsigned DMG artifact
-        if: ${{ hashFiles('build/*.dmg') != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: abendrot-unsigned-dmg
-          path: build/*.dmg
-          if-no-files-found: ignore
-          retention-days: 7
+  public-release-gate:
+    name: public-dev/release-gate
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/public-dev' }}
+    runs-on: ubuntu-latest
+    needs: [test-warmthcore, build-app-unsigned, shell-release-guards]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Verify public-dev gate provenance
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = "refs/heads/public-dev" ]
+          [ "$GITHUB_REF_NAME" = "public-dev" ]
+          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ]
+          [ "${{ needs.test-warmthcore.result }}" = "success" ]
+          [ "${{ needs.build-app-unsigned.result }}" = "success" ]
+          [ "${{ needs.shell-release-guards.result }}" = "success" ]
+
+      - name: Validate public appcast
+        run: |
+          python3 - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          appcast = Path("appcast.xml")
+          expected_title = "Abendrot"
+          expected_link = "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
+          insertion_anchor = "release.sh inserts new <item> elements directly below this line."
+
+          def fail(message):
+              print(f"::error::{message}", file=sys.stderr)
+              raise SystemExit(1)
+
+          try:
+              parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+              root = ET.parse(appcast, parser=parser).getroot()
+          except (OSError, ET.ParseError) as error:
+              fail(f"Invalid appcast.xml: {error}")
+
+          if root.tag != "rss" or root.get("version") != "2.0":
+              fail("appcast.xml must have one RSS 2.0 root.")
+
+          channels = [node for node in root if node.tag == "channel"]
+          if len(channels) != 1:
+              fail("appcast.xml must have exactly one direct channel.")
+          channel = channels[0]
+
+          titles = [node for node in channel if node.tag == "title"]
+          if len(titles) != 1 or (titles[0].text or "").strip() != expected_title:
+              fail(f"appcast.xml channel title must be {expected_title!r}.")
+
+          links = [node for node in channel if node.tag == "link"]
+          if len(links) != 1 or (links[0].text or "").strip() != expected_link:
+              fail(f"appcast.xml channel link must be {expected_link}.")
+
+          children = list(channel)
+          anchors = [
+              index
+              for index, node in enumerate(children)
+              if node.tag is ET.Comment
+              and (node.text or "").strip() == insertion_anchor
+          ]
+          if len(anchors) != 1:
+              fail("appcast.xml must contain exactly one direct release insertion anchor.")
+
+          item_indexes = [
+              index for index, node in enumerate(children) if node.tag == "item"
+          ]
+          if item_indexes and anchors[0] > min(item_indexes):
+              fail("appcast.xml release insertion anchor must precede every item.")
+
+          print("Public appcast XML and canonical channel metadata are valid.")
+          PY
+
+      - name: Verify curated public tree
+        run: |
+          set -euo pipefail
+          expected=(
+            "App/Sources"
+            "App/Resources"
+            "WarmthKit/Sources"
+            "WarmthKit/Tests"
+            "scripts/dmg"
+            "scripts/release"
+            "cli/Sources"
+            "cli/Tests"
+            "cli/completions"
+            "WarmthKit/Package.swift"
+            "WarmthKit/Package.resolved"
+            "project.yml"
+            ".github/workflows/ci.yml"
+            "cli/Package.swift"
+            "cli/Package.resolved"
+            "AGENTS.md"
+            "docs/abendrot.1"
+            "appcast.xml"
+            "PRIVACY.md"
+            "README.md"
+            ".gitignore"
+            "LICENSE"
+            "CONTRIBUTING.md"
+            "SECURITY.md"
+            "assets/abendrot-icon.png"
+          )
+
+          missing=()
+          for e in "${expected[@]}"; do
+            git ls-files -- "$e" | grep -q . || missing+=("$e")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required tracked public entry:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+          critical_files=(appcast.xml PRIVACY.md LICENSE SECURITY.md)
+          for f in "${critical_files[@]}"; do
+            [ -f "$f" ] || { echo "::error::Missing required public file: $f"; exit 1; }
+            git ls-files --error-unmatch "$f" >/dev/null
+          done
+
+          strays=()
+          while IFS= read -r f; do
+            ok=""
+            for e in "${expected[@]}"; do
+              if [[ "$f" == "$e" || "$f" == "$e"/* ]]; then ok=1; break; fi
+            done
+            [ -z "$ok" ] && strays+=("$f")
+          done < <(git ls-files)
+          if [ "${#strays[@]}" -gt 0 ]; then
+            echo "::error::Unexpected tracked public file(s):"
+            printf '  %s\n' "${strays[@]}"
+            exit 1
+          fi
+
+          section_mark="$(printf '\302\247')"
+          tokens=(
+            '/U''sers/'
+            '/ho''me/[a-z]'
+            'abendrot-''(build|public)'
+            "$section_mark"
+            '\bfound''er\b'
+            '(^|[^$])\{\{[^}]+\}\}'
+          )
+          pat="$(IFS='|'; echo "${tokens[*]}")"
+          set +e
+          hits="$(git grep -nEI "$pat" -- .)"
+          rc=$?
+          set -e
+          case "$rc" in
+            0)
+              printf '%s\n' "$hits"
+              echo "::error::Public leak scan found tells above."
+              exit 1
+              ;;
+            1) echo "Public tree allowlist + leak scan clean." ;;
+            *) echo "::error::Public leak scan failed."; exit "$rc";;
+          esac
 
   # ---------------------------------------------------------------------------
   # 4. Sign + notarize + staple (MODE A ONLY).
-  # Entire job is skipped unless detect-secrets says signing=true. On forked
-  # PRs this is `false`, so no secret is ever requested in a fork context.
-  # Defense-in-depth: every step also tolerates empty inputs.
+  # Manual validation path only: workflow_dispatch on exact main, behind the
+  # release-signing environment. Missing signing/notarization inputs fail this
+  # explicitly requested job before any credential import or artifact work.
   # ---------------------------------------------------------------------------
   sign-notarize:
     runs-on: macos-26
-    needs: [detect-secrets, build-app-unsigned]
+    needs: [build-app-unsigned]
     if: >-
-      needs.detect-secrets.outputs.signing == 'true' &&
-      github.event_name != 'pull_request'
-    # ^ also refuse to run on ANY pull_request (fork or not) as a hard guard:
-    # signing/notarization is reserved for push to main + manual dispatch.
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main'
     environment: release-signing   # GitHub "environment" -> optional required reviewers
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Validate signing/notarization secret bundle
+        env:
+          CERT_P12_BASE64: ${{ secrets.DEVELOPER_ID_APP_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APP_CERT_PASSWORD }}
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP_IDENTITY }}
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            CERT_P12_BASE64 \
+            CERT_PASSWORD \
+            DEVELOPER_ID_APP \
+            ASC_API_KEY_P8_BASE64 \
+            ASC_API_KEY_ID \
+            ASC_API_ISSUER_ID
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required for signed release validation."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Import Developer ID cert into a temporary keychain
         env:
@@ -285,10 +443,6 @@ jobs:
           CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APP_CERT_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${CERT_P12_BASE64:-}" ]; then
-            echo "No cert payload; signing cannot proceed. Exiting cleanly."
-            exit 0
-          fi
           KEYCHAIN="$RUNNER_TEMP/abendrot-signing.keychain-db"
           KEYCHAIN_PW=$(uuidgen)
           security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
@@ -316,7 +470,11 @@ jobs:
             echo "::error::project.yml missing — cannot generate the Xcode project for a signed release."
             exit 1
           fi
-          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          curl -fsSL "$XCODEGEN_URL" -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP"
+          export PATH="$RUNNER_TEMP/xcodegen/bin:$PATH"
+          xcodegen --version | grep -qx "Version: $XCODEGEN_VERSION"
           xcodegen generate --spec project.yml
           ARCHIVE="$RUNNER_TEMP/Abendrot.xcarchive"
           xcodebuild \
@@ -327,6 +485,7 @@ jobs:
             -archivePath "$ARCHIVE" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="$DEVELOPER_ID_APP" \
+            ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \
             OTHER_CODE_SIGN_FLAGS="--options runtime --timestamp" \
             archive
           # ExportOptions.plist must live in scripts/release/ (committed; no secrets).
@@ -334,7 +493,30 @@ jobs:
             -archivePath "$ARCHIVE" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist scripts/release/ExportOptions-DeveloperID.plist
-          echo "EXPORTED_APP=$RUNNER_TEMP/export/${ABENDROT_APP_SCHEME}.app" >> "$GITHUB_ENV"
+          EXPORTED_APP="$RUNNER_TEMP/export/${ABENDROT_APP_SCHEME}.app"
+          SPARKLE_KEY="$(/usr/bin/plutil -extract SUPublicEDKey raw \
+            "$EXPORTED_APP/Contents/Info.plist" 2>/dev/null || true)"
+          SPARKLE_FEED="$(/usr/bin/plutil -extract SUFeedURL raw \
+            "$EXPORTED_APP/Contents/Info.plist" 2>/dev/null || true)"
+          SOURCE_COMMIT="$(/usr/bin/plutil -extract AbendrotSourceCommit raw \
+            "$EXPORTED_APP/Contents/Info.plist" 2>/dev/null || true)"
+          [ "$SOURCE_COMMIT" = "$GITHUB_SHA" ] || {
+            echo "::error::Signed artifact is not bound to the checked-out source commit."
+            exit 1
+          }
+          SPARKLE_KEY_BYTES="$(
+            printf '%s' "$SPARKLE_KEY" | /usr/bin/base64 -D 2>/dev/null | wc -c | tr -d ' '
+          )"
+          [ "$SPARKLE_KEY_BYTES" = "32" ] || {
+            echo "::error::Signed artifact SUPublicEDKey must decode to exactly 32 bytes."
+            exit 1
+          }
+          EXPECTED_FEED="https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
+          [ "$SPARKLE_FEED" = "$EXPECTED_FEED" ] || {
+            echo "::error::Signed artifact SUFeedURL must be $EXPECTED_FEED"
+            exit 1
+          }
+          echo "EXPORTED_APP=$EXPORTED_APP" >> "$GITHUB_ENV"
 
       - name: Notarize + staple + verify
         env:
@@ -344,8 +526,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${EXPORTED_APP:-}" ] || [ ! -d "${EXPORTED_APP:-/nonexistent}" ]; then
-            echo "::warning::No exported app to notarize (TBD). Skipping."
-            exit 0
+            echo "::error::Signing job produced no exported app."
+            exit 1
           fi
           # Build a plain DMG to notarize (scripted, headless-safe fallback).
           ./scripts/dmg/plain-dmg.sh \
@@ -354,15 +536,6 @@ jobs:
             --volname "Abendrot"
           # notarize.sh reads ASC_* from env; no-ops with a clear message if unset.
           ./scripts/release/notarize.sh "$RUNNER_TEMP/Abendrot.dmg"
-
-      - name: Upload notarized DMG
-        if: ${{ hashFiles('build/*.dmg', '../*.dmg') != '' || env.EXPORTED_APP != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: abendrot-notarized-dmg
-          path: ${{ runner.temp }}/Abendrot.dmg
-          if-no-files-found: ignore
-          retention-days: 14
 
       - name: Tear down temporary keychain
         if: always()
@@ -374,14 +547,13 @@ jobs:
   # ===========================================================================
   # SELF-HOSTED PHYSICAL DISPLAY MATRIX — PLANNED, NOT A GATE (UNIMPLEMENTED).
   #
-  # This job documents and reserves the structure for the real-hardware tests
-  # matrix:
+  # This job documents and reserves the structure for future real-hardware tests:
   # - M5 (Tahoe, gamma-broken) - M3/M4 (gamma works)
   # - Apple display (Studio Display / built-in, buttonless)
   # - generic DDC monitor - HDMI-on-Apple-Silicon / dock edge case
   #
   # It runs ONLY on manual dispatch with an explicit opt-in input, and ONLY on
-  # a runner the maintainer labels `self-hosted, macOS, abendrot-display-matrix`.
+  # a runner labeled `self-hosted, macOS, abendrot-display-matrix`.
   # It NEVER runs on push/PR, so it never sees fork secrets and never blocks CI.
   #
   # ANTI-GREEN-THEATRE: this job is UNIMPLEMENTED and therefore intentionally
@@ -406,7 +578,7 @@ jobs:
           - { name: "generic-ddc-monitor",    note: "hardware warmth via IOAVService DDC" }
           - { name: "hdmi-dock-edgecase",     note: "HDMI on Apple Silicon / dock transport" }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Describe planned matrix rig (UNIMPLEMENTED — fails on purpose)
         run: |
           echo "=== PLANNED self-hosted display-matrix rig: ${{ matrix.rig.name }} ==="

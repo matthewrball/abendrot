@@ -184,7 +184,8 @@ Momentary true-color peek — temporarily drop warmth to reveal real colors. Thi
 **live-only**: it requires a running app and does not write any persisted setting. If the app
 is not running, it exits `3`.
 
-- `--hold <hold>`: Double, hold the reveal for N seconds (default `3`).
+- `--hold <hold>`: finite Double `0`–`300`, hold the reveal for N seconds
+  (default `3`). Non-finite or out-of-range input is rejected (exit `2`).
 
 ```sh
 abendrot reveal              # ~3s peek
@@ -212,7 +213,7 @@ prints usage.
 | Location auto | `set location --auto` | flag | — | Clears the manual coordinate. |
 | Enabled | `on` / `off` | Bool | — | Master toggle. |
 | Excluded apps | `exclude add\|remove <bundle-id>` | String | a macOS bundle id | e.g. `com.apple.dt.Xcode`. |
-| Reveal (transient) | `reveal [--hold <s>]` | Double | hold seconds, default `3` | Live-only; not persisted. |
+| Reveal (transient) | `reveal [--hold <s>]` | Double | `0`–`300` seconds, default `3` | Live-only; not persisted. |
 
 Validation is enforced by the CLI **and** re-checked by the app, so a bad value is rejected
 loudly (exit 2) rather than silently clamped.

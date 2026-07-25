@@ -230,19 +230,22 @@ struct SetLocation: ParsableCommand {
 
     func run() throws {
         if auto {
+            guard latitude == nil, longitude == nil else {
+                throw fail("give <lat> <lon> OR --auto, not both", code: CLIExit.badInput)
+            }
             try applySettings(SettingsPatch(clearUserCoordinate: true), json: json)
             return
         }
         guard let latitude, let longitude else {
             throw fail("provide <lat> <lon>, or --auto to clear", code: CLIExit.badInput)
         }
-        guard (-90.0...90.0).contains(latitude) else {
-            throw fail("latitude must be -90…90, got \(latitude)", code: CLIExit.badInput)
+        let coordinate = try requireValid {
+            try ControlValidation.validatedCoordinate(lat: latitude, lon: longitude)
         }
-        guard (-180.0...180.0).contains(longitude) else {
-            throw fail("longitude must be -180…180, got \(longitude)", code: CLIExit.badInput)
-        }
-        try applySettings(SettingsPatch(userLatitude: latitude, userLongitude: longitude), json: json)
+        try applySettings(
+            SettingsPatch(userLatitude: coordinate.lat, userLongitude: coordinate.lon),
+            json: json
+        )
     }
 }
 
@@ -261,29 +264,11 @@ struct ExcludeAdd: ParsableCommand {
     @Flag(name: .long) var json = false
 
     func run() throws {
-        let id = try validatedBundleID(bundleID)
+        let id = try requireValid { try ControlValidation.validatedBundleID(bundleID) }
         let current = Control.configuredExcludedApps()
         let next = Set(current).union([id]).sorted()
         try applySettings(SettingsPatch(excludedApps: next), json: json)
     }
-}
-
-/// Light shape-check for an exclusion bundle id: non-empty, no internal whitespace, and at least
-/// one dot (a reverse-DNS hint). Stays lenient — unusual but dotted ids pass — so we never reject a
-/// legitimate id, only obviously bad input (empty, whitespace-only, a bare word).
-func validatedBundleID(_ raw: String) throws -> String {
-    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-        throw fail("bundle id must not be empty", code: CLIExit.badInput)
-    }
-    guard !trimmed.contains(where: { $0.isWhitespace }) else {
-        throw fail("bundle id must not contain spaces, got '\(raw)'", code: CLIExit.badInput)
-    }
-    guard trimmed.contains(".") else {
-        throw fail("bundle id should look like a reverse-DNS id (e.g. com.apple.dt.Xcode), got '\(trimmed)'",
-                   code: CLIExit.badInput)
-    }
-    return trimmed
 }
 
 struct ExcludeRemove: ParsableCommand {
@@ -292,7 +277,7 @@ struct ExcludeRemove: ParsableCommand {
     @Flag(name: .long) var json = false
 
     func run() throws {
-        let id = try validatedBundleID(bundleID)
+        let id = try requireValid { try ControlValidation.validatedBundleID(bundleID) }
         let current = Control.configuredExcludedApps()
         let next = Set(current).subtracting([id]).sorted()
         try applySettings(SettingsPatch(excludedApps: next), json: json)
@@ -320,16 +305,19 @@ struct ExcludeList: ParsableCommand {
 
 struct Reveal: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Momentary true-color peek (live-only; requires a running app).")
-    @Option(name: .long, help: "Hold the reveal for N seconds (default 3).") var hold: Double?
+    @Option(name: .long, help: "Hold the reveal for 0–300 seconds (default 3).") var hold: Double?
     @Flag(name: .long) var json = false
 
     func run() throws {
+        let validHold = try hold.map { value in
+            try requireValid { try ControlValidation.validatedRevealHold(value) }
+        }
         // Reveal is live-only: NO defaults write. Require a running app + ack, else exit 3.
         guard Control.isRunning() else {
             if json { print("{\"ok\":false,\"reason\":\"app-not-running\"}") }
             throw fail("app not running — reveal requires the running app", code: CLIExit.appNotRunning)
         }
-        let requestID = Control.post(action: .reveal(holdSeconds: hold))
+        let requestID = Control.post(action: .reveal(holdSeconds: validHold))
         if Control.waitForAck(requestID) {
             if json { print("{\"ok\":true,\"appliedLive\":true}") } else { print("ok") }
         } else {

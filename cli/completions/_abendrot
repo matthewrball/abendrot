@@ -307,7 +307,7 @@ _abendrot_exclude_list() {
 _abendrot_reveal() {
     local -i ret=1
     local -ar arg_specs=(
-        '--hold[Hold the reveal for N seconds (default 3).]:hold:'
+        '--hold[Hold the reveal for 0–300 seconds (default 3).]:hold:'
         '--json'
         '--version[Show the version.]'
         '(-h --help)'{-h,--help}'[Show help information.]'

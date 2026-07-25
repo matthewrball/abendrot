@@ -1,3 +1,4 @@
+import Darwin
 import Testing
 import Foundation
 @testable import HardwareDDC
@@ -104,6 +105,75 @@ struct DDCTransportTests {
             return
         }
     }
+
+    @Test("malformed gain replies above the reported maximum are never snapshotted or written")
+    func rejectsMalformedNativeGain() async {
+        let id = DisplayIdentity.fixture()
+        let bus = FakeI2CBus(native: [
+            0x16: (101, 100), 0x18: (100, 100), 0x1A: (100, 100),
+        ])
+        let provider = FakeBusProvider(); provider.install(bus, for: id)
+        let store = InMemoryDDCSnapshotStore()
+        let ddc = transport(provider, store)
+
+        await #expect(throws: DDCError.nativeReadFailed) {
+            try await ddc.writeRGBGain(rgbGain(for: Kelvin(3000)), to: id)
+        }
+        #expect(await store.snapshot(for: id.persistentKey) == nil)
+    }
+
+    @Test("invalid persisted native gains are not restored to hardware")
+    func rejectsInvalidPersistedGain() async {
+        let id = DisplayIdentity.fixture()
+        let bus = FakeI2CBus(native: [
+            0x16: (100, 100), 0x18: (100, 100), 0x1A: (100, 100),
+        ])
+        let provider = FakeBusProvider(); provider.install(bus, for: id)
+        let store = InMemoryDDCSnapshotStore()
+        await store.preseed(
+            DDCDisplaySnapshot(
+                native: DDCNativeState(
+                    red: .init(current: .max, max: 100),
+                    green: .init(current: 100, max: 100),
+                    blue: .init(current: 100, max: 100)
+                ),
+                isDirty: true
+            ),
+            for: id.persistentKey
+        )
+        let ddc = transport(provider, store)
+
+        await #expect(throws: DDCError.nativeReadFailed) {
+            try await ddc.restoreNativeGain(for: id)
+        }
+        #expect(bus.totalWrites == 0)
+    }
+
+    @Test("corrupt file snapshot store fails closed before any DDC bus write")
+    func corruptFileStorePreventsBusWrites() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ddc-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("snapshots.json")
+        try Data("not json".utf8).write(to: url)
+
+        let id = DisplayIdentity.fixture()
+        let bus = FakeI2CBus(native: [
+            0x16: (100, 100), 0x18: (100, 100), 0x1A: (100, 100),
+        ])
+        let provider = FakeBusProvider(); provider.install(bus, for: id)
+        let ddc = IOAVServiceDDCTransport(
+            provider: provider,
+            store: FileDDCSnapshotStore(url: url),
+            timing: .immediate
+        )
+
+        await #expect(throws: DDCError.self) {
+            try await ddc.writeRGBGain(rgbGain(for: Kelvin(3000)), to: id)
+        }
+        #expect(bus.totalWrites == 0)
+    }
 }
 
 // MARK: - Transport: capability classification
@@ -165,21 +235,89 @@ struct DDCSnapshotStoreTests {
     }
 
     @Test("file store persists native + dirty across instances")
-    func filePersistsAcrossInstances() async {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ddc-test-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: url) }
+    func filePersistsAcrossInstances() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ddc-test-\(UUID().uuidString)", isDirectory: true)
+        let url = directory.appendingPathComponent("snapshots.json")
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o755]
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
         let key = "display-B"
 
         let first = FileDDCSnapshotStore(url: url)
-        await first.saveNative(
+        try await first.saveNative(
             DDCNativeState(red: .init(current: 50, max: 100), green: .init(current: 50, max: 100), blue: .init(current: 50, max: 100)),
             for: key
         )
-        await first.setDirty(true, for: key)
+        try await first.setDirty(true, for: key)
 
         let second = FileDDCSnapshotStore(url: url)
-        #expect(await second.dirtyKeys() == [key])
-        #expect(await second.snapshot(for: key)?.native?.red.current == 50)
+        #expect(try await second.dirtyKeys() == [key])
+        #expect(try await second.snapshot(for: key)?.native?.red.current == 50)
+        #expect(posixMode(of: directory) == 0o700)
+        #expect(posixMode(of: url) == 0o600)
     }
+
+    @Test("file store refuses a snapshot symlink without modifying its referent")
+    func fileStoreRejectsSnapshotSymlink() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ddc-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let referent = directory.appendingPathComponent("referent.json")
+        let url = directory.appendingPathComponent("snapshots.json")
+        try Data("keep".utf8).write(to: referent)
+        try FileManager.default.createSymbolicLink(atPath: url.path, withDestinationPath: referent.path)
+
+        let store = FileDDCSnapshotStore(url: url)
+        await #expect(throws: Error.self) {
+            try await store.saveNative(
+                DDCNativeState(red: .init(current: 50, max: 100), green: .init(current: 50, max: 100), blue: .init(current: 50, max: 100)),
+                for: "display-C"
+            )
+        }
+
+        #expect(try String(contentsOf: referent, encoding: .utf8) == "keep")
+        #expect(isSymlink(url))
+        try FileManager.default.removeItem(at: url)
+        #expect(try await store.snapshot(for: "display-C") == nil)
+    }
+
+    @Test("file store refuses a final directory symlink")
+    func fileStoreRejectsDirectorySymlink() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ddc-test-\(UUID().uuidString)", isDirectory: true)
+        let realDirectory = root.appendingPathComponent("real", isDirectory: true)
+        let linkDirectory = root.appendingPathComponent("link", isDirectory: true)
+        try FileManager.default.createDirectory(at: realDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(atPath: linkDirectory.path, withDestinationPath: realDirectory.path)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = FileDDCSnapshotStore(url: linkDirectory.appendingPathComponent("snapshots.json"))
+        await #expect(throws: Error.self) {
+            try await store.saveNative(
+                DDCNativeState(red: .init(current: 50, max: 100), green: .init(current: 50, max: 100), blue: .init(current: 50, max: 100)),
+                for: "display-D"
+            )
+        }
+
+        #expect(!FileManager.default.fileExists(atPath: realDirectory.appendingPathComponent("snapshots.json").path))
+        try FileManager.default.removeItem(at: linkDirectory)
+        #expect(try await store.snapshot(for: "display-D") == nil)
+    }
+}
+
+private func posixMode(of url: URL) -> Int {
+    var info = stat()
+    guard lstat(url.path, &info) == 0 else { return -1 }
+    return Int(info.st_mode & 0o777)
+}
+
+private func isSymlink(_ url: URL) -> Bool {
+    var info = stat()
+    guard lstat(url.path, &info) == 0 else { return false }
+    return (info.st_mode & S_IFMT) == S_IFLNK
 }
