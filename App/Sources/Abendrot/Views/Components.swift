@@ -8,10 +8,10 @@ import WarmthKit
 // Mirrors brand/explorations/components.html: warm slider, segmented mode control,
 // per-display rows. Provisional structure — final motion polish + the "wet glass"
 // specular/lens treatment are deferred to the /design-motion-principles + brand-lock
-// pass (§21.3). Hooks/TODOs are left explicit, not faked.
+// pass. Hooks/TODOs are left explicit, not faked.
 //
 // The old engine "method badge" (Hardware / Gamma / Overlay) was removed from the UI in the
-// §26 de-jargon pass — warming method is now expressed in plain language in the popover rows and
+// de-jargon pass — warming method is now expressed in plain language in the popover rows and
 // Settings → Displays → Advanced, never as a raw badge.
 
 // MARK: - Tooltip
@@ -82,7 +82,7 @@ struct KelvinInfoButton: View {
 // `rgbGain(for:).blue` is 1.0 at 6500K and falls toward 0 as it warms, so (1 − blueGain) is the
 // fraction of blue-channel light removed — already ~1.0 by ~1900K (blue hits 0 there). The cap stops
 // short of a "total elimination" claim (residual backlight / panel leakage): the everyday warmest
-// setting (Cozy off) reads 95%, while Cozy's deepest ember reads 99% (founder — the deeper glow earns
+// setting (Cozy off) reads 95%, while Cozy's deepest ember reads 99% (maintainer — the deeper glow earns
 // a higher number). An estimate of emitted blue vs the standard white point, NOT a measured
 // melanopic/circadian dose (that needs the panel's spectrum, which we don't have).
 struct BlueLightReductionLabel: View {
@@ -117,15 +117,64 @@ struct BlueLightReductionLabel: View {
     }
 }
 
+// MARK: - WarmthPowerSwitch
+
+/// Fast, interruptible master switch; native `.switch` ignores rapid re-clicks while its AppKit
+/// thumb animation is in flight.
+struct WarmthPowerSwitch: View {
+    @Binding private var isOn: Bool
+    let accessibilityLabel: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(isOn: Binding<Bool>, accessibilityLabel: String) {
+        self._isOn = isOn
+        self.accessibilityLabel = accessibilityLabel
+    }
+
+    var body: some View {
+        Button { isOn.toggle() } label: {
+            ZStack {
+                Capsule()
+                    .fill(trackFill)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Theme.Color.lineStrong.opacity(isOn ? 0.55 : 0.8), lineWidth: 0.6)
+                    )
+
+                Circle()
+                    .fill(Theme.Color.textCream)
+                    .frame(width: 24, height: 24)
+                    .shadow(color: .black.opacity(0.24), radius: 3, y: 1)
+                    .offset(x: isOn ? 14 : -14)
+            }
+            .frame(width: 58, height: 30)
+            .animation(reduceMotion ? nil : .interactiveSpring(response: 0.15, dampingFraction: 0.92, blendDuration: 0), value: isOn)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 66, height: 40)
+        .contentShape(Rectangle())
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityHint("Turns display warmth \(isOn ? "off" : "on")")
+    }
+
+    private var trackFill: AnyShapeStyle {
+        isOn
+            ? AnyShapeStyle(Theme.Gradient.sunsetHorizontal)
+            : AnyShapeStyle(Theme.Color.lineStrong.opacity(0.45))
+    }
+}
+
 // MARK: - DisplayRow (simple popover)
 
-/// A glanceable per-display row: name + method badge (plan §4.1).
+/// A glanceable per-display row: name + method badge.
 struct DisplayRow: View {
     @Bindable var model: AppModel
     let display: DisplayState
     /// True when this display can ONLY be tinted — no true-warm path is available to it. Surfaced
     /// honestly (plain language, no jargon) so we never imply true warming where the hardware/OS
-    /// can't deliver it. (§25.J)
+    /// can't deliver it.
     var tintOnly: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -138,7 +187,7 @@ struct DisplayRow: View {
                         .font(Theme.Typography.ui(12.5))
                         .foregroundStyle(Theme.Color.textPrimary)
                     HStack(spacing: 4) {
-                        // Small warning glyph (matches the §25.J banner) so the tint-only tooltip is
+                        // Small warning glyph so the tint-only tooltip is
                         // discoverable, not just hover-anywhere. Hovering either icon or text shows it.
                         if tintOnly {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -210,7 +259,7 @@ struct SectionLabel: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         // The app's one section-heading style: sentence case · 13pt semibold · secondary — native
-        // macOS System Settings (founder). Route every popover + Settings section title through here so
+        // macOS System Settings . Route every popover + Settings section title through here so
         // they never drift apart again.
         Text(text)
             .font(Theme.Typography.ui(13, weight: .semibold))
@@ -230,7 +279,7 @@ struct DividerLine: View {
 
 // MARK: - FrostBackground
 
-/// The persistent "frosted ember" material backing the Settings and About windows (§21.3). Full-bleed
+/// The persistent "frosted ember" material backing the Settings and About windows. Full-bleed
 /// (cornerRadius 0 — the window supplies the rounded corners) and degrades to the ember SOLID under
 /// Reduce Transparency via `GlassSurface`. Shared so the two windows can't drift.
 struct FrostBackground: View {

@@ -88,10 +88,12 @@ struct CheckForUpdatesView: View {
 
 @MainActor
 struct UpdateSettingsView: View {
+    @Bindable var model: AppModel
     @ObservedObject private var updates: UpdateManager
     var showsSectionLabel = true
 
-    init(updates: UpdateManager = .shared, showsSectionLabel: Bool = true) {
+    init(model: AppModel, updates: UpdateManager = .shared, showsSectionLabel: Bool = true) {
+        self.model = model
         _updates = ObservedObject(wrappedValue: updates)
         self.showsSectionLabel = showsSectionLabel
     }
@@ -106,7 +108,13 @@ struct UpdateSettingsView: View {
                 Spacer()
                 Toggle("", isOn: Binding(
                     get: { updates.automaticallyInstallsUpdates },
-                    set: { updates.setAutomaticallyInstallsUpdates($0) }
+                    set: { enabled in
+                        guard enabled != updates.automaticallyInstallsUpdates else { return }
+                        updates.setAutomaticallyInstallsUpdates(enabled)
+                        if updates.automaticallyInstallsUpdates == enabled {
+                            model.playSoftToggleTone(on: enabled)
+                        }
+                    }
                 ))
                 .labelsHidden()
                 .disabled(updates.updaterUnavailableReason != nil)

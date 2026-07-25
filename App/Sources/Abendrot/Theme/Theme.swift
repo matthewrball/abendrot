@@ -8,15 +8,15 @@ import SwiftUI
 // (radius / motion / material params) mirror `tokens.json` and carry a pointer to
 // their source key so a brand-lock pass can re-sync from one place.
 //
-// PROVISIONAL: the founder selects the final accent ramp + icon before lock
-// (plan §5.5). Do not hard-lock these values; treat the asset catalog + this file
+// PROVISIONAL: the final accent ramp + icon are not yet locked
+// Do not hard-lock these values; treat the asset catalog + this file
 // as the one place to swap.
 //
 // Token discipline (baked into tokens.json):
-//   - Never pure #000 — grounds are warm-tinted near-blacks.
-//   - #FFFFFF is RESERVED for the Reveal-True-Color veil only. Body text is
-//     `textPrimary` (#ECE8F4), never white.
-//   - Light + Reduce-Transparency surfaces are warm cream / twilight, never grey.
+// - Never pure #000 — grounds are warm-tinted near-blacks.
+// - #FFFFFF is RESERVED for the Reveal-True-Color veil only. Body text is
+// `textPrimary` (#ECE8F4), never white.
+// - Light + Reduce-Transparency surfaces are warm cream / twilight, never grey.
 enum Theme {
 
     // MARK: Colours (semantic → asset-catalog colorset names)
@@ -41,6 +41,7 @@ enum Theme {
 
         // Text
         static let textPrimary = SwiftUI.Color("TextPrimary", bundle: .main)
+        static let textCream = SwiftUI.Color("TextCream", bundle: .main)
         static let textMuted = SwiftUI.Color("TextMuted", bundle: .main)
         static let textFaint = SwiftUI.Color("TextFaint", bundle: .main)
 
@@ -76,8 +77,8 @@ enum Theme {
 
     // MARK: Motion (tokens.json → motion.*)
     //
-    // "Emotional pacing, not spectacle" (plan §5.2): ~100–150ms eases. The single
-    // signature is the reveal spring (§21.3 — `.interactiveSpring`, see `revealSpring`).
+    // "Emotional pacing, not spectacle": ~100–150ms eases. The single
+    // signature is the reveal spring.
     enum Motion {
         /// motion.ease-warm — the signature warmth ease (cubic-bezier 0.22,0.61,0.36,1).
         static let durFast: TimeInterval = 0.110   // motion.dur-fast
@@ -88,7 +89,7 @@ enum Theme {
         /// Approximation of the `ease-warm` cubic-bezier as a SwiftUI timing curve.
         static let warm = Animation.timingCurve(0.22, 0.61, 0.36, 1, duration: durBase)
 
-        /// The one "big" moment — Reveal True Color "lift the veil" (§21.3).
+        /// The one "big" moment — Reveal True Color "lift the veil".
         /// Physical/elastic spring, not a fade.
         static let revealSpring = Animation.interactiveSpring(
             response: 0.34, dampingFraction: 0.72, blendDuration: 0.1

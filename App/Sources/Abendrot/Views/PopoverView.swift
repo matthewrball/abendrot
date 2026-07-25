@@ -4,9 +4,9 @@ import WarmthKit
 
 // MARK: - PopoverView
 //
-// The everyday menu-bar surface (plan §4.1, §4.4, §21.3). Left-click shows the simple
+// The everyday menu-bar surface. Left-click shows the simple
 // controls; ⌥-click / right-click expands the SAME glass to the advanced power rows
-// (the "liquid expansion" of §21.3 — the popover grows, it does not open a new window).
+// (the "liquid expansion" — the popover grows, it does not open a new window).
 //
 // Simple view (while warming): the global warmth slider, then the schedule Mode control —
 // both reveal/hide with the master toggle. Per-display "Override" rows now live in the
@@ -24,7 +24,7 @@ struct PopoverView: View {
             header
             DividerLine().padding(.vertical, 14)
 
-            // Upfront honesty: if the whole Mac can't truly warm anything, say so. (§25.J)
+            // Upfront honesty: if the whole Mac can't truly warm anything, say so.
             if allDisplaysTintOnly {
                 IncompatibilityNotice()
                     .padding(.bottom, 16)
@@ -36,7 +36,7 @@ struct PopoverView: View {
                 .padding(.bottom, model.state.isEnabled ? 16 : 0)
 
             // The warmth readout + the schedule Mode control are only meaningful while warming is on
-            // — the master toggle owns on/off — so they hide and re-reveal together with a soft
+            // the master toggle owns on/off — so they hide and re-reveal together with a soft
             // scale-fade. (Per-display "Override" rows live in the Advanced section now.)
             if model.state.isEnabled {
                 let locked = model.isWarmthLockedInSunset
@@ -52,7 +52,7 @@ struct PopoverView: View {
                     )
                     .zIndex(1)
                     // Always-on's slider path is 7pt shorter than Sunset's caption path; reserve it here
-                    // so Mode, Cozy mode, and the footer share one y-position across modes.
+                    // so Mode and the footer share one y-position across modes.
                     .padding(.bottom, locked ? 0 : 7)
                     if locked {
                         sunsetLockCaption
@@ -61,11 +61,13 @@ struct PopoverView: View {
                     }
                     modeSection
                         .padding(.top, 16)
-                    // Cozy mode (the maximum-warmth control) right under Mode — the bare card, no section
-                    // header / science note (those live in Settings). Shares `model.setCozy`, so it can
-                    // never disagree with the Settings card, onboarding, or the `abendrot cozy` CLI.
-                    CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
-                        .padding(.top, 16)
+                    if !locked {
+                        // Cozy mode (the maximum-warmth control) right under Mode — hidden while Sunset
+                        // owns warmth and points users to Settings for the maximum.
+                        CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
+                            .padding(.top, 16)
+                            .transition(.opacity)
+                    }
                 }
                 .transition(.softReveal)
                 // Caption crossfades while the popover shell keeps a steady natural height.
@@ -86,7 +88,7 @@ struct PopoverView: View {
         }
         .padding(20)
         .frame(width: 330)
-        // Big corner hit targets (founder): the whole TOP-RIGHT corner opens Settings; the whole
+        // Big corner hit targets: the whole TOP-RIGHT corner opens Settings; the whole
         // BOTTOM-RIGHT corner toggles the advanced expansion. Overlays pinned to the card's actual
         // corners (added after `.padding(20)`, so they reach the real edges, over the padding) and they
         // keep the header/footer rows at their natural height. The visible glyphs live in `header`/
@@ -111,6 +113,7 @@ struct PopoverView: View {
             .accessibilityLabel(model.isAdvancedExpanded ? "Collapse advanced" : "Show advanced")
         }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.isAdvancedExpanded)
+        .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: model.state.isEnabled)
         .glassSurface(.popover)
     }
 
@@ -143,10 +146,10 @@ struct PopoverView: View {
                 .font(Theme.Typography.ui(13, weight: .semibold))
                 .foregroundStyle(Theme.Color.textPrimary)
             Spacer()
-            Toggle("", isOn: enabledBinding)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(Theme.Color.accent)
+            WarmthPowerSwitch(
+                isOn: enabledBinding,
+                accessibilityLabel: model.state.displays.count == 1 ? "Warm my display" : "Warm my displays"
+            )
         }
     }
 
@@ -174,7 +177,7 @@ struct PopoverView: View {
     /// fireball thumb / "Warmest" label / 99% reading so the slider agrees with the Cozy card below it.
     private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
 
-    // MARK: Incompatibility ("can only be tinted") detection — §25.J (DRAFT)
+    // MARK: Incompatibility ("can only be tinted") detection
 
     /// True when there is ≥1 display and EVERY connected display can only be tinted — the whole
     /// Mac/OS can't truly warm anything, so we say so up front with a banner. The per-display
@@ -192,7 +195,7 @@ struct PopoverView: View {
             // Quit — the ⎋ (escape) glyph, not a power symbol (which reads like an on/off switch and
             // gets confused with warming on/off). Routes through NSApp.terminate →
             // applicationShouldTerminate, which neutral-resets every display before exit (contract
-            // §9). LSUIElement agents have no app menu, so this is the Quit affordance; ⌘Q also works.
+            //). LSUIElement agents have no app menu, so this is the Quit affordance; ⌘Q also works.
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
@@ -230,13 +233,7 @@ struct PopoverView: View {
     private var enabledBinding: Binding<Bool> {
         Binding(
             get: { model.state.isEnabled },
-            // Animate so the schedule mode control reveals/hides with the soft spring (the optimistic
-            // `state.isEnabled` flips synchronously inside this transaction → the transition plays).
-            set: { newValue in
-                withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
-                    model.setEnabled(newValue)
-                }
-            }
+            set: { model.setEnabled($0) }
         )
     }
 
@@ -250,17 +247,19 @@ struct PopoverView: View {
         Binding(get: { model.state.resolvedWarmth.strength }, set: { _ in })
     }
 
-    /// Explains the locked slider and links to the editable maximum (Settings → General). Leads with the
-    /// live state (warming now vs. eases in at sunset) so the daytime "neutral now" reading isn't a puzzle.
+    /// Explains the locked slider and links to the editable maximum (Settings → General).
     private var sunsetLockCaption: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(model.isWarmingActive
-                 ? "Sunset is setting your warmth automatically."
+                 ? ScheduleModeOption.followSunset.subtitle
                  : "Warmth eases in around your local sunset.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
-            Button { SettingsWindowController.show(model: model) } label: {
+            Button {
+                model.maximumWarmthFocusRequest = UUID()
+                SettingsWindowController.show(model: model, tab: .general)
+            } label: {
                 HStack(spacing: 3) {
                     Text("Adjust your maximum in Settings")
                     Image(systemName: "arrow.up.right")
@@ -307,12 +306,12 @@ private struct SoftRevealModifier: ViewModifier {
     }
 }
 
-// MARK: - IncompatibilityNotice (§25.J)
+// MARK: - IncompatibilityNotice
 
 /// The app-level "this Mac can only tint" notice, shown when EVERY connected display is tint-only.
 /// Names the user's actual chip + macOS version (so the limitation is concrete, not vague) and offers
 /// a tappable "Why?" that reveals a plain-language, non-medical explanation. Dark ink on the amber
-/// fill for contrast. DRAFT copy/visual — pending founder design direction.
+/// fill for contrast. DRAFT copy/visual — pending final design direction.
 private struct IncompatibilityNotice: View {
     @State private var showWhy = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

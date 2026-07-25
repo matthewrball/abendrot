@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - SettingsWindowController
 //
-// Programmatic settings window (plan §4.4, reference doc). A SwiftUI `Window` scene
+// Programmatic settings window. A SwiftUI `Window` scene
 // CANNOT carry the Liquid Glass chrome because `.fullSizeContentView` must be set at
 // window *creation* and SwiftUI resets it — so we host `SettingsView` in an
 // `NSHostingController` inside an NSWindow we build ourselves, with the full glass
@@ -22,15 +22,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     /// Open (or re-focus) the Settings window for the given model, optionally deep-linking a tab.
     ///
     /// Two things have to happen, in order:
-    ///  1. Dismiss the `MenuBarExtra(.window)` dropdown. SwiftUI only auto-dismisses it on
-    ///     app-deactivate / outside-click — NOT when another same-app window (Settings) becomes key.
-    ///     Left open it lingers behind Settings, resigns key, and its `.switch` master toggle
-    ///     desaturates to grey (warming is still on). We close it here, while it's still the key
-    ///     window at click time. (Also the desired UX: clicking the gear closes the dropdown.)
-    ///  2. Open / raise Settings on the NEXT main-actor turn, so the dropdown teardown settles before
-    ///     we front the window; `orderFrontRegardless` in `focus()` forces it up for this `.accessory`
-    ///     agent app.
-    static func show(model: AppModel, tab: SettingsTab? = nil) {
+    /// 1. Dismiss the `MenuBarExtra(.window)` dropdown. SwiftUI only auto-dismisses it on
+    /// app-deactivate / outside-click — NOT when another same-app window (Settings) becomes key.
+    /// Left open it lingers behind Settings, resigns key, and its `.switch` master toggle
+    /// desaturates to grey (warming is still on). We close it here, while it's still the key
+    /// window at click time. (Also the desired UX: clicking the gear closes the dropdown.)
+    /// 2. Open / raise Settings on the NEXT main-actor turn, so the dropdown teardown settles before
+    /// we front the window; `orderFrontRegardless` in `focus()` forces it up for this `.accessory`
+    /// agent app.
+    static func show(model: AppModel, tab: SettingsTab? = nil, focusExcludedApps: Bool = false) {
         // Close the dropdown now, while it's still key. Guard against closing the Settings window
         // itself (the re-focus path, where Settings may already be the key/last-key window).
         if let dropdown = NSApp.keyWindow, dropdown !== shared?.window {
@@ -40,6 +40,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             // Set the tab BEFORE the early return so re-focusing an already-open window also
             // deep-links (clicking "Manage…" while Settings is open jumps it to Advanced).
             if let tab { model.settingsTab = tab }
+            if focusExcludedApps { model.excludedAppsFocusRequest = UUID() }
             if let existing = shared {
                 existing.focus()
                 return

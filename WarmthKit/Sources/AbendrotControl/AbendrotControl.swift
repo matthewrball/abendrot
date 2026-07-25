@@ -42,17 +42,19 @@ public enum AbendrotControl {
 // strings `AppModel` persists today — AppModel re-exports them through its `*Key` constants so
 // there is one literal per setting across the whole codebase, with no chance of the two drifting.
 //
-//   isEnabled              Bool
-//   globalWarmthStrength   Double
-//   warmestPointKelvin     Int
-//   scheduleMode           Data (Codable JSON of ScheduleMode — carries associated values)
-//   revealMode             String (RevealMode.rawValue: "hold" | "toggle")
-//   excludedApps           [String] (sorted bundle ids)
-//   userLatitude           Double
-//   userLongitude          Double
+// isEnabled Bool
+// globalWarmthStrength Double (Sunset maximum)
+// manualWarmthStrength Double
+// warmestPointKelvin Int
+// scheduleMode Data (Codable JSON of ScheduleMode — carries associated values)
+// revealMode String (RevealMode.rawValue: "hold" | "toggle")
+// excludedApps [String] (sorted bundle ids)
+// userLatitude Double
+// userLongitude Double
 public enum PreferenceKey {
     public static let isEnabled = "isEnabled"
     public static let globalWarmthStrength = "globalWarmthStrength"
+    public static let manualWarmthStrength = "manualWarmthStrength"
     public static let warmestPointKelvin = "warmestPointKelvin"
     public static let scheduleMode = "scheduleMode"
     public static let revealMode = "revealMode"

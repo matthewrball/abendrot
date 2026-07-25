@@ -54,6 +54,19 @@ secret_refs_sign_job="$(grep -cF '${{ secrets.' "$SIGN_JOB")"
 }
 echo "PASS: CI signing secrets are manual-main-only and build tooling is pinned"
 
+APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
+PATCH_APPLY="$TMP/apply-settings-patch.swift"
+sed -n \
+  '/private func apply(_ patch: SettingsPatch)/,/private func apply(_ action: ControlAction)/p' \
+  "$APP_MODEL" > "$PATCH_APPLY"
+mode_line="$(grep -nF 'patch.scheduleMode' "$PATCH_APPLY" | head -1 | cut -d: -f1)"
+warmth_line="$(grep -nF 'patch.globalWarmthStrength' "$PATCH_APPLY" | head -1 | cut -d: -f1)"
+[ -n "$mode_line" ] && [ -n "$warmth_line" ] && [ "$mode_line" -lt "$warmth_line" ] || {
+  echo "Control patches must apply schedule mode before mode-specific warmth." >&2
+  exit 1
+}
+echo "PASS: combined control patches select schedule mode before warmth"
+
 APP="$TMP/Abendrot.app"
 APPCAST="$TMP/appcast.xml"
 CANONICAL_FEED="https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"

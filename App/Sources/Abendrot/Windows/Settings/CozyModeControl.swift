@@ -2,14 +2,15 @@ import SwiftUI
 import WarmthKit
 
 /// "Cozy mode" — the maximum-warmth control, reframed as one delightful toggle (no granular slider,
-/// founder). Off, the warmest the General slider reaches is 1900K — where blue is already fully removed.
+/// maintainer). Off, the warmest the General slider reaches is 1900K — where blue is already fully removed.
 /// On, it unlocks the deepest candle & ember glow: the engine `warmestPoint` drops to `warmestSupported`
 /// (~500K), the card ignites into the sunset gradient, and the screen eases warmer immediately. Below
 /// 1900K is a real but minimal extra circadian reduction at a real legibility cost — see
-/// docs/research/max-warmth-circadian-research.md (Brown et al. 2022; CIE S 026:2018).
+/// the circadian research (Brown et al. 2022; CIE S 026:2018).
 struct CozyModeControl: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsTooltip = false
     /// Hide the "Maximum warmth" section header (onboarding shows the card bare, under its own title).
     var showsSectionLabel: Bool = true
     /// Hide the when-on science caption (onboarding keeps it compact; the detail lives in Settings).
@@ -18,12 +19,14 @@ struct CozyModeControl: View {
     /// the warmest, so the screen blooms to the maximum (rather than holding a mid-slider spot); OFF restores
     /// the everyday 1900K ceiling. (Settings keeps the richer "preserve current warmth, unlock headroom".)
     var enablesAtWarmest: Bool = false
+    var mirrorsToSunsetMaximum: Bool = false
 
     /// Derived from the actual warmest point so the toggle can never disagree with the engine.
     private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
     private var cardShape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
+    private static let tooltip = "Cozy Mode is not expected to add any additional circadian benefit, but some people prefer the darker, warmer, candle-like look."
 
-    /// The §13-safe note with both citations as tappable links. Built as an AttributedString so the body
+    /// The note with both citations as tappable links. Built as an AttributedString so the body
     /// stays faint while the links read as links — accent-coloured + underlined + clickable. (A blanket
     /// `.foregroundStyle` on a markdown Text flattens the link colour, so they didn't look tappable.)
     private var scienceNote: AttributedString {
@@ -48,7 +51,7 @@ struct CozyModeControl: View {
                 .accessibilityElement()
                 .accessibilityLabel("Cozy mode")
                 .accessibilityValue(isCozy ? "On" : "Off")
-                .accessibilityHint("Unlocks the warmest candle and ember glow, below 1900 Kelvin.")
+                .accessibilityHint(Self.tooltip)
                 .accessibilityAddTraits(.isButton)
 
             if isCozy && showsExplanation {
@@ -66,9 +69,26 @@ struct CozyModeControl: View {
             SparkingFlameIcon(isCozy: isCozy)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Cozy mode")
-                    .font(Theme.Typography.ui(14, weight: .semibold))
-                    .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
+                HStack(spacing: 5) {
+                    Text("Cozy mode")
+                        .font(Theme.Typography.ui(14, weight: .semibold))
+                        .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.72) : Theme.Color.textFaint)
+                        .accessibilityHidden(true)
+                }
+                .onHover { showsTooltip = $0 }
+                .overlay(alignment: .bottomLeading) {
+                    if showsTooltip {
+                        AbendrotTooltipText(Self.tooltip, width: 180)
+                            .offset(y: -18)
+                            .transition(.scale(scale: 0.9, anchor: .bottomLeading).combined(with: .opacity))
+                            .zIndex(2)
+                    }
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showsTooltip)
                 Text("The warmest setting.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.82) : Theme.Color.textMuted)
@@ -117,6 +137,9 @@ struct CozyModeControl: View {
                     model.setWarmestPoint(Kelvin.everydayWarmest)
                 } else {
                     model.setWarmestPoint(Kelvin.warmestSupported)
+                    if mirrorsToSunsetMaximum {
+                        model.setSunsetMaximumWarmth(1.0)
+                    }
                     model.setGlobalWarmth(1.0)
                 }
             }

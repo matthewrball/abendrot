@@ -39,7 +39,7 @@ enum OnboardingLayout {
 
 // MARK: - OnboardingView
 //
-// "3 clicks to warmth" (plan §21.3, §4.6): welcome → choose the schedule → set your warmth — three
+// "3 clicks to warmth": welcome → choose the schedule → set your warmth — three
 // numbered setup steps, then a brief UNNUMBERED "you're all set" confirmation that carries the privacy
 // reassurance. Calm glass; everything else lives in Settings. The app needs no permissions, so onboarding
 // asks for none — it just orients the user (a menu-bar agent launches invisibly) and lands them on warmth.
@@ -73,9 +73,6 @@ struct OnboardingView: View {
     // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
     // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
     @State private var hasInitializedWarmth = false
-    /// The "You're all set" CTA is two-step: first "Open menu bar" (reveals the popover so the user sees
-    /// where Abendrot lives), then "Done" (finishes). Flips true after the first tap.
-    @State private var didOpenMenuBar = false
     /// Mirrors the warmth slider's press state: the blue-light % rolls on discrete changes (Cozy on→99)
     /// but stays silent during a live drag, where rapid numericText changes glitch. Fed by WarmSlider.
     @State private var sliderPressing = false
@@ -170,7 +167,7 @@ struct OnboardingView: View {
             Text("Welcome to Abendrot")
                 .font(Theme.Typography.serif(20))
                 .foregroundStyle(Theme.Color.textPrimary)
-            Text("Abendrot warms your screen as the day winds down — on every display, built-in and external. It lives quietly in your menu bar: no dock icon, no account.")
+            Text("Abendrot warms your displays around sunset, limiting blue light exposure and supporting healthy evening light habits.\n\nFree to use.\nNo account, no tracking.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
@@ -190,7 +187,7 @@ struct OnboardingView: View {
                 Text("How warm should we get?")
                     .font(Theme.Typography.serif(19))
                     .foregroundStyle(Theme.Color.textPrimary)
-                // Ported from the popover Warmth header (founder) — the "what is Kelvin?" helper beside
+                // Ported from the popover Warmth header — the "what is Kelvin?" helper beside
                 // the step title, since this step no longer shows the slider's own "Warmth" header.
                 KelvinInfoButton()
             }
@@ -222,7 +219,7 @@ struct OnboardingView: View {
 
             WarmSlider(strength: Binding(
                 get: { model.state.globalWarmth.strength },
-                set: { model.setGlobalWarmth($0) }
+                set: { setOnboardingWarmth($0) }
             ), model: model, showsHeader: false, cozy: isCozy,
             onPressingChanged: { sliderPressing = $0 })
 
@@ -231,7 +228,8 @@ struct OnboardingView: View {
             // the way to the warmest + ignites the fireball thumb (the deepest ember); the choice
             // (warmestPoint) persists past onboarding.
             CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
-                            enablesAtWarmest: true)
+                            enablesAtWarmest: true,
+                            mirrorsToSunsetMaximum: scheduleOption == .followSunset)
 
             Spacer(minLength: 0)
 
@@ -251,8 +249,9 @@ struct OnboardingView: View {
             // Re-prime to the warmest "preview of your evening" on EVERY entry for Sunset — showing the peak
             // the evening ramp climbs to is this step's whole job. EXCEPTION: for Always-on the slider sets
             // the user's REAL everyday warmth, so re-slamming 1.0 on back-nav would discard what they dialed
-            // — keep it.
+            // keep it.
             if scheduleOption != .alwaysOn {
+                model.setSunsetMaximumWarmth(1.0)
                 model.setGlobalWarmth(1.0)
             }
             model.setEnabled(true, userInitiated: false)
@@ -291,11 +290,11 @@ struct OnboardingView: View {
     .frame(maxHeight: .infinity, alignment: .top)
     .onAppear {
         model.setEnabled(true, userInitiated: false)
+        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
         if !hasInitializedWarmth {
             model.setGlobalWarmth(1.0)
             hasInitializedWarmth = true
         }
-        model.setScheduleMode(scheduleOption.toScheduleMode(), userInitiated: false)
     }
 }
 
@@ -335,7 +334,7 @@ private var manualDetail: some View {
                     .opacity(presentationScheduleOption == .alwaysOn ? 1 : 0)
                     .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
 
-                Text("The sun has set — your screen is warming now.")
+                Text(ScheduleModeOption.followSunset.subtitle)
                     .opacity(presentationScheduleOption != .alwaysOn && model.isWarmingActive ? 1 : 0)
                     .animation(.easeInOut(duration: 0.25), value: presentationScheduleOption)
                     .animation(.easeInOut(duration: 0.25), value: model.isWarmingActive)
@@ -394,30 +393,22 @@ private var manualDetail: some View {
 
             Spacer(minLength: 0)
 
-            // Two-step CTA: first reveal the menu-bar popover (so the user SEES where Abendrot lives), then
-            // finish (founder). The title swaps to "Done" after the first tap.
             VStack(spacing: 10) {
                 SecondaryButton(title: "Star on GitHub", icon: "star") {
                     NSWorkspace.shared.open(URL(string: "https://github.com/matthewrball/abendrot")!)
                 }
 
-                PrimaryButton(title: didOpenMenuBar ? "Done" : "Open menu bar") {
-                    if didOpenMenuBar {
-                        onFinish()
-                    } else {
-                        openMenuBarPopover()
-                        didOpenMenuBar = true
-                    }
-                }
+                // The old two-step flow made the second click land outside the popover and close it.
+                PrimaryButton(title: "Done") { finishByOpeningMenuBar() }
             }
             .padding(.top, 2)
         }
     }
 
-    // §13-safe science nudge toward Sunset. Cites the expert EVENING-LIGHT consensus (an input/habit
+    // science nudge toward Sunset. Cites the expert EVENING-LIGHT consensus (an input/habit
     // recommendation, NOT a sleep-outcome promise) and states only what the engine does (eases off blue in
     // the evening) — the approved "supports healthy evening light habits" framing. NO medical/sleep claim,
-    // no "improves sleep". Wording from docs/marketing/evidence-base.md claim #5 (Brown et al. 2022).
+    // no "improves sleep". Wording from the evidence base, claim #5 (Brown et al. 2022).
     private var sunsetScienceCard: some View {
         sunsetScienceCardContent
             .glassSurface(.frost, cornerRadius: Theme.Radius.control)
@@ -480,7 +471,7 @@ private var manualDetail: some View {
     private var scheduleSubtitle: String {
         if scheduleOption == .alwaysOn { return "Warms continuously, day\u{00A0}and\u{00A0}night." }
         return model.isWarmingActive
-            ? "The sun has set — your screen is warming now."
+            ? ScheduleModeOption.followSunset.subtitle
             : "It’s daytime, so your screen stays neutral for now — warmth eases in around your local sunset."
     }
 
@@ -547,6 +538,13 @@ private var manualDetail: some View {
         model.setScheduleMode(option.toScheduleMode())
     }
 
+    private func setOnboardingWarmth(_ strength: Double) {
+        if scheduleOption == .followSunset {
+            model.setSunsetMaximumWarmth(strength)
+        }
+        model.setGlobalWarmth(strength)
+    }
+
     private func advance() {
         if step == .schedule && scheduleOption == .alwaysOn {
             step = .allSet
@@ -575,21 +573,29 @@ private var manualDetail: some View {
         step = prev
     }
 
-    /// Reveal the menu-bar popover so the user sees where Abendrot lives. SwiftUI's `MenuBarExtra(.window)`
-    /// has no public "present" API, so we find its `NSStatusBarButton` in the app's windows and click it.
-    /// Best-effort — a no-op if the button can't be located (the user still has the "Done" tap to finish).
-    private func openMenuBarPopover() {
-        func find(in view: NSView) -> NSStatusBarButton? {
-            if let button = view as? NSStatusBarButton { return button }
-            for sub in view.subviews { if let button = find(in: sub) { return button } }
-            return nil
+    private func finishByOpeningMenuBar() {
+        let button = statusBarButton()
+        onFinish()
+        DispatchQueue.main.async {
+            button?.performClick(nil)
         }
+    }
+
+    private func statusBarButton() -> NSStatusBarButton? {
         for window in NSApp.windows {
-            if let content = window.contentView, let button = find(in: content) {
-                button.performClick(nil)
-                return
+            if let content = window.contentView, let button = findStatusBarButton(in: content) {
+                return button
             }
         }
+        return nil
+    }
+
+    private func findStatusBarButton(in view: NSView) -> NSStatusBarButton? {
+        if let button = view as? NSStatusBarButton { return button }
+        for subview in view.subviews {
+            if let button = findStatusBarButton(in: subview) { return button }
+        }
+        return nil
     }
 }
 
@@ -607,8 +613,6 @@ struct PrimaryButton: View {
                     .opacity(title == "Continue" ? 1 : 0)
                 Text("Looks right")
                     .opacity(title == "Looks right" ? 1 : 0)
-                Text("Open menu bar")
-                    .opacity(title == "Open menu bar" ? 1 : 0)
                 Text("Done")
                     .opacity(title == "Done" ? 1 : 0)
                 Text("Get started")

@@ -33,7 +33,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 // MARK: - SettingsView
 //
-// The Settings window body (plan §4.4 tabs: General / Schedule / Displays / Shortcuts
+// The Settings window body (tabs: General / Schedule / Displays / Shortcuts
 // / Advanced / Privacy / About). Hosted by the programmatic `SettingsWindowController`
 // so the "frosted ember" glass chrome actually renders (a SwiftUI `Window` scene
 // resets `.fullSizeContentView`; see reference doc). Settings double as onboarding +
@@ -86,7 +86,7 @@ struct SettingsView: View {
                 // Hide the sidebar branding on About (it duplicates the About-page header). Animate
                 // offset+opacity on an always-present view rather than a conditional transition, so the
                 // slide-OUT (entering About) is exactly as smooth as the slide-IN (leaving) — a SwiftUI
-                // removal transition snapped instead of sliding (founder). Stays in the layout (offset
+                // removal transition snapped instead of sliding . Stays in the layout (offset
                 // off-screen + faded) so nothing reflows.
                 SidebarBranding()
                     .padding(.horizontal, 14)
@@ -136,7 +136,7 @@ struct SettingsView: View {
         case .advanced: AdvancedTab(model: model)
         case .privacy: PrivacyTab(model: model)
         case .statistics: StatisticsTab(model: model)
-        case .updates: UpdatesTab()
+        case .updates: UpdatesTab(model: model)
         case .about: AboutTab()
         }
     }

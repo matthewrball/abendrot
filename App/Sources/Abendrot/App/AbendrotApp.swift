@@ -6,7 +6,7 @@ import WarmthKit
 //
 // The app entry. An `LSUIElement` agent app (set in Info.plist via project.yml): no
 // Dock icon, no Cmd-Tab. The whole UI hangs off a `MenuBarExtra` with the provisional
-// sunset-arc template glyph (plan §4.3). Settings open as a programmatic glass window
+// sunset-arc template glyph. Settings open as a programmatic glass window
 // (`SettingsWindowController`), NOT a SwiftUI `Window` scene (see that file's note).
 //
 // Lifecycle: `AppModel.start()` boots the engine + reveal hotkey; `shutdown()`
@@ -83,11 +83,11 @@ struct AbendrotApp: App {
     }
 }
 
-// MARK: - Dev relaunch (Session 11)
-
 #if DEBUG
-/// DEV-ONLY: kill this instance and reopen the freshly-built app from the founder's Release build path
-/// — the dogfooding "restart from latest build" the founder otherwise runs by hand. The `/bin/sh` child
+// MARK: - Dev relaunch
+
+/// DEV-ONLY: kill this instance and reopen the freshly-built app from the local Release build path
+/// the "restart from latest build" otherwise run by hand. The `/bin/sh` child
 /// is reparented to launchd when the kill takes us down, so `open` still fires; the short sleep lets the
 /// old instance go before the new one launches. Paired with the dev MenuBarExtra above — delete both
 /// before shipping.
@@ -171,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // Neutral-reset every display before exit (contract §9 quit guarantee).
+        // Neutral-reset every display before exit.
         // The reset runs on the main actor, so we can't block the main thread waiting
         // for it (a DispatchSemaphore.wait here would deadlock the very Task it awaits).
         // Instead defer termination with .terminateLater, run the async shutdown, then

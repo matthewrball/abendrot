@@ -14,7 +14,7 @@ struct AdvancedTab: View {
             DividerLine()
 
             // Reveal True Color hotkey — moved here from the former Shortcuts tab, tucked under
-            // Maximum warmth (founder). Click the field to rebind; default ⌥⌘T.
+            // Maximum warmth . Click the field to rebind; default ⌥⌘T.
             VStack(alignment: .leading, spacing: 12) {
                 SectionLabel("Reveal True Color")
                 Text("Instantly see your screen's true colors — bound to a keyboard shortcut.")
@@ -22,7 +22,7 @@ struct AdvancedTab: View {
                     .foregroundStyle(Theme.Color.textMuted)
 
                 // The shortcut as a clear, labelled liquid-glass input — mirrors the Schedule "Location"
-                // field so it's obvious you're setting a keyboard shortcut (founder), not a bare pill
+                // field so it's obvious you're setting a keyboard shortcut, not a bare pill
                 // tucked in the corner. The recorder sits on the right; the whole row reads as a field.
                 HStack(spacing: 10) {
                     Image(systemName: "keyboard")
@@ -47,7 +47,7 @@ struct AdvancedTab: View {
                         .strokeBorder(.white.opacity(0.08), lineWidth: 1)
                 )
 
-                // Hold vs Toggle (§3 locked: ship both, default hold) — on-brand glass switcher.
+                // Hold vs Toggle — on-brand glass switcher.
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         BrandSegmentedControl(
@@ -60,7 +60,7 @@ struct AdvancedTab: View {
                     }
                     Text(model.revealMode == .hold
                          ? "Hold the shortcut to reveal true color; release to ease warmth back."
-                         : "Press the shortcut to reveal true color; press again to ease it back.")
+                         : "Press the shortcut to toggle warming off/on.")
                         .font(Theme.Typography.ui(12))
                         .foregroundStyle(Theme.Color.textMuted)
                 }
@@ -71,7 +71,7 @@ struct AdvancedTab: View {
 
             if model.state.isEnabled {
                 DividerLine()
-                // Emergency reset, relocated from the Displays page (founder): the forceful gamma/DDC
+                // Emergency reset, relocated from the Displays page: the forceful gamma/DDC
                 // restore kept as a quiet safety net without cluttering the main Displays view.
                 Button(role: .destructive) {
                     model.setEnabled(false)
@@ -94,6 +94,8 @@ struct AdvancedTab: View {
 /// app…" picks an `.app` via `NSOpenPanel` (the app is not sandboxed, so no entitlement is needed).
 private struct ExcludedAppsControl: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsFocusCue = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -123,6 +125,54 @@ private struct ExcludedAppsControl: View {
             }
             .buttonStyle(.liquidGlass)
             .padding(.top, 2)
+        }
+        .background(focusCueFill)
+        .overlay(focusCueStroke)
+        .task(id: model.excludedAppsFocusRequest) {
+            guard let request = model.excludedAppsFocusRequest else { return }
+            await runFocusCue(request)
+        }
+    }
+
+    private var focusCueFill: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control + 4, style: .continuous)
+            .fill(Theme.Color.accent.opacity(0.12))
+            .opacity(showsFocusCue ? 1 : 0)
+            .padding(-10)
+    }
+
+    private var focusCueStroke: some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.control + 4, style: .continuous)
+            .stroke(Theme.Color.accent.opacity(0.7), lineWidth: 1)
+            .shadow(color: Theme.Color.accent.opacity(0.45), radius: 12)
+            .opacity(showsFocusCue ? 1 : 0)
+            .padding(-10)
+    }
+
+    @MainActor
+    private func runFocusCue(_ request: UUID) async {
+        if showsFocusCue {
+            withAnimation(nil) { showsFocusCue = false }
+            await Task.yield()
+        }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.18)) {
+            showsFocusCue = true
+        }
+        do {
+            try await Task.sleep(nanoseconds: 700_000_000)
+        } catch {
+            return
+        }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.42)) {
+            showsFocusCue = false
+        }
+        do {
+            try await Task.sleep(nanoseconds: reduceMotion ? 0 : 420_000_000)
+        } catch {
+            return
+        }
+        if model.excludedAppsFocusRequest == request {
+            model.excludedAppsFocusRequest = nil
         }
     }
 

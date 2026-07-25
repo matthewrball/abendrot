@@ -22,6 +22,7 @@ final class AbendrotControlTests: XCTestCase {
         // the running app silently stop seeing each other's writes — so pin every one.
         XCTAssertEqual(PreferenceKey.isEnabled, "isEnabled")
         XCTAssertEqual(PreferenceKey.globalWarmthStrength, "globalWarmthStrength")
+        XCTAssertEqual(PreferenceKey.manualWarmthStrength, "manualWarmthStrength")
         XCTAssertEqual(PreferenceKey.warmestPointKelvin, "warmestPointKelvin")
         XCTAssertEqual(PreferenceKey.scheduleMode, "scheduleMode")
         XCTAssertEqual(PreferenceKey.revealMode, "revealMode")

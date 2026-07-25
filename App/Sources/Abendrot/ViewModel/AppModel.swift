@@ -8,11 +8,11 @@ import AbendrotControl
 //
 // The `@Observable`, `@MainActor` view-model that sits between SwiftUI and the
 // FROZEN `WarmthEngine` actor. It:
-//   - owns the `WarmthEngine` and `HotkeyService`,
-//   - consumes `engine.stateUpdates()` and republishes the latest `WarmthState`
-//     for the views to render,
-//   - turns view intents (toggle, slider, mode, per-display overrides, reveal)
-//     into `await engine.…` calls.
+// - owns the `WarmthEngine` and `HotkeyService`,
+// - consumes `engine.stateUpdates()` and republishes the latest `WarmthState`
+// for the views to render,
+// - turns view intents (toggle, slider, mode, per-display overrides, reveal)
+// into `await engine.…` calls.
 //
 // Integration is ONLY via the contract (`import WarmthKit`). No engine internals.
 //
@@ -35,11 +35,17 @@ final class AppModel {
     /// "Per-app exclusions" row opens Settings → Advanced).
     var settingsTab: SettingsTab = .general
 
+    /// One-shot focus cue for Settings -> Advanced -> Excluded apps.
+    var excludedAppsFocusRequest: UUID?
+
+    /// One-shot focus cue for Settings -> General -> Maximum warmth.
+    var maximumWarmthFocusRequest: UUID?
+
     /// Whether the menu-bar icon is shown (Settings → General). When false the app
-    /// keeps running and is reachable via the global hotkey + relaunch (plan §4.3).
+    /// keeps running and is reachable via the global hotkey + relaunch.
     var showInMenuBar: Bool = true
 
-    /// Reveal-True-Color behaviour: hold (default) vs toggle (§3 locked — ship both). Mirrors
+    /// Reveal-True-Color behaviour: hold (default) vs toggle. Mirrors
     /// `HotkeyService.mode`; surfaced here so the Settings picker can bind and previews (no live
     /// service) still render. Persisted; restored in `applyPersistedState()`.
     var revealMode: RevealMode = .hold
@@ -51,6 +57,11 @@ final class AppModel {
 
     /// Manual Sunset location override. nil = Auto from system time zone; no permission or network.
     var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
+
+    @ObservationIgnored private var sunsetMaximumWarmth = WarmthLevel(strength: 0.7)
+    @ObservationIgnored private var manualWarmth = WarmthLevel(strength: 0.7)
+    @ObservationIgnored private var pendingEnabled: Bool?
+    @ObservationIgnored private var pendingScheduleMode: ScheduleModeOption?
 
     // MARK: Statistics (local-only — never leaves this Mac, "Private by default")
 
@@ -83,7 +94,7 @@ final class AppModel {
     private var frontmostMonitor: FrontmostAppMonitor?
     private var observationTask: Task<Void, Never>?
 
-    // MARK: Control surface (CLI / AI — plan §2)
+    // MARK: Control surface
 
     /// Regenerated once per app launch. Lets the CLI tell "this is the same running instance" apart
     /// from a relaunch even if the pid is reused. Written into every `ControlStateSnapshot`.
@@ -108,8 +119,11 @@ final class AppModel {
         let engine = WarmthEngine(configuration: configuration)
         self.engine = engine
         self.state = WarmthState(scheduleMode: configuration.defaultScheduleMode)
-        self.hotkeyService = HotkeyService(engine: engine)
         self.frontmostMonitor = FrontmostAppMonitor(engine: engine)
+        self.hotkeyService = HotkeyService(engine: engine) { [weak self] in
+            guard let self else { return }
+            self.setEnabled(!self.state.isEnabled)
+        }
     }
 
     /// Preview / scaffold initializer — seeds a mock state, no live actor.
@@ -118,6 +132,8 @@ final class AppModel {
         self.hotkeyService = nil
         self.frontmostMonitor = nil
         self.state = previewState
+        self.sunsetMaximumWarmth = previewState.globalWarmth
+        self.manualWarmth = previewState.globalWarmth
     }
 
     // MARK: Lifecycle
@@ -132,7 +148,7 @@ final class AppModel {
         frontmostMonitor?.start()
         observationTask = Task { [weak self] in
             for await snapshot in await engine.stateUpdates() {
-                self?.state = snapshot
+                self?.applyEngineSnapshot(snapshot)
                 self?.updateWarmingStats()
                 // Publish the live control snapshot every tick so `abendrot status` always reflects
                 // current runtime truth (ponytail: small atomic write per tick; add a coalescing
@@ -140,7 +156,7 @@ final class AppModel {
                 self?.writeControlSnapshot()
             }
         }
-        // Observe CLI/AI control messages (plan §2.2). The CLI posts with `deliverImmediately: true`,
+        // Observe CLI/AI control messages. The CLI posts with `deliverImmediately: true`,
         // so a command applies even when the app is idle. Same login session only — never
         // postToAllSessions. Torn down in `shutdown()`. The block runs on `.main`; under Swift 6 the
         // block isn't statically MainActor-isolated, so hop with `assumeIsolated` (it really is main).
@@ -158,7 +174,7 @@ final class AppModel {
                 self?.handleControlMessage(decoded)
             }
         }
-        // Start the engine, THEN replay persisted user state (§25.B) in the same task so the
+        // Start the engine, THEN replay persisted user state in the same task so the
         // restore is ordered strictly after start() — avoiding a reentrancy race where it could
         // land before the engine finishes booting.
         Task { [weak self] in
@@ -170,10 +186,30 @@ final class AppModel {
         }
     }
 
+    private func applyEngineSnapshot(_ snapshot: WarmthState) {
+        var next = snapshot
+        if let pending = pendingScheduleMode {
+            if ScheduleModeOption(snapshot.scheduleMode) == pending {
+                pendingScheduleMode = nil
+            } else {
+                next.scheduleMode = state.scheduleMode
+                next.globalWarmth = state.globalWarmth
+            }
+        }
+        if let pending = pendingEnabled {
+            if snapshot.isEnabled == pending {
+                pendingEnabled = nil
+            } else {
+                next.isEnabled = state.isEnabled
+            }
+        }
+        state = next
+    }
+
     /// Replay persisted user state through the normal setters so the engine and the published
     /// `state` converge exactly as a live interaction would. Called once from `start()`, strictly
     /// after `engine.start()`. Only keys explicitly written before are restored — a fresh install
-    /// keeps the engine's defaults. (§25.B persistence.)
+    /// keeps the engine's defaults.
     private func applyPersistedState() {
         // Restore the reloadable user settings (warmth, mode, enabled, …) through the shared path
         // the CLI/AI control surface also uses, so launch and a live reload converge identically.
@@ -182,7 +218,7 @@ final class AppModel {
         // ── Launch-only tail (NEVER reload these) ────────────────────────────────────────────────
         // Everything below is a cold-launch-only side effect. It lives ONLY here, never in
         // `reloadUserSettingsFromDisk()`, so a settings reload triggered by a CLI notification can
-        // never re-pop onboarding or double-count the stats (plan §2.2 / acceptance criterion).
+        // never re-pop onboarding or double-count the stats.
         let defaults = UserDefaults.standard
 
         // Statistics (local-only). `double`/`integer` return 0 for an unset key — the right
@@ -207,7 +243,7 @@ final class AppModel {
     /// Re-read the reloadable user settings from the app's preference domain and replay them through
     /// the normal setters. Called once on launch (from `applyPersistedState()`) and again whenever a
     /// `settingsChanged` notification arrives with no decodable payload (the raw-`defaults`
-    /// compatibility path, plan §2.2) — so this method holds ONLY settings, never the launch-only
+    /// compatibility path, plan) — so this method holds ONLY settings, never the launch-only
     /// stats/onboarding side effects.
     ///
     /// Reads use **CFPreferences against the app domain**, not `UserDefaults.standard`: a sibling
@@ -224,7 +260,7 @@ final class AppModel {
         // neuter warming. The only writer today is the Maximum-warmth control.
         if let saved = cfPrefInt(PreferenceKey.warmestPointKelvin),
            saved <= Kelvin.ceilingCoolBound.value {
-            // One-time migration to the S13 two-state ceiling (Cozy is now derived from
+            // One-time migration to the two-state ceiling (Cozy is now derived from
             // warmestPoint < 1900): the granular slider was removed, so any persisted value in the
             // band 1900 < wp ≤ 3400 is stale and makes the Cozy round-trip incoherent. Snap it up to
             // everydayWarmest (1900) so the persisted state matches the 2-state ceiling and
@@ -237,22 +273,34 @@ final class AppModel {
         // Schedule mode (Codable JSON — carries associated values). If the blob is ever malformed
         // (schema drift, a renamed case, a partial write), drop the key so it re-derives cleanly
         // rather than silently stranding the user on the default — the "it worked then broke" class
-        // §25.B exists to kill.
+        // exists to kill.
+        var restoredMode: ScheduleMode?
         if let data = cfPrefData(PreferenceKey.scheduleMode) {
             if let mode = try? JSONDecoder().decode(ScheduleMode.self, from: data) {
-                setScheduleMode(mode, userInitiated: false)   // restore must not tick
+                restoredMode = mode
             } else {
                 CFPreferencesSetAppValue(PreferenceKey.scheduleMode as CFString, nil, domain)
                 CFPreferencesAppSynchronize(domain)
             }
         }
 
-        // Nightly warmth strength. A *missing* key stays the engine's 0.7 out-of-box default instead
-        // of being clobbered to 0.0. A *persisted* 0.0 is a real user choice (slider dragged to off)
-        // and is intentionally honored — distinct from unset.
-        if let strength = cfPrefDouble(PreferenceKey.globalWarmthStrength),
-           let valid = try? ControlValidation.validatedStrength(strength) {
-            setGlobalWarmth(valid)
+        // Sunset maximum and Manual warmth are separate dials. The existing global key remains the
+        // Sunset maximum for CLI/back-compat; the new manual key falls back to it once for migration.
+        let savedSunsetStrength = cfPrefDouble(PreferenceKey.globalWarmthStrength)
+            .flatMap { try? ControlValidation.validatedStrength($0) }
+        if let strength = savedSunsetStrength {
+            sunsetMaximumWarmth = WarmthLevel(strength: strength)
+        }
+        if let strength = cfPrefDouble(PreferenceKey.manualWarmthStrength)
+            .flatMap({ try? ControlValidation.validatedStrength($0) }) {
+            manualWarmth = WarmthLevel(strength: strength)
+        } else if let strength = savedSunsetStrength {
+            manualWarmth = WarmthLevel(strength: strength)
+        }
+        if let restoredMode {
+            setScheduleMode(restoredMode, userInitiated: false)   // restore must not tick
+        } else {
+            applyActiveWarmth()
         }
 
         // Master toggle last. The final converged engine state is order-independent — each setter
@@ -264,10 +312,10 @@ final class AppModel {
             setEnabled(enabled, userInitiated: false)   // restore must not play the confirmation tone
         }
 
-        // Reveal behaviour (hold vs toggle, §3). A fresh install keeps the default hold.
+        // Reveal behaviour. A fresh install keeps the default hold.
         if let raw = cfPrefString(PreferenceKey.revealMode),
            let mode = RevealMode(rawValue: raw) {
-            setRevealMode(mode)
+            setRevealMode(mode, userInitiated: false)
         }
 
         // Excluded apps (suspend warmth while one is frontmost). Fresh install = none.
@@ -317,7 +365,7 @@ final class AppModel {
         cfPrefValue(key) as? [String]
     }
 
-    // MARK: ── Control surface: apply messages + write snapshot (plan §2.2/§2.3) ─
+    // MARK: ── Control surface: apply messages + write snapshot ─
 
     /// Entry point for a received `settingsChanged` notification, taking the already-decoded message
     /// (decoded off-actor in the observer block). A nil message means no decodable payload was
@@ -363,6 +411,10 @@ final class AppModel {
     @discardableResult
     private func apply(_ patch: SettingsPatch) -> Bool {
         var accepted = false
+        if let mode = patch.scheduleMode {
+            setScheduleMode(mode.toScheduleMode(), userInitiated: false)
+            accepted = true
+        }
         if let strength = patch.globalWarmthStrength,
            let valid = try? ControlValidation.validatedStrength(strength) {
             setGlobalWarmth(valid)
@@ -376,14 +428,10 @@ final class AppModel {
             setWarmestPoint(Kelvin(min(valid, Kelvin.ceilingCoolBound.value)))
             accepted = true
         }
-        if let mode = patch.scheduleMode {
-            setScheduleMode(mode.toScheduleMode(), userInitiated: false)
-            accepted = true
-        }
         if let revealRaw = patch.revealMode,
            let valid = try? ControlValidation.validatedRevealMode(revealRaw),
            let mode = RevealMode(rawValue: valid) {
-            setRevealMode(mode)
+            setRevealMode(mode, userInitiated: false)
             accepted = true
         }
         if let apps = patch.excludedApps,
@@ -441,7 +489,7 @@ final class AppModel {
 
     /// Encode the current state to `~/Library/Application Support/Abendrot/state.json` atomically.
     /// Called every engine state tick and after each accepted control message. Errors are swallowed
-    /// quietly — a failed status write must never disrupt warming. (Plan §2.2.3.)
+    /// quietly — a failed status write must never disrupt warming.
     func writeControlSnapshot() {
         let info = Bundle.main.infoDictionary
         let snapshot = ControlStateSnapshot(
@@ -501,9 +549,10 @@ final class AppModel {
     // MARK: ── Global intents ────────────────────────────────────────────────
 
     func setEnabled(_ enabled: Bool, userInitiated: Bool = true) {
-        // Optimistic UI (plan §5.2 — no spinners): reflect immediately, engine confirms.
+        // Optimistic UI (no spinners): reflect immediately, engine confirms.
         let changed = enabled != state.isEnabled
         state.isEnabled = enabled
+        pendingEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.isEnabledKey)
         Task { await engine?.setEnabled(enabled) }
         // Tone only on a real user toggle (not the launch-time restore, which passes userInitiated: false).
@@ -513,33 +562,32 @@ final class AppModel {
     /// A pleasant chime when the user toggles warming, if "Soft confirmation tone" is on (General tab;
     /// key owned by that tab's `@AppStorage("softConfirmationTone")`). ON plays the bright system "Glass"
     /// chime; OFF plays the SAME chime at a lower playback rate — a deeper, muted/dampened version of it
-    /// (founder: muted timbre, not quieter). Fresh, retained player each time so overlapping toggles each
+    /// (by preference: muted timbre, not quieter). Fresh, retained player each time so overlapping toggles each
     /// finish (a local player would deallocate before its async playback ends).
     private func playSoftConfirmationTone(warming: Bool) {
         guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
         // ON = the bright Glass chime; OFF = the SAME chime pitched DOWN ~5 semitones — a deeper,
-        // dampened version (founder). (AVAudioPlayer.rate only time-stretches — it PRESERVES pitch — so
+        // dampened version . (AVAudioPlayer.rate only time-stretches — it PRESERVES pitch — so
         // it was imperceptible; a real pitch shift needs the AVAudioUnitTimePitch graph below.)
         confirmationChime?.play(pitchCents: warming ? 0 : -500, volume: 0.7)   // ~0.35 effective vs the 0.5 master
     }
 
+    /// Same Glass cue as the master toggle, just lower and darker for secondary toggles.
+    func playSoftToggleTone(on: Bool) {
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        confirmationChime?.play(pitchCents: on ? -180 : -620, volume: 0.36)
+    }
+
     /// A soft tick when the user switches Schedule mode (Sunset · Manual), gated by the SAME
-    /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the Glass graph but
-    /// QUIETER and pitched UP into a light "selection" tick — not the warming bloom — and each mode
-    /// gets its OWN note (Always-on brighter/higher, Sunset lower), so you hear WHICH mode you picked:
-    /// a choice, not an on/off.
+    /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the secondary toggle
+    /// tone so mode changes stay quieter than the master warming bloom.
     /// Internal (not private) so onboarding can play the same mode tick when its picker is toggled.
     func playSoftModeTone(_ mode: ScheduleMode) {
-        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
-        // ponytail: taste-tune these three by ear — sound is sensory. Cents are vs. the Glass
-        // fundamental; both sit ABOVE the warming tones (0 / -500) so they read as a lighter tick, and
-        // a major third apart from each other.
-        let cents: Float = ScheduleModeOption(mode) == .alwaysOn ? 700 : 300
-        confirmationChime?.play(pitchCents: cents, volume: 0.22)   // ~0.11 effective vs the 0.5 master
+        playSoftToggleTone(on: ScheduleModeOption(mode) == .alwaysOn)
     }
 
     /// Flip the popover's advanced panel. Plays the airy swoosh — rising on EXPAND, falling on COLLAPSE
-    /// — gated by the SAME "Soft confirmation tone" pref as the chimes. The caller wraps this in
+    /// gated by the SAME "Soft confirmation tone" pref as the chimes. The caller wraps this in
     /// `withAnimation` so the panel still animates; the swoosh is just a side effect of the flip.
     func toggleAdvanced() {
         isAdvancedExpanded.toggle()
@@ -557,9 +605,32 @@ final class AppModel {
 
     func setGlobalWarmth(_ strength: Double) {
         let level = WarmthLevel(strength: strength)
-        state.globalWarmth = level
-        // Persist the clamped canonical value, not the raw arg (§25.B).
+        if ScheduleModeOption(state.scheduleMode) == .alwaysOn {
+            manualWarmth = level
+            UserDefaults.standard.set(level.strength, forKey: Self.manualWarmthStrengthKey)
+        } else {
+            sunsetMaximumWarmth = level
+            UserDefaults.standard.set(level.strength, forKey: Self.globalWarmthStrengthKey)
+        }
+        applyActiveWarmth()
+    }
+
+    func setSunsetMaximumWarmth(_ strength: Double) {
+        let level = WarmthLevel(strength: strength)
+        sunsetMaximumWarmth = level
         UserDefaults.standard.set(level.strength, forKey: Self.globalWarmthStrengthKey)
+        if ScheduleModeOption(state.scheduleMode) != .alwaysOn {
+            applyActiveWarmth()
+        }
+    }
+
+    private func warmth(for mode: ScheduleMode) -> WarmthLevel {
+        ScheduleModeOption(mode) == .alwaysOn ? manualWarmth : sunsetMaximumWarmth
+    }
+
+    private func applyActiveWarmth() {
+        let level = warmth(for: state.scheduleMode)
+        state.globalWarmth = level
         Task { await engine?.setWarmth(level) }
     }
 
@@ -587,24 +658,30 @@ final class AppModel {
         // Compare at the UI grain (Sunset · Manual): the dormant cases (.solar/.custom/...) all read
         // as Sunset, so re-selecting one is not a user-visible change and must not tick.
         let changed = ScheduleModeOption(mode) != ScheduleModeOption(state.scheduleMode)
+        if changed { pendingScheduleMode = ScheduleModeOption(mode) }
         state.scheduleMode = mode
+        state.globalWarmth = warmth(for: mode)
         // ScheduleMode carries associated values (.solar/.custom) → encode as Codable JSON,
-        // not a bare string (§25.B).
+        // not a bare string.
         if let data = try? JSONEncoder().encode(mode) {
             UserDefaults.standard.set(data, forKey: Self.scheduleModeKey)
         }
-        Task { await engine?.setScheduleMode(mode) }
+        let level = state.globalWarmth
+        Task {
+            await engine?.setScheduleMode(mode)
+            await engine?.setWarmth(level)
+        }
         // Tick only on a real user-initiated switch (not the launch-time restore, userInitiated: false).
         if userInitiated, changed { playSoftModeTone(mode) }
     }
 
-    // MARK: ── Persistence (§25.B) ───────────────────────────────────────────
+    // MARK: ── Persistence ───────────────────────────────────────────
     //
     // User-facing engine state that must survive relaunch. `warmestPoint` already
     // persisted (the hybrid expanded-range pick); this extends the same pattern to the
     // master toggle, the nightly warmth, and the schedule mode so the app reopens exactly
     // as the user left it instead of resetting to disabled / off / follow-Night-Shift every
-    // launch (a major "it worked then broke" contributor — §25 Session-5 RESULTS).
+    // launch (a major "it worked then broke" contributor — Session-5 RESULTS).
     //
     // Each value is written in its setter and restored once in `start()` *after*
     // `engine.start()` by replaying that same setter, so the engine and the published
@@ -618,6 +695,7 @@ final class AppModel {
     static let warmestPointKey = PreferenceKey.warmestPointKelvin
     static let isEnabledKey = PreferenceKey.isEnabled
     static let globalWarmthStrengthKey = PreferenceKey.globalWarmthStrength
+    static let manualWarmthStrengthKey = PreferenceKey.manualWarmthStrength
     static let scheduleModeKey = PreferenceKey.scheduleMode
     static let revealModeKey = PreferenceKey.revealMode
     static let excludedAppsKey = PreferenceKey.excludedApps
@@ -666,7 +744,7 @@ final class AppModel {
             setWarmestPoint(Kelvin.everydayWarmest)
             setGlobalWarmthToKelvin(restore)
         }
-        if userInitiated, changed { playCozyFireSound(starting: on) }
+        if userInitiated, changed { playSoftToggleTone(on: on) }
     }
 
     // MARK: ── Reveal True Color ─────────────────────────────────────────────
@@ -681,14 +759,16 @@ final class AppModel {
         Task { await engine?.endReveal() }
     }
 
-    /// Switch the reveal behaviour between hold and toggle (§3). `HotkeyService.mode` already honours
+    /// Switch the reveal behaviour between hold and toggle. `HotkeyService.mode` already honours
     /// this live in `handleKeyDown/Up`; this surfaces + persists the choice. The service call is a
     /// no-op in previews (no live hotkey), but the observed `revealMode` still updates so the picker
     /// tracks the selection.
-    func setRevealMode(_ mode: RevealMode) {
+    func setRevealMode(_ mode: RevealMode, userInitiated: Bool = true) {
+        let changed = mode != revealMode
         revealMode = mode
         hotkeyService?.mode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: Self.revealModeKey)
+        if userInitiated, changed { playSoftToggleTone(on: mode == .toggle) }
     }
 
     // MARK: ── Per-display intents ───────────────────────────────────────────
@@ -704,14 +784,17 @@ final class AppModel {
 
     /// Enable/disable a display's "Custom warmth" override. Off → the display follows the global
     /// warmth; on → it keeps its own value (seeded to the current global by the engine).
-    func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity) {
+    func setWarmthOverride(_ enabled: Bool, for id: DisplayIdentity, userInitiated: Bool = true) {
+        var changed = false
         if let i = state.displays.firstIndex(where: { $0.id == id }) {
+            changed = state.displays[i].warmthOverridden != enabled
             state.displays[i].warmthOverridden = enabled
             if enabled {
                 state.displays[i].warmth = state.globalWarmth
             }
         }
         Task { await engine?.setWarmthOverride(enabled, for: id) }
+        if userInitiated, changed { playSoftToggleTone(on: enabled) }
     }
 
     func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) {
@@ -725,16 +808,19 @@ final class AppModel {
         Task { await engine?.setPreferredMethod(method, for: id) }
     }
 
-    func setHardwareDDCEnabled(_ enabled: Bool, for id: DisplayIdentity) {
+    func setHardwareDDCEnabled(_ enabled: Bool, for id: DisplayIdentity, userInitiated: Bool = true) {
+        var changed = false
         if let i = state.displays.firstIndex(where: { $0.id == id }) {
+            changed = state.displays[i].isHardwareDDCEnabled != enabled
             state.displays[i].isHardwareDDCEnabled = enabled
         }
         Task { await engine?.setHardwareDDCEnabled(enabled, for: id) }
+        if userInitiated, changed { playSoftToggleTone(on: enabled) }
     }
 
     func setExcludedApps(_ bundleIDs: Set<String>) {
         excludedApps = bundleIDs
-        // Persist a sorted [String] (stable, plist-native) so the set survives relaunch (§25.B).
+        // Persist a sorted [String] (stable, plist-native) so the set survives relaunch.
         UserDefaults.standard.set(bundleIDs.sorted(), forKey: Self.excludedAppsKey)
         Task { await engine?.setExcludedApps(bundleIDs) }
     }
@@ -783,7 +869,7 @@ final class AppModel {
         let formatter = Self.sunsetReadoutFormatter
         formatter.timeZone = zone
         // Show a real, named abbreviation ("EDT", "PDT") but NOT a bare "GMT-5" offset — a picked city's
-        // longitude-derived zone has no place name, and the city name is already in the field (founder).
+        // longitude-derived zone has no place name, and the city name is already in the field .
         let time = formatter.string(from: sunset)
         if let abbr = zone.abbreviation(for: sunset), !abbr.hasPrefix("GMT") {
             return "Today's sunset ≈ \(time) \(abbr)"
@@ -823,10 +909,12 @@ final class AppModel {
         return parts.joined(separator: " ")
     }
 
-    func setStatsEnabled(_ on: Bool) {
+    func setStatsEnabled(_ on: Bool, userInitiated: Bool = true) {
+        let changed = on != statsEnabled
         statsEnabled = on
         UserDefaults.standard.set(on, forKey: Self.statsEnabledKey)
         updateWarmingStats()   // off → closes any open session; on → resumes if currently warming
+        if userInitiated, changed { playSoftToggleTone(on: on) }
     }
 
     func resetStatistics() {
@@ -901,7 +989,7 @@ final class AppModel {
 
     /// The current global Kelvin readout, derived from strength + the *actual* warmest point the
     /// engine is using (published in `state`). Previously hardcoded 2700K, which made the readout
-    /// disagree with the applied warmth — fixed so the number never lies. (§25 max-warmth.)
+    /// disagree with the applied warmth — fixed so the number never lies.
     var globalKelvin: Kelvin {
         state.globalWarmth.kelvin(warmestPoint: state.warmestPoint)
     }
@@ -927,7 +1015,7 @@ final class AppModel {
         state.isEnabled && state.isScheduleActiveNow && !state.isRevealing
     }
 
-    // MARK: ── Incompatibility ("can only be tinted") detection — §25.J ──────────
+    // MARK: ── Incompatibility ("can only be tinted") detection — ──────────
 
     /// A display can only be TINTED when no true-warm path is available to it: gamma is not
     /// supported on this chip/OS (or private APIs are off) AND it is not DDC-capable. Capability-
