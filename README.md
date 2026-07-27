@@ -19,24 +19,31 @@
 </p>
 
 <p align="center">
-  <sub>Built in the open · <a href="https://abendrot.app">abendrot.app</a> · Signed builds + <code>brew install --cask abendrot</code> land with v1.0</sub>
+  <sub>Built in the open · <a href="https://abendrot.app">abendrot.app</a> · MIT licensed</sub>
 </p>
 
 ---
 
-**Abendrot** warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.
+**Abendrot** is the f.lux / Night Shift successor built to do the thing the incumbents quietly fail at: reliably warm **external monitors** and the **buttonless Apple displays** — Studio Display, Pro Display XDR, LG UltraFine — and keep working on the newest Apple Silicon Macs, where the classic gamma trick silently stops warming. Without tracking you.
 
-It's the f.lux / Night Shift successor built to do the thing the incumbents quietly fail at: reliably warm **external monitors** and the **buttonless Apple displays** — Studio Display, Pro Display XDR, LG UltraFine — and keep working on the newest Apple Silicon Macs, where the classic gamma trick silently stops warming. Without tracking you.
+## Install
 
-> **Status: pre-release.** The warmth engine and CLI have comprehensive headless test coverage. Signed/notarized distribution and the final physical-display release matrix are still pending, so there is no supported download yet. You can build it from source today (see [Build from source](#build-from-source)).
+> [!IMPORTANT]
+> **Pre-release:** signed/notarized distribution and the final physical-display release matrix are still pending. The install options below become available with v1.0; contributors can use the [development setup](CONTRIBUTING.md#getting-set-up) today.
 
-## Grounded in the science
+### Homebrew
 
-Your eye has a non-visual light sensor — melanopsin, in a class of retinal cells called ipRGCs — that is most sensitive to short-wavelength **blue light around 480–490 nm** and helps tell your brain whether it's day or night ([Berson et al., 2002](https://doi.org/10.1126/science.1067262); [CIE S 026:2018](https://doi.org/10.25039/S026.2018)). Warmer, dimmer light in the evening puts less energy in that band.
+```sh
+brew install --cask abendrot
+```
 
-Abendrot is designed around that: it attenuates the display's blue channel as it warms, and at its warmest everyday setting (~1900 K) the warming curve **takes the blue channel to zero**. We **link the research rather than asserting health outcomes** — and because the dose depends on intensity as much as color, the honest advice is to **also lower your screen brightness** in the evening. See [The science](#the-science) for citations.
+### Direct download
 
-> General wellness, not medical advice. Abendrot reduces evening blue-light exposure; it is not a medical device and makes no claim to treat or improve any condition.
+Download the latest signed `.dmg` from [GitHub Releases](https://github.com/matthewrball/abendrot/releases/latest).
+
+Requires macOS 26 "Tahoe" or later. Universal for Apple Silicon and Intel.
+
+> Abendrot is free and open source under the MIT License. If it is useful to you, please [star the repository](https://github.com/matthewrball/abendrot/stargazers).
 
 ## Why Abendrot
 
@@ -70,92 +77,16 @@ abendrot reveal --hold 10      # momentary true-color peek, then ease back
 
 **Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. When you install the app, the binary ships inside the bundle and the Homebrew cask symlinks it onto your `PATH`.
 
-<details>
-<summary><strong>Common tasks → commands</strong> — the v1 surface (<code>abendrot --help</code> for everything)</summary>
+Every command supports `--json`, with scriptable exit codes. See [`AGENTS.md`](AGENTS.md) for the complete CLI and agent-control reference.
 
-| Task | Command |
-|---|---|
-| Set warmth (0–1, or by Kelvin) | `abendrot set warmth 0.8` · `abendrot set warmth --kelvin 2700` |
-| Read live status as JSON | `abendrot status --json` |
-| Read one configured setting | `abendrot get warmth` |
-| Turn warming on / off | `abendrot on` · `abendrot off` |
-| Set the schedule mode | `abendrot set mode sunset` *(or `always-on` / `off`)* |
-| Set the warmest point the slider maps to | `abendrot set max-warmth 1900` |
-| Toggle cozy mode (reaching deep candle/ember warmth) | `abendrot cozy on` · `abendrot cozy off` |
-| Choose hold vs toggle for reveal | `abendrot set reveal-mode hold` *(or `toggle`)* |
-| Set location for the sunset schedule | `abendrot set location --auto` *(or `<lat> <lon>`)* |
-| Exclude an app from warming | `abendrot exclude add com.apple.FinalCut` |
-| List / remove exclusions | `abendrot exclude list` · `abendrot exclude remove <bundle-id>` |
-| Momentary true-color reveal | `abendrot reveal --hold 8` |
+## Research and comparisons
 
-Machine-readable everywhere: every command takes `--json`, and exit codes are scriptable (`0` ok · `2` bad input · `3` app not running · `4` live-apply timeout). See [`AGENTS.md`](AGENTS.md) for the full agent-facing reference.
+- [Research and supporting references](https://abendrot.app/#science)
+- [How Abendrot compares with Night Shift and f.lux](https://abendrot.app/#vs)
 
-</details>
+These pages are maintained on abendrot.app so claims, citations, and comparison data stay current in one place.
 
-## How it compares
-
-| | **Abendrot** | Apple Night Shift | f.lux | Redshift |
-|---|---|---|---|---|
-| Platform | macOS 26+ | macOS / iOS | macOS / Windows / Linux | Linux / X11 |
-| Warmest setting | Down to 500 K in Cozy mode | ~2700–3400 K <sup>1</sup> (Apple publishes no value); never reaches ~1900 K | ~1900 K ("Candle") | Configurable |
-| Blue at the warmest setting | Driven to zero by 1900 K | Reduced, but not eliminated <sup>2</sup> | Deep (candle) | Depends on setting |
-| Warms Apple's buttonless displays (Studio Display, Pro Display XDR) | Yes | Yes (Apple's own) | No | No |
-| External & multiple displays | Warms external monitors at the hardware level (DDC), with gamma + overlay fallback - and re-applies when you plug or unplug a screen | Inconsistent <sup>1</sup> | Gamma only; unreliable | X11 only |
-| Shows the actual color temperature + method, per display | Yes | No — a "Less / More Warm" slider | No | Per-output |
-| Reveal-true-color hotkey | Yes (hold) | No | No | Toggle only |
-| Scriptable CLI / AI control | Yes (`abendrot`, `--json`) | No | No | Partial (CLI) |
-| Open source | Yes (MIT) | No | No (freeware, closed) | Yes (GPL) |
-| Telemetry | None | Apple's | Unknown (closed-source) | None |
-| Price | Free forever | Free (built in) | Free | Free |
-
-<sub>Night Shift is a fine, free, built-in option — especially on a MacBook's own display. Abendrot is for deeper warmth and reliable warming across **every** external display, with the actual Kelvin and warming method shown per screen.</sub>
-
-<sub><sup>1</sup> Apple publishes no Kelvin value for Night Shift; ~2700–3400 K is a third-party estimate (Iris, f.lux). On external displays, Apple states performance "depends on the characteristics of the display" ([Apple Support](https://support.apple.com/en-us/102191)). <sup>2</sup> Per Michael Herf of f.lux (2017 spectrometer measurement, macOS 10.12.4), Night Shift removes under ~30% of blue light's biological impact at its default setting. Figures reflect third-party measurements/estimates and our own testing. General wellness, not medical advice.</sub>
-
-## Install
-
-**Manual download:** [latest release](https://github.com/matthewrball/abendrot/releases) *(available with v1.0)*
-
-> [!IMPORTANT]
-> Abendrot is free and open source under the MIT License. If Abendrot is useful to you, please star the repository — it helps visibility and keeps development going.
-
-> **Pre-release.** Abendrot isn't downloadable yet. Signed, notarized builds and a Homebrew cask arrive with **v1.0** — watch [Releases](https://github.com/matthewrball/abendrot/releases) or [abendrot.app](https://abendrot.app). Until then, build from source below.
-
-*Coming with v1.0:* download a `.dmg` from Releases, or `brew install --cask abendrot` (which also puts the `abendrot` CLI on your `PATH`). Requirements: macOS 26 "Tahoe" or later, Apple Silicon or Intel.
-
-## The science
-
-Abendrot makes no health claims of its own — it links the research and lets you read it. A few starting points, all peer-reviewed:
-
-- **Your clock reads blue differently than your eyes do.** The human melatonin-suppression action spectrum peaks in the blue (~459–464 nm) — [Brainard et al., 2001, *J Neurosci*](https://doi.org/10.1523/JNEUROSCI.21-16-06405.2001); [Thapan et al., 2001, *J Physiol*](https://doi.org/10.1111/j.1469-7793.2001.t01-1-00261.x).
-- **Warmth is a spectral edit, not a sleep claim.** An expert consensus on supportive evening/night light targets (measured in melanopic terms, not Kelvin) — [Brown et al., 2022, *PLoS Biology*](https://doi.org/10.1371/journal.pbio.3001571).
-- **Melanopic load is the better evening word than brightness.** It's the melanopic (short-wavelength) content of evening screen light that drives the effect — more than overall brightness — [Schoellhorn et al., 2023, *Communications Biology*](https://doi.org/10.1038/s42003-023-04598-4).
-- **Dim still matters.** Melatonin suppression is also driven by **light intensity**, with much of the effect at modest indoor levels — so dimming matters too — [Zeitzer et al., 2000, *J Physiol*](https://doi.org/10.1111/j.1469-7793.2000.00695.x).
-- **There is no perfect setting for everyone.** Individual sensitivity to evening light varies more than **50-fold**, so there's no single "correct" setting — [Phillips et al., 2019, *PNAS*](https://doi.org/10.1073/pnas.1901824116).
-
-> Individual responses to light vary widely; these are general-wellness references, not a promise of any outcome. Pair warmth with lower brightness for the biggest reduction in evening light exposure.
-
-## Build from source
-
-Requires **macOS 26 "Tahoe"**, **Xcode 26**, and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
-
-```sh
-git clone https://github.com/matthewrball/abendrot.git
-cd abendrot
-
-# Engine package — builds and tests headlessly, no app bundle needed
-swift test --package-path WarmthKit
-
-# The app
-xcodegen generate                            # generates Abendrot.xcodeproj from project.yml
-open Abendrot.xcodeproj                       # build & run the Abendrot scheme in Xcode
-
-# The CLI (optional) — a standalone thin client to the running app
-swift build -c release --package-path cli
-./cli/.build/release/abendrot --version      # → 0.1.0
-```
-
-It runs in the menu bar — look for the sunset arc. Quit from the popover footer (power icon) or ⌘Q.
+> General wellness, not medical advice. Abendrot reduces evening blue-light exposure; it is not a medical device and makes no claim to treat or improve any condition.
 
 ## Tech
 
@@ -171,7 +102,7 @@ No telemetry. No analytics SDK, account, or identifiers. Settings and usage stat
 
 ## Contributing
 
-Issues and pull requests are welcome — bug reports from real display setups are especially valuable, since the whole point is reliability on hardware we can't all test on. See [`CONTRIBUTING.md`](CONTRIBUTING.md). Security disclosures: [`SECURITY.md`](SECURITY.md).
+Issues and pull requests are welcome — bug reports from real display setups are especially valuable, since the whole point is reliability on hardware we can't all test on. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the local build and test setup. Security disclosures: [`SECURITY.md`](SECURITY.md).
 
 ## License
 
