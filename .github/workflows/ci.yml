@@ -204,6 +204,7 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -derivedDataPath build/DerivedData \
+            -onlyUsePackageVersionsFromResolvedFile \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \
@@ -321,6 +322,7 @@ jobs:
             "cli/Sources"
             "cli/Tests"
             "cli/completions"
+            "Abendrot.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
             "WarmthKit/Package.swift"
             "WarmthKit/Package.resolved"
             "project.yml"
@@ -483,6 +485,7 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -archivePath "$ARCHIVE" \
+            -onlyUsePackageVersionsFromResolvedFile \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="$DEVELOPER_ID_APP" \
             ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \

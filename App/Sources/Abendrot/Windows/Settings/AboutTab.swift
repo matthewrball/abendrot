@@ -15,7 +15,7 @@ struct AboutTab: View {
             }
 
             // Mission — what it is, framed as the input it changes.
-            Text("Abendrot warms your screen with the evening — on every display, built-in and external — so your screen gives off less blue light as the day winds down. It’s free, open source, and runs entirely on your Mac: no account, no telemetry.")
+            Text("Abendrot warms your screen with the evening — on every display, built-in and external — so your screen gives off less blue light as the day winds down. It’s free, open source, and runs entirely on your Mac.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -29,7 +29,6 @@ struct AboutTab: View {
             VStack(alignment: .leading, spacing: 8) {
                 aboutPoint("Every display", "Real warmth on built-in and external monitors — including buttonless Apple displays — where Night Shift and f.lux quietly give up.")
                 aboutPoint("Free & open source", "MIT-licensed. Read every line of the engine that touches your screen.")
-                aboutPoint("Private by default", "No account, no tracking, no telemetry. Nothing about your displays leaves your Mac.")
                 aboutPoint("Built for the newest Macs", "Uses the best warming method each display supports — and says so plainly when macOS only allows a tint, not true warming.")
             }
 

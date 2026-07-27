@@ -25,7 +25,8 @@ final class OneShotPlayer {
         player.stop()                       // reset if a prior shot is still scheduled (rapid re-fire)
         player.scheduleBuffer(buffer, at: nil)
         player.play()
-        scheduleIdle(after: idleAfter)
+        let duration = Double(buffer.frameLength) / buffer.format.sampleRate
+        scheduleIdle(after: max(idleAfter, duration))
     }
 
     /// Schedule + play an on-disk audio file (e.g. the system "Glass" chime). Same lifecycle as the buffer
@@ -37,15 +38,21 @@ final class OneShotPlayer {
         player.stop()                       // reset if a prior shot is still scheduled (rapid re-fire)
         player.scheduleFile(file, at: nil)
         player.play()
-        scheduleIdle(after: idleAfter)
+        let duration = Double(file.length) / file.processingFormat.sampleRate
+        scheduleIdle(after: max(idleAfter, duration))
     }
 
     /// Stop the engine `seconds` after the (short) sound so the render thread doesn't run on forever.
     private func scheduleIdle(after seconds: TimeInterval) {
         idleTask?.cancel()
         idleTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard let self, !self.player.isPlaying else { return }
+            do {
+                try await Task.sleep(for: .seconds(seconds))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.player.stop()
             self.engine.stop()
         }
     }

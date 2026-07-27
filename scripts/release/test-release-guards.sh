@@ -11,6 +11,7 @@ cleanup() {
 trap cleanup EXIT
 
 CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
+RELEASE_SCRIPT="$ROOT/scripts/release/release.sh"
 SIGN_JOB="$TMP/sign-notarize.yml"
 
 grep -qF "github.event_name == 'workflow_dispatch'" "$CI_WORKFLOW"
@@ -39,6 +40,14 @@ grep -qF \
 grep -qF 'echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -' \
   "$CI_WORKFLOW"
 grep -qF '"$RUNNER_TEMP/xcodegen/bin/xcodegen" --version' "$CI_WORKFLOW"
+[ "$(grep -cF -- '-onlyUsePackageVersionsFromResolvedFile' "$CI_WORKFLOW")" -eq 2 ]
+[ "$(grep -cF -- '--only-use-versions-from-resolved-file' "$RELEASE_SCRIPT")" -eq 2 ]
+APP_PACKAGE_LOCK="$ROOT/Abendrot.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+grep -qF '"identity" : "sparkle"' "$APP_PACKAGE_LOCK"
+if grep -qF '"identity" : "sparkle"' "$ROOT/WarmthKit/Package.resolved"; then
+  echo "WarmthKit must not own the app-only Sparkle dependency." >&2
+  exit 1
+fi
 
 awk '
   /^  sign-notarize:$/ { in_job = 1 }
@@ -55,6 +64,19 @@ secret_refs_sign_job="$(grep -cF '${{ secrets.' "$SIGN_JOB")"
 echo "PASS: CI signing secrets are manual-main-only and build tooling is pinned"
 
 APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
+UPDATE_MANAGER="$ROOT/App/Sources/Abendrot/Services/UpdateManager.swift"
+sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
+  | grep -qF '#if DEBUG'
+sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
+  | grep -qF 'return false'
+echo "PASS: Debug builds cannot connect to the production Sparkle feed"
+
+grep -qF 'static let warmedSecondsKey = "stats.warmedSeconds"' "$APP_MODEL"
+grep -qF 'static let warmSunsetCountKey = "stats.warmSunsetCount"' "$APP_MODEL"
+grep -qF 'static let lastWarmSunsetDayKey = "stats.lastWarmSunsetDay"' "$APP_MODEL"
+grep -qF 'static let statsEnabledKey = "stats.enabled"' "$APP_MODEL"
+echo "PASS: statistics persistence keys remain upgrade-compatible"
+
 PATCH_APPLY="$TMP/apply-settings-patch.swift"
 sed -n \
   '/private func apply(_ patch: SettingsPatch)/,/private func apply(_ action: ControlAction)/p' \
@@ -85,6 +107,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0"><dict>
   <key>CFBundleShortVersionString</key><string>1.0.0</string>
   <key>CFBundleVersion</key><string>42</string>
+  <key>CFBundleIdentifier</key><string>app.abendrot.Abendrot</string>
   <key>CFBundleExecutable</key><string>Abendrot</string>
   <key>SUFeedURL</key><string>https://example.invalid/appcast.xml</string>
   <key>SUPublicEDKey</key><string>test-public-key</string>
@@ -401,6 +424,19 @@ set -e
 grep -qF "unsafe or malformed marketing version" "$TMP/multiline-version-stderr"
 echo "PASS: multiline versions cannot bypass whole-value validation"
 /usr/bin/plutil -replace CFBundleShortVersionString -string "1.0.0" \
+  "$APP/Contents/Info.plist"
+
+/usr/bin/plutil -replace CFBundleIdentifier -string "example.invalid.Abandrot" \
+  "$APP/Contents/Info.plist"
+set +e
+APPCAST_PATH="$APPCAST" "$ROOT/scripts/release/release.sh" \
+  --app "$APP" --unsigned >/dev/null 2>"$TMP/bundle-id-stderr"
+rc=$?
+set -e
+[ "$rc" -eq 3 ]
+grep -qF "CFBundleIdentifier must remain app.abendrot.Abendrot" "$TMP/bundle-id-stderr"
+echo "PASS: releases preserve the user preferences and statistics domain"
+/usr/bin/plutil -replace CFBundleIdentifier -string "app.abendrot.Abendrot" \
   "$APP/Contents/Info.plist"
 
 set +e

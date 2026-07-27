@@ -579,11 +579,12 @@ final class AppModel {
     }
 
     /// A soft tick when the user switches Schedule mode (Sunset · Manual), gated by the SAME
-    /// "Soft confirmation tone" pref as the warming chime (General tab). Reuses the secondary toggle
-    /// tone so mode changes stay quieter than the master warming bloom.
+    /// "Soft confirmation tone" pref as the warming chime (General tab).
     /// Internal (not private) so onboarding can play the same mode tick when its picker is toggled.
     func playSoftModeTone(_ mode: ScheduleMode) {
-        playSoftToggleTone(on: ScheduleModeOption(mode) == .alwaysOn)
+        guard UserDefaults.standard.bool(forKey: "softConfirmationTone") else { return }
+        let cents: Float = ScheduleModeOption(mode) == .alwaysOn ? 700 : 300
+        confirmationChime?.play(pitchCents: cents, volume: 0.22)
     }
 
     /// Flip the popover's advanced panel. Plays the airy swoosh — rising on EXPAND, falling on COLLAPSE
@@ -744,7 +745,7 @@ final class AppModel {
             setWarmestPoint(Kelvin.everydayWarmest)
             setGlobalWarmthToKelvin(restore)
         }
-        if userInitiated, changed { playSoftToggleTone(on: on) }
+        if userInitiated, changed { playCozyFireSound(starting: on) }
     }
 
     // MARK: ── Reveal True Color ─────────────────────────────────────────────

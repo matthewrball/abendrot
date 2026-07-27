@@ -77,9 +77,12 @@ final class abendrotTests: XCTestCase {
         XCTAssertThrowsError(try ControlValidation.validatedStrength(50))
         XCTAssertThrowsError(try ControlValidation.validatedKelvin(50))
         XCTAssertThrowsError(try ControlValidation.validatedRevealMode("foo"))
+        XCTAssertThrowsError(try ControlValidation.validatedRevealHold(.infinity))
+        XCTAssertThrowsError(try ControlValidation.validatedRevealHold(301))
         XCTAssertNoThrow(try ControlValidation.validatedStrength(0.8))
         XCTAssertNoThrow(try ControlValidation.validatedKelvin(1900))
         XCTAssertNoThrow(try ControlValidation.validatedRevealMode("toggle"))
+        XCTAssertNoThrow(try ControlValidation.validatedRevealHold(10))
     }
 
     func testModeParsingRejectsUnknown() {

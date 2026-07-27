@@ -90,12 +90,9 @@ targets:
         SUAutomaticallyUpdate: false
         SUScheduledCheckInterval: 86400
         SUVerifyUpdateBeforeExtraction: true
-        # PLACEHOLDER — the REAL EdDSA public key is injected at release time from the
-        # keypair whose PRIVATE half lives ONLY in the maintainer's login keychain
-        #. `generate_keys` prints the public key; never commit a
-        # private key. Until then this placeholder keeps the bundle key present so the
-        # plist schema is stable.
-        SUPublicEDKey: "INJECTED_AT_RELEASE_PUBLIC_ED_KEY_PLACEHOLDER"
+        # EdDSA public key for the Sparkle signing key whose private half lives only
+        # in the maintainer's login keychain.
+        SUPublicEDKey: "HW5DAqjbnmoAtvM/DVUj9iFHNC9YSjFn2vNkZguu6iM="
     settings:
       base:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentBase

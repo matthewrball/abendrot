@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// How long Abendrot has actively warmed the Mac (local-only — never sent anywhere). The headline
-/// total ticks live via a `TimelineView` while the tab is open; `AppModel` owns the accrual.
+/// How long Abendrot has actively warmed the Mac. The headline total ticks live via a
+/// `TimelineView` while the tab is open; `AppModel` owns the accrual.
 struct StatisticsTab: View {
     @Bindable var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: "Statistics", subtitle: "How long Abendrot has softened your evenings — counted on this Mac only.")
+            TabHeader(title: "Statistics", subtitle: "How long Abendrot has softened your evenings.")
 
             // Live readout: refresh the elapsed total once a second while the tab is visible.
             TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -36,13 +36,13 @@ struct StatisticsTab: View {
 
             DividerLine()
 
-            Toggle("Collect statistics on this Mac", isOn: Binding(
+            Toggle("Collect statistics", isOn: Binding(
                 get: { model.statsEnabled },
                 set: { model.setStatsEnabled($0) }
             ))
             .toggleStyle(.switch)
             .tint(Theme.Color.accent)
-            Text("Stored locally and never sent anywhere. Turn off to stop counting.")
+            Text("Turn off to stop counting.")
                 .font(Theme.Typography.ui(11.5))
                 .foregroundStyle(Theme.Color.textFaint)
         }

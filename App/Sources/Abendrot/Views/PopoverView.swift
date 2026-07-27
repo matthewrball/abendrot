@@ -167,8 +167,7 @@ struct PopoverView: View {
                     get: { ScheduleModeOption(model.state.scheduleMode) },
                     set: { model.setScheduleMode($0.toScheduleMode()) }
                 ),
-                compact: true,
-                onChange: { _ in }
+                compact: true
             )
         }
     }
@@ -250,7 +249,7 @@ struct PopoverView: View {
     /// Explains the locked slider and links to the editable maximum (Settings → General).
     private var sunsetLockCaption: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(model.isWarmingActive
+            Text(model.state.isScheduleActiveNow
                  ? ScheduleModeOption.followSunset.subtitle
                  : "Warmth eases in around your local sunset.")
                 .font(Theme.Typography.ui(11))

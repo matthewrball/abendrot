@@ -30,7 +30,7 @@ enum OnboardingLayout {
     static let scheduleSunsetHeight: CGFloat = 580
     static let scheduleHeaderHeight: CGFloat = 210
     static let warmthHeight: CGFloat = 500
-    static let allSetHeight: CGFloat = 496
+    static let allSetHeight: CGFloat = 350
     static let minimumContentHeight: CGFloat = 300
     static let maximumContentHeight: CGFloat = 665
 
@@ -40,8 +40,8 @@ enum OnboardingLayout {
 // MARK: - OnboardingView
 //
 // "3 clicks to warmth": welcome → choose the schedule → set your warmth — three
-// numbered setup steps, then a brief UNNUMBERED "you're all set" confirmation that carries the privacy
-// reassurance. Calm glass; everything else lives in Settings. The app needs no permissions, so onboarding
+// numbered setup steps, then a brief UNNUMBERED "you're all set" confirmation. Calm glass; everything
+// else lives in Settings. The app needs no permissions, so onboarding
 // asks for none — it just orients the user (a menu-bar agent launches invisibly) and lands them on warmth.
 // Mode comes FIRST, applied LIVE so its effect is visible (Always-on warms now; Sunset stays neutral in
 // daylight and says exactly when it will kick in); the warmth step then forces a "preview of your evening"
@@ -350,34 +350,32 @@ private var manualDetail: some View {
             .frame(height: 40)
             .frame(maxWidth: .infinity)
 
-            ModeControl(selection: scheduleSelection, animatesSelection: false) { _ in }
+            ModeControl(selection: scheduleSelection)
         }
     }
 
-    // MARK: Step 4 — closing confirmation (not numbered) — privacy reassurance lives here now
+    // MARK: Step 4 — closing confirmation (not numbered)
     private var allSetStep: some View {
         VStack(spacing: 18) {
-            ZStack {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 46, weight: .light))
-                    .foregroundStyle(Theme.Color.accentHighlight)
-                    .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
-                    .accessibilityHidden(true)
-                
-                HStack {
-                    Button { goBack() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.Color.textMuted)
-                            .padding(.vertical, 4)
-                            .padding(.trailing, 10)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Back")
-                    Spacer()
+            HStack {
+                Button { goBack() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .padding(.vertical, 4)
+                        .padding(.trailing, 10)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+                Spacer()
             }
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 46, weight: .light))
+                .foregroundStyle(Theme.Color.accentHighlight)
+                .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
+                .accessibilityHidden(true)
 
             Text("You’re all set")
                 .font(Theme.Typography.serif(22))
@@ -387,11 +385,6 @@ private var manualDetail: some View {
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-
-            privacyNote
-                .padding(.top, 6)
-
-            Spacer(minLength: 0)
 
             VStack(spacing: 10) {
                 SecondaryButton(title: "Star on GitHub", icon: "star") {
@@ -435,31 +428,6 @@ private var manualDetail: some View {
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // Brief, beautiful privacy reassurance — the closing note. Reuses the Privacy settings page's
-    // checkmark.shield icon. A general promise (not just location), since it's the parting word.
-    private var privacyNote: some View {
-        VStack(spacing: 4) {
-            Text("Private by default")
-                .font(Theme.Typography.ui(11.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.textPrimary)
-            
-            Text("Nothing about you or your displays ever leaves this Mac — no account, no tracking, no telemetry.")
-                .font(Theme.Typography.ui(11))
-                .foregroundStyle(Theme.Color.textMuted)
-                .multilineTextAlignment(.center)
-                .lineSpacing(2.5)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 18)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity)
-        .glassSurface(.frost, cornerRadius: Theme.Radius.card)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                .strokeBorder(Theme.Color.line.opacity(0.6), lineWidth: 0.5)
-        )
     }
 
     // MARK: Helpers
@@ -520,8 +488,7 @@ private var manualDetail: some View {
         guard option != scheduleOption else { return }
         
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        // ModeControl strips animations from its tap events to protect its own layout.
-        // We break out of its transaction synchronously so our UI updates can crossfade.
+        // Keep the detail crossfade independent from the glyph's one-shot selection effect.
         DispatchQueue.main.async {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
                 scheduleOption = option

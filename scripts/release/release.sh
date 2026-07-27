@@ -54,6 +54,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # ---- PLACEHOLDERS ----
 APP_DISPLAY_NAME="Abendrot"
 GH_REPO="matthewrball/abendrot"
+EXPECTED_BUNDLE_ID="app.abendrot.Abendrot"
 APPCAST_PATH="${APPCAST_PATH:-$REPO_ROOT/appcast.xml}"  # hosted via GitHub (raw)
 RELEASE_SCRATCH="${RELEASE_SCRATCH:-$REPO_ROOT/release-scratch}"
 DOWNLOAD_URL_BASE="https://github.com/${GH_REPO}/releases/download"
@@ -93,6 +94,7 @@ PLIST="$APP/Contents/Info.plist"
 [ -f "$PLIST" ] || { echo "release: Info.plist missing in app bundle." >&2; exit 3; }
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw "$PLIST" 2>/dev/null || echo '')"
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw "$PLIST" 2>/dev/null || echo '')"
+BUNDLE_ID="$(/usr/bin/plutil -extract CFBundleIdentifier raw "$PLIST" 2>/dev/null || echo '')"
 APP_EXECUTABLE="$(/usr/bin/plutil -extract CFBundleExecutable raw "$PLIST" 2>/dev/null || echo '')"
 [ -n "$VERSION" ] || { echo "release: could not read CFBundleShortVersionString." >&2; exit 3; }
 [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] \
@@ -103,6 +105,11 @@ case "$BUILD" in
 esac
 [ "$BUILD" -gt 0 ] 2>/dev/null \
   || { echo "release: CFBundleVersion must be greater than zero, got '$BUILD'." >&2; exit 3; }
+[ "$BUNDLE_ID" = "$EXPECTED_BUNDLE_ID" ] || {
+  echo "release: ABORT — CFBundleIdentifier must remain $EXPECTED_BUNDLE_ID." >&2
+  echo "         Changing it would strand existing user preferences and statistics." >&2
+  exit 3
+}
 [ -n "$APP_EXECUTABLE" ] || { echo "release: could not read CFBundleExecutable." >&2; exit 3; }
 APP_BINARY="$APP/Contents/MacOS/$APP_EXECUTABLE"
 [ -x "$APP_BINARY" ] || { echo "release: app executable missing at '$APP_BINARY'." >&2; exit 3; }
@@ -330,11 +337,13 @@ embed_cli_helper() {
     esac
     triple="${arch}-apple-macosx26.0"
     bin_dir="$(swift build -c release --package-path "$CLI_PKG" \
+      --only-use-versions-from-resolved-file \
       --scratch-path "$cli_build_root" --triple "$triple" --show-bin-path)" || {
         echo "release: ABORT — could not resolve CLI build path for '$arch'." >&2
         exit 5
       }
     swift build -c release --package-path "$CLI_PKG" \
+      --only-use-versions-from-resolved-file \
       --scratch-path "$cli_build_root" --triple "$triple" || {
         echo "release: ABORT — CLI helper build failed for '$arch'." >&2
         exit 5

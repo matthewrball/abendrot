@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - SettingsTab
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, displays, advanced, privacy, statistics, updates, about
+    case general, displays, advanced, statistics, updates, about
     var id: String { rawValue }
 
     var title: String {
@@ -11,7 +11,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .displays: return "Displays"
         case .advanced: return "Advanced"
-        case .privacy: return "Privacy"
         case .statistics: return "Statistics"
         case .updates: return "Updates"
         case .about: return "About"
@@ -23,7 +22,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .displays: return "display.2"
         case .advanced: return "slider.horizontal.3"
-        case .privacy: return "hand.raised"
         case .statistics: return "chart.bar.xaxis"
         case .updates: return "arrow.down.circle"
         case .about: return "info.circle"
@@ -33,8 +31,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 // MARK: - SettingsView
 //
-// The Settings window body (tabs: General / Schedule / Displays / Shortcuts
-// / Advanced / Privacy / About). Hosted by the programmatic `SettingsWindowController`
+// The Settings window body (tabs: General / Displays / Advanced / Statistics
+// / Updates / About). Hosted by the programmatic `SettingsWindowController`
 // so the "frosted ember" glass chrome actually renders (a SwiftUI `Window` scene
 // resets `.fullSizeContentView`; see reference doc). Settings double as onboarding +
 // trust-builder (CleanShot X pattern).
@@ -134,7 +132,6 @@ struct SettingsView: View {
         case .general: GeneralTab(model: model)
         case .displays: DisplaysTab(model: model)
         case .advanced: AdvancedTab(model: model)
-        case .privacy: PrivacyTab(model: model)
         case .statistics: StatisticsTab(model: model)
         case .updates: UpdatesTab(model: model)
         case .about: AboutTab()
@@ -200,7 +197,7 @@ private struct SettingsSidebarButton: View {
 
 // MARK: - Tab header
 
-// Internal (not private) so the per-tab files (General/Displays/Advanced/Privacy/Statistics) share it.
+// Internal (not private) so the per-tab files share it.
 struct TabHeader: View {
     let title: String
     let subtitle: String

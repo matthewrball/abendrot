@@ -28,6 +28,13 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
         }
     }
 
+    var symbolName: String {
+        switch self {
+        case .followSunset: return "sunset"
+        case .alwaysOn: return "sun.max"
+        }
+    }
+
     /// Classify a contract `ScheduleMode` into a UI option. There is no "Off" option — the master
     /// "Warm my displays" toggle owns on/off — so a (UI-less) engine `.off` maps to the Sunset
     /// default. The manual "Schedule" (custom-time) option was removed; the engine's `.custom` case
@@ -49,26 +56,20 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - ModeControl (A3 "Living Glyph" — chosen finalist)
+// MARK: - ModeControl
 //
 // The Schedule either-or (Sunset · Manual) as a larger Liquid-Glass segmented control whose
-// SELECTED segment's glyph comes alive once and then HOLDS: the Sunset sun dips below a horizon;
-// the Always-on sun blooms its rays and settles (no perpetual motion). The selection slides on the
-// brand's warm ease and the chosen segment wears the sunset gradient as lit glass.
-//
-// Design source: brand/explorations/schedule-toggle/finalist-a3-living-glyph.html (variation A3.1).
-// Picked over the rotary-dial finalist for legibility + nativeness. `BrandSegmentedControl` (below)
-// is retained unchanged for the app's other small pickers. `compact` gives the popover a tighter
-// version while Settings / Onboarding use the full showcase size.
+// selected native glyph responds once: Sunset settles downward; Manual's rays rotate. There is no
+// perpetual motion, and Reduce Motion keeps the state change instant. `compact` gives the popover a
+// tighter version while Settings and onboarding use the full size.
 struct ModeControl: View {
     @Binding var selection: ScheduleModeOption
     var compact: Bool = false
-    var animatesSelection: Bool = true
-    var onChange: (ScheduleModeOption) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var pillNamespace
     @State private var hovered: ScheduleModeOption?
+    @State private var sunsetGlyphTrigger = 0
+    @State private var manualGlyphTrigger = 0
 
     // Sizing: full (Settings/Onboarding) vs compact (popover, stays glanceable).
     private var glyphSize: CGFloat { compact ? 30 : 42 }
@@ -85,15 +86,18 @@ struct ModeControl: View {
             segment(.alwaysOn)
         }
         .padding(trackPad)
-        // Native Liquid Glass track (frosted ember, the macOS-Tahoe material) + a hairline rim.
-        .glassSurface(.frost, cornerRadius: trackRadius)
+        .background(modeTrack)
         .overlay(
             RoundedRectangle(cornerRadius: trackRadius, style: .continuous)
                 .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
         )
         .animation(selectionAnimation, value: selection)
-        .transaction { transaction in
-            if !animatesSelection { transaction.animation = nil }
+        .onChange(of: selection) { _, option in
+            guard !reduceMotion else { return }
+            switch option {
+            case .followSunset: sunsetGlyphTrigger &+= 1
+            case .alwaysOn: manualGlyphTrigger &+= 1
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Schedule mode")
@@ -109,9 +113,23 @@ struct ModeControl: View {
             select(option)
         } label: {
             VStack(spacing: stackGap) {
-                ModeGlyph(size: glyphSize, ink: ink, option: option,
-                          isSelected: isSelected, reduceMotion: reduceMotion || !animatesSelection)
+                Image(systemName: option.symbolName + (isSelected ? ".fill" : ""))
+                    .font(.system(size: compact ? 23 : 31, weight: .semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(ink)
                     .frame(width: glyphSize, height: glyphSize)
+                    .symbolEffect(
+                        .bounce.down.wholeSymbol,
+                        options: .nonRepeating.speed(1.4),
+                        value: option == .followSunset ? sunsetGlyphTrigger : 0
+                    )
+                    .symbolEffect(
+                        .rotate.clockwise.byLayer,
+                        options: .nonRepeating.speed(1.4),
+                        value: option == .alwaysOn ? manualGlyphTrigger : 0
+                    )
+                    .symbolEffectsRemoved(reduceMotion)
+                    .accessibilityHidden(true)
                 Text(option.label)
                     // Keep label metrics stable; the moving pill and ink color carry selection.
                     .font(Theme.Typography.ui(labelSize, weight: .semibold))
@@ -124,11 +142,7 @@ struct ModeControl: View {
             .frame(maxWidth: .infinity)
             .background {
                 if isSelected {
-                    if animatesSelection {
-                        selectedPill.matchedGeometryEffect(id: "modePill", in: pillNamespace)
-                    } else {
-                        selectedPill
-                    }
+                    selectedPill
                 } else if hovered == option {
                     // Native hover highlight on the unselected segment.
                     RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
@@ -151,7 +165,6 @@ struct ModeControl: View {
         // Fires only on a real change → the glyph flourish never re-fires on no-op taps (audit fix).
         guard option != selection else { return }
         selection = option
-        onChange(option)
     }
 
     // MARK: Brand surfaces
@@ -176,106 +189,23 @@ struct ModeControl: View {
             .shadow(color: Theme.Color.accent.opacity(0.30), radius: 14)   // soft ember glow
     }
 
+    private var modeTrack: some View {
+        RoundedRectangle(cornerRadius: trackRadius, style: .continuous)
+            .fill(Theme.Color.line.opacity(0.42))
+            .overlay {
+                RoundedRectangle(cornerRadius: trackRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.055), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+    }
+
     private var selectionAnimation: Animation? {
-        animatesSelection ? Theme.Motion.warm(reduceMotion: reduceMotion) : nil
-    }
-}
-
-// MARK: - ModeGlyph
-//
-// The living sun glyph for one segment, drawn proportionally to `size` (so compact + full share one
-// recipe). The animation is a ONE-SHOT keyed off `isSelected` that settles via springs — never loops:
-// · Sunset → the sun disc dips below a clipped horizon; faint dusk rays fade in.
-// · Always → the eight rays bloom out (staggered scale-in) and the core gives one settle pulse.
-// Under Reduce Motion every spring resolves instantly (nil animation), so state is correct with no motion.
-private struct ModeGlyph: View {
-    let size: CGFloat
-    let ink: Color
-    let option: ScheduleModeOption
-    let isSelected: Bool
-    let reduceMotion: Bool
-
-    /// Unit scale from the canonical 46pt design grid.
-    private var s: CGFloat { size / 46 }
-
-    var body: some View {
-        ZStack {
-            switch option {
-            case .followSunset: sunsetGlyph
-            case .alwaysOn:     alwaysGlyph
-            }
-        }
-        .frame(width: size, height: size)
-    }
-
-    // MARK: Sunset — sun dips below the horizon (one-shot)
-
-    private var sunsetGlyph: some View {
-        let discY: CGFloat = isSelected ? 30 * s : 19 * s   // dipped vs. riding high
-        return ZStack {
-            // faint dusk rays above the dipping sun (fade in when chosen)
-            ZStack {
-                Capsule().fill(ink).frame(width: 2.4 * s, height: 3.6 * s).offset(y: -13.5 * s)
-                Capsule().fill(ink).frame(width: 2.4 * s, height: 3.4 * s).offset(y: -13.5 * s)
-                    .rotationEffect(.degrees(-42))
-                Capsule().fill(ink).frame(width: 2.4 * s, height: 3.4 * s).offset(y: -13.5 * s)
-                    .rotationEffect(.degrees(42))
-            }
-            .opacity(isSelected ? 0.5 : 0)
-            .animation(glyphAnim(.easeWarm), value: isSelected)
-
-            // the sun disc, clipped to the sky (above the horizon) so it can set
-            Circle().fill(ink)
-                .frame(width: 16.8 * s, height: 16.8 * s)
-                .position(x: size / 2, y: discY)
-                .animation(glyphAnim(.dip), value: isSelected)
-                .mask(
-                    Rectangle()
-                        .frame(width: size, height: 31 * s)
-                        .position(x: size / 2, y: 31 * s / 2)
-                )
-
-            // horizon (a bright line + a fainter ground line)
-            Capsule().fill(ink).frame(width: 36 * s, height: 2.6 * s)
-                .position(x: size / 2, y: 31 * s)
-            Capsule().fill(ink).frame(width: 24 * s, height: 2.4 * s).opacity(0.42)
-                .position(x: size / 2, y: 37 * s)
-        }
-    }
-
-    // MARK: Manual — rays bloom and settle (one-shot)
-
-    private var alwaysGlyph: some View {
-        ZStack {
-            ForEach(0..<8, id: \.self) { i in
-                Capsule().fill(ink)
-                    .frame(width: 2.6 * s, height: 6 * s)
-                    .offset(y: -13.5 * s)
-                    .frame(width: size, height: size)          // expand bounds → anchor at glyph centre
-                    .rotationEffect(.degrees(Double(i) * 45))
-                    .scaleEffect(isSelected ? 1 : 0.62, anchor: .center)
-                    .opacity(isSelected ? 1 : 0.4)
-                    .animation(glyphAnim(.bloom, delay: Double(i) * 0.025), value: isSelected)
-            }
-            Circle().fill(ink)
-                .frame(width: 16 * s, height: 16 * s)
-                .scaleEffect(isSelected ? 1 : 0.9)
-                .animation(glyphAnim(.settle), value: isSelected)
-        }
-    }
-
-    // MARK: Motion (one-shot, settles; nil under Reduce Motion)
-
-    private enum GlyphMove { case dip, bloom, settle, easeWarm }
-
-    private func glyphAnim(_ move: GlyphMove, delay: Double = 0) -> Animation? {
-        guard !reduceMotion else { return nil }
-        switch move {
-        case .dip:      return .spring(response: 0.44, dampingFraction: 0.74).delay(delay)
-        case .bloom:    return .spring(response: 0.34, dampingFraction: 0.62).delay(delay)
-        case .settle:   return .spring(response: 0.40, dampingFraction: 0.64).delay(delay)
-        case .easeWarm: return Theme.Motion.warm.delay(delay)
-        }
+        Theme.Motion.warm(reduceMotion: reduceMotion)
     }
 }
 

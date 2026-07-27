@@ -69,8 +69,8 @@ public actor WarmthEngine {
 
     /// Low-frequency timer that advances the Sunset-mode ramp. Night Shift change / wake / hotplug
     /// all trigger `reapply`, but with Night Shift OFF (the common case for an app that replaces it)
-    /// there are no notifications, so the solar ramp needs its own tick. `reapply` writes to a
-    /// backend only when the resolved warmth actually changes, so an idle tick costs ~nothing.
+    /// there are no notifications, so time-varying schedules need their own tick. Static schedules
+    /// return before touching a backend.
     private var rampTask: Task<Void, Never>?
     private let rampTickInterval: Duration = .seconds(60)
 
@@ -645,6 +645,13 @@ public actor WarmthEngine {
         publish()
     }
 
+    #if DEBUG
+    /// Test seam for the live minute ticker.
+    func simulateRampTick() async {
+        await tickRamp()
+    }
+    #endif
+
     // MARK: ── Sunset ramp ticker ───────────────────────────────────────────────
 
     /// Spawn the low-frequency loop that re-evaluates the schedule so the Sunset ramp advances.
@@ -663,9 +670,15 @@ public actor WarmthEngine {
     /// One ramp tick: re-apply so the solar-ramped warmth moves, publishing only when the observable
     /// state actually changed. The per-minute applied-warmth nudges aren't reflected in `WarmthState`
     /// (so a mid-ramp tick is a silent backend update); activation edges flip `isScheduleActiveNow`
-    /// and do publish. Cheap: gated on `isEnabled`, and `reapply` is draw-on-change.
+    /// and do publish. Static Always-on/Off schedules do not need time-based re-evaluation.
     private func tickRamp() async {
         guard box.value.isEnabled else { return }
+        switch box.value.scheduleMode {
+        case .followSystemNightShift, .solar, .custom:
+            break
+        case .alwaysOn, .off:
+            return
+        }
         let before = box.value
         await reapply()
         if box.value != before { publish() }

@@ -61,8 +61,7 @@ struct GeneralTab: View {
                             selection: Binding(
                                 get: { ScheduleModeOption(model.state.scheduleMode) },
                                 set: { model.setScheduleMode($0.toScheduleMode()) }
-                            ),
-                            onChange: { _ in }
+                            )
                         )
                         // Shared `ScheduleModeOption.subtitle` — the same one-liner as the popover.
                         Text(ScheduleModeOption(model.state.scheduleMode).subtitle)
@@ -77,7 +76,7 @@ struct GeneralTab: View {
                 if model.state.isEnabled && ScheduleModeOption(model.state.scheduleMode) == .followSunset {
                     VStack(alignment: .leading, spacing: 7) {
                         SectionLabel("Location")
-                        Text("Used to estimate your sunset. No location permission required.")
+                        Text("Used to estimate your sunset.")
                             .font(Theme.Typography.ui(11.5))
                             .foregroundStyle(Theme.Color.textMuted)
                         CityAutocomplete(model: model, opensUpward: true)

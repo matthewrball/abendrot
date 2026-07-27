@@ -35,7 +35,7 @@
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>INJECTED_AT_RELEASE_PUBLIC_ED_KEY_PLACEHOLDER</string>
+	<string>HW5DAqjbnmoAtvM/DVUj9iFHNC9YSjFn2vNkZguu6iM=</string>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 	<key>SUVerifyUpdateBeforeExtraction</key>

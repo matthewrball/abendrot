@@ -9,8 +9,6 @@ import WarmthKit
 /// the circadian research (Brown et al. 2022; CIE S 026:2018).
 struct CozyModeControl: View {
     @Bindable var model: AppModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showsTooltip = false
     /// Hide the "Maximum warmth" section header (onboarding shows the card bare, under its own title).
     var showsSectionLabel: Bool = true
     /// Hide the when-on science caption (onboarding keeps it compact; the detail lives in Settings).
@@ -61,34 +59,21 @@ struct CozyModeControl: View {
                     .transition(.opacity)
             }
         }
-        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: isCozy)
     }
 
     private var card: some View {
         HStack(spacing: 14) {
-            SparkingFlameIcon(isCozy: isCozy)
+            Image(systemName: isCozy ? "flame.fill" : "flame")
+                .font(.system(size: 22, weight: .semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textMuted)
+                .frame(width: 28)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text("Cozy mode")
-                        .font(Theme.Typography.ui(14, weight: .semibold))
-                        .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.72) : Theme.Color.textFaint)
-                        .accessibilityHidden(true)
-                }
-                .onHover { showsTooltip = $0 }
-                .overlay(alignment: .bottomLeading) {
-                    if showsTooltip {
-                        AbendrotTooltipText(Self.tooltip, width: 180)
-                            .offset(y: -18)
-                            .transition(.scale(scale: 0.9, anchor: .bottomLeading).combined(with: .opacity))
-                            .zIndex(2)
-                    }
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showsTooltip)
+                Text("Cozy mode")
+                    .font(Theme.Typography.ui(14, weight: .semibold))
+                    .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
                 Text("The warmest setting.")
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.82) : Theme.Color.textMuted)
@@ -130,130 +115,22 @@ struct CozyModeControl: View {
         if enablesAtWarmest {
             // Onboarding: Cozy means "give me the coziest." Turning ON unlocks the deepest ember AND runs the
             // slider all the way to the warmest, so the screen blooms to the maximum instead of holding a
-            // mid-slider spot; OFF restores the everyday 1900K ceiling. Animated so the thumb glides to the end.
+            // mid-slider spot; OFF restores the everyday 1900K ceiling.
             model.playCozyFireSound(starting: !isCozy)
-            withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
-                if isCozy {
-                    model.setWarmestPoint(Kelvin.everydayWarmest)
-                } else {
-                    model.setWarmestPoint(Kelvin.warmestSupported)
-                    if mirrorsToSunsetMaximum {
-                        model.setSunsetMaximumWarmth(1.0)
-                    }
-                    model.setGlobalWarmth(1.0)
+            if isCozy {
+                model.setWarmestPoint(Kelvin.everydayWarmest)
+            } else {
+                model.setWarmestPoint(Kelvin.warmestSupported)
+                if mirrorsToSunsetMaximum {
+                    model.setSunsetMaximumWarmth(1.0)
                 }
+                model.setGlobalWarmth(1.0)
             }
             return
         }
-        // Settings: the richer behaviour — preserve the user's warmth and just unlock headroom, animated.
+        // Settings: preserve the user's warmth and just unlock headroom.
         // The actual ceiling + warmth move lives in `model.setCozy`, the ONE path the CLI shares, so the
         // card, onboarding's "Looks right", and `abendrot cozy on|off` can never drift.
-        withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) {
-            model.setCozy(!isCozy)
-        }
+        model.setCozy(!isCozy)
     }
-}
-
-private struct SparkingFlameIcon: View {
-    var isCozy: Bool
-    
-    @State private var sparkTrigger = 0
-    
-    struct Spark: Identifiable {
-        let id: Int
-        let angle: Double
-        let distance: Double
-        let delay: Double
-    }
-    
-    let sparks: [Spark] = [
-        Spark(id: 0, angle: 105, distance: 16, delay: 0.0),
-        Spark(id: 1, angle: 90, distance: 22, delay: 0.05),
-        Spark(id: 2, angle: 75, distance: 16, delay: 0.1)
-    ]
-    
-    var body: some View {
-        ZStack {
-            // Sparks shooting out
-            ForEach(sparks) { spark in
-                Circle()
-                    .fill(Theme.Color.accentHighlight)
-                    .frame(width: 3.5, height: 3.5)
-                    .keyframeAnimator(initialValue: SparkAnimState(), trigger: sparkTrigger) { content, value in
-                        content
-                            .offset(x: value.travel * cos(spark.angle * .pi / 180),
-                                    y: -value.travel * sin(spark.angle * .pi / 180))
-                            .scaleEffect(value.scale)
-                            .opacity(value.opacity)
-                            .blur(radius: value.blur)
-                    } keyframes: { _ in
-                        KeyframeTrack(\.travel) {
-                            CubicKeyframe(0, duration: spark.delay)
-                            SpringKeyframe(spark.distance, duration: 0.5, spring: .smooth)
-                        }
-                        KeyframeTrack(\.scale) {
-                            CubicKeyframe(0, duration: spark.delay)
-                            CubicKeyframe(1.2, duration: 0.1)
-                            CubicKeyframe(0.0, duration: 0.4)
-                        }
-                        KeyframeTrack(\.opacity) {
-                            CubicKeyframe(0, duration: spark.delay)
-                            CubicKeyframe(1.0, duration: 0.1)
-                            CubicKeyframe(0.0, duration: 0.4)
-                        }
-                        KeyframeTrack(\.blur) {
-                            CubicKeyframe(0, duration: spark.delay)
-                            CubicKeyframe(0, duration: 0.2)
-                            CubicKeyframe(2.0, duration: 0.3)
-                        }
-                    }
-            }
-            
-            // The Flame itself
-            Image(systemName: isCozy ? "flame.fill" : "flame")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textMuted)
-                .contentTransition(.symbolEffect(.replace))
-                .keyframeAnimator(initialValue: FlameAnimState(scale: isCozy ? 1 : 0.9, glow: isCozy ? 0.55 : 0), trigger: sparkTrigger) { content, value in
-                    content
-                        .scaleEffect(value.scale)
-                        .shadow(color: Theme.Color.accentHighlight.opacity(value.glow), radius: value.glow * 15)
-                } keyframes: { _ in
-                    KeyframeTrack(\.scale) {
-                        if isCozy {
-                            SpringKeyframe(1.15, duration: 0.2, spring: .smooth)
-                            SpringKeyframe(1.0, duration: 0.4, spring: .smooth)
-                        } else {
-                            SpringKeyframe(0.9, duration: 0.3, spring: .smooth)
-                        }
-                    }
-                    KeyframeTrack(\.glow) {
-                        if isCozy {
-                            CubicKeyframe(1.0, duration: 0.2)
-                            CubicKeyframe(0.55, duration: 0.5)
-                        } else {
-                            CubicKeyframe(0.0, duration: 0.3)
-                        }
-                    }
-                }
-        }
-        .frame(width: 28)
-        .onChange(of: isCozy) { _, new in
-            if new {
-                sparkTrigger += 1
-            }
-        }
-    }
-}
-
-private struct SparkAnimState {
-    var travel: Double = 0
-    var scale: Double = 0
-    var opacity: Double = 0
-    var blur: Double = 0
-}
-
-private struct FlameAnimState {
-    var scale: Double = 0.9
-    var glow: Double = 0.0
 }

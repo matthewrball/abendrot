@@ -17,7 +17,7 @@ import SwiftUI
 // A singleton so re-opening About re-focuses the existing window. Uses
 // `AppActivationPolicy.enter()/leave()` so this `.accessory` agent app foregrounds
 // the window correctly and flips back to menu-bar-only when it closes. The window is
-// a fixed-size (460×560), non-resizable card — it's a brand showcase, not a workspace.
+// a fixed-size (660×400), non-resizable card — it's a brand showcase, not a workspace.
 @MainActor
 final class AboutWindowController: NSWindowController, NSWindowDelegate {
 
@@ -48,7 +48,7 @@ final class AboutWindowController: NSWindowController, NSWindowDelegate {
 
     private init(model: AppModel) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 660, height: 400),
             // `.fullSizeContentView` MUST be present at creation for the glass chrome. No `.resizable`:
             // a fixed card. `.miniaturizable` is omitted so the only traffic light is close (the panel
             // has nothing to minimise to in an agent app).
@@ -59,6 +59,8 @@ final class AboutWindowController: NSWindowController, NSWindowDelegate {
         window.title = "About Abendrot"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
         // The whole card is draggable — there are no drag-stealing controls here (unlike Settings'
         // WarmSlider), so let users grab it anywhere, the way a tidy About panel should feel.
         window.isMovableByWindowBackground = true
@@ -94,116 +96,117 @@ final class AboutWindowController: NSWindowController, NSWindowDelegate {
 
 // MARK: - AboutView
 //
-// The About card body. Centered composition (Amphetamine-style) — distinct from Settings'
-// left-aligned tab pages — so it reads as a brand "card", not a settings panel. Everything is
-// built from existing `Theme` tokens and the shared `AppIconView`; no hardcoded hex, no new
-// health/medical/sleep claims. The mission sentence is reused verbatim from Settings →
-// About; the only additions are factually-true product promises (MIT / free forever / no ads)
-// and the already-shipped live warmed-time stat.
+// A landscape brand plaque: identity on the left, product story on the right. Everything uses
+// existing theme tokens and shared components; the copy and warmed-time stat are unchanged.
 private struct AboutView: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                AboutHeader()
-                    .padding(.top, 52)
+        ZStack {
+            FrostBackground()
 
-                VersionLine()
-                    .padding(.top, 22)
+            HStack(spacing: 0) {
+                AboutBrandRail()
+                    .frame(width: 228)
 
-                MissionCopy()
-                    .padding(.top, 38)
-                    .padding(.horizontal, 40)
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.clear, Theme.Color.lineStrong, .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 0.5)
+                    .padding(.vertical, 24)
+                    .accessibilityHidden(true)
 
-                WarmedTimeStat(model: model)
-                    .padding(.top, 38)
-                    .padding(.horizontal, 36)
-
-                BylineLink(fontSize: 11.5)
-                    .padding(.top, 34)
-
-                AboutFooterLinks()
-                    .padding(.top, 24)
-                    .padding(.bottom, 48)
+                ScrollView {
+                    AboutContent(model: model)
+                        .frame(minHeight: 400)
+                }
+                .scrollIndicators(.hidden)
             }
-            .frame(maxWidth: .infinity)
-            // One signature moment: the card eases up + fades in on open (Reduce-Motion-aware), the
-            // same "emotional pacing, not spectacle" the rest of the app follows.
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 10)
         }
-        .scrollIndicators(.hidden)
-        .frame(width: 460, height: 640)
-        // Persistent frosted-ember glass, full-bleed to the window edges (cornerRadius 0 — the window
-        // itself supplies the rounded corners). The sunset halo behind the icon lives in AboutHeader.
-        .background(FrostBackground())
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 8)
+        .frame(width: 660, height: 400)
         .onAppear {
             guard !reduceMotion else { appeared = true; return }
-            withAnimation(.smooth(duration: 0.55)) { appeared = true }
+            withAnimation(.smooth(duration: 0.45)) { appeared = true }
         }
     }
 }
 
-// MARK: - Header (icon + wordmark, with a sunset halo)
+// MARK: - Brand rail
 
-/// The large app icon over a soft radial sunset wash, with the serif wordmark beneath. The halo is the
-/// card's single decorative flourish — it echoes the icon's own glow and ties the panel to the brand.
-private struct AboutHeader: View {
+private struct AboutBrandRail: View {
     var body: some View {
-        VStack(spacing: 16) {
-            AppIconView()
-                .frame(width: 72, height: 72)
-                .background {
-                    // A soft sunset glow blooming out from behind the icon. Radial so it fades to nothing
-                    // before the card edges — a wash, not a hard disc.
-                    RadialGradient(
-                        colors: [
-                            Theme.Color.accent.opacity(0.34),
-                            Theme.Color.accent.opacity(0.10),
-                            .clear
-                        ],
-                        center: .center,
-                        startRadius: 6,
-                        endRadius: 92
-                    )
-                    .frame(width: 184, height: 184)
-                    .blur(radius: 10)
-                    .accessibilityHidden(true)
-                }
-                .shadow(color: Theme.Color.accentPress.opacity(0.28), radius: 18, y: 8)
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Theme.Color.accentDeep.opacity(0.18),
+                    Theme.Color.accent.opacity(0.05),
+                    .clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .accessibilityHidden(true)
 
-            Text("Abendrot")
-                .font(Theme.Typography.serif(30))
-                .foregroundStyle(Theme.Color.textPrimary)
+            VStack(alignment: .leading, spacing: 0) {
+                AppIconView()
+                    .frame(width: 88, height: 88)
+                    .background {
+                        RadialGradient(
+                            colors: [
+                                Theme.Color.accent.opacity(0.36),
+                                Theme.Color.accent.opacity(0.10),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 8,
+                            endRadius: 92
+                        )
+                        .frame(width: 184, height: 184)
+                        .blur(radius: 10)
+                        .accessibilityHidden(true)
+                    }
+                    .shadow(color: Theme.Color.accentPress.opacity(0.28), radius: 18, y: 8)
 
-            Text("Warm your screen with the evening.")
-                .font(Theme.Typography.serif(13.5, weight: .regular))
-                .italic()
-                .foregroundStyle(Theme.Color.textMuted)
+                Text("Abendrot")
+                    .font(Theme.Typography.serif(31))
+                    .foregroundStyle(Theme.Color.textPrimary)
+                    .padding(.top, 14)
+
+                VersionLine()
+                    .padding(.top, 18)
+
+                Spacer()
+            }
+            .padding(.top, 54)
+            .padding(.horizontal, 30)
+            .padding(.bottom, 28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity)
+        .clipped()
     }
 }
 
 // MARK: - Version + copyright
 
-/// "Version 0.1.0 (1)" + "© 2026 Matthew Ball", read live from the bundle. Faint, monospaced-digit, so
-/// the build numbers sit calmly. Reads `CFBundleShortVersionString` / `CFBundleVersion`; falls back to
-/// sensible placeholders if the keys are somehow absent (never crashes the panel).
 private struct VersionLine: View {
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(versionText)
-                .font(Theme.Typography.ui(11.5, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.textMuted)
             Text("© 2026 Matthew Ball")
-                .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textFaint)
         }
+        .font(Theme.Typography.ui(11, weight: .medium))
     }
 
     private var versionText: String {
@@ -214,57 +217,87 @@ private struct VersionLine: View {
     }
 }
 
-// MARK: - Mission + the open-source promise
+// MARK: - Product story
 
-/// The reused, mission sentence (verbatim from Settings → About) plus the factually-true
-/// "free & open source forever" promise. Centered, tasteful line-length. No new health claims.
-private struct MissionCopy: View {
+private struct AboutContent: View {
+    @Bindable var model: AppModel
+
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 0) {
+            Capsule()
+                .fill(Theme.Gradient.sunsetHorizontal)
+                .frame(width: 36, height: 2)
+                .accessibilityHidden(true)
+
+            Text("Warm your screen\nwith the evening.")
+                .font(Theme.Typography.serif(25))
+                .foregroundStyle(Theme.Color.textPrimary)
+                .lineSpacing(1)
+                .padding(.top, 12)
+
             Text("Abendrot warms your screen with the evening — on every display, built-in and external — so your screen gives off less blue light as the day winds down. It runs entirely on your Mac: no account, no telemetry.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
-                .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 22)
 
-            // The promise line — every word here is true: Abendrot is MIT-licensed and free forever.
             Text("Free and open source, forever. No ads, no in-app purchases, no paywall.")
                 .font(Theme.Typography.ui(12, weight: .medium))
                 .foregroundStyle(Theme.Color.accentHighlight)
-                .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
+
+            Spacer(minLength: 18)
+
+            WarmedTimeStat(model: model)
+
+            HStack(alignment: .center) {
+                BylineLink(fontSize: 11)
+                Spacer(minLength: 18)
+                AboutFooterLinks()
+            }
+            .padding(.top, 15)
         }
+        .padding(.top, 42)
+        .padding(.horizontal, 34)
+        .padding(.bottom, 27)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
 // MARK: - Live warmed-time stat
 
-/// "Abendrot has warmed your Mac for 2d 17h 41m 46s" — the live total from `AppModel.totalWarmedSeconds`,
-/// ticking once a second via `TimelineView` while the window is open. A divider above sets it apart as a
-/// quiet, personal footnote (Amphetamine surfaces a comparable lifetime stat). Reuses the exact duration
-/// formatting shipped in Settings → Statistics so the two never drift.
 private struct WarmedTimeStat: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        VStack(spacing: 18) {
-            DividerLine()
-                .padding(.horizontal, 24)
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            HStack(alignment: .center, spacing: 16) {
+                Text("Abendrot has warmed your Mac for")
+                    .font(Theme.Typography.ui(11))
+                    .foregroundStyle(Theme.Color.textMuted)
 
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                VStack(spacing: 6) {
-                    Text("Abendrot has warmed your Mac for")
-                        .font(Theme.Typography.ui(11))
-                        .foregroundStyle(Theme.Color.textMuted)
-                    Text(model.warmedDurationString)
-                        .font(Theme.Typography.serif(20))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.Color.accentHighlight)
-                        .contentTransition(.numericText())
-                }
+                Spacer(minLength: 8)
+
+                Text(model.warmedDurationString)
+                    .font(Theme.Typography.serif(25))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Gradient.sunsetHorizontal)
+                    .shadow(color: Theme.Color.accent.opacity(0.18), radius: 8)
+                    .contentTransition(.numericText())
             }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                    .fill(Theme.Color.accentDeep.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                    .strokeBorder(Theme.Color.line.opacity(0.65), lineWidth: 0.5)
+            )
         }
         .frame(maxWidth: .infinity)
     }
@@ -272,26 +305,25 @@ private struct WarmedTimeStat: View {
 
 // MARK: - Footer link row
 
-/// On-brand links in a glass-pill row: abendrot.app + GitHub (the bundled `github` mark asset).
 private struct AboutFooterLinks: View {
     var body: some View {
-        HStack(spacing: 10) {
-            AboutPillLink(
+        HStack(spacing: 20) {
+            AboutLink(
                 title: "abendrot.app",
                 icon: .symbol("globe"),
-                url: "https://abendrot.app"
+                url: "https://abendrot.app",
+                hint: "Opens the Abendrot website in your browser"
             )
-            AboutPillLink(
+            AboutLink(
                 title: "GitHub",
                 icon: .asset("github"),
-                url: "https://github.com/matthewrball/abendrot"
+                url: "https://github.com/matthewrball/abendrot",
+                hint: "Opens the GitHub repository in your browser"
             )
         }
-        .padding(.horizontal, 28)
     }
 }
 
-/// How a pill link draws its leading icon: a bundled image asset or an SF Symbol.
 private enum AboutLinkIcon {
     case asset(String)
     case symbol(String)
@@ -312,13 +344,11 @@ private enum AboutLinkIcon {
     }
 }
 
-/// A footer action: an icon + underlined accent label inside a frosted-glass pill that brightens and
-/// lifts a touch on hover, with a link cursor. The glass pill is the on-brand upgrade over Settings'
-/// bare `AboutLink` (which suits an inline page); here the links are the card's primary call to action.
-private struct AboutPillLink: View {
+private struct AboutLink: View {
     let title: String
     let icon: AboutLinkIcon
     let url: String
+    let hint: String
 
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -327,26 +357,19 @@ private struct AboutPillLink: View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 7) {
                 icon.view()
-                Text(title).underline()
-                    .font(Theme.Typography.ui(12, weight: .medium))
+                    .foregroundStyle(Theme.Color.accent)
+                Text(title)
+                    .font(Theme.Typography.ui(11.5, weight: .medium))
+                    .foregroundStyle(hovering ? Theme.Color.accentHighlight : Theme.Color.textMuted)
             }
-            .foregroundStyle(Theme.Color.accent)
-            .opacity(hovering ? 1 : 0.9)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
-            .glassSurface(.frost, cornerRadius: Theme.Radius.pill)
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(Theme.Color.line.opacity(hovering ? 0.85 : 0.5), lineWidth: 0.5)
-            )
-            .clipShape(Capsule(style: .continuous))
-            .offset(y: hovering ? -1 : 0)
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: hovering)
         }
         .buttonStyle(.plain)
         .pointerStyle(.link)
         .onHover { hovering = $0 }
         .accessibilityLabel(title)
+        .accessibilityHint(hint)
+        .help(hint)
     }
 }
 
