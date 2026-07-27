@@ -83,8 +83,6 @@ Every command supports `--json`, with scriptable exit codes. See [`AGENTS.md`](A
 - [Research and supporting references](https://abendrot.app/#science)
 - [How Abendrot compares with Night Shift and f.lux](https://abendrot.app/#vs)
 
-These pages are maintained on abendrot.app so claims, citations, and comparison data stay current in one place.
-
 > General wellness, not medical advice. Abendrot reduces evening blue-light exposure; it is not a medical device and makes no claim to treat or improve any condition.
 
 ## Tech
