@@ -6,6 +6,7 @@
 
 <p align="center">
   <strong>The macOS app for your circadian rhythm</strong><br>
+  <br>
   Grounded in peer-reviewed light research, Abendrot warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.<sup><a href="https://abendrot.app/#references">[1,4-6,8]</a></sup><br>
   <strong>Free and open source, forever. No ads, no in-app purchases, no paywall.</strong>
 </p>
