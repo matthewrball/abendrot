@@ -7,8 +7,8 @@
 <p align="center">
   <strong>The macOS app for your circadian rhythm</strong><br>
   <br>
-  Grounded in peer-reviewed light research, Abendrot warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.<sup><a href="https://abendrot.app/#references">[1,4-6,8]</a></sup><br>
-  <strong>Free and open source, forever. No ads, no in-app purchases, no paywall.</strong>
+  Grounded in peer-reviewed light research, Abendrot warms your displays around your local sunset.<sup><a href="https://abendrot.app/#references">[1,4-6,8]</a></sup><br>
+  <strong>Free and open source. No ads, no in-app purchases, no paywall.</strong>
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
 
 ---
 
-**Abendrot** is the f.lux / Night Shift successor built to do the thing the incumbents quietly fail at: reliably warm **external monitors** and the **buttonless Apple displays** — Studio Display, Pro Display XDR, LG UltraFine — and keep working on the newest Apple Silicon Macs, where the classic gamma trick silently stops warming. Without tracking you.
+**Abendrot** is a native macOS menu-bar app that warms each display using the methods available on that Mac. When direct display warming is unavailable, it can fall back to a screen tint.
 
 ## Install
 
@@ -48,23 +48,21 @@ Requires macOS 26 "Tahoe" or later. Universal for Apple Silicon and Intel.
 
 ## Why Abendrot
 
-- **Warmth that actually lands on every display.** A layered engine warms each display with the best true-warming method available — and **tells you which one each display is using**, never a silent no-op.
-- **Reveal True Color.** Hold a global hotkey and warmth lifts across every display for color-critical work; release and it eases back. Built for designers and photographers.
+- **Per-display warming.** Abendrot detects the methods available for each display and offers direct warming or a screen tint as supported.
+- **Reveal True Color.** Hold a global hotkey to temporarily lift warmth; release it to restore warmth.
 - **Scriptable & AI-controllable.** An `abendrot` CLI drives the running app from your terminal — or from an AI assistant like Claude Code, Codex, or Cursor. Read live state as JSON, set warmth, trigger a reveal. *(see [Scripting & AI control](#scripting--ai-control))*
 - **Health is the reason; reliability is the proof.** Abendrot helps you keep warmer, lower-blue light in the evening, and links the circadian research instead of making medical claims.
-- **Genuinely trustworthy.** MIT-licensed, no telemetry, no account, runs entirely on your Mac. The anti-NightOwl.
+- **Local and auditable.** MIT-licensed, no telemetry, no account. Settings and usage statistics stay on your Mac; only update checks contact GitHub.
 
 ## How it works
 
-Warmth is applied per display by a layered engine that picks the best working method and reports it in the UI:
+Warmth is applied per display using the methods available to that display:
 
 | Layer | What it is | Role |
 |---|---|---|
-| **Gamma** | The system display transfer table (`CGSetDisplayTransferByTable`) | **The universal true-warm default** — works OS-level on built-in *and* external displays, including buttonless Apple displays. Chip/OS-aware: used where it genuinely warms, never where it would silently no-op. |
-| **Hardware (DDC)** | Real panel RGB-gain over DDC/CI | Opt-in per display — a hardware upgrade where a monitor exposes gain control. |
-| **Overlay** | A per-screen Metal veil | The universal floor — works on every display type, always available as a fallback. |
-
-Each connected display shows a small badge — `Gamma` / `Hardware` / `Overlay` — so you always know what's actually happening. The schedule follows your system Night Shift window when available, or a custom/manual schedule.
+| **Gamma** | The system display transfer table (`CGSetDisplayTransferByTable`) | Used when Abendrot identifies gamma warming as supported. |
+| **Hardware (DDC)** | Panel RGB-gain over DDC/CI | Opt-in on compatible external monitors. |
+| **Overlay** | A per-screen Metal veil | Screen-tint fallback when direct display warming is unavailable or disabled. |
 
 ## Scripting & AI control
 
@@ -107,7 +105,7 @@ Issues and pull requests are welcome — bug reports from real display setups ar
 
 ## License
 
-[MIT](LICENSE) © Matthew Ball. Free forever — never behind a paywall. If Abendrot helps your evenings, you can support its maintenance via GitHub Sponsors.
+[MIT](LICENSE) © Matthew Ball. Free and open source. If Abendrot helps your evenings, you can support its maintenance via GitHub Sponsors.
 
 ---
 
