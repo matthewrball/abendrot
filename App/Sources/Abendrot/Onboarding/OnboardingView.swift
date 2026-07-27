@@ -26,11 +26,11 @@ enum OnboardingStep: Int, CaseIterable {
 
 enum OnboardingLayout {
     static let contentWidth: CGFloat = 320
-    static let welcomeHeight: CGFloat = 375
+    static let welcomeHeight: CGFloat = 392
     static let scheduleSunsetHeight: CGFloat = 580
     static let scheduleHeaderHeight: CGFloat = 210
     static let warmthHeight: CGFloat = 500
-    static let allSetHeight: CGFloat = 350
+    static let allSetHeight: CGFloat = 353
     static let minimumContentHeight: CGFloat = 300
     static let maximumContentHeight: CGFloat = 665
 
@@ -167,7 +167,7 @@ struct OnboardingView: View {
             Text("Welcome to Abendrot")
                 .font(Theme.Typography.serif(20))
                 .foregroundStyle(Theme.Color.textPrimary)
-            Text("Abendrot warms your displays around sunset, limiting blue light exposure and supporting healthy evening light habits.\n\nFree to use.\nNo account, no tracking.")
+            Text("Grounded in peer-reviewed light research, Abendrot warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.\n\nFree to use.\nNo account, no tracking.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)

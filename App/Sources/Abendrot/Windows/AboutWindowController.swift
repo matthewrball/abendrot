@@ -108,19 +108,32 @@ private struct AboutView: View {
             FrostBackground()
 
             HStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        Theme.Color.accentDeep.opacity(0.18),
+                        Theme.Color.accent.opacity(0.05),
+                        .clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(width: 228)
+
+                Rectangle()
+                    .fill(Theme.Color.lineStrong)
+                    .frame(width: 0.5)
+
+                Spacer(minLength: 0)
+            }
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
+
+            HStack(spacing: 0) {
                 AboutBrandRail()
                     .frame(width: 228)
 
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.clear, Theme.Color.lineStrong, .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                Color.clear
                     .frame(width: 0.5)
-                    .padding(.vertical, 24)
                     .accessibilityHidden(true)
 
                 ScrollView {
@@ -144,53 +157,40 @@ private struct AboutView: View {
 
 private struct AboutBrandRail: View {
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Theme.Color.accentDeep.opacity(0.18),
-                    Theme.Color.accent.opacity(0.05),
-                    .clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 0) {
+            AppIconView()
+                .frame(width: 88, height: 88)
+                .background {
+                    RadialGradient(
+                        colors: [
+                            Theme.Color.accent.opacity(0.36),
+                            Theme.Color.accent.opacity(0.10),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 8,
+                        endRadius: 92
+                    )
+                    .frame(width: 184, height: 184)
+                    .blur(radius: 10)
+                    .accessibilityHidden(true)
+                }
+                .shadow(color: Theme.Color.accentPress.opacity(0.28), radius: 18, y: 8)
 
-            VStack(alignment: .leading, spacing: 0) {
-                AppIconView()
-                    .frame(width: 88, height: 88)
-                    .background {
-                        RadialGradient(
-                            colors: [
-                                Theme.Color.accent.opacity(0.36),
-                                Theme.Color.accent.opacity(0.10),
-                                .clear
-                            ],
-                            center: .center,
-                            startRadius: 8,
-                            endRadius: 92
-                        )
-                        .frame(width: 184, height: 184)
-                        .blur(radius: 10)
-                        .accessibilityHidden(true)
-                    }
-                    .shadow(color: Theme.Color.accentPress.opacity(0.28), radius: 18, y: 8)
+            Text("Abendrot")
+                .font(Theme.Typography.serif(31))
+                .foregroundStyle(Theme.Color.textPrimary)
+                .padding(.top, 14)
 
-                Text("Abendrot")
-                    .font(Theme.Typography.serif(31))
-                    .foregroundStyle(Theme.Color.textPrimary)
-                    .padding(.top, 14)
+            VersionLine()
+                .padding(.top, 18)
 
-                VersionLine()
-                    .padding(.top, 18)
-
-                Spacer()
-            }
-            .padding(.top, 54)
-            .padding(.horizontal, 30)
-            .padding(.bottom, 28)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Spacer()
         }
+        .padding(.top, 54)
+        .padding(.horizontal, 30)
+        .padding(.bottom, 28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .clipped()
     }
 }
@@ -224,23 +224,27 @@ private struct AboutContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Capsule()
-                .fill(Theme.Gradient.sunsetHorizontal)
-                .frame(width: 36, height: 2)
-                .accessibilityHidden(true)
-
-            Text("Warm your screen\nwith the evening.")
+            Text("The macOS app for\nyour circadian rhythm")
                 .font(Theme.Typography.serif(25))
                 .foregroundStyle(Theme.Color.textPrimary)
                 .lineSpacing(1)
-                .padding(.top, 12)
 
-            Text("Abendrot warms your screen with the evening — on every display, built-in and external — so your screen gives off less blue light as the day winds down. It runs entirely on your Mac: no account, no telemetry.")
+            Text("Grounded in peer-reviewed light research, Abendrot warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 22)
+
+            Link(destination: URL(string: "https://abendrot.app/#references")!) {
+                Label("Read the research", systemImage: "book.closed")
+                    .foregroundStyle(Theme.Color.accentHighlight)
+            }
+            .buttonStyle(.liquidGlass)
+            .pointerStyle(.link)
+            .accessibilityHint("Opens Abendrot’s research references in your browser")
+            .help("Opens Abendrot’s research references in your browser")
+            .padding(.top, 12)
 
             Text("Free and open source, forever. No ads, no in-app purchases, no paywall.")
                 .font(Theme.Typography.ui(12, weight: .medium))
