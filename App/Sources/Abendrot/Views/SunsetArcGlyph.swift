@@ -48,13 +48,13 @@ struct SunsetArcGlyph: View {
 // MARK: - Menu-bar status-item glyph
 //
 // The single most-seen surface. Resting = the original shipped sunset glyph (a filled half-sun on a
-// horizon). Warming keeps the EXACT same shape and same width — it just adds ember-amber + a soft glow
+// horizon). Enabled keeps the EXACT same shape and same width — it just adds ember-amber + a soft glow
 // + one reflection ripple on the water below (maintainer pick, 2026-06-21; same-width states → no jump).
 // • `template()` — resting/inactive. MONOCHROME template; `isTemplate = true` is CRITICAL:
 // macOS tints it to match light/dark bars. Without it the icon vanishes on light bars.
-// • `active()` — warming on. Identical sun + horizon, now ember-amber with a soft glow and the
+// • `active()` — Warm My Displays on. Identical sun + horizon, now ember-amber with a soft glow and the
 // reflection ripple added. Non-template so the amber/glow survive the menu bar's auto-tinting.
-// `AbendrotApp` swaps between them on `AppModel.isWarmingActive`.
+// `AbendrotApp` swaps between them on `AppModel.state.isEnabled`.
 enum MenuBarGlyph {
     /// Inactive (resting) glyph: the filled half-sun + horizon, as a tintable template image.
     static func template(pointSize: CGFloat = 18) -> NSImage {
@@ -63,7 +63,7 @@ enum MenuBarGlyph {
         return image
     }
 
-    /// Active (warming) glyph: identical shape/width, ember-amber + soft glow + the reflection ripple.
+    /// Active (enabled) glyph: identical shape/width, ember-amber + soft glow + the reflection ripple.
     static func active(pointSize: CGFloat = 18) -> NSImage {
         // ponytail: one amber (--accent #FD9228) that reads on both light & dark bars; deepen
         // per-appearance only if it ever looks washed-out on a light bar.

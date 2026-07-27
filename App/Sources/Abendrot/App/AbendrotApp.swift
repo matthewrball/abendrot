@@ -26,9 +26,9 @@ struct AbendrotApp: App {
         MenuBarExtra(isInserted: $model.showInMenuBar) {
             PopoverView(model: model)
         } label: {
-            // "One Ripple" sunset-arc glyph: a monochrome template at rest, ember-amber filled while
-            // warming (chosen 2026-06-20 from the menu-bar icon lab). Reactive via @Observable model.
-            Image(nsImage: model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template())
+            // "One Ripple" sunset-arc glyph: a monochrome template while disabled, ember-amber while
+            // Warm My Displays is enabled. Reactive via @Observable model.
+            Image(nsImage: model.state.isEnabled ? MenuBarGlyph.active() : MenuBarGlyph.template())
         }
         .menuBarExtraStyle(.window)
         // (First-run onboarding is presented imperatively from `AppModel.applyPersistedState()`, not via
