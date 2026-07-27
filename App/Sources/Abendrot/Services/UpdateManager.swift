@@ -19,9 +19,6 @@ final class UpdateManager: ObservableObject {
                 userDriverDelegate: nil
             )
             updaterController = controller
-            if controller.updater.automaticallyChecksForUpdates {
-                controller.updater.checkForUpdatesInBackground()
-            }
         } else {
             updaterController = nil
             updaterUnavailableReason = "Updates are unavailable in this build."

@@ -79,14 +79,22 @@ echo "PASS: Debug and release builds use validated Sparkle configuration"
 
 grep -qF 'SUEnableAutomaticChecks: true' "$PROJECT_SPEC"
 grep -qF 'SUAutomaticallyUpdate: true' "$PROJECT_SPEC"
+grep -qF 'SUScheduledCheckInterval: 86400' "$PROJECT_SPEC"
 [ "$(/usr/bin/plutil -extract SUEnableAutomaticChecks raw "$INFO_PLIST")" = "true" ]
 [ "$(/usr/bin/plutil -extract SUAutomaticallyUpdate raw "$INFO_PLIST")" = "true" ]
+[ "$(/usr/bin/plutil -extract SUScheduledCheckInterval raw "$INFO_PLIST")" = "86400" ]
 sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
-  | grep -qF 'controller.updater.automaticallyChecksForUpdates'
-sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
-  | grep -qF 'controller.updater.checkForUpdatesInBackground()'
+  | grep -qF 'startingUpdater: true'
+sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE_MANAGER" \
+  | grep -qF 'updater.automaticallyChecksForUpdates = enabled'
+sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE_MANAGER" \
+  | grep -qF 'updater.automaticallyDownloadsUpdates = enabled'
+if grep -qF 'checkForUpdatesInBackground()' "$UPDATE_MANAGER"; then
+  echo "Unexpected launch-time background update check in UpdateManager." >&2
+  exit 1
+fi
 grep -qF 'Text("Download updates automatically")' "$UPDATE_MANAGER"
-echo "PASS: Release builds check on launch and download updates by default with opt-out"
+echo "PASS: Release builds rely on Sparkle's scheduler and download updates by default with opt-out"
 
 grep -qF 'static let warmedSecondsKey = "stats.warmedSeconds"' "$APP_MODEL"
 grep -qF 'static let warmSunsetCountKey = "stats.warmSunsetCount"' "$APP_MODEL"
