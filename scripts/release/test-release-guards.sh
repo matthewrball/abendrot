@@ -67,11 +67,15 @@ APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
 UPDATE_MANAGER="$ROOT/App/Sources/Abendrot/Services/UpdateManager.swift"
 PROJECT_SPEC="$ROOT/project.yml"
 INFO_PLIST="$ROOT/App/Resources/Info.plist"
-sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
-  | grep -qF '#if DEBUG'
-sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
-  | grep -qF 'return false'
-echo "PASS: Debug builds cannot connect to the production Sparkle feed"
+if sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
+  | grep -qF '#if DEBUG'; then
+  echo "Debug builds must use the same validated Sparkle configuration." >&2
+  exit 1
+fi
+grep -qF 'localizedCaseInsensitiveContains("PLACEHOLDER")' "$UPDATE_MANAGER"
+grep -qF 'feedURLString == "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"' \
+  "$UPDATE_MANAGER"
+echo "PASS: Debug and release builds use validated Sparkle configuration"
 
 grep -qF 'SUEnableAutomaticChecks: true' "$PROJECT_SPEC"
 grep -qF 'SUAutomaticallyUpdate: true' "$PROJECT_SPEC"

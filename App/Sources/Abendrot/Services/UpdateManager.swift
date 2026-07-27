@@ -62,9 +62,6 @@ final class UpdateManager: ObservableObject {
     }
 
     private static var hasUsableUpdateConfiguration: Bool {
-        #if DEBUG
-        return false
-        #else
         let publicKey = (Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let feedURLString = (Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String)?
@@ -72,8 +69,7 @@ final class UpdateManager: ObservableObject {
 
         return !publicKey.isEmpty
             && !publicKey.localizedCaseInsensitiveContains("PLACEHOLDER")
-            && URL(string: feedURLString) != nil
-        #endif
+            && feedURLString == "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
     }
 }
 
