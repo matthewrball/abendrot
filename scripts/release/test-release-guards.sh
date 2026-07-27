@@ -65,11 +65,24 @@ echo "PASS: CI signing secrets are manual-main-only and build tooling is pinned"
 
 APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
 UPDATE_MANAGER="$ROOT/App/Sources/Abendrot/Services/UpdateManager.swift"
+PROJECT_SPEC="$ROOT/project.yml"
+INFO_PLIST="$ROOT/App/Resources/Info.plist"
 sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
   | grep -qF '#if DEBUG'
 sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
   | grep -qF 'return false'
 echo "PASS: Debug builds cannot connect to the production Sparkle feed"
+
+grep -qF 'SUEnableAutomaticChecks: true' "$PROJECT_SPEC"
+grep -qF 'SUAutomaticallyUpdate: true' "$PROJECT_SPEC"
+[ "$(/usr/bin/plutil -extract SUEnableAutomaticChecks raw "$INFO_PLIST")" = "true" ]
+[ "$(/usr/bin/plutil -extract SUAutomaticallyUpdate raw "$INFO_PLIST")" = "true" ]
+sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
+  | grep -qF 'controller.updater.automaticallyChecksForUpdates'
+sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
+  | grep -qF 'controller.updater.checkForUpdatesInBackground()'
+grep -qF 'Text("Download updates automatically")' "$UPDATE_MANAGER"
+echo "PASS: Release builds check on launch and download updates by default with opt-out"
 
 grep -qF 'static let warmedSecondsKey = "stats.warmedSeconds"' "$APP_MODEL"
 grep -qF 'static let warmSunsetCountKey = "stats.warmSunsetCount"' "$APP_MODEL"

@@ -29,9 +29,9 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Abendrot. Soften into the evening.</string>
 	<key>SUAutomaticallyUpdate</key>
-	<false/>
+	<true/>
 	<key>SUEnableAutomaticChecks</key>
-	<false/>
+	<true/>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>

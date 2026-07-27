@@ -63,6 +63,56 @@ final class AppModel {
     @ObservationIgnored private var pendingEnabled: Bool?
     @ObservationIgnored private var pendingScheduleMode: ScheduleModeOption?
 
+    // MARK: Warmth drag hold (stops the engine echo from fighting the slider)
+    //
+    // `state.globalWarmth` is written optimistically the instant the slider moves, but the engine
+    // only ingests that value after an unstructured Task reaches its actor prologue. `publish()`
+    // reads the engine's box LIVE, so any publish landing inside that window carries the PREVIOUS
+    // drag frame's warmth — and `applyEngineSnapshot`'s wholesale `state = next` used to write it
+    // back over the finger. Forward drag writes are un-animated (the gesture wraps them in a
+    // `disablesAnimations` transaction) but the echo arrives with the default transaction, so
+    // WarmSlider's `.smooth(0.16)` glided the thumb BACKWARDS while the finger moved forwards —
+    // the reported "moves up and down sporadically". It's a race the drag usually wins, which is
+    // why it was intermittent.
+    //
+    // The hold is a self-expiring timestamp rather than an is-dragging flag on purpose: the slider
+    // reports press state via `@GestureState`, which never fires its `false` if the popover closes
+    // mid-drag — a flag would stick on and freeze warmth until the next drag. A stamp cannot stick.
+    // ponytail: one window for both sliders; the user only drags one at a time.
+    @ObservationIgnored private var warmthWriteAt: TimeInterval = 0
+    /// Which slider was last written — nil = the global one, otherwise that display's own slider.
+    @ObservationIgnored private var warmthWriteDisplay: DisplayIdentity?
+    /// How long a local warmth value outranks the engine's echo. Comfortably longer than a drag's
+    /// ~8–16ms frame cadence, short enough that release reconciles immediately.
+    private static let warmthHoldWindow: TimeInterval = 0.3
+
+    private var warmthHoldIsFresh: Bool {
+        ProcessInfo.processInfo.systemUptime - warmthWriteAt < Self.warmthHoldWindow
+    }
+
+    private func stampWarmthWrite(display: DisplayIdentity? = nil) {
+        warmthWriteAt = ProcessInfo.processInfo.systemUptime
+        warmthWriteDisplay = display
+    }
+
+    // MARK: Engine warmth writes (latest-wins, serialized)
+    //
+    // A drag emits 60–120 values/sec. One unstructured `Task` per value gave Swift no ordering
+    // guarantee between them, so the engine could ingest them out of order and settle — and
+    // publish — a stale warmth, which is also what the hardware would land on. Draining a
+    // latest-wins slot with a single in-flight task fixes the ordering AND collapses the
+    // intermediate values, which cuts engine publishes (and the main-thread snapshot write each
+    // one triggered) by roughly an order of magnitude during a drag.
+    @ObservationIgnored private var pendingGlobalWarmth: WarmthLevel?
+    @ObservationIgnored private var globalWarmthDrain: Task<Void, Never>?
+    @ObservationIgnored private var pendingDisplayWarmth: [DisplayIdentity: WarmthLevel] = [:]
+    @ObservationIgnored private var displayWarmthDrain: Task<Void, Never>?
+
+    /// Throttle bookkeeping for the engine-stream snapshot write. See `writeControlSnapshotThrottled`.
+    @ObservationIgnored private var lastSnapshotWriteAt: TimeInterval = 0
+    @ObservationIgnored private var snapshotTrailingWrite: Task<Void, Never>?
+    private static let snapshotWriteInterval: TimeInterval = 0.25
+
     // MARK: Statistics (local-only — never leaves this Mac, "Private by default")
 
     /// Total seconds Abendrot has actively warmed, EXCLUDING any in-flight period (the live total
@@ -150,10 +200,12 @@ final class AppModel {
             for await snapshot in await engine.stateUpdates() {
                 self?.applyEngineSnapshot(snapshot)
                 self?.updateWarmingStats()
-                // Publish the live control snapshot every tick so `abendrot status` always reflects
-                // current runtime truth (ponytail: small atomic write per tick; add a coalescing
-                // throttle only if it ever measurably janks).
-                self?.writeControlSnapshot()
+                // Publish the live control snapshot so `abendrot status` reflects current runtime
+                // truth. Throttled: this is a synchronous JSON encode + atomic file write + chmod
+                // ON THE MAIN ACTOR, and it used to run once per engine publish — i.e. once per
+                // drag frame. That jammed the same main thread the drag runs on, which is what made
+                // the slider's echo race intermittent. Trailing-edge, so the final state still lands.
+                self?.writeControlSnapshotThrottled()
             }
         }
         // Observe CLI/AI control messages. The CLI posts with `deliverImmediately: true`,
@@ -203,7 +255,57 @@ final class AppModel {
                 next.isEnabled = state.isEnabled
             }
         }
+        // A warmth the user set moments ago outranks the engine's echo of the frame before it —
+        // otherwise the echo rewinds the thumb mid-drag. Only the slider actually being dragged is
+        // held: `resolvedWarmth` (the Sunset ramp, shown by the locked popover slider) and every
+        // other display keep tracking the engine live.
+        if warmthHoldIsFresh {
+            if let id = warmthWriteDisplay {
+                if let local = state.displays.first(where: { $0.id == id }),
+                   let i = next.displays.firstIndex(where: { $0.id == id }) {
+                    next.displays[i].warmth = local.warmth
+                    next.displays[i].warmthOverridden = local.warmthOverridden
+                }
+            } else {
+                next.globalWarmth = state.globalWarmth
+            }
+        }
         state = next
+    }
+
+    /// Queue a global warmth for the engine, latest-wins. See `pendingGlobalWarmth`.
+    private func pushWarmthToEngine(_ level: WarmthLevel) {
+        pendingGlobalWarmth = level
+        guard globalWarmthDrain == nil, let engine else { return }
+        globalWarmthDrain = Task { [weak self] in
+            while let next = self?.takePendingGlobalWarmth() {
+                await engine.setWarmth(next)
+            }
+            self?.globalWarmthDrain = nil
+        }
+    }
+
+    private func takePendingGlobalWarmth() -> WarmthLevel? {
+        defer { pendingGlobalWarmth = nil }
+        return pendingGlobalWarmth
+    }
+
+    /// Queue a per-display warmth for the engine, latest-wins per display.
+    private func pushWarmthToEngine(_ level: WarmthLevel, for id: DisplayIdentity) {
+        pendingDisplayWarmth[id] = level
+        guard displayWarmthDrain == nil, let engine else { return }
+        displayWarmthDrain = Task { [weak self] in
+            while let next = self?.takePendingDisplayWarmth() {
+                await engine.setWarmth(next.level, for: next.id)
+            }
+            self?.displayWarmthDrain = nil
+        }
+    }
+
+    private func takePendingDisplayWarmth() -> (id: DisplayIdentity, level: WarmthLevel)? {
+        guard let first = pendingDisplayWarmth.first else { return nil }
+        pendingDisplayWarmth.removeValue(forKey: first.key)
+        return (first.key, first.value)
     }
 
     /// Replay persisted user state through the normal setters so the engine and the published
@@ -490,6 +592,27 @@ final class AppModel {
     /// Encode the current state to `~/Library/Application Support/Abendrot/state.json` atomically.
     /// Called every engine state tick and after each accepted control message. Errors are swallowed
     /// quietly — a failed status write must never disrupt warming.
+    /// Rate-limited `writeControlSnapshot` for the engine's state stream, which can fire once per
+    /// drag frame. Writes immediately when the last write is old enough, otherwise schedules a
+    /// single trailing write so the settled state always reaches disk. Direct callers (control-message
+    /// acks, launch) keep calling `writeControlSnapshot()` so the CLI's ack stays immediate.
+    private func writeControlSnapshotThrottled() {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastSnapshotWriteAt < Self.snapshotWriteInterval else {
+            lastSnapshotWriteAt = now
+            writeControlSnapshot()
+            return
+        }
+        guard snapshotTrailingWrite == nil else { return }   // one already queued
+        snapshotTrailingWrite = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.snapshotWriteInterval))
+            guard !Task.isCancelled, let self else { return }
+            self.snapshotTrailingWrite = nil
+            self.lastSnapshotWriteAt = ProcessInfo.processInfo.systemUptime
+            self.writeControlSnapshot()
+        }
+    }
+
     func writeControlSnapshot() {
         let info = Bundle.main.infoDictionary
         let snapshot = ControlStateSnapshot(
@@ -538,6 +661,15 @@ final class AppModel {
         observationTask = nil
         controlRevealTask?.cancel()
         controlRevealTask = nil
+        globalWarmthDrain?.cancel()
+        globalWarmthDrain = nil
+        displayWarmthDrain?.cancel()
+        displayWarmthDrain = nil
+        // Drop any queued trailing write and flush synchronously — the throttle must never be the
+        // reason the CLI's `state.json` misses the final state.
+        snapshotTrailingWrite?.cancel()
+        snapshotTrailingWrite = nil
+        writeControlSnapshot()
         if let controlObserver {
             DistributedNotificationCenter.default().removeObserver(controlObserver)
             self.controlObserver = nil
@@ -632,7 +764,8 @@ final class AppModel {
     private func applyActiveWarmth() {
         let level = warmth(for: state.scheduleMode)
         state.globalWarmth = level
-        Task { await engine?.setWarmth(level) }
+        stampWarmthWrite()
+        pushWarmthToEngine(level)
     }
 
     /// Set the global warmth so the *effective Kelvin* lands at (or as near as the curve allows) `target`,
@@ -780,7 +913,8 @@ final class AppModel {
             state.displays[i].warmth = level
             state.displays[i].warmthOverridden = true   // setting a per-display value IS the override
         }
-        Task { await engine?.setWarmth(level, for: id) }
+        stampWarmthWrite(display: id)
+        pushWarmthToEngine(level, for: id)
     }
 
     /// Enable/disable a display's "Custom warmth" override. Off → the display follows the global

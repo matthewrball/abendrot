@@ -84,10 +84,10 @@ targets:
         # authority). The appcast lives at the raw GitHub URL; Sparkle reads it to
         # discover updates.
         SUFeedURL: "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
-        # Opt-in by default: users can enable daily background checks and automatic
-        # install from Settings. Manual "Check for Updates" always remains available.
-        SUEnableAutomaticChecks: false
-        SUAutomaticallyUpdate: false
+        # Check once at launch and download in the background by default. Sparkle
+        # persists the user's opt-out from Settings; manual checks remain available.
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: true
         SUScheduledCheckInterval: 86400
         SUVerifyUpdateBeforeExtraction: true
         # EdDSA public key for the Sparkle signing key whose private half lives only

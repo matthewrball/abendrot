@@ -8,16 +8,20 @@ final class UpdateManager: ObservableObject {
     private let updaterController: SPUStandardUpdaterController?
 
     @Published private(set) var canCheckForUpdates = false
-    @Published private(set) var automaticallyInstallsUpdates = false
+    @Published private(set) var automaticallyDownloadsUpdates = false
     @Published private(set) var updaterUnavailableReason: String?
 
     private init() {
         if Self.hasUsableUpdateConfiguration {
-            updaterController = SPUStandardUpdaterController(
+            let controller = SPUStandardUpdaterController(
                 startingUpdater: true,
                 updaterDelegate: nil,
                 userDriverDelegate: nil
             )
+            updaterController = controller
+            if controller.updater.automaticallyChecksForUpdates {
+                controller.updater.checkForUpdatesInBackground()
+            }
         } else {
             updaterController = nil
             updaterUnavailableReason = "Updates are unavailable in this build."
@@ -34,7 +38,7 @@ final class UpdateManager: ObservableObject {
         refresh()
     }
 
-    func setAutomaticallyInstallsUpdates(_ enabled: Bool) {
+    func setAutomaticallyDownloadsUpdates(_ enabled: Bool) {
         guard let updater = updaterController?.updater else {
             refresh()
             return
@@ -47,12 +51,12 @@ final class UpdateManager: ObservableObject {
     func refresh() {
         guard let updater = updaterController?.updater else {
             canCheckForUpdates = false
-            automaticallyInstallsUpdates = false
+            automaticallyDownloadsUpdates = false
             updaterUnavailableReason = "Updates are unavailable in this build."
             return
         }
         canCheckForUpdates = updater.canCheckForUpdates
-        automaticallyInstallsUpdates = updater.automaticallyChecksForUpdates
+        automaticallyDownloadsUpdates = updater.automaticallyChecksForUpdates
             && updater.automaticallyDownloadsUpdates
         updaterUnavailableReason = nil
     }
@@ -108,14 +112,14 @@ struct UpdateSettingsView: View {
                 SectionLabel("Updates")
             }
             HStack {
-                Text("Install updates automatically").font(Theme.Typography.ui(13))
+                Text("Download updates automatically").font(Theme.Typography.ui(13))
                 Spacer()
                 Toggle("", isOn: Binding(
-                    get: { updates.automaticallyInstallsUpdates },
+                    get: { updates.automaticallyDownloadsUpdates },
                     set: { enabled in
-                        guard enabled != updates.automaticallyInstallsUpdates else { return }
-                        updates.setAutomaticallyInstallsUpdates(enabled)
-                        if updates.automaticallyInstallsUpdates == enabled {
+                        guard enabled != updates.automaticallyDownloadsUpdates else { return }
+                        updates.setAutomaticallyDownloadsUpdates(enabled)
+                        if updates.automaticallyDownloadsUpdates == enabled {
                             model.playSoftToggleTone(on: enabled)
                         }
                     }
