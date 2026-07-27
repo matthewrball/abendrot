@@ -12,11 +12,14 @@ trap cleanup EXIT
 
 CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
 RELEASE_SCRIPT="$ROOT/scripts/release/release.sh"
+APPCAST_VALIDATOR="$ROOT/scripts/release/validate-appcast.py"
 SIGN_JOB="$TMP/sign-notarize.yml"
 
 grep -qF "github.event_name == 'workflow_dispatch'" "$CI_WORKFLOW"
 grep -qF "github.ref == 'refs/heads/main'" "$CI_WORKFLOW"
 grep -qF "environment: release-signing" "$CI_WORKFLOW"
+grep -qF "python3 scripts/release/validate-appcast.py appcast.xml" "$CI_WORKFLOW"
+grep -qF '[ "$PUBLISH_APPCAST" = "true" ] && GH_FLAGS+=( --draft )' "$RELEASE_SCRIPT"
 if grep -Eq '^  (detect-signing-secrets|detect-secrets):' "$CI_WORKFLOW"; then
   echo "CI must not read release secrets in a separate push/PR-visible job." >&2
   exit 1
@@ -118,6 +121,54 @@ APP="$TMP/Abendrot.app"
 APPCAST="$TMP/appcast.xml"
 CANONICAL_FEED="https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
 MOCK_DEVELOPER_ID_APP="Developer ID Application: Abendrot Test (ABCDE12345)"
+
+VALID_SIGNATURE="$(head -c 64 /dev/zero | /usr/bin/base64)"
+VALID_APPCAST="$TMP/valid-appcast.xml"
+cat > "$VALID_APPCAST" <<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Abendrot</title>
+    <link>$CANONICAL_FEED</link>
+    <language>en</language>
+    <!-- release.sh inserts new <item> elements directly below this line. -->
+    <item>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/matthewrball/abendrot/releases/download/v1.1.0/Abendrot-1.1.0.dmg"
+                 length="222" type="application/octet-stream"
+                 sparkle:edSignature="$VALID_SIGNATURE" />
+    </item>
+    <item>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/matthewrball/abendrot/releases/download/v1.0.0/Abendrot-1.0.0.dmg"
+                 length="111" type="application/octet-stream"
+                 sparkle:edSignature="$VALID_SIGNATURE" />
+    </item>
+  </channel>
+</rss>
+XML
+python3 "$APPCAST_VALIDATOR" "$VALID_APPCAST" >/dev/null
+for field in signature version url length minimum-os; do
+  invalid="$TMP/invalid-$field.xml"
+  cp "$VALID_APPCAST" "$invalid"
+  case "$field" in
+    signature) sed -i '' "s/$VALID_SIGNATURE/$VALID_SIGNATURE-invalid/g" "$invalid" ;;
+    version) sed -i '' 's#<sparkle:version>2</sparkle:version>#<sparkle:version>1</sparkle:version>#' "$invalid" ;;
+    url) sed -i '' 's#https://github.com#http://example.invalid#g' "$invalid" ;;
+    length) sed -i '' 's/length="222"/length="0"/' "$invalid" ;;
+    minimum-os) sed -i '' 's/>26.0.0</>25.9.0</g' "$invalid" ;;
+  esac
+  if python3 "$APPCAST_VALIDATOR" "$invalid" >/dev/null 2>&1; then
+    echo "Appcast validator accepted invalid $field." >&2
+    exit 1
+  fi
+done
+echo "PASS: appcast validation covers every item's signature, version, URL, length, and minimum OS"
+
 mkdir -p "$APP/Contents/MacOS"
 cat > "$TMP/app-main.c" <<'C'
 int main(void) { return 0; }
@@ -162,6 +213,7 @@ make_fake_release_root() {
   local origin="$fake-origin.git"
   mkdir -p "$fake/scripts/release"
   cp "$ROOT/scripts/release/release.sh" "$fake/scripts/release/release.sh"
+  cp "$ROOT/scripts/release/validate-appcast.py" "$fake/scripts/release/validate-appcast.py"
   cat > "$fake/scripts/release/verify-public-snapshot.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -173,6 +225,7 @@ SH
   git -C "$fake" config user.name "Release Guard Test"
   git -C "$fake" config user.email "release-guard@example.invalid"
   git -C "$fake" add scripts/release/release.sh
+  git -C "$fake" add scripts/release/validate-appcast.py
   git -C "$fake" add scripts/release/verify-public-snapshot.sh
   git -C "$fake" commit -qm "test: seed release script"
   git init --bare -q "$origin"
@@ -235,7 +288,8 @@ write_canonical_appcast() {
 <?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>Abendrot Updates</title>
+    <title>Abendrot</title>
+    <link>https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml</link>
     <language>en</language>
     <!-- release.sh inserts new <item> elements directly below this line. -->
   </channel>
@@ -723,7 +777,8 @@ chmod 755 "$MOCK_SIGNED_BIN/"*
 
 cat > "$MOCK_SPARKLE/sign_update" <<'SH'
 #!/usr/bin/env bash
-printf 'sparkle:edSignature="mock-signature" length="%s"\n' "$(stat -f%z "$1")"
+signature="$(head -c 64 /dev/zero | /usr/bin/base64)"
+printf 'sparkle:edSignature="%s" length="%s"\n' "$signature" "$(stat -f%z "$1")"
 SH
 cat > "$MOCK_SPARKLE/generate_keys" <<'SH'
 #!/usr/bin/env bash
@@ -775,7 +830,9 @@ fi
 grep -qF "Sparkle keychain public key matches embedded SUPublicEDKey" "$TMP/key-pass-out"
 cmp "$TMP/signed-appcast-before.xml" "$APPCAST"
 grep -qF '<sparkle:version>44</sparkle:version>' "$TMP/signed-pass/appcast-1.0.0-44.xml"
+grep -qF -- '--draft' "$TMP/key-pass-out"
 echo "PASS: signed dry-runs keep production appcast unchanged and write a verified candidate"
+echo "PASS: stable signed releases are uploaded as drafts before appcast promotion"
 
 /usr/bin/plutil -replace CFBundleVersion -string "45" "$APP/Contents/Info.plist"
 write_canonical_appcast "$APPCAST"
@@ -800,6 +857,51 @@ cmp "$TMP/prerelease-appcast-before.xml" "$APPCAST"
 [ -z "$(find "$TMP/signed-prerelease" -name 'appcast-*.xml' -print 2>/dev/null)" ]
 grep -qF "signed pre-release — production appcast left unchanged" "$TMP/prerelease-out"
 echo "PASS: signed pre-releases stay outside the stable appcast"
+
+PUBLISH_ROOT="$TMP/publish-release-root"
+make_fake_release_root "$PUBLISH_ROOT"
+mkdir -p "$PUBLISH_ROOT/cli" "$PUBLISH_ROOT/scripts/dmg"
+printf '// mock package\n' > "$PUBLISH_ROOT/cli/Package.swift"
+cp "$ROOT/scripts/dmg/plain-dmg.sh" "$PUBLISH_ROOT/scripts/dmg/plain-dmg.sh"
+cp "$ROOT/scripts/release/notarize.sh" "$PUBLISH_ROOT/scripts/release/notarize.sh"
+write_canonical_appcast "$PUBLISH_ROOT/appcast.xml"
+git -C "$PUBLISH_ROOT" add cli/Package.swift scripts/dmg/plain-dmg.sh \
+  scripts/release/notarize.sh appcast.xml
+git -C "$PUBLISH_ROOT" commit -qm "test: complete mocked release root"
+PUBLISH_HEAD="$(git -C "$PUBLISH_ROOT" rev-parse HEAD)"
+git -C "$PUBLISH_ROOT" push -q origin HEAD:refs/heads/dev
+
+PUBLISH_APP="$TMP/publish-Abendrot.app"
+cp -R "$APP" "$PUBLISH_APP"
+/usr/bin/plutil -replace CFBundleVersion -string "46" "$PUBLISH_APP/Contents/Info.plist"
+/usr/bin/plutil -replace AbendrotSourceCommit -string "$PUBLISH_HEAD" \
+  "$PUBLISH_APP/Contents/Info.plist"
+GH_RELEASE_LOG="$TMP/gh-release-create.log"
+set +e
+PATH="$MOCK_SIGNED_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_SWIFT_BUILD_ROOT="$MOCK_SWIFT_BUILD/publish" \
+  MOCK_SPARKLE_PUBLIC_KEY="$TEST_PUBLIC_KEY" \
+  ASC_API_KEY_P8="$TMP/mock-asc.p8" ASC_API_KEY_ID=MOCKKEY ASC_API_ISSUER_ID=MOCKISSUER \
+  RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
+  GH_TARGET_SHA="$TARGET_MAIN" GH_MAIN_SHA="$TARGET_MAIN" \
+  GH_COMMIT_MESSAGE=$'sync from build\n\nSource-Build-Commit: '"$PUBLISH_HEAD" \
+  GH_RELEASE_LOG="$GH_RELEASE_LOG" VERIFY_PUBLIC_SNAPSHOT_LOG="$VERIFY_PUBLIC_SNAPSHOT_LOG" \
+  RELEASE_SCRATCH="$TMP/signed-publish" \
+  SPARKLE_SIGN_UPDATE="$MOCK_SPARKLE/sign_update" \
+  "$PUBLISH_ROOT/scripts/release/release.sh" --app "$PUBLISH_APP" --dmg-mode plain \
+  >"$TMP/signed-publish-out" 2>"$TMP/signed-publish-stderr"
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  cat "$TMP/signed-publish-stderr" >&2
+  exit "$rc"
+fi
+grep -qF -- '--draft' "$GH_RELEASE_LOG"
+grep -qF "created draft v1.0.0" "$TMP/signed-publish-out"
+grep -qF "Only then publish the draft" "$TMP/signed-publish-out"
+grep -qF '<sparkle:version>46</sparkle:version>' "$PUBLISH_ROOT/appcast.xml"
+echo "PASS: stable publish creates only a draft before installing the appcast candidate"
 
 if [ -x "$ROOT/scripts/sync-public.sh" ]; then
   set +e

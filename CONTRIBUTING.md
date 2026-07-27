@@ -26,7 +26,7 @@ The project is split into:
 
 - Keep changes focused; one logical change per PR.
 - Add or update tests for engine logic (`WarmthCore`) — it's meant to stay headlessly testable.
-- Match the surrounding code style. CI runs `swift-format` / SwiftLint and the unit tests.
+- Match the surrounding code style. CI runs `swift-format` and the unit tests.
 - Be honest in user-facing copy: this is a general-wellness tool, not a medical device. No medical claims.
 
 ## Reporting bugs

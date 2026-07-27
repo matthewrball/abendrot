@@ -16,8 +16,8 @@
 # 5. Sparkle-sign the DMG with `sign_update` (EdDSA) — the SINGLE release
 # authority's key (local machine, key in login keychain).
 # 6. Update appcast.xml PRESERVING existing <item> entries (prepend the new one).
-# 7. `gh release create --target <curated public SHA>` the tag, upload the DMG,
-# attach notes.
+# 7. Upload stable releases as GitHub drafts. Publish the draft only after the
+# appcast has passed public-dev CI and been promoted to public main.
 #
 # DESIGN RULE: release is GATED on >=1 notarized+stapled DMG WHEN
 # signing is enabled. When signing is deferred (no Apple account) the gate is
@@ -543,7 +543,7 @@ fi
 
 # --- 6. Prepare appcast candidate (PRESERVING existing items) ---------------
 # We PREPEND a new <item> into a candidate file, never rewriting old entries.
-# The production appcast is replaced only after `gh release create` succeeds.
+# The production appcast is replaced only after the draft release upload succeeds.
 DOWNLOAD_URL="${DOWNLOAD_URL_BASE}/${TAG}/$(basename "$DMG_OUT")"
 PUBDATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
 # Build an appcast item only for a stable signed release. Unsigned and pre-release
@@ -607,12 +607,8 @@ if [ "$PUBLISH_APPCAST" = "true" ]; then
   ' "$APPCAST_CANDIDATE" > "$TMP_APPCAST"
   mv "$TMP_APPCAST" "$APPCAST_CANDIDATE"
   rm -f "$ITEM_FILE"
-  /usr/bin/xmllint --noout "$APPCAST_CANDIDATE" || {
-    echo "release: ABORT — generated appcast candidate is not valid XML." >&2
-    exit 8
-  }
-  grep -qF "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST_CANDIDATE" || {
-    echo "release: ABORT — generated appcast candidate is missing build $BUILD." >&2
+  python3 "$REPO_ROOT/scripts/release/validate-appcast.py" "$APPCAST_CANDIDATE" || {
+    echo "release: ABORT — generated appcast candidate failed release-item validation." >&2
     exit 8
   }
   echo "release: prepared signed appcast candidate at $APPCAST_CANDIDATE"
@@ -626,6 +622,7 @@ fi
 GH_FLAGS=( "$TAG" "$DMG_OUT" --repo "$GH_REPO" --title "${APP_DISPLAY_NAME} ${VERSION}" )
 [ -n "$RELEASE_TARGET_RESOLVED" ] && GH_FLAGS+=( --target "$RELEASE_TARGET_RESOLVED" )
 [ "$PRERELEASE" = "true" ] && GH_FLAGS+=( --prerelease )
+[ "$PUBLISH_APPCAST" = "true" ] && GH_FLAGS+=( --draft )
 [ -n "$NOTES" ] && GH_FLAGS+=( --notes-file "$NOTES" ) || GH_FLAGS+=( --generate-notes )
 
 if command -v gh >/dev/null 2>&1; then
@@ -639,9 +636,10 @@ if command -v gh >/dev/null 2>&1; then
         echo "         Candidate retained at: $APPCAST_CANDIDATE" >&2
         exit 8
       }
-      echo "release: published $TAG; appcast.xml updated locally but NOT committed or pushed."
+      echo "release: created draft $TAG; appcast.xml updated locally but NOT committed or pushed."
       echo "         Commit it in the build repo, then use scripts/publish.sh stage and"
       echo "         scripts/publish.sh promote so the verified public main feed advances."
+      echo "         Only then publish the draft: gh release edit $TAG --repo $GH_REPO --draft=false"
     elif [ "$SIGNED" = "true" ]; then
       echo "release: published signed pre-release $TAG; appcast unchanged."
     else

@@ -26,11 +26,12 @@ sleep, or precise GPS data.
 
 Core screen warming works without a network connection.
 
-When you manually check for updates, or enable automatic update checks, Sparkle
-requests Abendrot's update feed and release files from GitHub over HTTPS. As
-with any web request, GitHub may receive standard connection metadata such as
-an IP address under its own privacy policy. Abendrot does not add an account,
-device identifier, analytics payload, or app settings to those requests.
+By default, Sparkle automatically checks for and downloads updates from GitHub
+over HTTPS. You can disable automatic updates in Settings; manual update checks
+also contact GitHub. As with any web request, GitHub may receive standard
+connection metadata such as an IP address under its own privacy policy.
+Abendrot does not add an account, device identifier, analytics payload, or app
+settings to those requests.
 
 Links you choose to open from the app, such as the project website, GitHub, or
 research references, open in your default browser and are governed by those
@@ -53,7 +54,7 @@ settings and recovery files, delete:
 ## Changes and contact
 
 Material changes to data collection will be documented here before release.
-Questions can be opened as an issue or discussion on
+Questions can be opened as an issue on
 [GitHub](https://github.com/matthewrball/abendrot). Sensitive privacy concerns
 can use GitHub's private vulnerability reporting under the repository's
 Security tab.

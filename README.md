@@ -5,9 +5,9 @@
 <h1 align="center">Abendrot</h1>
 
 <p align="center">
-  <strong>A macOS app for your circadian rhythm.</strong><br>
-  Your Mac's screen warms with the evening — on <em>every</em> display — so your nights stay calm and your mornings stay sharp.<br>
-  Free, open-source, and grounded in peer-reviewed light research. Read every line of it.
+  <strong>The macOS app for your circadian rhythm</strong><br>
+  Abendrot warms your displays around sunset, limiting blue light exposure and supporting healthy evening light habits.<br>
+  <strong>Free and open source, forever. No ads, no in-app purchases, no paywall.</strong>
 </p>
 
 <p align="center">

@@ -85,7 +85,7 @@ abendrot status --json   # see the JSON field reference below
 Print one configured (persisted) setting. Works whether or not the app is running, because
 it reads the preference domain directly.
 
-`<key>` is one of: `warmth` | `mode` | `max-warmth` | `reveal-mode` | `location` | `enabled`
+`<key>` is one of: `warmth` | `mode` | `max-warmth` | `cozy` | `reveal-mode` | `location` | `enabled`
 
 ```sh
 abendrot get warmth          # 0.80
