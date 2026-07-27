@@ -75,7 +75,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         AbendrotSourceCommit: "$(ABENDROT_SOURCE_COMMIT)"
         LSMinimumSystemVersion: "26.0"
-        NSHumanReadableCopyright: "Abendrot. Soften into the evening."
+        NSHumanReadableCopyright: "Abendrot. Warm into the evening."
         # No camera/mic/location/accessibility usage strings — core function needs no
         # permissions. A notification usage prompt is requested at
         # runtime during onboarding, not declared as an always-on permission.

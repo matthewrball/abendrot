@@ -107,4 +107,4 @@ Issues and pull requests are welcome — bug reports from real display setups ar
 
 ---
 
-<p align="center"><sub>Soften into the evening.</sub></p>
+<p align="center"><sub>Warm into the evening.</sub></p>
