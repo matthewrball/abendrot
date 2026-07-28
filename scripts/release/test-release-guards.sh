@@ -128,7 +128,10 @@ grep -qF 'MACOSX_DEPLOYMENT_TARGET: "14.0"' "$PROJECT_SPEC"
 [ "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw "$INFO_PLIST")" = "14.0" ]
 grep -qF '.macOS("14.0")' "$ROOT/WarmthKit/Package.swift"
 grep -qF '.macOS("14.0")' "$ROOT/cli/Package.swift"
-grep -qF 'macOS&nbsp;14 Sonoma and later' "$ROOT/landing/index.html"
+grep -qF 'Requires macOS 14 "Sonoma" or later.' "$ROOT/README.md"
+if [ -f "$ROOT/landing/index.html" ]; then
+  grep -qF 'macOS&nbsp;14 Sonoma and later' "$ROOT/landing/index.html"
+fi
 echo "PASS: app, engine, and CLI share the macOS 14 deployment floor"
 sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
   | grep -qF 'startingUpdater: true'
