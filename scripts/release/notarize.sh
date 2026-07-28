@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 #
-# notarize.sh — submit a DMG (or .app/.zip) to Apple notarization, staple, verify.
+# notarize.sh — submit the finished DMG to Apple notarization, staple, verify.
 #
 # Notarization workflow: notarytool submit --wait + stapler staple, with release
-# gates (spctl -a -vvv, parse notarytool log), the deferred-signing decision (signing
-# DEFERRED -> this MUST no-op gracefully with no Apple credentials = credential-less mode).
+# gates (spctl -a -vvv, parse notarytool log).
 #
-# MODE B (default, TODAY, no Apple account): if no App Store Connect API key is
-# configured, this script prints a clear explanation and exits 0 (success) so the
-# release/CI pipeline is never blocked by the absence of credentials.
+# LOCAL UNSIGNED MODE: if no App Store Connect API key is configured, this script
+# prints a clear explanation and exits 0 so explicit local smoke packaging remains
+# usable. Official/public releases still fail closed in release.sh.
 #
-# WHEN SIGNING IS ENABLED (with an Apple Developer Program account): set the env
-# vars below (or pass --key/--key-id/--issuer) and it performs a real notarize +
-# staple + Gatekeeper verify.
+# SIGNED MODE: set the env vars below (or pass --key/--key-id/--issuer) and it
+# performs a real notarize + staple + Gatekeeper verify.
 #
 # Credentials needed when signing is enabled (see the release runbook):
 # ASC_API_KEY_P8 path to the App Store Connect API key .p8 (or *_BASE64)
@@ -21,10 +19,11 @@
 # In CI these come from secrets (ASC_API_KEY_P8_BASE64 is base64-decoded here).
 #
 # Usage:
-# scripts/release/notarize.sh <path-to-dmg|app|zip> \
+# scripts/release/notarize.sh <path-to-dmg> \
 # [--key <p8>] [--key-id <id>] [--issuer <uuid>]
 #
-# Exit codes: 0 success OR cleanly-skipped (when signing is deferred); 2 args; 3 missing target;
+# Exit codes: 0 success OR cleanly-skipped (local unsigned); 2 args/type;
+# 3 missing target;
 # 4 notarization rejected; 5 staple/verify failed.
 
 set -euo pipefail
@@ -60,13 +59,20 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$TARGET" ]; then
-  echo "notarize: usage: notarize.sh <path-to-dmg|app|zip> [--key ..]" >&2
+  echo "notarize: usage: notarize.sh <path-to-dmg> [--key ..]" >&2
   exit 2
 fi
 if [ ! -e "$TARGET" ]; then
   echo "notarize: target not found at '$TARGET'." >&2
   exit 3
 fi
+case "$TARGET" in
+  *.dmg);;
+  *)
+    echo "notarize: only accepts a finished .dmg; package app bundles before submission." >&2
+    exit 2
+    ;;
+esac
 
 # If a base64 key blob is provided (CI secret) but no path, materialize it.
 if [ -z "$KEY_PATH" ] && [ -n "${ASC_API_KEY_P8_BASE64:-}" ]; then
@@ -77,20 +83,18 @@ if [ -z "$KEY_PATH" ] && [ -n "${ASC_API_KEY_P8_BASE64:-}" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# MODE B short-circuit: no credentials -> explain + exit 0 (do not block).
+# Local unsigned short-circuit: no credentials -> explain + exit 0.
 # ---------------------------------------------------------------------------
 if [ -z "$KEY_PATH" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER" ]; then
   cat >&2 <<'EOF'
-notarize: SKIPPED (no Apple credentials configured).
+notarize: SKIPPED (local unsigned mode — no notarization credentials configured).
 
-  The signing/notarization step is DEFERRED per the deferred-signing decision
-  (no $99 Apple Developer Program yet). The DMG/app you built is valid for
-  LOCAL/unsigned testing today, but it is NOT notarized: on another Mac it will
-  trip Gatekeeper (right-click > Open, or `xattr -dr com.apple.quarantine`).
+  The DMG is valid only for local unsigned testing. It is NOT notarized and will
+  trip Gatekeeper on another Mac.
 
-  To enable notarization (when signing is enabled), provide all three:
+  For a signed release, provide all three:
       ASC_API_KEY_P8 (or ASC_API_KEY_P8_BASE64), ASC_API_KEY_ID, ASC_API_ISSUER_ID
-  See the release runbook.
+  See the release runbook's "Signing credentials" section.
 EOF
   echo "notarize: exiting 0 (clean skip)."
   exit 0
@@ -146,32 +150,22 @@ if ! xcrun stapler staple "$TARGET"; then
 fi
 xcrun stapler validate "$TARGET" || { echo "notarize: stapler validate failed." >&2; exit 5; }
 
-# Gatekeeper assessment. For a DMG, assess the mounted app; for an .app assess
-# directly. spctl -a -vvv is the release gate.
+# Gatekeeper assessment: mount the finished DMG and assess its single app.
+# spctl -a -vvv is the release gate.
 echo "notarize: Gatekeeper verify (spctl -a -vvv)..."
-case "$TARGET" in
-  *.dmg)
-    MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/abendrot-verify.XXXXXX")"
-    hdiutil attach "$TARGET" -nobrowse -quiet -mountpoint "$MOUNT_POINT" \
-      || { echo "notarize: could not mount notarized DMG for verification." >&2; exit 5; }
-    APPS=("$MOUNT_POINT"/*.app)
-    if [ "${#APPS[@]}" -ne 1 ] || [ ! -d "${APPS[0]}" ]; then
-      echo "notarize: expected exactly one app at the DMG root." >&2
-      exit 5
-    fi
-    spctl -a -vvv -t execute "${APPS[0]}" \
-      || { echo "notarize: spctl rejected app in DMG." >&2; exit 5; }
-    hdiutil detach "$MOUNT_POINT" -quiet \
-      || { echo "notarize: could not detach verification DMG." >&2; exit 5; }
-    rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
-    MOUNT_POINT=""
-    ;;
-  *.app)
-    spctl -a -vvv -t execute "$TARGET" || { echo "notarize: spctl rejected app." >&2; exit 5; }
-    ;;
-  *)
-    echo "notarize: note — stapled '$TARGET'; spctl execute-assessment skipped for this type."
-    ;;
-esac
+MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/abendrot-verify.XXXXXX")"
+hdiutil attach "$TARGET" -nobrowse -quiet -mountpoint "$MOUNT_POINT" \
+  || { echo "notarize: could not mount notarized DMG for verification." >&2; exit 5; }
+APPS=("$MOUNT_POINT"/*.app)
+if [ "${#APPS[@]}" -ne 1 ] || [ ! -d "${APPS[0]}" ]; then
+  echo "notarize: expected exactly one app at the DMG root." >&2
+  exit 5
+fi
+spctl -a -vvv -t execute "${APPS[0]}" \
+  || { echo "notarize: spctl rejected app in DMG." >&2; exit 5; }
+hdiutil detach "$MOUNT_POINT" -quiet \
+  || { echo "notarize: could not detach verification DMG." >&2; exit 5; }
+rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
+MOUNT_POINT=""
 
 echo "notarize: SUCCESS — '$TARGET' notarized, stapled, and Gatekeeper-accepted."

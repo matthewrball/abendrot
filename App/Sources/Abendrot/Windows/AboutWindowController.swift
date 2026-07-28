@@ -241,7 +241,6 @@ private struct AboutContent: View {
                     .foregroundStyle(Theme.Color.accentHighlight)
             }
             .buttonStyle(.liquidGlass)
-            .pointerStyle(.link)
             .accessibilityHint("Opens Abendrot’s research references in your browser")
             .help("Opens Abendrot’s research references in your browser")
             .padding(.top, 12)
@@ -369,7 +368,6 @@ private struct AboutLink: View {
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: hovering)
         }
         .buttonStyle(.plain)
-        .pointerStyle(.link)
         .onHover { hovering = $0 }
         .accessibilityLabel(title)
         .accessibilityHint(hint)

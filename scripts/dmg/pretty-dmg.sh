@@ -13,17 +13,16 @@
 # - HEADLESS-SAFE (no WindowServer / logged-in session needed — the old
 # "UI runner only" constraint is gone),
 # - DETERMINISTIC (create-dmg's Finder scripting applied icon positions
-# with a nondeterministic ~29px scroll-offset drift, and parked hidden
-# files OUTSIDE the window, giving AppleShowAllFiles users a window that
-# scrolls right into a white void — both observed 2026-07-27, v1.2.3),
+# with a nondeterministic ~29px scroll-offset drift),
 # - RETINA-CRISP (dmg-background.png + dmg-background@2x.png are compiled
 # into a single HiDPI TIFF automatically).
 # plain-dmg.sh remains the zero-dependency fallback. Releases are
 # gated on >=1 notarized+stapled DMG when signing is enabled.
 #
-# Install: pipx install dmgbuild (or: pip3 install --user dmgbuild)
+# Install: pipx install 'dmgbuild==1.6.7' && pipx pin dmgbuild
 #
 # Usage:
+# scripts/dmg/pretty-dmg.sh --check
 # scripts/dmg/pretty-dmg.sh --app <Abendrot.app> --out <out.dmg> \
 # [--volname "Abendrot"] [--background <png>] [--volicon <icns>]
 #
@@ -39,11 +38,14 @@ OUT=""
 VOLNAME="Abendrot"
 BACKGROUND="$ASSETS_DIR/dmg-background.png"   # brand art (see assets/README.md)
 VOLICON="$ASSETS_DIR/volume.icns"             # brand volume icon (optional)
+DMGBUILD_VERSION="1.6.7"
+CHECK_ONLY="false"
 
 usage() { grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed -n '1,32p'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --check)      CHECK_ONLY="true"; shift ;;
     --app)        APP="${2:-}"; shift 2 ;;
     --out)        OUT="${2:-}"; shift 2 ;;
     --volname)    VOLNAME="${2:-}"; shift 2 ;;
@@ -54,6 +56,33 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+resolve_dmgbuild() {
+  if ! command -v pipx >/dev/null 2>&1; then
+    echo "pretty-dmg: 'pipx' not found." >&2
+    echo "            Install pipx, then: pipx install 'dmgbuild==$DMGBUILD_VERSION'" >&2
+    return 5
+  fi
+  if [ "$(pipx list dmgbuild --short 2>/dev/null)" != "dmgbuild $DMGBUILD_VERSION" ]; then
+    echo "pretty-dmg: requires dmgbuild $DMGBUILD_VERSION via pipx." >&2
+    echo "            Run: pipx install --upgrade 'dmgbuild==$DMGBUILD_VERSION'" >&2
+    echo "                 pipx pin dmgbuild" >&2
+    echo "            Zero-dependency fallback: scripts/dmg/plain-dmg.sh" >&2
+    return 5
+  fi
+  local executable
+  executable="$(pipx environment --value PIPX_BIN_DIR)/dmgbuild"
+  [ -x "$executable" ] || {
+    echo "pretty-dmg: pipx dmgbuild executable not found." >&2
+    return 5
+  }
+  printf '%s\n' "$executable"
+}
+
+if [ "$CHECK_ONLY" = "true" ]; then
+  resolve_dmgbuild >/dev/null
+  exit $?
+fi
+
 if [ -z "$APP" ] || [ -z "$OUT" ]; then
   echo "pretty-dmg: --app and --out are required." >&2; usage >&2; exit 2
 fi
@@ -61,20 +90,19 @@ if [ ! -d "$APP" ]; then
   echo "pretty-dmg: app not found at '$APP'." >&2; exit 3
 fi
 
-DMGBUILD="$(command -v dmgbuild || true)"
-# pipx installs outside the default PATH on fresh shells; look there too.
-[ -n "$DMGBUILD" ] || [ ! -x "$HOME/.local/bin/dmgbuild" ] || DMGBUILD="$HOME/.local/bin/dmgbuild"
-if [ -z "$DMGBUILD" ]; then
-  echo "pretty-dmg: 'dmgbuild' not found." >&2
-  echo "            Install:  pipx install dmgbuild   (or pip3 install --user dmgbuild)" >&2
-  echo "            Zero-dependency fallback: scripts/dmg/plain-dmg.sh" >&2
-  exit 5
-fi
+DMGBUILD="$(resolve_dmgbuild)" || exit $?
 
 # Absolute paths — the settings module resolves them from its own cwd.
 APP="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
+APP_NAME="$(basename "$APP")"
 OUT_DIR="$(dirname "$OUT")"; mkdir -p "$OUT_DIR"
 OUT="$(cd "$OUT_DIR" && pwd)/$(basename "$OUT")"
+MOUNT_PATH="/Volumes/$VOLNAME"
+if [ -e "$MOUNT_PATH" ] || [ -L "$MOUNT_PATH" ]; then
+  echo "pretty-dmg: volume path already exists at '$MOUNT_PATH'." >&2
+  echo "            Detach the existing volume before building so Finder records the correct background alias." >&2
+  exit 6
+fi
 rm -f "$OUT"
 
 # ---------------------------------------------------------------------------
@@ -121,7 +149,15 @@ PARKED_Y=100
 # ---------------------------------------------------------------------------
 
 SETTINGS="$(mktemp -t pretty-dmg-settings.XXXXXX).py"
-trap 'rm -f "$SETTINGS"' EXIT
+MOUNT_POINT=""
+cleanup() {
+  if [ -n "$MOUNT_POINT" ]; then
+    hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || true
+    rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
+  fi
+  rm -f "$SETTINGS"
+}
+trap cleanup EXIT
 
 cat > "$SETTINGS" <<EOF
 import os, os.path, re
@@ -192,6 +228,22 @@ if ! PDMG_APP="$APP" PDMG_BACKGROUND="$BACKGROUND" PDMG_VOLICON="$VOLICON" \
   echo "            Fallback: scripts/dmg/plain-dmg.sh produces a plain DMG." >&2
   exit 6
 fi
+
+# dmgbuild currently has an upstream path where a failed app copy can still
+# leave a valid-looking image. Mount the result and prove the payload exists.
+MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/abendrot-pretty-dmg.XXXXXX")"
+hdiutil attach "$OUT" -nobrowse -readonly -quiet -mountpoint "$MOUNT_POINT" \
+  || { echo "pretty-dmg: built image could not be mounted." >&2; exit 6; }
+if [ ! -d "$MOUNT_POINT/$APP_NAME" ] \
+  || [ ! -L "$MOUNT_POINT/Applications" ] \
+  || [ "$(readlink "$MOUNT_POINT/Applications")" != "/Applications" ]; then
+  echo "pretty-dmg: built image is missing the app or /Applications link." >&2
+  exit 6
+fi
+hdiutil detach "$MOUNT_POINT" -quiet \
+  || { echo "pretty-dmg: could not detach verification image." >&2; exit 6; }
+rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
+MOUNT_POINT=""
 
 if command -v shasum >/dev/null 2>&1; then
   echo "pretty-dmg: done. sha256: $(shasum -a 256 "$OUT" | awk '{print $1}')"

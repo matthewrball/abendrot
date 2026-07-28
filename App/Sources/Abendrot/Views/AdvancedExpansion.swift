@@ -66,7 +66,6 @@ struct AdvancedExpansion: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .pointerStyle(.link)
         }
         .toggleStyle(.switch)
         .tint(Theme.Color.accent)

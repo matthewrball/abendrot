@@ -88,11 +88,12 @@ if contrast:
             v /= 255
             return v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4
         return .2126 * lin(c[0]) + .7152 * lin(c[1]) + .0722 * lin(c[2])
-    # Label text rows sit just under the 120pt icon boxes centred at y=210.
-    # Finder always draws them BLACK over a custom background (see LABEL BAND),
-    # so contrast is measured against black only.
+    # Sample conservative rectangles covering both Finder labels, not only
+    # their center pixels. Finder draws them BLACK over a custom background.
+    label_rects = ((250, 430, 560, 596), (900, 1080, 560, 596))
     worst = min((lum(src.getpixel((x, y))) + .05) / .05
-                for x in (340, 980) for y in range(546, 590, 4))
+                for x1, x2, y1, y2 in label_rects
+                for x in range(x1, x2, 2) for y in range(y1, y2, 2))
     verdict = "AAA" if worst >= 7 else "AA" if worst >= 4.5 else "BELOW AA"
     print(f"render-background: label contrast vs black text: {worst:.2f}:1 ({verdict})")
 PY

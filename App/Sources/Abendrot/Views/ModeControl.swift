@@ -124,7 +124,7 @@ struct ModeControl: View {
                         value: option == .followSunset ? sunsetGlyphTrigger : 0
                     )
                     .symbolEffect(
-                        .rotate.clockwise.byLayer,
+                        .bounce.up.wholeSymbol,
                         options: .nonRepeating.speed(1.4),
                         value: option == .alwaysOn ? manualGlyphTrigger : 0
                     )

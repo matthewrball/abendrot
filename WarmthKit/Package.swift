@@ -10,14 +10,14 @@
 // development or for the self-hosted hardware test matrix. Signing/notarization
 // is a launch-time concern (deferred until signing is enabled).
 //
-// Verify against Xcode 26 / macOS 26 "Tahoe" SDK before relying on any API here.
+// Deploys to macOS 14 "Sonoma"; verify with the Xcode 26 / macOS 26 SDK.
 
 import PackageDescription
 
 let package = Package(
     name: "WarmthKit",
     platforms: [
-        .macOS("26.0"),
+        .macOS("14.0"),
     ],
     products: [
         // Umbrella the app target links against.

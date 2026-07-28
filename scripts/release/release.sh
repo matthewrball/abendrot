@@ -11,7 +11,7 @@
 # What it does (the Go CLI's job, our way):
 # 1. Read version + build number from the EXPORTED app's Info.plist (plutil).
 # 2. Require a build number above every build already in the appcast.
-# 3. Build the DMG (pretty on a UI runner, else plain) — credential-less safe.
+# 3. Build the DMG (headless branded dmgbuild path, else plain).
 # 4. When signing is enabled: notarize + staple + verify via notarize.sh.
 # 5. Sparkle-sign the DMG with `sign_update` (EdDSA) — the SINGLE release
 # authority's key (local machine, key in login keychain).
@@ -20,9 +20,8 @@
 # appcast has passed public-dev CI and been promoted to public main.
 #
 # DESIGN RULE: public release is GATED on >=1 notarized+stapled DMG, Developer
-# ID signing, and Sparkle EdDSA signing. When signing is deferred (no Apple
-# account), --unsigned is private/local dry-run packaging only and cannot publish
-# or upload artifacts.
+# ID signing, and Sparkle EdDSA signing. --unsigned is private/local dry-run
+# packaging only and cannot publish or upload artifacts.
 #
 # This file is a working SKELETON: the Sparkle + appcast + gh steps are real
 # command lines, guarded so the script runs end-to-end TODAY without credentials
@@ -56,6 +55,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_DISPLAY_NAME="Abendrot"
 GH_REPO="matthewrball/abendrot"
 EXPECTED_BUNDLE_ID="app.abendrot.Abendrot"
+EXPECTED_MINIMUM_SYSTEM_VERSION="14.0"
 APPCAST_PATH="${APPCAST_PATH:-$REPO_ROOT/appcast.xml}"  # hosted via GitHub (raw)
 RELEASE_SCRATCH="${RELEASE_SCRATCH:-$REPO_ROOT/release-scratch}"
 DOWNLOAD_URL_BASE="https://github.com/${GH_REPO}/releases/download"
@@ -102,6 +102,7 @@ VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw "$PLIST" 2>/d
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw "$PLIST" 2>/dev/null || echo '')"
 BUNDLE_ID="$(/usr/bin/plutil -extract CFBundleIdentifier raw "$PLIST" 2>/dev/null || echo '')"
 APP_EXECUTABLE="$(/usr/bin/plutil -extract CFBundleExecutable raw "$PLIST" 2>/dev/null || echo '')"
+MINIMUM_SYSTEM_VERSION="$(/usr/bin/plutil -extract LSMinimumSystemVersion raw "$PLIST" 2>/dev/null || echo '')"
 [ -n "$VERSION" ] || { echo "release: could not read CFBundleShortVersionString." >&2; exit 3; }
 [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] \
   || { echo "release: unsafe or malformed marketing version '$VERSION'." >&2; exit 3; }
@@ -117,6 +118,10 @@ esac
   exit 3
 }
 [ -n "$APP_EXECUTABLE" ] || { echo "release: could not read CFBundleExecutable." >&2; exit 3; }
+[ "$MINIMUM_SYSTEM_VERSION" = "$EXPECTED_MINIMUM_SYSTEM_VERSION" ] || {
+  echo "release: ABORT — LSMinimumSystemVersion must be $EXPECTED_MINIMUM_SYSTEM_VERSION, got '${MINIMUM_SYSTEM_VERSION:-missing}'." >&2
+  exit 3
+}
 APP_BINARY="$APP/Contents/MacOS/$APP_EXECUTABLE"
 [ -x "$APP_BINARY" ] || { echo "release: app executable missing at '$APP_BINARY'." >&2; exit 3; }
 echo "release: $APP_DISPLAY_NAME version=$VERSION build=$BUILD prerelease=$PRERELEASE"
@@ -341,7 +346,7 @@ embed_cli_helper() {
       arm64|x86_64) ;;
       *) echo "release: ABORT — unsupported app architecture '$arch'." >&2; exit 5;;
     esac
-    triple="${arch}-apple-macosx26.0"
+    triple="${arch}-apple-macosx14.0"
     bin_dir="$(swift build -c release --package-path "$CLI_PKG" \
       --only-use-versions-from-resolved-file \
       --scratch-path "$cli_build_root" --triple "$triple" --show-bin-path)" || {
@@ -418,6 +423,47 @@ embed_cli_helper() {
 
 embed_cli_helper "$APP"
 
+# Every executable slice inside the shipped bundle must honor the public macOS
+# 14 floor. Info.plist alone is not enough: one too-new nested helper/framework
+# makes the app fail at runtime on a supported system.
+verify_macho_deployment_floor() {
+  local candidate build_info relative
+  local found_macho="false"
+
+  while IFS= read -r -d '' candidate; do
+    /usr/bin/file -b "$candidate" | grep -q 'Mach-O' || continue
+    found_macho="true"
+    relative="${candidate#"$APP/"}"
+    build_info="$(/usr/bin/xcrun vtool -show-build "$candidate" 2>/dev/null)" || {
+      echo "release: ABORT — could not inspect deployment floor for '$relative'." >&2
+      exit 5
+    }
+    if ! printf '%s\n' "$build_info" | /usr/bin/awk \
+      -v maximum="$EXPECTED_MINIMUM_SYSTEM_VERSION" '
+        function encoded(version, parts, count) {
+          count = split(version, parts, ".")
+          return (parts[1] + 0) * 1000000 + (parts[2] + 0) * 1000 + (parts[3] + 0)
+        }
+        $1 == "minos" {
+          seen = 1
+          if (encoded($2) > encoded(maximum)) too_new = 1
+        }
+        END { if (!seen || too_new) exit 1 }
+      '; then
+      echo "release: ABORT — '$relative' contains a slice requiring newer than macOS $EXPECTED_MINIMUM_SYSTEM_VERSION." >&2
+      exit 5
+    fi
+  done < <(find "$APP/Contents" -type f -print0)
+
+  [ "$found_macho" = "true" ] || {
+    echo "release: ABORT — app bundle contains no inspectable Mach-O files." >&2
+    exit 5
+  }
+  echo "release: verified every shipped Mach-O slice targets macOS $EXPECTED_MINIMUM_SYSTEM_VERSION or earlier."
+}
+
+verify_macho_deployment_floor
+
 # --- 3. Build the DMG -------------------------------------------------------
 DMG_OUT="$RELEASE_SCRATCH/${APP_DISPLAY_NAME}-${VERSION}.dmg"
 mkdir -p "$(dirname "$DMG_OUT")"
@@ -427,8 +473,8 @@ choose_dmg_mode() {
     pretty) echo pretty ;;
     plain)  echo plain ;;
     auto)
-      # Use pretty only if create-dmg exists AND there's a GUI session.
-      if command -v create-dmg >/dev/null 2>&1 && pgrep -x WindowServer >/dev/null 2>&1; then
+      # Use the builder's own exact-version readiness probe.
+      if "$REPO_ROOT/scripts/dmg/pretty-dmg.sh" --check >/dev/null 2>&1; then
         echo pretty
       else
         echo plain
@@ -437,11 +483,18 @@ choose_dmg_mode() {
   esac
 }
 EFFECTIVE_MODE="$(choose_dmg_mode)"
+if [ "${RELEASE_PUBLISH:-0}" = "1" ] \
+  && [ "$UNSIGNED" != "true" ] \
+  && [ "$PRERELEASE" != "true" ] \
+  && [ "$EFFECTIVE_MODE" != "pretty" ]; then
+  echo "release: ABORT — stable publication requires the branded DMG toolchain." >&2
+  echo "         Run scripts/dmg/pretty-dmg.sh --check and fix its reported dependency." >&2
+  exit 6
+fi
 echo "release: building DMG (mode=$EFFECTIVE_MODE) -> $DMG_OUT"
 if [ "$EFFECTIVE_MODE" = "pretty" ]; then
   "$REPO_ROOT/scripts/dmg/pretty-dmg.sh" --app "$APP" --out "$DMG_OUT" --volname "$APP_DISPLAY_NAME" \
-    || { echo "release: pretty-dmg failed; falling back to plain-dmg." >&2;
-         "$REPO_ROOT/scripts/dmg/plain-dmg.sh" --app "$APP" --out "$DMG_OUT" --volname "$APP_DISPLAY_NAME"; }
+    || { echo "release: ABORT — branded DMG creation failed." >&2; exit 6; }
 else
   "$REPO_ROOT/scripts/dmg/plain-dmg.sh" --app "$APP" --out "$DMG_OUT" --volname "$APP_DISPLAY_NAME"
 fi
@@ -565,7 +618,7 @@ if [ "$PUBLISH_APPCAST" = "true" ]; then
       <pubDate>${PUBDATE}</pubDate>
       <sparkle:version>${BUILD}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
       ${ENCLOSURE}
     </item>
 EOF

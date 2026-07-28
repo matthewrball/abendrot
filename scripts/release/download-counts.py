@@ -10,9 +10,9 @@ import urllib.parse
 import urllib.request
 
 DEFAULT_REPO = "matthewrball/abendrot"
-CAVEAT = "App downloads count .dmg and .zip release artifacts, not unique people or installs."
+CAVEAT = "App downloads count .dmg release artifacts, not unique people or installs."
 API_ROOT = "https://api.github.com"
-APP_EXTENSIONS = (".dmg", ".zip")
+APP_EXTENSIONS = (".dmg",)
 
 
 def parse_repo(value: str) -> tuple[str, str]:

@@ -29,6 +29,7 @@ class DownloadCountsTests(unittest.TestCase):
                     "prerelease": True,
                     "assets": [
                         {"name": "Abendrot.dmg", "download_count": 2},
+                        {"name": "Abendrot.zip", "download_count": 4},
                         {"name": "appcast.xml", "download_count": 3},
                     ],
                 },
@@ -46,11 +47,11 @@ class DownloadCountsTests(unittest.TestCase):
         self.assertEqual(report["repo"], "owner/repo")
         self.assertEqual(report["caveat"], download_counts.CAVEAT)
         self.assertEqual(report["total_app_downloads"], 7)
-        self.assertEqual(report["total_other_asset_downloads"], 3)
+        self.assertEqual(report["total_other_asset_downloads"], 7)
         self.assertEqual([release["tag"] for release in report["releases"]], ["v1.0.0-beta", "v1.0.0"])
         self.assertTrue(report["releases"][0]["prerelease"])
         self.assertEqual(report["releases"][0]["app_downloads"], 2)
-        self.assertEqual(report["releases"][0]["other_asset_downloads"], 3)
+        self.assertEqual(report["releases"][0]["other_asset_downloads"], 7)
         self.assertFalse(report["releases"][0]["assets"][1]["app_artifact"])
         self.assertEqual(report["releases"][1]["assets"][0]["asset_downloads"], 5)
 

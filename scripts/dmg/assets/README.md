@@ -56,7 +56,8 @@ osascript -e 'tell application "Finder" to get bounds of item 1 of window "Abend
    black ones; the labels stayed black over both a dark and a bright band, so
    it is not luminance-adaptive either. There is no way to force white, so the
    band behind the labels must be **bright**. That is what `.label-glow` does;
-   `render-background.sh --contrast` reports it (currently ~7.3:1, WCAG AAA).
+   `render-background.sh --contrast` samples the full label rectangles
+   (currently ~6.4:1, WCAG AA).
 
    This is the single most counter-intuitive thing here: a dark, moody DMG
    background will give users unreadable black-on-dark labels, and testing in

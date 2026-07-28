@@ -18,7 +18,7 @@ import PackageDescription
 let package = Package(
     name: "abendrot",
     platforms: [
-        .macOS("26.0"),
+        .macOS("14.0"),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),

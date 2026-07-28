@@ -27,8 +27,8 @@ cask "abendrot" do
   # Sparkle drives in-app updates; declare so brew defers to the app.
   auto_updates true
 
-  # macOS 26 "Tahoe" deployment-target floor.
-  depends_on macos: ">= :tahoe"
+  # macOS 14 "Sonoma" deployment-target floor.
+  depends_on macos: ">= :sonoma"
 
   # Read the latest version straight from the Sparkle appcast (single source of truth).
   livecheck do

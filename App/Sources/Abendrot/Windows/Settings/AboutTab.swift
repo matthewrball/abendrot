@@ -84,7 +84,6 @@ private struct AboutLink: View {
             .animation(.easeOut(duration: 0.12), value: hovering)
         }
         .buttonStyle(.plain)
-        .pointerStyle(.link)
         .onHover { hovering = $0 }
     }
 

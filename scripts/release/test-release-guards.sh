@@ -12,6 +12,8 @@ trap cleanup EXIT
 
 CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
 RELEASE_SCRIPT="$ROOT/scripts/release/release.sh"
+NOTARIZE_SCRIPT="$ROOT/scripts/release/notarize.sh"
+PRETTY_DMG_SCRIPT="$ROOT/scripts/dmg/pretty-dmg.sh"
 APPCAST_VALIDATOR="$ROOT/scripts/release/validate-appcast.py"
 SIGN_JOB="$TMP/sign-notarize.yml"
 
@@ -67,6 +69,40 @@ secret_refs_sign_job="$(grep -cF '${{ secrets.' "$SIGN_JOB")"
 }
 echo "PASS: CI signing secrets are manual-main-only and build tooling is pinned"
 
+DMG_MODE_SELECTOR="$TMP/dmg-mode-selector.sh"
+sed -n '/^choose_dmg_mode()/,/^}/p' "$RELEASE_SCRIPT" > "$DMG_MODE_SELECTOR"
+grep -qF 'scripts/dmg/pretty-dmg.sh" --check' "$DMG_MODE_SELECTOR"
+if grep -Eq 'create-dmg|WindowServer' "$DMG_MODE_SELECTOR"; then
+  echo "Auto DMG selection must use headless dmgbuild, not create-dmg or a GUI session." >&2
+  exit 1
+fi
+grep -qF "stable publication requires the branded DMG toolchain" "$RELEASE_SCRIPT"
+grep -qF "ABORT — branded DMG creation failed" "$RELEASE_SCRIPT"
+echo "PASS: automatic release packaging shares the branded builder's exact readiness probe"
+
+grep -qF 'DMGBUILD_VERSION="1.6.7"' "$PRETTY_DMG_SCRIPT"
+grep -qF -- '--check)' "$PRETTY_DMG_SCRIPT"
+grep -qF 'pipx list dmgbuild --short' "$PRETTY_DMG_SCRIPT"
+grep -qF 'built image is missing the app or /Applications link' "$PRETTY_DMG_SCRIPT"
+grep -qF 'Detach the existing volume before building so Finder records the correct background alias.' \
+  "$PRETTY_DMG_SCRIPT"
+mounted_volume_guard_line="$(grep -nF 'MOUNT_PATH="/Volumes/$VOLNAME"' "$PRETTY_DMG_SCRIPT" | cut -d: -f1)"
+output_delete_line="$(grep -nF 'rm -f "$OUT"' "$PRETTY_DMG_SCRIPT" | cut -d: -f1)"
+[ "$mounted_volume_guard_line" -lt "$output_delete_line" ] || {
+  echo "Branded DMG mounted-volume guard must run before replacing the output." >&2
+  exit 1
+}
+echo "PASS: branded DMG tooling is version-pinned and verifies its mounted payload"
+
+mkdir -p "$TMP/notary-input.app"
+set +e
+"$NOTARIZE_SCRIPT" "$TMP/notary-input.app" >"$TMP/notary-app-out" 2>"$TMP/notary-app-err"
+notary_app_rc=$?
+set -e
+[ "$notary_app_rc" -eq 2 ]
+grep -qF "only accepts a finished .dmg" "$TMP/notary-app-err"
+echo "PASS: notarization rejects raw app bundles before credential handling"
+
 APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
 UPDATE_MANAGER="$ROOT/App/Sources/Abendrot/Services/UpdateManager.swift"
 PROJECT_SPEC="$ROOT/project.yml"
@@ -87,6 +123,13 @@ grep -qF 'SUScheduledCheckInterval: 86400' "$PROJECT_SPEC"
 [ "$(/usr/bin/plutil -extract SUEnableAutomaticChecks raw "$INFO_PLIST")" = "true" ]
 [ "$(/usr/bin/plutil -extract SUAutomaticallyUpdate raw "$INFO_PLIST")" = "true" ]
 [ "$(/usr/bin/plutil -extract SUScheduledCheckInterval raw "$INFO_PLIST")" = "86400" ]
+grep -qF 'macOS: "14.0"' "$PROJECT_SPEC"
+grep -qF 'MACOSX_DEPLOYMENT_TARGET: "14.0"' "$PROJECT_SPEC"
+[ "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw "$INFO_PLIST")" = "14.0" ]
+grep -qF '.macOS("14.0")' "$ROOT/WarmthKit/Package.swift"
+grep -qF '.macOS("14.0")' "$ROOT/cli/Package.swift"
+grep -qF 'macOS&nbsp;14 Sonoma and later' "$ROOT/landing/index.html"
+echo "PASS: app, engine, and CLI share the macOS 14 deployment floor"
 sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
   | grep -qF 'startingUpdater: true'
 sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE_MANAGER" \
@@ -136,7 +179,7 @@ cat > "$VALID_APPCAST" <<XML
     <item>
       <sparkle:version>2</sparkle:version>
       <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
       <enclosure url="https://github.com/matthewrball/abendrot/releases/download/v1.1.0/Abendrot-1.1.0.dmg"
                  length="222" type="application/octet-stream"
                  sparkle:edSignature="$VALID_SIGNATURE" />
@@ -144,7 +187,7 @@ cat > "$VALID_APPCAST" <<XML
     <item>
       <sparkle:version>1</sparkle:version>
       <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
       <enclosure url="https://github.com/matthewrball/abendrot/releases/download/v1.0.0/Abendrot-1.0.0.dmg"
                  length="111" type="application/octet-stream"
                  sparkle:edSignature="$VALID_SIGNATURE" />
@@ -161,7 +204,7 @@ for field in signature version url length minimum-os; do
     version) sed -i '' 's#<sparkle:version>2</sparkle:version>#<sparkle:version>1</sparkle:version>#' "$invalid" ;;
     url) sed -i '' 's#https://github.com#http://example.invalid#g' "$invalid" ;;
     length) sed -i '' 's/length="222"/length="0"/' "$invalid" ;;
-    minimum-os) sed -i '' 's/>26.0.0</>25.9.0</g' "$invalid" ;;
+    minimum-os) sed -i '' 's/>14.0.0</>13.9.0</g' "$invalid" ;;
   esac
   if python3 "$APPCAST_VALIDATOR" "$invalid" >/dev/null 2>&1; then
     echo "Appcast validator accepted invalid $field." >&2
@@ -174,8 +217,8 @@ mkdir -p "$APP/Contents/MacOS"
 cat > "$TMP/app-main.c" <<'C'
 int main(void) { return 0; }
 C
-xcrun clang -arch arm64 "$TMP/app-main.c" -o "$TMP/app-main-arm64"
-xcrun clang -arch x86_64 "$TMP/app-main.c" -o "$TMP/app-main-x86_64"
+xcrun clang -arch arm64 -mmacosx-version-min=14.0 "$TMP/app-main.c" -o "$TMP/app-main-arm64"
+xcrun clang -arch x86_64 -mmacosx-version-min=14.0 "$TMP/app-main.c" -o "$TMP/app-main-x86_64"
 lipo -create "$TMP/app-main-arm64" "$TMP/app-main-x86_64" \
   -output "$APP/Contents/MacOS/Abendrot"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -186,6 +229,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key><string>42</string>
   <key>CFBundleIdentifier</key><string>app.abendrot.Abendrot</string>
   <key>CFBundleExecutable</key><string>Abendrot</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>SUFeedURL</key><string>https://example.invalid/appcast.xml</string>
   <key>SUPublicEDKey</key><string>test-public-key</string>
 </dict></plist>
@@ -657,7 +701,7 @@ set +e
 ASC_API_KEY_P8= ASC_API_KEY_ID= ASC_API_ISSUER_ID= \
 APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/release" \
   "$ROOT/scripts/release/release.sh" \
-  --app "$APP" --unsigned --dmg-mode plain >/dev/null 2>"$TMP/unsigned-stderr"
+  --app "$APP" --unsigned --dmg-mode plain >"$TMP/unsigned-out" 2>"$TMP/unsigned-stderr"
 rc=$?
 set -e
 if [ "$rc" -ne 0 ]; then
@@ -669,6 +713,35 @@ lipo "$APP/Contents/Helpers/abendrot" \
   -verify_arch $(lipo -archs "$APP/Contents/MacOS/Abendrot")
 echo "PASS: unsigned builds cannot modify the production appcast"
 echo "PASS: embedded CLI covers every app architecture"
+grep -qF "verified every shipped Mach-O slice targets macOS 14.0 or earlier" \
+  "$TMP/unsigned-out"
+
+/usr/bin/plutil -replace LSMinimumSystemVersion -string "15.0" "$APP/Contents/Info.plist"
+set +e
+APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/wrong-plist-floor" \
+  "$ROOT/scripts/release/release.sh" \
+  --app "$APP" --unsigned --dmg-mode plain >/dev/null 2>"$TMP/wrong-plist-floor-stderr"
+rc=$?
+set -e
+[ "$rc" -eq 3 ]
+grep -qF "LSMinimumSystemVersion must be 14.0" "$TMP/wrong-plist-floor-stderr"
+/usr/bin/plutil -replace LSMinimumSystemVersion -string "14.0" "$APP/Contents/Info.plist"
+echo "PASS: release packaging rejects an app that overstates its supported OS floor"
+
+mkdir -p "$APP/Contents/Frameworks"
+xcrun clang -arch arm64 -mmacosx-version-min=15.0 "$TMP/app-main.c" \
+  -o "$APP/Contents/Frameworks/TooNew"
+set +e
+APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/too-new-nested-code" \
+  "$ROOT/scripts/release/release.sh" \
+  --app "$APP" --unsigned --dmg-mode plain >/dev/null 2>"$TMP/too-new-nested-stderr"
+rc=$?
+set -e
+[ "$rc" -eq 5 ]
+grep -qF "contains a slice requiring newer than macOS 14.0" \
+  "$TMP/too-new-nested-stderr"
+rm -f "$APP/Contents/Frameworks/TooNew"
+echo "PASS: release packaging rejects too-new nested Mach-O slices"
 
 MOCK_SIGNED_BIN="$TMP/mock-signed-bin"
 MOCK_SPARKLE="$TMP/mock-sparkle-tools"
@@ -763,7 +836,7 @@ while [ $# -gt 0 ]; do
     *) shift;;
   esac
 done
-[ -n "$triple" ] || triple="arm64-apple-macosx26.0"
+[ -n "$triple" ] || triple="arm64-apple-macosx14.0"
 arch="${triple%%-*}"
 dir="${MOCK_SWIFT_BUILD_ROOT:?}/$triple"
 if [ -n "$show" ]; then
@@ -774,7 +847,7 @@ fi
 mkdir -p "$dir"
 src="$dir/main.c"
 printf 'int main(void) { return 0; }\n' > "$src"
-/usr/bin/xcrun clang -arch "$arch" "$src" -o "$dir/abendrot"
+/usr/bin/xcrun clang -arch "$arch" -mmacosx-version-min=14.0 "$src" -o "$dir/abendrot"
 SH
 chmod 755 "$MOCK_SIGNED_BIN/"*
 
@@ -866,9 +939,25 @@ make_fake_release_root "$PUBLISH_ROOT"
 mkdir -p "$PUBLISH_ROOT/cli" "$PUBLISH_ROOT/scripts/dmg"
 printf '// mock package\n' > "$PUBLISH_ROOT/cli/Package.swift"
 cp "$ROOT/scripts/dmg/plain-dmg.sh" "$PUBLISH_ROOT/scripts/dmg/plain-dmg.sh"
+cat > "$PUBLISH_ROOT/scripts/dmg/pretty-dmg.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "${1:-}" != "--check" ] || exit 0
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --out) out="${2:-}"; shift 2 ;;
+    *) shift;;
+  esac
+done
+[ -n "$out" ]
+printf 'mock branded dmg\n' > "$out"
+SH
+chmod 755 "$PUBLISH_ROOT/scripts/dmg/pretty-dmg.sh"
 cp "$ROOT/scripts/release/notarize.sh" "$PUBLISH_ROOT/scripts/release/notarize.sh"
 write_canonical_appcast "$PUBLISH_ROOT/appcast.xml"
 git -C "$PUBLISH_ROOT" add cli/Package.swift scripts/dmg/plain-dmg.sh \
+  scripts/dmg/pretty-dmg.sh \
   scripts/release/notarize.sh appcast.xml
 git -C "$PUBLISH_ROOT" commit -qm "test: complete mocked release root"
 PUBLISH_HEAD="$(git -C "$PUBLISH_ROOT" rev-parse HEAD)"
@@ -892,7 +981,7 @@ PATH="$MOCK_SIGNED_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP"
   GH_RELEASE_LOG="$GH_RELEASE_LOG" VERIFY_PUBLIC_SNAPSHOT_LOG="$VERIFY_PUBLIC_SNAPSHOT_LOG" \
   RELEASE_SCRATCH="$TMP/signed-publish" \
   SPARKLE_SIGN_UPDATE="$MOCK_SPARKLE/sign_update" \
-  "$PUBLISH_ROOT/scripts/release/release.sh" --app "$PUBLISH_APP" --dmg-mode plain \
+  "$PUBLISH_ROOT/scripts/release/release.sh" --app "$PUBLISH_APP" --dmg-mode pretty \
   >"$TMP/signed-publish-out" 2>"$TMP/signed-publish-stderr"
 rc=$?
 set -e

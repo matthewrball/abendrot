@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FD9228" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/macOS-26%20Tahoe-FD9228" alt="macOS 26 Tahoe">
+  <img src="https://img.shields.io/badge/macOS-14%2B-FD9228" alt="macOS 14 Sonoma or later">
   <img src="https://img.shields.io/badge/architecture-universal-FD9228" alt="Universal Apple Silicon and Intel">
   <img src="https://img.shields.io/badge/status-pre--release-C2310A" alt="Pre-release">
   <a href="https://github.com/matthewrball/abendrot/stargazers"><img src="https://img.shields.io/github/stars/matthewrball/abendrot?color=FD9228" alt="GitHub stars"></a>
@@ -48,7 +48,7 @@ brew install --cask abendrot
 
 After 1.0.0 ships, download the signed, notarized `.dmg` from [GitHub Releases](https://github.com/matthewrball/abendrot/releases).
 
-Requires macOS 26 "Tahoe" or later. Universal for Apple Silicon and Intel.
+Requires macOS 14 "Sonoma" or later. Universal for Apple silicon and Intel.
 
 > Abendrot is free and open source under the MIT License. If it is useful to you, please [star the repository](https://github.com/matthewrball/abendrot/stargazers).
 
@@ -109,8 +109,9 @@ Every command supports `--json`, with scriptable exit codes. See [`AGENTS.md`](A
 
 ## Tech
 
-Native **Swift 6** (SwiftUI + AppKit), **macOS 26 "Tahoe"**, distributed as a
-universal Apple Silicon + Intel app. No Electron, no bundled runtime. The warmth
+Native **Swift 6** (SwiftUI + AppKit), **macOS 14 "Sonoma" or later**, distributed as a
+universal Apple silicon + Intel app. Tahoe uses native Liquid Glass; Sonoma and Sequoia
+use the built-in material fallback. No Electron, no bundled runtime. The warmth
 engine lives in a standalone, unit-tested Swift package (`WarmthKit`); the app
 is a small menu-bar agent; the `abendrot` CLI is a separate thin client that
 talks to the running app.
