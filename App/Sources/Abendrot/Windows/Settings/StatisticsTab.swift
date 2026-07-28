@@ -42,9 +42,6 @@ struct StatisticsTab: View {
             ))
             .toggleStyle(.switch)
             .tint(Theme.Color.accent)
-            Text("Turn off to stop counting.")
-                .font(Theme.Typography.ui(11.5))
-                .foregroundStyle(Theme.Color.textFaint)
         }
     }
 
