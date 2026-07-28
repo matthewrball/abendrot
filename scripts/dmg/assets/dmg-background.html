@@ -1,0 +1,230 @@
+<!doctype html>
+<!--
+  dmg-background.html — SOURCE for the DMG Finder-window background art.
+  A miniature of the abendrot.app hero: the icon's vertical sunset ramp,
+  golden sun cresting a glowing horizon, water reflection below. Colors,
+  gradients and grain are lifted from landing/src/styles/tokens.css +
+  main.css (hero-sky / hero-sun / hero-horizon / hero-reflection).
+
+  CANVAS = 660x400 = the Finder window's CONTENT area. The window FRAME is
+  32pt taller, because Finder's window bounds include the title bar — see the
+  GEOMETRY block in scripts/dmg/pretty-dmg.sh. Get that wrong and the bottom
+  of this image is silently cropped.
+
+  Layout (content-area points):
+    y=210  icon row — Abendrot.app (170,210), Applications (490,210)
+    y=283  Finder's label text band; .label-glow lifts it so the always-black
+           label text stays legible
+    y=332  horizon
+
+  The wordmark's app icon is inlined as a base64 data: URI by
+  scripts/dmg/render-background.sh, which also renders the PNGs — run that
+  rather than opening this file expecting the icon to appear.
+-->
+<html lang="en"><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 660px; height: 400px; overflow: hidden; }
+  .stage {
+    position: relative; width: 660px; height: 400px; overflow: hidden;
+    background: #160A12;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Sky: the icon's vertical sunset ramp (tokens.css --sunset-sky),
+         horizon at y=332 so the bright end lands at the waterline ---- */
+  .sky {
+    position: absolute; left: 0; top: 0; width: 660px; height: 332px;
+    background: linear-gradient(180deg,
+      #160A12 0%,
+      #2A0F16 34%,
+      #6A100F 62%,
+      #C2310A 82%,
+      #FB7C0E 95%,
+      #FD9228 100%);
+  }
+
+  /* ---- Sun bloom — soft radial glow swelling up from the horizon ---- */
+  .sun-bloom {
+    position: absolute; left: 330px; top: 332px;
+    width: 620px; height: 620px; transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side,
+      #FFE0B8 0%,
+      rgba(255, 192, 97, .92) 9%,
+      rgba(253, 146, 40, .60) 22%,
+      rgba(253, 146, 40, .26) 40%,
+      rgba(194, 49, 10, .10) 60%,
+      transparent 74%);
+    filter: blur(2px);
+  }
+
+  /* ---- The sun itself, cresting the horizon (hero-sun::before) ---- */
+  .sun-dome {
+    position: absolute; left: 330px; top: 258px;
+    width: 148px; height: 74px; transform: translateX(-50%);
+    border-radius: 999px 999px 0 0;
+    background: radial-gradient(120% 200% at 50% 100%,
+      #FFFFFF 0%, #FFE0B8 18%, #FFC061 42%, #FD9228 72%, transparent 92%);
+    filter: blur(3px);
+  }
+
+  /* ---- Water below the horizon: deep ground + the sun streak ---- */
+  .water {
+    position: absolute; left: 0; top: 332px; width: 660px; height: 68px;
+    background:
+      radial-gradient(46% 160% at 50% 0%,
+        rgba(253, 146, 40, .66) 0%,
+        rgba(194, 49, 10, .28) 38%,
+        transparent 72%),
+      linear-gradient(180deg, #2E1013 0%, #160A12 100%);
+  }
+  /* ripple lines, faded out toward the edges so they live under the sun */
+  .ripples {
+    position: absolute; left: 0; top: 332px; width: 660px; height: 68px;
+    background: repeating-linear-gradient(180deg,
+      transparent 0, transparent 5px,
+      rgba(255, 236, 217, .07) 5px, rgba(255, 236, 217, .07) 6px);
+    -webkit-mask-image: radial-gradient(60% 130% at 50% 0%, #000 0%, rgba(0,0,0,.35) 55%, transparent 85%);
+            mask-image: radial-gradient(60% 130% at 50% 0%, #000 0%, rgba(0,0,0,.35) 55%, transparent 85%);
+  }
+
+  /* ---- Horizon line — glowing where sky meets water (hero-horizon) ---- */
+  .horizon {
+    position: absolute; left: 0; top: 331px; width: 660px; height: 2px;
+    background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 192, 97, .55) 30%,
+      #FFE0B8 50%,
+      rgba(255, 192, 97, .55) 70%,
+      transparent);
+    box-shadow: 0 0 22px 2px rgba(253, 146, 40, .5);
+    filter: blur(.4px);
+  }
+
+  /* ---- Top scrim — keeps the wordmark zone deep and legible (hero-scrim) */
+  .scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg,
+      rgba(15, 8, 14, .52) 0%,
+      rgba(15, 8, 14, .30) 20%,
+      rgba(15, 8, 14, .08) 38%,
+      transparent 52%);
+  }
+
+  /* ---- Edge vignette — settles the eye toward the two icon slots ---- */
+  .vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(150% 130% at 50% 46%,
+      transparent 58%, rgba(10, 5, 8, .32) 100%);
+  }
+
+  /* ---- Icon landing slots — liquid-glass squircles (tokens --glass-*) ----
+     Centred on the icon row at y=210. No separate drop-shadow ellipse: it
+     landed in the label band below and crushed the text contrast. ---- */
+  .slot {
+    position: absolute; top: 144px; width: 132px; height: 132px;
+    border-radius: 33px;
+    background: linear-gradient(140deg,
+      rgba(255, 255, 255, .10) 0%,
+      rgba(255, 255, 255, .025) 46%,
+      rgba(255, 255, 255, .055) 100%);
+    box-shadow:
+      inset 0 1px 1.5px rgba(255, 255, 255, .30),
+      inset 0 0 0 .5px rgba(255, 255, 255, .16),
+      0 14px 30px rgba(0, 0, 0, .30);
+  }
+  .slot.left  { left: 104px; }
+  .slot.right { left: 424px; }
+
+  /* Warm mist centred on the label text band (y~273-293). A Finder window
+     with a custom background ALWAYS draws icon labels black — the viewer's
+     Dark Mode does not apply (see LABEL BAND in render-background.sh) — so
+     this band is deliberately bright, ~7:1 behind the text. The plateau keeps
+     the lift even across the text rows; it reads as low-sun haze, not a UI
+     chip. Painted AFTER .slot so it also lifts the slot's drop shadow. */
+  .label-glow {
+    position: absolute; top: 251px; width: 236px; height: 64px;
+    background: radial-gradient(50% 50% at 50% 50%,
+      rgba(255, 206, 150, LABEL_A1) 0%, rgba(255, 206, 150, LABEL_A1) 38%,
+      rgba(252, 150, 60, LABEL_A2) 66%, transparent 86%);
+    filter: blur(9px);
+  }
+  .label-glow.left  { left: 52px; }
+  .label-glow.right { left: 372px; }
+
+  /* ---- Drag arrow between the slots — quiet, warm, cta-chevron style ---- */
+  .arrow {
+    position: absolute; left: 244px; top: 196px;
+    filter: drop-shadow(0 0 7px rgba(253, 146, 40, .45));
+  }
+
+  /* ---- Wordmark: the app icon + serif name (site nav .brand) ---- */
+  .brandline {
+    position: absolute; left: 0; top: 38px; width: 660px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+  }
+  .brandline .mark {
+    width: 38px; height: 38px; display: block;
+    filter: drop-shadow(0 3px 8px rgba(10, 5, 8, .55));
+  }
+  .brandline .name {
+    font-family: "Iowan Old Style", "New York", Georgia, serif;
+    font-size: 27px; font-weight: 600; letter-spacing: .015em;
+    color: #F3EADF;
+    text-shadow: 0 1px 12px rgba(10, 5, 8, .55);
+  }
+
+  /* ---- Footer micro-mark, resting in the water ---- */
+  .site {
+    position: absolute; left: 0; top: 376px; width: 660px;
+    text-align: center;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 9.5px; letter-spacing: .22em;
+    color: rgba(243, 234, 223, .30);
+  }
+
+  /* ---- Film grain so the big ramps never band (site .warmfield::after) ---- */
+  .grain {
+    position: absolute; inset: 0; opacity: .05; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+</style></head>
+<body>
+<div class="stage">
+  <div class="sky"></div>
+  <div class="sun-bloom"></div>
+  <div class="sun-dome"></div>
+  <div class="water"></div>
+  <div class="ripples"></div>
+  <div class="horizon"></div>
+  <div class="scrim"></div>
+  <div class="vignette"></div>
+
+  <div class="slot left"></div>
+  <div class="slot right"></div>
+  <div class="label-glow left"></div>
+  <div class="label-glow right"></div>
+
+  <svg class="arrow" width="176" height="28" viewBox="0 0 176 28">
+    <defs>
+      <linearGradient id="ag" gradientUnits="userSpaceOnUse" x1="8" y1="14" x2="161" y2="14">
+        <stop offset="0"   stop-color="#FFC061" stop-opacity="0"/>
+        <stop offset=".55" stop-color="#FFC061" stop-opacity=".62"/>
+        <stop offset="1"   stop-color="#FFE0B8" stop-opacity=".95"/>
+      </linearGradient>
+    </defs>
+    <line x1="8" y1="14" x2="150" y2="14" stroke="url(#ag)" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M148,5 L161,14 L148,23" fill="none" stroke="#FFE0B8" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>
+  </svg>
+
+  <div class="brandline">
+    <img class="mark" alt="" src="APP_ICON_DATA_URI">
+    <span class="name">Abendrot</span>
+  </div>
+
+  <div class="site">abendrot.app</div>
+
+  <div class="grain"></div>
+</div>
+</body></html>

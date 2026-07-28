@@ -5,9 +5,9 @@
   Runtime; no App Sandbox). Used ONLY in the signing job. Contains NO
   secrets — the signing identity is resolved from the temp keychain at export.
 
-  PLACEHOLDER: replace TEAMID_PLACEHOLDER with the maintainer's 10-char Team ID once
-  the $99 Apple Developer Program is active. Until then this file is inert (the
-  sign-notarize job is skipped without credentials).
+  Team ID wired 2026-07-27 (membership active). A Team ID is an identifier, not a
+  secret — it is readable from any distributed signed binary via
+  `codesign -dv --verbose=4` — so it is safe in the public mirror.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -16,7 +16,7 @@
   <string>developer-id</string>
 
   <key>teamID</key>
-  <string>TEAMID_PLACEHOLDER</string>
+  <string>XGFJEZS3MA</string>
 
   <!-- Manual signing: the Developer ID Application identity comes from the
        temporary keychain imported in CI (or login keychain locally). -->
