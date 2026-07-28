@@ -51,6 +51,7 @@ public enum AbendrotControl {
 // excludedApps [String] (sorted bundle ids)
 // userLatitude Double
 // userLongitude Double
+// displaySettings Data (Codable JSON of [DisplayIdentity.persistentKey: DisplaySettingsPreference])
 public enum PreferenceKey {
     public static let isEnabled = "isEnabled"
     public static let globalWarmthStrength = "globalWarmthStrength"
@@ -61,4 +62,29 @@ public enum PreferenceKey {
     public static let excludedApps = "excludedApps"
     public static let userLatitude = "userLatitude"
     public static let userLongitude = "userLongitude"
+    public static let displaySettings = "displaySettings"
+}
+
+// MARK: - DisplaySettingsPreference
+
+/// Persisted per-display Settings choices, keyed externally by `DisplayIdentity.persistentKey`.
+/// This intentionally mirrors the engine's launch-time displaySettings JSON shape so the app and
+/// engine can share one preference record while the running UI still validates before applying it.
+public struct DisplaySettingsPreference: Codable, Sendable, Equatable {
+    public var warmth: WarmthLevel
+    public var warmthOverridden: Bool
+    public var isHardwareDDCEnabled: Bool
+    public var preferredMethod: DisplayMethod?
+
+    public init(
+        warmth: WarmthLevel,
+        warmthOverridden: Bool,
+        isHardwareDDCEnabled: Bool,
+        preferredMethod: DisplayMethod?
+    ) {
+        self.warmth = warmth
+        self.warmthOverridden = warmthOverridden
+        self.isHardwareDDCEnabled = isHardwareDDCEnabled
+        self.preferredMethod = preferredMethod
+    }
 }

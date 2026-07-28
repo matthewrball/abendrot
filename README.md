@@ -7,7 +7,7 @@
 <p align="center">
   <strong>The macOS app for your circadian rhythm</strong><br>
   <br>
-  Grounded in peer-reviewed light research, Abendrot warms your displays around your local sunset.<sup><a href="https://abendrot.app/#references">[1,4-6,8]</a></sup><br>
+  Grounded in <a href="https://abendrot.app/#science">peer-reviewed light research</a>, Abendrot warms your displays around your local sunset.<br>
   <strong>Free and open source. No ads, no in-app purchases, no paywall.</strong>
 </p>
 
@@ -27,12 +27,12 @@
 
 **Abendrot** is a native macOS menu-bar app that warms each display using the methods available on that Mac. When direct display warming is unavailable, it can fall back to a screen tint.
 
-## Install
+## Install after 1.0.0 ships
 
 > [!IMPORTANT]
-> **Pre-release:** signed/notarized distribution and the final physical-display release matrix are still pending. The install options below become available with v1.0; contributors can use the [development setup](CONTRIBUTING.md#getting-set-up) today.
+> **Pre-release:** signed/notarized 1.0.0 distribution and the final physical-display release matrix are still pending. There is no unsigned public beta or download path. The install options below become available with 1.0.0; contributors can use the [development setup](CONTRIBUTING.md#getting-set-up) today.
 
-### Homebrew
+### Homebrew (after release)
 
 ```sh
 brew install --cask abendrot
@@ -40,7 +40,7 @@ brew install --cask abendrot
 
 ### Direct download
 
-Download the latest signed `.dmg` from [GitHub Releases](https://github.com/matthewrball/abendrot/releases/latest).
+After 1.0.0 ships, download the signed, notarized `.dmg` from [GitHub Releases](https://github.com/matthewrball/abendrot/releases).
 
 Requires macOS 26 "Tahoe" or later. Universal for Apple Silicon and Intel.
 
@@ -48,10 +48,10 @@ Requires macOS 26 "Tahoe" or later. Universal for Apple Silicon and Intel.
 
 ## Why Abendrot
 
-- **Per-display warming.** Abendrot detects the methods available for each display and offers direct warming or a screen tint as supported.
+- **Per-display warming.** Abendrot detects the methods available to each display and uses direct warming or a screen tint where supported.
 - **Reveal True Color.** Hold a global hotkey to temporarily lift warmth; release it to restore warmth.
 - **Scriptable & AI-controllable.** An `abendrot` CLI drives the running app from your terminal — or from an AI assistant like Claude Code, Codex, or Cursor. Read live state as JSON, set warmth, trigger a reveal. *(see [Scripting & AI control](#scripting--ai-control))*
-- **Health is the reason; reliability is the proof.** Abendrot helps you keep warmer, lower-blue light in the evening, and links the circadian research instead of making medical claims.
+- **Health is the context; reliability is the proof.** Abendrot gives you warmer, lower-blue light in the evening, and links the circadian research instead of making medical claims.
 - **Local and auditable.** MIT-licensed, no telemetry, no account. Settings and usage statistics stay on your Mac; only update checks contact GitHub.
 
 ## How it works
@@ -103,7 +103,7 @@ Issues and pull requests are welcome — bug reports from real display setups ar
 
 ## License
 
-[MIT](LICENSE) © Matthew Ball. Free and open source. If Abendrot helps your evenings, you can support its maintenance via GitHub Sponsors.
+[MIT](LICENSE) © Matthew Ball. Free and open source. If Abendrot is useful to you, you can support its maintenance via GitHub Sponsors.
 
 ---
 

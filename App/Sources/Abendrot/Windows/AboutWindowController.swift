@@ -187,7 +187,7 @@ private struct AboutBrandRail: View {
 
             Spacer()
         }
-        .padding(.top, 54)
+        .padding(.top, 46)
         .padding(.horizontal, 30)
         .padding(.bottom, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -211,7 +211,7 @@ private struct VersionLine: View {
 
     private var versionText: String {
         let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let build = info?["CFBundleVersion"] as? String ?? "1"
         return "Version \(short) (\(build))"
     }
@@ -229,14 +229,14 @@ private struct AboutContent: View {
                 .foregroundStyle(Theme.Color.textPrimary)
                 .lineSpacing(1)
 
-            Text("Grounded in peer-reviewed light research, Abendrot warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.")
+            Text("Grounded in peer-reviewed light research, Abendrot warms your displays around your local sunset. It changes screen color; it does not make a medical promise.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 22)
 
-            Link(destination: URL(string: "https://abendrot.app/#references")!) {
+            Link(destination: URL(string: "https://abendrot.app/#science")!) {
                 Label("Read the research", systemImage: "book.closed")
                     .foregroundStyle(Theme.Color.accentHighlight)
             }
@@ -264,7 +264,7 @@ private struct AboutContent: View {
             }
             .padding(.top, 15)
         }
-        .padding(.top, 42)
+        .padding(.top, 34)
         .padding(.horizontal, 34)
         .padding(.bottom, 27)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

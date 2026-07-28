@@ -59,9 +59,10 @@ final class AppModel {
     var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
 
     @ObservationIgnored private var sunsetMaximumWarmth = WarmthLevel(strength: 0.7)
-    @ObservationIgnored private var manualWarmth = WarmthLevel(strength: 0.7)
+    @ObservationIgnored private var manualWarmth = WarmthLevel(strength: 1.0)
     @ObservationIgnored private var pendingEnabled: Bool?
     @ObservationIgnored private var pendingScheduleMode: ScheduleModeOption?
+    @ObservationIgnored private var persistedDisplaySettings: [String: DisplaySettingsPreference] = [:]
 
     // MARK: Warmth drag hold (stops the engine echo from fighting the slider)
     //
@@ -270,6 +271,7 @@ final class AppModel {
                 next.globalWarmth = state.globalWarmth
             }
         }
+        applyPersistedDisplaySettings(to: &next, pushToEngine: true)
         state = next
     }
 
@@ -425,6 +427,18 @@ final class AppModel {
             let validApps = ControlValidation.normalizedPersistedBundleIDs(arr)
             if !validApps.isEmpty || arr.isEmpty {
                 setExcludedApps(Set(validApps))
+            }
+        }
+
+        if let data = cfPrefData(PreferenceKey.displaySettings) {
+            if let decoded = ControlValidation.decodedPersistedDisplaySettings(from: data) {
+                persistedDisplaySettings = decoded
+                persistDisplaySettings()
+                applyPersistedDisplaySettingsToCurrentRows()
+            } else {
+                CFPreferencesSetAppValue(PreferenceKey.displaySettings as CFString, nil, domain)
+                CFPreferencesAppSynchronize(domain)
+                persistedDisplaySettings = [:]
             }
         }
 
@@ -835,6 +849,7 @@ final class AppModel {
     static let excludedAppsKey = PreferenceKey.excludedApps
     static let userLatitudeKey = PreferenceKey.userLatitude
     static let userLongitudeKey = PreferenceKey.userLongitude
+    static let displaySettingsKey = PreferenceKey.displaySettings
     // Stats + onboarding keys stay local — they are NOT part of the CLI control surface.
     static let warmedSecondsKey = "stats.warmedSeconds"
     static let warmSunsetCountKey = "stats.warmSunsetCount"
@@ -912,6 +927,7 @@ final class AppModel {
         if let i = state.displays.firstIndex(where: { $0.id == id }) {
             state.displays[i].warmth = level
             state.displays[i].warmthOverridden = true   // setting a per-display value IS the override
+            rememberDisplaySettings(state.displays[i])
         }
         stampWarmthWrite(display: id)
         pushWarmthToEngine(level, for: id)
@@ -927,6 +943,7 @@ final class AppModel {
             if enabled {
                 state.displays[i].warmth = state.globalWarmth
             }
+            rememberDisplaySettings(state.displays[i])
         }
         Task { await engine?.setWarmthOverride(enabled, for: id) }
         if userInitiated, changed { playSoftToggleTone(on: enabled) }
@@ -938,7 +955,7 @@ final class AppModel {
             // The engine re-resolves and republishes the actually-applied method (which can differ
             // if the chosen layer isn't usable). nil = automatic best-available.
             state.displays[i].preferredMethod = method
-            if let method { state.displays[i].appliedMethod = method }
+            rememberDisplaySettings(state.displays[i])
         }
         Task { await engine?.setPreferredMethod(method, for: id) }
     }
@@ -948,9 +965,54 @@ final class AppModel {
         if let i = state.displays.firstIndex(where: { $0.id == id }) {
             changed = state.displays[i].isHardwareDDCEnabled != enabled
             state.displays[i].isHardwareDDCEnabled = enabled
+            rememberDisplaySettings(state.displays[i])
         }
         Task { await engine?.setHardwareDDCEnabled(enabled, for: id) }
         if userInitiated, changed { playSoftToggleTone(on: enabled) }
+    }
+
+    private func applyPersistedDisplaySettingsToCurrentRows() {
+        applyPersistedDisplaySettings(to: &state, pushToEngine: true)
+    }
+
+    private func applyPersistedDisplaySettings(to next: inout WarmthState, pushToEngine: Bool) {
+        for index in next.displays.indices {
+            let id = next.displays[index].id
+            guard let saved = persistedDisplaySettings[id.persistentKey] else { continue }
+            let original = next.displays[index]
+            next.displays[index].warmth = saved.warmth
+            next.displays[index].warmthOverridden = saved.warmthOverridden
+            next.displays[index].isHardwareDDCEnabled = saved.isHardwareDDCEnabled
+            next.displays[index].preferredMethod = saved.preferredMethod
+            guard pushToEngine, next.displays[index] != original else { continue }
+            let display = next.displays[index]
+            Task {
+                await engine?.setDisplaySettings(
+                    warmth: display.warmth,
+                    warmthOverridden: display.warmthOverridden,
+                    isHardwareDDCEnabled: display.isHardwareDDCEnabled,
+                    preferredMethod: display.preferredMethod,
+                    for: id
+                )
+            }
+        }
+    }
+
+    private func rememberDisplaySettings(_ display: DisplayState) {
+        persistedDisplaySettings[display.id.persistentKey] = DisplaySettingsPreference(
+            warmth: display.warmth,
+            warmthOverridden: display.warmthOverridden,
+            isHardwareDDCEnabled: display.isHardwareDDCEnabled,
+            preferredMethod: display.preferredMethod
+        )
+        persistDisplaySettings()
+    }
+
+    private func persistDisplaySettings() {
+        let sanitized = ControlValidation.normalizedPersistedDisplaySettings(persistedDisplaySettings)
+        persistedDisplaySettings = sanitized
+        guard let data = try? JSONEncoder().encode(sanitized) else { return }
+        UserDefaults.standard.set(data, forKey: Self.displaySettingsKey)
     }
 
     func setExcludedApps(_ bundleIDs: Set<String>) {

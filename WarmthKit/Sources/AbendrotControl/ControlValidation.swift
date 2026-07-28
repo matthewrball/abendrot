@@ -1,4 +1,5 @@
 import Foundation
+import WarmthCore
 
 // MARK: - ControlError
 //
@@ -26,6 +27,7 @@ public enum ControlValidation {
     public static let defaultRevealHoldSeconds = 3.0
     public static let maximumRevealHoldSeconds = 300.0
     public static let maximumBundleIDBytes = 255
+    public static let maximumDisplaySettingsKeyBytes = 512
 
     /// Global warmth strength must be 0.0–1.0 (matches `WarmthLevel`'s clamp domain).
     public static func validatedStrength(_ value: Double) throws -> Double {
@@ -109,5 +111,122 @@ public enum ControlValidation {
 
     public static func normalizedPersistedBundleIDs(_ raw: [String]) -> [String] {
         Array(Set(raw.compactMap { try? validatedBundleID($0) })).sorted()
+    }
+
+    /// Display settings are restored by durable `DisplayIdentity.persistentKey`. Reject malformed
+    /// keys and impossible warmth values, and collapse legacy/unsafe method overrides to automatic
+    /// (`nil`) rather than preserving a forced layer that the current UI no longer exposes.
+    public static func decodedPersistedDisplaySettings(from data: Data) -> [String: DisplaySettingsPreference]? {
+        guard let topLevel = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return topLevel.reduce(into: [:]) { result, entry in
+            guard isValidDisplaySettingsKey(entry.key),
+                  JSONSerialization.isValidJSONObject(entry.value),
+                  let entryData = try? JSONSerialization.data(withJSONObject: entry.value),
+                  let raw = try? JSONDecoder().decode(RawDisplaySettingsPreference.self, from: entryData),
+                  let sanitized = normalizedPersistedDisplaySetting(raw) else { return }
+            result[entry.key] = sanitized
+        }
+    }
+
+    public static func normalizedPersistedDisplaySettings(
+        _ raw: [String: DisplaySettingsPreference]
+    ) -> [String: DisplaySettingsPreference] {
+        raw.reduce(into: [:]) { result, entry in
+            guard isValidDisplaySettingsKey(entry.key),
+                  let sanitized = normalizedPersistedDisplaySetting(entry.value) else { return }
+            result[entry.key] = sanitized
+        }
+    }
+
+    private static func normalizedPersistedDisplaySetting(
+        _ raw: DisplaySettingsPreference
+    ) -> DisplaySettingsPreference? {
+        normalizedPersistedDisplaySetting(
+            warmth: raw.warmth,
+            warmthOverridden: raw.warmthOverridden,
+            isHardwareDDCEnabled: raw.isHardwareDDCEnabled,
+            preferredMethod: raw.preferredMethod
+        )
+    }
+
+    private static func normalizedPersistedDisplaySetting(
+        _ raw: RawDisplaySettingsPreference
+    ) -> DisplaySettingsPreference? {
+        let method: DisplayMethod?
+        switch raw.preferredMethod {
+        case "hardware": method = .hardware
+        case "overlay": method = .overlay
+        case "gamma", "off", nil: method = nil
+        default: method = nil
+        }
+        return normalizedPersistedDisplaySetting(
+            strength: raw.warmth.strength,
+            warmthOverridden: raw.warmthOverridden,
+            isHardwareDDCEnabled: raw.isHardwareDDCEnabled,
+            preferredMethod: method
+        )
+    }
+
+    private static func normalizedPersistedDisplaySetting(
+        warmth: WarmthLevel,
+        warmthOverridden: Bool,
+        isHardwareDDCEnabled: Bool,
+        preferredMethod: DisplayMethod?
+    ) -> DisplaySettingsPreference? {
+        normalizedPersistedDisplaySetting(
+            strength: warmth.strength,
+            warmthOverridden: warmthOverridden,
+            isHardwareDDCEnabled: isHardwareDDCEnabled,
+            preferredMethod: preferredMethod
+        )
+    }
+
+    private static func normalizedPersistedDisplaySetting(
+        strength: Double,
+        warmthOverridden: Bool,
+        isHardwareDDCEnabled: Bool,
+        preferredMethod: DisplayMethod?
+    ) -> DisplaySettingsPreference? {
+        guard strength.isFinite, (0.0...1.0).contains(strength) else { return nil }
+        var ddcEnabled = isHardwareDDCEnabled
+        let method: DisplayMethod?
+        switch preferredMethod {
+        case .hardware:
+            method = ddcEnabled ? .hardware : nil
+        case .overlay:
+            method = .overlay
+            ddcEnabled = false
+        case .gamma, .off, nil:
+            method = nil
+        }
+        return DisplaySettingsPreference(
+            warmth: WarmthLevel(strength: strength),
+            warmthOverridden: warmthOverridden,
+            isHardwareDDCEnabled: ddcEnabled,
+            preferredMethod: method
+        )
+    }
+
+    private static func isValidDisplaySettingsKey(_ key: String) -> Bool {
+        guard !key.isEmpty, key.utf8.count <= maximumDisplaySettingsKeyBytes else { return false }
+        return key.unicodeScalars.allSatisfy { scalar in
+            scalar.value == 45 || scalar.value == 46 || scalar.value == 124 ||
+                (48...57).contains(scalar.value) ||
+                (65...90).contains(scalar.value) ||
+                (97...122).contains(scalar.value)
+        }
+    }
+
+    private struct RawDisplaySettingsPreference: Decodable {
+        var warmth: RawWarmthLevel
+        var warmthOverridden: Bool
+        var isHardwareDDCEnabled: Bool
+        var preferredMethod: String?
+    }
+
+    private struct RawWarmthLevel: Decodable {
+        var strength: Double
     }
 }

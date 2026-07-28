@@ -30,7 +30,7 @@ enum OnboardingLayout {
     static let scheduleSunsetHeight: CGFloat = 580
     static let scheduleHeaderHeight: CGFloat = 210
     static let warmthHeight: CGFloat = 500
-    static let allSetHeight: CGFloat = 353
+    static let allSetHeight: CGFloat = 345
     static let minimumContentHeight: CGFloat = 300
     static let maximumContentHeight: CGFloat = 665
 
@@ -73,7 +73,7 @@ struct OnboardingView: View {
     // wipe an Always-on user's dialed warmth. The warmth step then re-primes to warmest on EACH entry for
     // Sunset (a "preview of your evening"); Always-on keeps what the user set. See the two onAppears.
     @State private var hasInitializedWarmth = false
-    /// Mirrors the warmth slider's press state: the blue-light % rolls on discrete changes (Cozy on→99)
+    /// Mirrors the warmth slider's press state: the blue-light % rolls on discrete changes
     /// but stays silent during a live drag, where rapid numericText changes glitch. Fed by WarmSlider.
     @State private var sliderPressing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -95,7 +95,7 @@ struct OnboardingView: View {
             .transition(.opacity)
             .frame(maxHeight: .infinity, alignment: .top)
         }
-        .padding(24)
+        .padding(EdgeInsets(top: 24, leading: 24, bottom: 16, trailing: 24))
         // The NSWindow owns the resize. SwiftUI fills the live AppKit host height, so controls move with
         // the actual window edge instead of jumping straight to the final target height.
         .frame(width: OnboardingLayout.contentWidth, alignment: .top)
@@ -167,7 +167,7 @@ struct OnboardingView: View {
             Text("Welcome to Abendrot")
                 .font(Theme.Typography.serif(20))
                 .foregroundStyle(Theme.Color.textPrimary)
-            Text("Grounded in peer-reviewed light research, Abendrot warms your entire workspace around sunset because staring at bright blue light at night is suboptimal.\n\nFree to use.\nNo account, no tracking.")
+            Text("Grounded in peer-reviewed light research, Abendrot warms your entire workspace around sunset.\n\nFree to use.\nNo account, no tracking.")
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textMuted)
                 .multilineTextAlignment(.center)
@@ -215,7 +215,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.Color.accentHighlight)
 
             // Same science-backed accent metric as the popover ticker (instant updates here).
-            BlueLightReductionLabel(kelvin: model.globalKelvin, cozy: isCozy, animated: !sliderPressing)
+            BlueLightReductionLabel(kelvin: model.globalKelvin, animated: !sliderPressing)
 
             WarmSlider(strength: Binding(
                 get: { model.state.globalWarmth.strength },
@@ -310,7 +310,7 @@ private var manualDetail: some View {
         }
         .zIndex(1)
 
-        BlueLightReductionLabel(kelvin: model.globalKelvin, cozy: isCozy, animated: !sliderPressing)
+        BlueLightReductionLabel(kelvin: model.globalKelvin, animated: !sliderPressing)
 
         WarmSlider(strength: Binding(
             get: { model.state.globalWarmth.strength },

@@ -29,6 +29,7 @@ final class AbendrotControlTests: XCTestCase {
         XCTAssertEqual(PreferenceKey.excludedApps, "excludedApps")
         XCTAssertEqual(PreferenceKey.userLatitude, "userLatitude")
         XCTAssertEqual(PreferenceKey.userLongitude, "userLongitude")
+        XCTAssertEqual(PreferenceKey.displaySettings, "displaySettings")
     }
 
     func testIdentityConstants() {
@@ -114,7 +115,7 @@ final class AbendrotControlTests: XCTestCase {
 
     func testSnapshotCodableRoundTrip() throws {
         let snapshot = ControlStateSnapshot(
-            appVersion: "0.1.0",
+            appVersion: "1.0.0",
             appBuild: "1",
             pid: 4242,
             appLaunchID: UUID().uuidString,
@@ -159,7 +160,7 @@ final class AbendrotControlTests: XCTestCase {
 
         func snapshot(maxK: Int) -> ControlStateSnapshot {
             ControlStateSnapshot(
-                appVersion: "0.1.0", appBuild: "1", pid: 1, appLaunchID: "L",
+                appVersion: "1.0.0", appBuild: "1", pid: 1, appLaunchID: "L",
                 updatedAt: Date(timeIntervalSince1970: 0), lastAppliedRequestID: nil,
                 isEnabled: true, scheduleMode: .sunset, isScheduleActiveNow: false,
                 isRevealing: false, globalWarmthStrength: 0.7, globalKelvin: 2700,
@@ -169,13 +170,131 @@ final class AbendrotControlTests: XCTestCase {
         XCTAssertFalse(snapshot(maxK: 1900).cozy)   // everyday ceiling
     }
 
+    // MARK: DisplaySettingsPreference
+
+    func testDisplaySettingsPreferenceCodableRoundTrip() throws {
+        let settings = [
+            "A1B2C3D4-1111-2222-3333-444455556666|610-4097-123": DisplaySettingsPreference(
+                warmth: WarmthLevel(strength: 0.42),
+                warmthOverridden: true,
+                isHardwareDDCEnabled: true,
+                preferredMethod: .hardware
+            ),
+        ]
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode([String: DisplaySettingsPreference].self, from: data)
+
+        XCTAssertEqual(decoded, settings)
+    }
+
+    func testDisplaySettingsPreferenceSanitizesInvalidStoredValues() throws {
+        let validKey = "A1B2C3D4-1111-2222-3333-444455556666|610-4097-123"
+        let sanitized = try XCTUnwrap(ControlValidation.decodedPersistedDisplaySettings(from: Data("""
+        {
+          "\(validKey)": {
+            "warmth": {"strength": 0.5},
+            "warmthOverridden": true,
+            "isHardwareDDCEnabled": true,
+            "preferredMethod": "off"
+          },
+          "bad/key": {
+            "warmth": {"strength": 0.7},
+            "warmthOverridden": true,
+            "isHardwareDDCEnabled": true,
+            "preferredMethod": "hardware"
+          },
+          "BAD-OUT-OF-RANGE": {
+            "warmth": {"strength": 1.5},
+            "warmthOverridden": true,
+            "isHardwareDDCEnabled": true,
+            "preferredMethod": "overlay"
+          }
+        }
+        """.utf8)))
+
+        XCTAssertEqual(Array(sanitized.keys), [validKey])
+        XCTAssertEqual(sanitized[validKey]?.warmth.strength, 0.5)
+        XCTAssertNil(sanitized[validKey]?.preferredMethod)
+    }
+
+    func testDisplaySettingsDecodeKeepsValidSiblingWhenOneEntryHasUnknownMethod() throws {
+        let validKey = "A1B2C3D4-1111-2222-3333-444455556666"
+        let unknownMethodKey = "BBBBCCCC-1111-2222-3333-444455556666"
+        let decoded = try XCTUnwrap(ControlValidation.decodedPersistedDisplaySettings(from: Data("""
+        {
+          "\(validKey)": {
+            "warmth": {"strength": 0.42},
+            "warmthOverridden": true,
+            "isHardwareDDCEnabled": true,
+            "preferredMethod": "hardware"
+          },
+          "\(unknownMethodKey)": {
+            "warmth": {"strength": 0.7},
+            "warmthOverridden": false,
+            "isHardwareDDCEnabled": true,
+            "preferredMethod": "future-method"
+          }
+        }
+        """.utf8)))
+
+        XCTAssertEqual(decoded[validKey]?.preferredMethod, .hardware)
+        XCTAssertEqual(decoded[unknownMethodKey]?.warmth.strength, 0.7)
+        XCTAssertEqual(decoded[unknownMethodKey]?.isHardwareDDCEnabled, true)
+        XCTAssertNil(decoded[unknownMethodKey]?.preferredMethod)
+    }
+
+    func testHardwareMethodWithoutDDCOptInSanitizesToAutomatic() {
+        let key = "A1B2C3D4-1111-2222-3333-444455556666"
+        let sanitized = ControlValidation.normalizedPersistedDisplaySettings([
+            key: DisplaySettingsPreference(
+                warmth: WarmthLevel(strength: 0.5),
+                warmthOverridden: true,
+                isHardwareDDCEnabled: false,
+                preferredMethod: .hardware
+            ),
+        ])
+
+        XCTAssertEqual(sanitized[key]?.isHardwareDDCEnabled, false)
+        XCTAssertNil(sanitized[key]?.preferredMethod)
+    }
+
+    func testOverlayMethodForcesDDCOptInOff() {
+        let key = "A1B2C3D4-1111-2222-3333-444455556666"
+        let sanitized = ControlValidation.normalizedPersistedDisplaySettings([
+            key: DisplaySettingsPreference(
+                warmth: WarmthLevel(strength: 0.5),
+                warmthOverridden: true,
+                isHardwareDDCEnabled: true,
+                preferredMethod: .overlay
+            ),
+        ])
+
+        XCTAssertEqual(sanitized[key]?.isHardwareDDCEnabled, false)
+        XCTAssertEqual(sanitized[key]?.preferredMethod, .overlay)
+    }
+
+    func testLegacyGammaDisplayPreferenceSanitizesToAutomatic() {
+        let key = "A1B2C3D4-1111-2222-3333-444455556666"
+        let sanitized = ControlValidation.normalizedPersistedDisplaySettings([
+            key: DisplaySettingsPreference(
+                warmth: WarmthLevel(strength: 0.5),
+                warmthOverridden: false,
+                isHardwareDDCEnabled: false,
+                preferredMethod: .gamma
+            ),
+        ])
+
+        XCTAssertNil(sanitized[key]?.preferredMethod)
+    }
+
     // MARK: ControlLiveness — forward-compatible decode of a future snapshot
 
     func testLivenessDecodesFromFullSnapshotJSON() throws {
         // The minimal liveness view must decode from a real full-snapshot encoding (same field
         // names/types), so the CLI's liveness/ack path works against the current app.
         let snapshot = ControlStateSnapshot(
-            appVersion: "0.1.0", appBuild: "1", pid: 4242,
+            appVersion: "1.0.0", appBuild: "1", pid: 4242,
             appLaunchID: UUID().uuidString,
             updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
             lastAppliedRequestID: "REQ-1",

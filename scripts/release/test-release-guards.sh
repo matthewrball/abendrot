@@ -20,6 +20,7 @@ grep -qF "github.ref == 'refs/heads/main'" "$CI_WORKFLOW"
 grep -qF "environment: release-signing" "$CI_WORKFLOW"
 grep -qF "python3 scripts/release/validate-appcast.py appcast.xml" "$CI_WORKFLOW"
 grep -qF '[ "$PUBLISH_APPCAST" = "true" ] && GH_FLAGS+=( --draft )' "$RELEASE_SCRIPT"
+grep -qF "Unsigned artifacts cannot be published or uploaded" "$RELEASE_SCRIPT"
 if grep -Eq '^  (detect-signing-secrets|detect-secrets):' "$CI_WORKFLOW"; then
   echo "CI must not read release secrets in a separate push/PR-visible job." >&2
   exit 1
@@ -316,7 +317,7 @@ PATH="$EARLY_SIGN_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" 
   MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
   RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
   GH_TARGET_SHA="$TARGET_MAIN" GH_MAIN_SHA="$TARGET_MAIN" \
-  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" --unsigned \
+  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" \
   >/dev/null 2>"$TMP/stale-app-stderr"
 rc=$?
 set -e
@@ -327,8 +328,11 @@ echo "PASS: publishing refuses a stale exported app bundle"
   "$APP/Contents/Info.plist"
 
 set +e
-PATH="/usr/bin:/bin:/usr/sbin:/sbin" RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
-  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" --unsigned \
+PATH="$EARLY_SIGN_BIN:/usr/bin:/bin:/usr/sbin:/sbin" \
+  DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
+  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" \
   >/dev/null 2>"$TMP/no-gh-stderr"
 rc=$?
 set -e
@@ -337,8 +341,10 @@ grep -qF "RELEASE_PUBLISH=1 requires the gh CLI" "$TMP/no-gh-stderr"
 echo "PASS: publishing fails closed when gh is unavailable"
 
 set +e
-PATH="$MOCK_GH:$PATH" RELEASE_PUBLISH=1 \
-  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" --unsigned \
+PATH="$EARLY_SIGN_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  RELEASE_PUBLISH=1 \
+  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" \
   >/dev/null 2>"$TMP/no-target-stderr"
 rc=$?
 set -e
@@ -347,21 +353,25 @@ grep -qF "RELEASE_TARGET_SHA must be the exact 40-char curated public commit SHA
 echo "PASS: publishing requires an explicit curated public release target"
 
 set +e
-PATH="$MOCK_GH:$PATH" RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_OTHER" \
+PATH="$EARLY_SIGN_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_OTHER" \
   GH_TARGET_SHA="$TARGET_OTHER" GH_MAIN_SHA="$TARGET_MAIN" GH_DEV_SHA="$TARGET_DEV" \
-  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" --unsigned \
+  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" \
   >/dev/null 2>"$TMP/bad-target-stderr"
 rc=$?
 set -e
 [ "$rc" -eq 9 ]
-grep -qF "RELEASE_TARGET_SHA must be public main or public-dev" "$TMP/bad-target-stderr"
-echo "PASS: release target must be on the curated public lineage"
+grep -qF "stable releases must target the curated public main SHA" "$TMP/bad-target-stderr"
+echo "PASS: stable release target must be the curated public main SHA"
 
 set +e
-PATH="$MOCK_GH:$PATH" RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
+PATH="$EARLY_SIGN_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
   GH_TARGET_SHA="$TARGET_MAIN" GH_MAIN_SHA="$TARGET_MAIN" GH_TAG_EXISTS=1 \
   GH_COMMIT_MESSAGE=$'sync from build\n\nSource-Build-Commit: '"$FAKE_HEAD" \
-  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" --unsigned \
+  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" \
   >/dev/null 2>"$TMP/stale-tag-stderr"
 rc=$?
 set -e
@@ -370,19 +380,23 @@ grep -qF "remote tag v1.0.0 already exists" "$TMP/stale-tag-stderr"
 echo "PASS: publishing refuses an existing stale release tag"
 
 set +e
-PATH="$EARLY_SIGN_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
-  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+cp "$APPCAST" "$TMP/unsigned-publish-appcast-before.xml"
+rm -f "$TMP/unsigned-gh-release.log"
+PATH="$EARLY_SIGN_BIN:$MOCK_GH:$PATH" \
   RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
   GH_TARGET_SHA="$TARGET_MAIN" GH_MAIN_SHA="$TARGET_MAIN" \
   GH_COMMIT_MESSAGE="sync without source trailer" \
+  GH_RELEASE_LOG="$TMP/unsigned-gh-release.log" APPCAST_PATH="$APPCAST" \
   "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" --unsigned \
-  >/dev/null 2>"$TMP/unsigned-missing-trailer-stderr"
+  >/dev/null 2>"$TMP/unsigned-publish-stderr"
 rc=$?
 set -e
 [ "$rc" -eq 9 ]
-grep -qF "must contain exactly one Source-Build-Commit" \
-  "$TMP/unsigned-missing-trailer-stderr"
-echo "PASS: unsigned publishing still requires the source-build trailer"
+grep -qF -- "--unsigned is private/local dry-run packaging only" \
+  "$TMP/unsigned-publish-stderr"
+cmp "$TMP/unsigned-publish-appcast-before.xml" "$APPCAST"
+[ ! -e "$TMP/unsigned-gh-release.log" ]
+echo "PASS: unsigned publish/upload mode is rejected before gh and leaves appcast unchanged"
 
 set +e
 PATH="$EARLY_SIGN_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
@@ -453,24 +467,13 @@ grep -qF "verified curated public release target $TARGET_MAIN" "$TMP/good-traile
 grep -qF "SUPublicEDKey must decode to exactly 32 bytes" "$TMP/good-trailer-stderr"
 echo "PASS: stable publishing accepts the exact source-build trailer before later gates"
 
-set +e
-PATH="$MOCK_GH:$PATH" RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \
-  GH_TARGET_SHA="$TARGET_MAIN" GH_MAIN_SHA="$TARGET_MAIN" \
-  GH_COMMIT_MESSAGE=$'sync from build\n\nSource-Build-Commit: '"$FAKE_HEAD" \
-  "$FAKE_ROOT/scripts/release/release.sh" --app "$APP" --unsigned \
-  >"$TMP/good-target-out" 2>"$TMP/good-target-stderr"
-rc=$?
-set -e
-[ "$rc" -eq 5 ]
-grep -qF "verified curated public release target $TARGET_MAIN" "$TMP/good-target-out"
-grep -qF "required cli/ package missing" "$TMP/good-target-stderr"
-echo "PASS: explicit release target is verified before publishing work continues"
-
 DIRTY_MARKER="$ROOT/.release-guard-dirty.$$"
 : > "$DIRTY_MARKER"
 set +e
-RELEASE_PUBLISH=1 APPCAST_PATH="$APPCAST" "$ROOT/scripts/release/release.sh" \
-  --app "$APP" --unsigned >/dev/null 2>"$TMP/dirty-stderr"
+PATH="$EARLY_SIGN_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  RELEASE_PUBLISH=1 APPCAST_PATH="$APPCAST" "$ROOT/scripts/release/release.sh" \
+  --app "$APP" >/dev/null 2>"$TMP/dirty-stderr"
 rc=$?
 set -e
 [ "$rc" -eq 9 ]

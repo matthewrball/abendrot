@@ -31,7 +31,7 @@ struct WarmSlider: View {
     /// stay honest); a lock badge rides the thumb and a hover tooltip explains why. Editable elsewhere.
     var isLocked: Bool = false
     /// Reports the press/drag state outward (onboarding suppresses the blue-light % roll during a live
-    /// drag but lets it animate on discrete changes like Cozy on→99). Default no-op for other callers.
+    /// drag but lets it animate on discrete changes). Default no-op for other callers.
     var onPressingChanged: (Bool) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -56,7 +56,9 @@ struct WarmSlider: View {
     /// marks you see line up exactly with the clicks you hear. More = finer/denser mini ticks.
     private let detentCount = 110
     /// Left edge of the visible slider: still soft, not true off. True off lives in the master toggle.
-    private let minimumSoftStrength = 0.12
+    // 0.104 maps to ~5193K on the everyday 1900K curve, which the shared blue-light label reports
+    // as ≈15% less blue-channel light. Keep the soft end factually aligned with the label.
+    private let minimumSoftStrength = 0.104
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 12) {
@@ -95,7 +97,7 @@ struct WarmSlider: View {
         .zIndex(showKelvinInfo ? 10 : 0)
         .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showKelvinInfo)
         // Surface the press/drag state so callers can gate animations (onboarding silences the
-        // blue-light % roll during a live drag, but lets it animate on discrete changes like Cozy on→99).
+        // blue-light % roll during a live drag, but lets it animate on discrete changes).
         .onChange(of: isPressing) { _, pressing in onPressingChanged(pressing) }
     }
 
@@ -134,7 +136,7 @@ struct WarmSlider: View {
                 .accessibilityLabel("\(headerTitle) \(displayKelvin.displayValue) Kelvin")
 
                 // Accent metric: estimated blue-light reduction (instant during a live drag).
-                BlueLightReductionLabel(kelvin: displayKelvin, cozy: cozy, animated: !isPressing)
+                BlueLightReductionLabel(kelvin: displayKelvin, animated: !isPressing)
                     .padding(.top, 3)
             }
         }

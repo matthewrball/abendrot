@@ -128,8 +128,9 @@ public struct ControlLiveness: Codable, Sendable, Equatable {
 
 // MARK: - DisplaySnapshot
 //
-// Per-display read-only status the CLI surfaces under `status` — the live runtime truth that is
-// NOT in UserDefaults (applied method, override, DDC, last error). Keyed by the stable display id.
+// Per-display status the CLI surfaces under `status`. `appliedMethod` and `lastError` are live
+// runtime truth only; `preferredMethod`, `warmthStrength`/`warmthOverridden`, and DDC opt-in also
+// mirror the persisted per-display Settings choices. Keyed by the stable display id.
 public struct DisplaySnapshot: Codable, Sendable, Equatable {
     public var id: String                  // DisplayIdentity.cgUUID.uuidString
     public var name: String

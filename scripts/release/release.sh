@@ -19,9 +19,10 @@
 # 7. Upload stable releases as GitHub drafts. Publish the draft only after the
 # appcast has passed public-dev CI and been promoted to public main.
 #
-# DESIGN RULE: release is GATED on >=1 notarized+stapled DMG WHEN
-# signing is enabled. When signing is deferred (no Apple account) the gate is
-# relaxed and the script clearly stamps the output as an UNSIGNED pre-release.
+# DESIGN RULE: public release is GATED on >=1 notarized+stapled DMG, Developer
+# ID signing, and Sparkle EdDSA signing. When signing is deferred (no Apple
+# account), --unsigned is private/local dry-run packaging only and cannot publish
+# or upload artifacts.
 #
 # This file is a working SKELETON: the Sparkle + appcast + gh steps are real
 # command lines, guarded so the script runs end-to-end TODAY without credentials
@@ -34,8 +35,8 @@
 # * SIGNED path (default for a real release): a missing/empty EdDSA signature is
 # a HARD FAILURE — the script exits non-zero and writes NOTHING to the
 # appcast. We never publish an item that claims to be signed but isn't.
-# * UNSIGNED path (--unsigned, local testing only): the script forces a GitHub
-# pre-release and does not modify the production appcast.
+# * UNSIGNED path (--unsigned, local testing only): the script produces a local
+# smoke artifact and does not modify the production appcast.
 #
 # Usage:
 # scripts/release/release.sh --app <exported/Abendrot.app> [--prerelease] \
@@ -82,6 +83,11 @@ done
 
 [ -n "$APP" ] || { echo "release: --app <exported app> is required." >&2; exit 2; }
 [ -d "$APP" ] || { echo "release: app not found at '$APP'." >&2; exit 3; }
+if [ "${RELEASE_PUBLISH:-0}" = "1" ] && [ "$UNSIGNED" = "true" ]; then
+  echo "release: ABORT — --unsigned is private/local dry-run packaging only." >&2
+  echo "         Unsigned artifacts cannot be published or uploaded. Re-run without --unsigned after Developer ID signing, notarization, stapling, and Sparkle signing." >&2
+  exit 9
+fi
 if [ "${RELEASE_PUBLISH:-0}" = "1" ] &&
    [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=all)" ]; then
   echo "release: ABORT — publishing requires a clean committed source tree." >&2
@@ -463,8 +469,8 @@ if [ "$UNSIGNED" != "true" ] && [ "$NOTARIZED" != "true" ]; then
   exit 4
 fi
 if [ "$NOTARIZED" != "true" ]; then
-  echo "release: NOTE — UNSIGNED pre-release. Mark the GitHub release as" >&2
-  echo "         pre-release and document the right-click>Open / xattr workaround." >&2
+  echo "release: NOTE — unsigned private/local smoke artifact." >&2
+  echo "         Do not publish or upload; use right-click>Open / xattr only for local testing." >&2
   PRERELEASE="true"
 fi
 
@@ -487,8 +493,7 @@ DMG_SIZE="$(stat -f%z "$DMG_OUT" 2>/dev/null || wc -c < "$DMG_OUT")"
 
 if [ "$SIGNED" = "false" ]; then
   echo "release: --unsigned -> building an UNSIGNED local-test release." >&2
-  echo "         The production appcast will not be modified; any GitHub release" >&2
-  echo "         is forced to pre-release." >&2
+  echo "         The production appcast will not be modified; publish/upload mode is rejected." >&2
   PRERELEASE="true"
 else
   SIGN_UPDATE="${SPARKLE_SIGN_UPDATE:-}"
@@ -629,6 +634,11 @@ if command -v gh >/dev/null 2>&1; then
   echo "release: gh release create ${GH_FLAGS[*]}"
   echo "release: (DRY-RUN GUARD) set RELEASE_PUBLISH=1 to actually publish."
   if [ "${RELEASE_PUBLISH:-0}" = "1" ]; then
+    if [ "$UNSIGNED" = "true" ]; then
+      echo "release: ABORT — --unsigned is private/local dry-run packaging only." >&2
+      echo "         Unsigned artifacts cannot be published or uploaded." >&2
+      exit 9
+    fi
     gh release create "${GH_FLAGS[@]}"
     if [ "$PUBLISH_APPCAST" = "true" ]; then
       mv "$APPCAST_CANDIDATE" "$APPCAST_PATH" || {
@@ -643,7 +653,8 @@ if command -v gh >/dev/null 2>&1; then
     elif [ "$SIGNED" = "true" ]; then
       echo "release: published signed pre-release $TAG; appcast unchanged."
     else
-      echo "release: published unsigned pre-release $TAG; appcast unchanged."
+      echo "release: ABORT — unsigned upload reached an unreachable release branch." >&2
+      exit 9
     fi
   else
     echo "release: skipped publish (dry run). DMG at $DMG_OUT."

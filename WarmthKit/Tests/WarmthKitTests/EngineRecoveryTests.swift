@@ -148,6 +148,31 @@ struct EngineRecoveryTests {
         #expect(row.appliedMethod == .overlay)
         #expect(row.lastError != nil)
     }
+
+    @Test("restoring per-display choices applies one exact state")
+    func restoringDisplaySettingsAppliesExactState() async throws {
+        let display = DisplayIdentity.fixture()
+        let engine = WarmthEngine.test(
+            backends: [],
+            store: InMemoryDDCSnapshotStore(),
+            displays: [display]
+        )
+        await engine.start()
+        await engine.setDisplaySettings(
+            warmth: WarmthLevel(strength: 0.42),
+            warmthOverridden: true,
+            isHardwareDDCEnabled: true,
+            preferredMethod: .hardware,
+            for: display
+        )
+
+        let restored = try #require(await engine.state.displays.first)
+        #expect(restored.warmth.strength == 0.42)
+        #expect(restored.warmthOverridden)
+        #expect(restored.isHardwareDDCEnabled)
+        #expect(restored.preferredMethod == .hardware)
+    }
+
 }
 
 private actor FailingDirtyStore: DDCSnapshotStore {

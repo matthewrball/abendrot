@@ -324,6 +324,24 @@ public actor WarmthEngine {
         publish()
     }
 
+    /// Restore all user-controlled fields for one display in a single apply/publish cycle.
+    public func setDisplaySettings(
+        warmth: WarmthLevel,
+        warmthOverridden: Bool,
+        isHardwareDDCEnabled: Bool,
+        preferredMethod: DisplayMethod?,
+        for id: DisplayIdentity
+    ) async {
+        guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }
+        box.value.displays[index].warmth = warmth
+        box.value.displays[index].warmthOverridden = warmthOverridden
+        box.value.displays[index].isHardwareDDCEnabled = isHardwareDDCEnabled
+        box.value.displays[index].preferredMethod = preferredMethod
+        rememberSettings(box.value.displays[index])
+        await reapply()
+        publish()
+    }
+
     /// Force a specific layer for a display, or nil to return to automatic best-available.
     public func setPreferredMethod(_ method: DisplayMethod?, for id: DisplayIdentity) async {
         guard let index = box.value.displays.firstIndex(where: { $0.id == id }) else { return }

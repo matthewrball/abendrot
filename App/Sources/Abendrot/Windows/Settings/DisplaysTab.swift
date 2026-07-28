@@ -7,13 +7,38 @@ struct DisplaysTab: View {
     @Bindable var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: model.state.displays.count == 1 ? "Display" : "Displays", subtitle: "Each connected display and how it's warmed.")
+            TabHeader(title: model.state.displays.count == 1 ? "Display" : "Displays", subtitle: "Each connected display and its warming settings.")
+            if let inactiveMessage {
+                Label(inactiveMessage, systemImage: "clock")
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        Theme.Color.line.opacity(0.4),
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous)
+                    )
+            }
             VStack(spacing: 12) {
                 ForEach(model.state.displays) { display in
                     DisplayConfigRow(display: display, model: model)
                 }
             }
         }
+    }
+
+    private var inactiveMessage: String? {
+        if !model.state.isEnabled {
+            return "Warming is turned off. Changes are saved and apply when you turn it on."
+        }
+        if model.state.isRevealing {
+            return "True Color Reveal is active. Changes are saved and apply when it ends."
+        }
+        if !model.state.isScheduleActiveNow {
+            return "Warming is not active right now. Changes are saved and apply when warming is active."
+        }
+        return nil
     }
 }
 
@@ -34,7 +59,7 @@ private struct DisplayConfigRow: View {
                     .foregroundStyle(Theme.Color.textPrimary)
                 Text(statusLine)
                     .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(statusColor)
+                    .foregroundStyle(Theme.Color.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -50,28 +75,25 @@ private struct DisplayConfigRow: View {
                     in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
     }
 
-    /// A display can be *truly* warmed when a real white-point path is available — gamma or hardware
-    /// DDC — with advanced methods enabled. Otherwise it can only be tinted. (Mirrors the popover's
-    /// `isTintOnly`,)
-    private var canTrueWarm: Bool {
-        let priv = model.state.privateAPIsEnabled
-        return priv && (display.capabilities.gamma.isSupported || display.capabilities.hardware.isSupported)
-    }
-
-    // Single source so the copy and its colour can't drift apart (review): incompatibility uses the
-    // warning accent; a user-chosen tint and a true warm both read muted.
-    private var status: (text: String, color: Color) {
-        if !canTrueWarm {
-            return ("Can only be tinted on this Mac — true warming isn’t available for this display", Theme.Color.accentHighlight)
+    private var statusLine: String {
+        switch display.appliedMethod {
+        case .hardware:
+            return "Using display hardware"
+        case .gamma:
+            return "Using standard color adjustment"
+        case .overlay:
+            return "Using a warm screen tint"
+        case .off:
+            switch display.preferredMethod {
+            case .hardware:
+                return "Hardware control selected"
+            case .overlay:
+                return "Screen tint selected"
+            default:
+                return "Automatic method selected"
+            }
         }
-        if display.preferredMethod == .overlay {
-            return ("Adding a warm tint — not true warming", Theme.Color.textMuted)
-        }
-        return ("Truly warmed — removes blue light", Theme.Color.textMuted)
     }
-
-    private var statusLine: String { status.text }
-    private var statusColor: Color { status.color }
 }
 
 // MARK: - Per-display override + custom warmth (Settings superset of the popover quick control)
@@ -91,10 +113,10 @@ private struct PerDisplayWarmthControl: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Override")
                         .font(Theme.Typography.ui(11.5, weight: .medium))
-                        .foregroundStyle(Theme.Color.textMuted)
+                        .foregroundStyle(display.warmthOverridden ? Theme.Color.textPrimary : Theme.Color.textMuted)
                     Text(display.warmthOverridden ? "Custom warmth for this display" : "Follows the global warmth")
                         .font(Theme.Typography.ui(11))
-                        .foregroundStyle(Theme.Color.textFaint)
+                        .foregroundStyle(display.warmthOverridden ? Theme.Color.textMuted : Theme.Color.textFaint)
                 }
                 Spacer()
                 Toggle("", isOn: overrideBinding)
@@ -126,7 +148,7 @@ private struct PerDisplayWarmthControl: View {
 
 // MARK: - Warming-method picker (plain-language per-display layer choice)
 
-/// The de-jargoned per-display warming-method control. Plain labels (Codex): **Standard /
+/// The de-jargoned per-display warming-method control. Plain labels: **Automatic /
 /// Screen tint / Hardware control** map onto the engine's `DisplayMethod` override.
 /// Only methods actually usable for this display are offered, so the available options themselves
 /// communicate what the hardware/OS supports.
@@ -172,12 +194,10 @@ private struct WarmingMethodPicker: View {
         .padding(.top, 2)
     }
 
-    /// The methods offered for this display, in Codex's order, filtered to what's usable right now.
+    /// The methods offered for this display, in UI order, filtered to what's usable right now.
     private var availableChoices: [WarmingMethodChoice] {
         let priv = model.state.privateAPIsEnabled
-        var choices: [WarmingMethodChoice] = []
-        if priv, display.capabilities.gamma.isSupported { choices.append(.standard) }
-        choices.append(.screenTint)                                     // overlay is always available
+        var choices: [WarmingMethodChoice] = [.standard, .screenTint]    // automatic + overlay always work
         if priv, display.capabilities.hardware.isSupported { choices.append(.hardwareControl) }
         return choices
     }
@@ -201,16 +221,18 @@ private struct WarmingMethodPicker: View {
         )
     }
 
-    /// "Hardware control" is the explicit DDC opt-in, so selecting it enables DDC for this display;
-    /// every other choice turns DDC back off (DDC is opt-in per display — contract invariant #2).
+    /// Hardware control opts into DDC; Screen tint opts out. Automatic only clears the layer
+    /// override, preserving the user's DDC opt-in as an input to the resolver.
     private func apply(_ choice: WarmingMethodChoice) {
         switch choice {
         case .hardwareControl:
             model.setHardwareDDCEnabled(true, for: display.id)
             model.setPreferredMethod(.hardware, for: display.id)
-        default:
+        case .screenTint:
             model.setHardwareDDCEnabled(false, for: display.id)
-            model.setPreferredMethod(choice.preferredMethod, for: display.id)
+            model.setPreferredMethod(.overlay, for: display.id)
+        case .standard:
+            model.setPreferredMethod(nil, for: display.id)
         }
     }
 
@@ -226,26 +248,18 @@ private struct WarmingMethodPicker: View {
     }
 }
 
-/// Plain-language names for the per-display warming method (Settings → Displays → Advanced). Maps to
-/// the engine's `DisplayMethod` override: Standard = gamma (the OS white-point true-warm), Screen
-/// tint = overlay, Hardware control = DDC.
+/// Plain-language names for the per-display warming method. Automatic clears the override so the
+/// engine can choose the best usable layer; Screen tint = overlay; Hardware control = DDC.
 private enum WarmingMethodChoice: String, CaseIterable, Identifiable, Sendable {
     case standard, screenTint, hardwareControl
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .standard: return "Standard"
+        case .standard: return "Automatic"
         case .screenTint: return "Screen tint"
         case .hardwareControl: return "Hardware control"
         }
     }
 
-    var preferredMethod: DisplayMethod? {
-        switch self {
-        case .standard: return .gamma
-        case .screenTint: return .overlay
-        case .hardwareControl: return .hardware
-        }
-    }
 }
