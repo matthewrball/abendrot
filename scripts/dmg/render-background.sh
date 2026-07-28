@@ -34,7 +34,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SRC="$REPO/scripts/dmg/assets/dmg-background.html"
-ICON="$REPO/assets/AppIcon.iconset/icon_256x256.png"
+ICON="$REPO/assets/abendrot-icon.png"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 # Solved label-glow alphas — see LABEL BAND above. Overridable from the env
