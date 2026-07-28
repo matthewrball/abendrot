@@ -6,6 +6,7 @@
 |---|---|---|
 | `dmg-background.png` | 660 × 400 px (1×) | Finder window background |
 | `dmg-background@2x.png` | 1320 × 800 px (2×) | Retina background |
+| `volume.png` | 1024 × 1024 px | mounted-volume icon master |
 | `volume.icns` | standard `.icns` | mounted-volume icon |
 
 **Do not edit the PNGs.** They are generated:
@@ -18,6 +19,17 @@ from `scripts/dmg/assets/dmg-background.html`, which is the source of truth. The
 script inlines the app icon into the wordmark, renders with headless Chrome at
 2×, and Lanczos-downscales the 1×. `dmgbuild` compiles the pair into a single
 HiDPI TIFF when the DMG is built.
+
+The volume icon is generated separately:
+
+```bash
+scripts/dmg/render-volume-icon.py
+```
+
+It uses an original metallic disk silhouette with the Abendrot sunset as a
+small inset badge. Finder cannot overlay branding on its native disk icon:
+supplying an `.icns` replaces the native icon entirely, so the custom artwork
+must preserve the recognizable storage-volume shape itself.
 
 ## Art direction (matches abendrot.app + the app icon)
 
@@ -65,12 +77,12 @@ osascript -e 'tell application "Finder" to get bounds of item 1 of window "Abend
 
 ## Hidden dot-files
 
-`.background.tiff`, `.VolumeIcon.icns`, and other volume metadata are parked
-in a compact grid **to the right** of the window (`HIDDEN_*` in
-`pretty-dmg.sh`) so the branded area stays exactly two icons. With "show
-hidden files" enabled, Finder can scroll horizontally to that grid. All
-hidden-file positions stay inside the artwork's vertical bounds so Finder
-does not reserve blank space below it.
+`.background.tiff`, `.VolumeIcon.icns`, and other volume metadata are parked in
+a compact grid **to the right** of the window (`HIDDEN_*` in `pretty-dmg.sh`) so
+the branded area stays exactly two icons. With "show hidden files" enabled,
+Finder can scroll horizontally to that grid. All hidden-file positions stay
+inside the artwork's vertical bounds so Finder does not reserve blank space
+below it.
 
 > Reduce-Transparency / a11y note: the artwork is a fixed image, so it
 > is unaffected by transparency settings; it stays an ember tint, never grey.

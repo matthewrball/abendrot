@@ -24,7 +24,7 @@
 # Usage:
 # scripts/dmg/pretty-dmg.sh --check
 # scripts/dmg/pretty-dmg.sh --app <Abendrot.app> --out <out.dmg> \
-# [--volname "Abendrot"] [--background <png>] [--volicon <icns>]
+# [--volname "Abendrot"] [--background <png>]
 #
 # Exit codes: 0 ok; 2 args; 3 missing app; 5 dmgbuild missing; 6 build fail.
 
@@ -37,7 +37,7 @@ APP=""
 OUT=""
 VOLNAME="Abendrot"
 BACKGROUND="$ASSETS_DIR/dmg-background.png"   # brand art (see assets/README.md)
-VOLICON="$ASSETS_DIR/volume.icns"             # brand volume icon (optional)
+VOLICON="$ASSETS_DIR/volume.icns"             # disk silhouette + Abendrot badge
 DMGBUILD_VERSION="1.6.7"
 CHECK_ONLY="false"
 
@@ -50,7 +50,6 @@ while [ $# -gt 0 ]; do
     --out)        OUT="${2:-}"; shift 2 ;;
     --volname)    VOLNAME="${2:-}"; shift 2 ;;
     --background) BACKGROUND="${2:-}"; shift 2 ;;
-    --volicon)    VOLICON="${2:-}"; shift 2 ;;
     -h|--help)    usage; exit 0 ;;
     *) echo "pretty-dmg: unknown arg '$1'" >&2; usage >&2; exit 2;;
   esac
@@ -80,7 +79,11 @@ resolve_dmgbuild() {
 
 if [ "$CHECK_ONLY" = "true" ]; then
   resolve_dmgbuild >/dev/null
-  exit $?
+  [ -f "$VOLICON" ] || {
+    echo "pretty-dmg: volume icon not found at '$VOLICON'." >&2
+    exit 5
+  }
+  exit 0
 fi
 
 if [ -z "$APP" ] || [ -z "$OUT" ]; then
@@ -192,9 +195,7 @@ show_sidebar = False
 icon_size = $ICON_SIZE
 text_size = $TEXT_SIZE
 scroll_position = (0.0, 0.0)
-# Thumbnail the dot-files rather than drawing generic white document icons:
-# .background.tiff previews as the artwork itself and .VolumeIcon.icns as the
-# app icon, so the system-file row stays on-brand for AppleShowAllFiles users.
+# Thumbnail hidden artwork when AppleShowAllFiles is enabled.
 show_icon_preview = True
 
 icon_locations = {
@@ -229,8 +230,6 @@ else
   echo "            Building a functional (un-arted) branded DMG." >&2
   BACKGROUND=""
 fi
-[ -f "$VOLICON" ] || VOLICON=""
-
 echo "pretty-dmg: building branded DMG -> $OUT"
 if ! PDMG_APP="$APP" PDMG_BACKGROUND="$BACKGROUND" PDMG_VOLICON="$VOLICON" \
      "$DMGBUILD" -s "$SETTINGS" "$VOLNAME" "$OUT"; then

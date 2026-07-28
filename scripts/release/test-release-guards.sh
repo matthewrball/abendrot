@@ -86,6 +86,18 @@ grep -qF "stable publication requires the branded DMG toolchain" "$RELEASE_SCRIP
 grep -qF "ABORT — branded DMG creation failed" "$RELEASE_SCRIPT"
 echo "PASS: automatic release packaging shares the branded builder's exact readiness probe"
 
+grep -qF 'PDMG_VOLICON="$VOLICON"' "$PRETTY_DMG_SCRIPT"
+grep -qF 'icon = os.environ.get("PDMG_VOLICON") or None' "$PRETTY_DMG_SCRIPT"
+[ -f "$ROOT/scripts/dmg/assets/volume.icns" ] \
+  && [ -f "$ROOT/scripts/dmg/assets/volume.png" ] \
+  && ! cmp -s \
+    "$ROOT/scripts/dmg/assets/volume.icns" \
+    "$ROOT/assets/abendrot.icns" || {
+  echo "The mounted DMG must use the distinct branded disk icon." >&2
+  exit 1
+}
+echo "PASS: mounted DMG uses the distinct branded disk icon"
+
 grep -qF 'local dmg_sign_id="${BUNDLE_ID}.dmg"' "$RELEASE_SCRIPT"
 grep -qF 'codesign --force' "$RELEASE_SCRIPT"
 grep -qF -- '--identifier "$dmg_sign_id"' "$RELEASE_SCRIPT"
