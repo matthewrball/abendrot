@@ -16,8 +16,9 @@
 # 5. Sparkle-sign the DMG with `sign_update` (EdDSA) — the SINGLE release
 # authority's key (local machine, key in login keychain).
 # 6. Update appcast.xml PRESERVING existing <item> entries (prepend the new one).
-# 7. Upload stable releases as GitHub drafts. Publish the draft only after the
-# appcast has passed public-dev CI and been promoted to public main.
+# 7. Upload stable releases as GitHub drafts. Stage the appcast on public-dev
+# and wait for green CI, publish and verify the release asset, then promote
+# the appcast to public main so the feed never exposes a private asset URL.
 #
 # DESIGN RULE: public release is GATED on >=1 notarized+stapled DMG, Developer
 # ID signing, and Sparkle EdDSA signing. --unsigned is private/local dry-run
@@ -743,9 +744,11 @@ if command -v gh >/dev/null 2>&1; then
         exit 8
       }
       echo "release: created draft $TAG; appcast.xml updated locally but NOT committed or pushed."
-      echo "         Commit it in the build repo, then use scripts/publish.sh stage and"
-      echo "         scripts/publish.sh promote so the verified public main feed advances."
-      echo "         Only then publish the draft: gh release edit $TAG --repo $GH_REPO --draft=false"
+      echo "         Commit it, stage/push public-dev, and wait for exact-SHA green CI."
+      echo "         Do NOT promote the appcast while the release asset is still private."
+      echo "         Publish and verify the asset first:"
+      echo "           gh release edit $TAG --repo $GH_REPO --draft=false"
+      echo "         Only then run scripts/publish.sh promote so the public feed advances."
     elif [ "$SIGNED" = "true" ]; then
       echo "release: published signed pre-release $TAG; appcast unchanged."
     else

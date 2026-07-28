@@ -1005,7 +1005,7 @@ cmp "$TMP/signed-appcast-before.xml" "$APPCAST"
 grep -qF '<sparkle:version>44</sparkle:version>' "$TMP/signed-pass/appcast-1.0.0-44.xml"
 grep -qF -- '--draft' "$TMP/key-pass-out"
 echo "PASS: signed dry-runs keep production appcast unchanged and write a verified candidate"
-echo "PASS: stable signed releases are uploaded as drafts before appcast promotion"
+echo "PASS: stable signed releases are uploaded as drafts before appcast staging"
 
 /usr/bin/plutil -replace CFBundleVersion -string "45" "$APP/Contents/Info.plist"
 write_canonical_appcast "$APPCAST"
@@ -1088,9 +1088,11 @@ if [ "$rc" -ne 0 ]; then
 fi
 grep -qF -- '--draft' "$GH_RELEASE_LOG"
 grep -qF "created draft v1.0.0" "$TMP/signed-publish-out"
-grep -qF "Only then publish the draft" "$TMP/signed-publish-out"
+grep -qF "Do NOT promote the appcast while the release asset is still private" \
+  "$TMP/signed-publish-out"
+grep -qF "Only then run scripts/publish.sh promote" "$TMP/signed-publish-out"
 grep -qF '<sparkle:version>46</sparkle:version>' "$PUBLISH_ROOT/appcast.xml"
-echo "PASS: stable publish creates only a draft before installing the appcast candidate"
+echo "PASS: stable publish stages appcast CI before release publication and feed promotion"
 
 if [ -x "$ROOT/scripts/sync-public.sh" ]; then
   set +e
@@ -1251,6 +1253,34 @@ case "$path" in
         ;;
     esac
     ;;
+  repos/*/releases/tags/*)
+    case "${GH_RELEASE_CASE:-public-good}" in
+      public-good)
+        cat <<'JSON'
+{"draft":false,"body":"SHA-256: fe31565c05c990c33899f12a49f2f429141694a931ef081f77c4c6a8abcf1bb6","assets":[{"name":"Abendrot-1.0.0.dmg","state":"uploaded","size":10800533,"digest":"sha256:fe31565c05c990c33899f12a49f2f429141694a931ef081f77c4c6a8abcf1bb6"}]}
+JSON
+        ;;
+      draft)
+        cat <<'JSON'
+{"draft":true,"body":"SHA-256: fe31565c05c990c33899f12a49f2f429141694a931ef081f77c4c6a8abcf1bb6","assets":[{"name":"Abendrot-1.0.0.dmg","state":"uploaded","size":10800533,"digest":"sha256:fe31565c05c990c33899f12a49f2f429141694a931ef081f77c4c6a8abcf1bb6"}]}
+JSON
+        ;;
+      missing-digest)
+        cat <<'JSON'
+{"draft":false,"body":"SHA-256: fe31565c05c990c33899f12a49f2f429141694a931ef081f77c4c6a8abcf1bb6","assets":[{"name":"Abendrot-1.0.0.dmg","state":"uploaded","size":10800533}]}
+JSON
+        ;;
+      digest-not-in-notes)
+        cat <<'JSON'
+{"draft":false,"body":"SHA-256: 0000000000000000000000000000000000000000000000000000000000000000","assets":[{"name":"Abendrot-1.0.0.dmg","state":"uploaded","size":10800533,"digest":"sha256:fe31565c05c990c33899f12a49f2f429141694a931ef081f77c4c6a8abcf1bb6"}]}
+JSON
+        ;;
+      *)
+        echo "unknown GH_RELEASE_CASE=$GH_RELEASE_CASE" >&2
+        exit 2
+        ;;
+    esac
+    ;;
   *)
     echo "unexpected gh api path: $path" >&2
     exit 2
@@ -1319,6 +1349,98 @@ SH
     grep -qF "$expected_text" "$TMP/promote-$name-out" "$TMP/promote-$name-stderr"
   }
 
+  write_public_appcast_item() {
+    local appcast="$1"
+    cat > "$appcast" <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Abendrot</title>
+    <item>
+      <title>Version 1.0.0</title>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <enclosure url="https://github.com/matthewrball/abendrot/releases/download/v1.0.0/Abendrot-1.0.0.dmg"
+                 sparkle:edSignature="ZmFrZQ=="
+                 sparkle:minimumSystemVersion="14.0"
+                 length="10800533"
+                 type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
+XML
+  }
+
+  assert_promote_appcast_case() {
+    local name="$1" release_case="$2" expected_rc="$3" expected_text="$4"
+    local origin="$TMP/promote-appcast-$name-origin.git" work="$TMP/promote-appcast-$name-work"
+    local build="$TMP/promote-appcast-$name-build" build_origin="$TMP/promote-appcast-$name-build-origin.git"
+    make_promote_build "$build" "$build_origin"
+    write_public_appcast_item "$build/appcast.xml"
+    git -C "$build" add appcast.xml
+    git -C "$build" commit -qm "test: add appcast item"
+    git -C "$build" push -q origin HEAD:refs/heads/dev
+    make_promote_public "$origin" "$work" "$build"
+    local publish_sha repo
+    publish_sha="$(git -C "$work" rev-parse origin/public-dev)"
+    repo="$(git -C "$work" config --get remote.origin.url | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')"
+    set +e
+    printf 'n\n' | PATH="$PROMOTE_GH:$PATH" BUILD="$build" PUBLIC="$work" \
+      GH_WORKFLOW_CASE="success" GH_RELEASE_CASE="$release_case" GH_PROMOTE_SHA="$publish_sha" GH_RUN_ID="1001" GH_REPO="$repo" \
+      "$ROOT/scripts/publish.sh" promote \
+      >"$TMP/promote-appcast-$name-out" 2>"$TMP/promote-appcast-$name-stderr"
+    rc=$?
+    set -e
+    if [ "$rc" -ne "$expected_rc" ]; then
+      cat "$TMP/promote-appcast-$name-out" >&2
+      cat "$TMP/promote-appcast-$name-stderr" >&2
+      exit 1
+    fi
+    grep -qF "$expected_text" "$TMP/promote-appcast-$name-out" "$TMP/promote-appcast-$name-stderr"
+  }
+
+  assert_promote_same_url_metadata_rejected() {
+    local origin="$TMP/promote-appcast-same-url-origin.git" work="$TMP/promote-appcast-same-url-work"
+    local build="$TMP/promote-appcast-same-url-build" build_origin="$TMP/promote-appcast-same-url-build-origin.git"
+    make_promote_build "$build" "$build_origin"
+    write_public_appcast_item "$build/appcast.xml"
+    git -C "$build" add appcast.xml
+    git -C "$build" commit -qm "test: update appcast item metadata"
+    git -C "$build" push -q origin HEAD:refs/heads/dev
+
+    git init --bare -q "$origin"
+    git init -q -b main "$work"
+    git -C "$work" config user.name "Release Guard Test"
+    git -C "$work" config user.email "release-guard@example.invalid"
+    git -C "$work" config gc.auto 0
+    write_public_appcast_item "$work/appcast.xml"
+    perl -0pi -e 's/length="10800533"/length="1"/' "$work/appcast.xml"
+    git -C "$work" add appcast.xml
+    git -C "$work" commit -qm "test: seed old public appcast"
+    git -C "$work" remote add origin "$origin"
+    git -C "$work" push -qu origin main
+    git -C "$work" checkout -qb public-dev
+    BUILD="$build" PUBLIC="$work" bash "$build/scripts/sync-public.sh" >/dev/null
+    git -C "$work" add -A
+    git -C "$work" commit -qm "test: changed appcast metadata" -m "Source-Build-Commit: $(git -C "$build" rev-parse HEAD)"
+    git -C "$work" push -qu -u origin public-dev
+
+    local publish_sha repo
+    publish_sha="$(git -C "$work" rev-parse origin/public-dev)"
+    repo="$(git -C "$work" config --get remote.origin.url | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')"
+    set +e
+    printf 'n\n' | PATH="$PROMOTE_GH:$PATH" BUILD="$build" PUBLIC="$work" \
+      GH_WORKFLOW_CASE="success" GH_RELEASE_CASE="public-good" GH_PROMOTE_SHA="$publish_sha" GH_RUN_ID="1001" GH_REPO="$repo" \
+      "$ROOT/scripts/publish.sh" promote \
+      >"$TMP/promote-appcast-same-url-out" 2>"$TMP/promote-appcast-same-url-stderr"
+    rc=$?
+    set -e
+    [ "$rc" -eq 1 ]
+    grep -qF "appcast enclosure metadata changed for existing URL" \
+      "$TMP/promote-appcast-same-url-stderr"
+  }
+
   assert_promote_case missing missing 1 "no successful completed push run"
   echo "PASS: promote rejects missing public-dev workflow run"
   assert_promote_case spoof-path spoof-path 1 "path=.github/workflows/not-ci.yml"
@@ -1360,6 +1482,19 @@ SH
   grep -qF "public-dev/release-gate green" "$TMP/promote-success-out"
   grep -qF "snapshot: public" "$TMP/promote-success-out"
   echo "PASS: promote accepts exact workflow run, job, SHA, repo, and source snapshot"
+
+  assert_promote_appcast_case appcast-draft draft 1 "appcast asset is not public yet"
+  echo "PASS: promote rejects appcast assets still on draft releases"
+  assert_promote_appcast_case appcast-missing-digest missing-digest 1 "digest is missing or invalid"
+  echo "PASS: promote rejects appcast assets without verifiable GitHub digests"
+  assert_promote_appcast_case appcast-digest-not-in-notes digest-not-in-notes 1 "digest is not recorded in release notes"
+  echo "PASS: promote rejects appcast assets whose API digest is not frozen in release notes"
+  assert_promote_same_url_metadata_rejected
+  echo "PASS: promote rejects same-URL appcast enclosure metadata changes"
+  assert_promote_appcast_case appcast-public public-good 0 "Aborted (no push)."
+  grep -qF "Abendrot-1.0.0.dmg public, uploaded, size/digest match release notes" \
+    "$TMP/promote-appcast-appcast-public-out"
+  echo "PASS: promote accepts new appcast assets only after public exact-asset verification"
 
   PUBLIC_ORIGIN="$TMP/public-origin.git"
   PUBLIC_WORK="$TMP/public-work"
