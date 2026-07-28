@@ -285,6 +285,7 @@ jobs:
             "CONTRIBUTING.md"
             "SECURITY.md"
             "assets/abendrot-icon.png"
+            "assets/abendrot-demo.gif"
           )
 
           missing=()

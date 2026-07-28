@@ -23,6 +23,12 @@
   <sub>Built in the open · <a href="https://abendrot.app">abendrot.app</a> · MIT licensed</sub>
 </p>
 
+<p align="center">
+  <a href="https://abendrot.app">
+    <img src="assets/abendrot-demo.gif" alt="Abendrot warming a Mac display around sunset and enabling Cozy mode" width="672">
+  </a>
+</p>
+
 ---
 
 **Abendrot** is a native macOS menu-bar app that warms each display using the methods available on that Mac. When direct display warming is unavailable, it can fall back to a screen tint.
@@ -63,6 +69,22 @@ Warmth is applied per display using the methods available to that display:
 | **Gamma** | The system display transfer table (`CGSetDisplayTransferByTable`) | Used when Abendrot identifies gamma warming as supported. |
 | **Hardware (DDC)** | Panel RGB-gain over DDC/CI | Opt-in on compatible external monitors. |
 | **Overlay** | A per-screen Metal veil | Screen-tint fallback when direct display warming is unavailable or disabled. |
+
+## Audit the engine
+
+The automatic fallback is a small, unit-tested path in [`LayerResolver.swift`](WarmthKit/Sources/WarmthCore/LayerResolver.swift):
+
+```swift
+if privateAPIsEnabled, isHardwareDDCEnabled, isSupported(capabilities.hardware) {
+    return .hardware
+}
+if privateAPIsEnabled, isSupported(capabilities.gamma) {
+    return .gamma
+}
+return .overlay
+```
+
+The rest of the engine is open for inspection in [`WarmthKit`](WarmthKit).
 
 ## Scripting & AI control
 
