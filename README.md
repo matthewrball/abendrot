@@ -15,7 +15,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FD9228" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-FD9228" alt="macOS 14 Sonoma or later">
   <img src="https://img.shields.io/badge/architecture-universal-FD9228" alt="Universal Apple Silicon and Intel">
-  <img src="https://img.shields.io/badge/status-pre--release-C2310A" alt="Pre-release">
+  <a href="https://github.com/matthewrball/abendrot/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-FD9228" alt="Release v1.0.0"></a>
   <a href="https://github.com/matthewrball/abendrot/stargazers"><img src="https://img.shields.io/github/stars/matthewrball/abendrot?color=FD9228" alt="GitHub stars"></a>
 </p>
 
@@ -33,22 +33,19 @@
 
 **Abendrot** is a native macOS menu-bar app that warms each display using the methods available on that Mac. When direct display warming is unavailable, it can fall back to a screen tint.
 
-## Install after 1.0.0 ships
+## Install
 
-> [!IMPORTANT]
-> **Pre-release:** signed/notarized 1.0.0 distribution and the final physical-display release matrix are still pending. There is no unsigned public beta or download path. The install options below become available with 1.0.0; contributors can use the [development setup](CONTRIBUTING.md#getting-set-up) today.
+Download the signed, notarized `.dmg` from [abendrot.app/download](https://abendrot.app/download/), or from [GitHub Releases](https://github.com/matthewrball/abendrot/releases/tag/v1.0.0).
 
-### Homebrew (after release)
+Requires macOS 14 "Sonoma" or later. Universal for Apple silicon and Intel.
+
+### Homebrew
 
 ```sh
 brew install --cask abendrot
 ```
 
-### Direct download
-
-After 1.0.0 ships, download the signed, notarized `.dmg` from [GitHub Releases](https://github.com/matthewrball/abendrot/releases).
-
-Requires macOS 14 "Sonoma" or later. Universal for Apple silicon and Intel.
+Homebrew is pending and not available yet. Use the `.dmg` above for now.
 
 > Abendrot is free and open source under the MIT License. If it is useful to you, please [star the repository](https://github.com/matthewrball/abendrot/stargazers).
 
@@ -96,7 +93,7 @@ abendrot status --json         # read live state as JSON — pipe it anywhere
 abendrot reveal --hold 10      # momentary true-color peek, then ease back
 ```
 
-**Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. When you install the app, the binary ships inside the bundle and the Homebrew cask symlinks it onto your `PATH`.
+**Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. When you install the app, the binary ships inside the bundle; once Homebrew is available, the cask will symlink it onto your `PATH`.
 
 Every command supports `--json`, with scriptable exit codes. See [`AGENTS.md`](AGENTS.md) for the complete CLI and agent-control reference.
 
@@ -118,7 +115,7 @@ talks to the running app.
 
 ## Privacy
 
-No telemetry. No analytics SDK, account, or identifiers. Settings and usage statistics stay on your Mac; only update checks contact the release host. See [`PRIVACY.md`](PRIVACY.md).
+No telemetry. No analytics SDK, account, or identifiers. Settings and usage statistics stay on your Mac; only update checks contact GitHub. See [`PRIVACY.md`](PRIVACY.md).
 
 ## Contributing
 

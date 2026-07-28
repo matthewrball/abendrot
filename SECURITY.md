@@ -22,4 +22,4 @@ Releases are distributed as signed, notarized builds, and in-app updates are ver
 
 ## Supported versions
 
-Abendrot is pre-release. Until a `1.0` release, only the latest source on the default branch is supported for security fixes.
+Only the latest public release is supported for security fixes. Update checks contact GitHub; Abendrot has no telemetry, analytics SDK, account, or identifiers.
