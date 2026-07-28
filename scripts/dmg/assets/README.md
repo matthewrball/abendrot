@@ -65,12 +65,12 @@ osascript -e 'tell application "Finder" to get bounds of item 1 of window "Abend
 
 ## Hidden dot-files
 
-`.background.tiff` and `.VolumeIcon.icns` are parked **outside** the window
-(`PARKED_X` in `pretty-dmg.sh`) so the window is exactly two icons for
-everyone. With "show hidden files" enabled they sit off-canvas, which makes
-the window horizontally scrollable — a deliberate trade, chosen over letting
-them clutter the artwork. Pinning them *inside* the window is what tripped
-rule 2 above, so if you ever move them back in, mind the margin.
+`.background.tiff`, `.VolumeIcon.icns`, and other volume metadata are parked
+in a compact grid **to the right** of the window (`HIDDEN_*` in
+`pretty-dmg.sh`) so the branded area stays exactly two icons. With "show
+hidden files" enabled, Finder can scroll horizontally to that grid. All
+hidden-file positions stay inside the artwork's vertical bounds so Finder
+does not reserve blank space below it.
 
 > Reduce-Transparency / a11y note: the artwork is a fixed image, so it
 > is unaffected by transparency settings; it stays an ember tint, never grey.

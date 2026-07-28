@@ -17,6 +17,12 @@ PRETTY_DMG_SCRIPT="$ROOT/scripts/dmg/pretty-dmg.sh"
 APPCAST_VALIDATOR="$ROOT/scripts/release/validate-appcast.py"
 SIGN_JOB="$TMP/sign-notarize.yml"
 
+grep -qF 'asc_key.p8.XXXXXX' "$NOTARIZE_SCRIPT"
+grep -qF 'notary-submit.txt.XXXXXX' "$NOTARIZE_SCRIPT"
+if grep -Eq 'XXXXXX\.(p8|txt)' "$NOTARIZE_SCRIPT"; then
+  echo "Notarization temp templates must end in Xs for macOS mktemp." >&2
+  exit 1
+fi
 grep -qF "github.event_name == 'workflow_dispatch'" "$CI_WORKFLOW"
 grep -qF "github.ref == 'refs/heads/main'" "$CI_WORKFLOW"
 grep -qF "environment: release-signing" "$CI_WORKFLOW"
@@ -80,10 +86,40 @@ grep -qF "stable publication requires the branded DMG toolchain" "$RELEASE_SCRIP
 grep -qF "ABORT — branded DMG creation failed" "$RELEASE_SCRIPT"
 echo "PASS: automatic release packaging shares the branded builder's exact readiness probe"
 
+grep -qF 'local dmg_sign_id="${BUNDLE_ID}.dmg"' "$RELEASE_SCRIPT"
+grep -qF 'codesign --force' "$RELEASE_SCRIPT"
+grep -qF -- '--identifier "$dmg_sign_id"' "$RELEASE_SCRIPT"
+grep -qF -- '--timestamp' "$RELEASE_SCRIPT"
+grep -qF 'codesign --verify --strict --verbose=2 "$dmg"' "$RELEASE_SCRIPT"
+grep -qF "DMG container signing authority does not match DEVELOPER_ID_APP" "$RELEASE_SCRIPT"
+dmg_sign_call_line="$(grep -nF 'sign_dmg_container "$DMG_OUT"' "$RELEASE_SCRIPT" | cut -d: -f1)"
+notarize_call_line="$(grep -nF 'notarize.sh" "$DMG_OUT"' "$RELEASE_SCRIPT" | cut -d: -f1)"
+[ -n "$dmg_sign_call_line" ] && [ -n "$notarize_call_line" ] && \
+  [ "$dmg_sign_call_line" -lt "$notarize_call_line" ] || {
+  echo "Signed release DMGs must be container-signed and verified before notarization." >&2
+  exit 1
+}
+final_dmg_verify_line="$(grep -nF 'verify_dmg_container_signature "$DMG_OUT"' "$RELEASE_SCRIPT" | cut -d: -f1)"
+sparkle_sign_line="$(grep -nF 'SIGN_OUT="$("$SIGN_UPDATE" "$DMG_OUT"' "$RELEASE_SCRIPT" | cut -d: -f1)"
+[ -n "$final_dmg_verify_line" ] && [ -n "$sparkle_sign_line" ] && \
+  [ "$notarize_call_line" -lt "$final_dmg_verify_line" ] && \
+  [ "$final_dmg_verify_line" -lt "$sparkle_sign_line" ] || {
+  echo "Signed release DMGs must be verified after notarization and before Sparkle signing." >&2
+  exit 1
+}
+sed -n '/^sign_dmg_container()/,/^}/p' "$RELEASE_SCRIPT" \
+  | grep -qF '[ "$UNSIGNED" != "true" ] || return 0'
+echo "PASS: signed release DMGs are container-signed before notarization and verified before Sparkle signing"
+
 grep -qF 'DMGBUILD_VERSION="1.6.7"' "$PRETTY_DMG_SCRIPT"
 grep -qF -- '--check)' "$PRETTY_DMG_SCRIPT"
 grep -qF 'pipx list dmgbuild --short' "$PRETTY_DMG_SCRIPT"
 grep -qF 'built image is missing the app or /Applications link' "$PRETTY_DMG_SCRIPT"
+grep -qF 'signed app signature was invalidated during DMG creation' "$PRETTY_DMG_SCRIPT"
+if grep -qF 'hide_extensions = [app_name]' "$PRETTY_DMG_SCRIPT"; then
+  echo "Branded DMG tooling must not attach FinderInfo to the signed app bundle." >&2
+  exit 1
+fi
 grep -qF 'Detach the existing volume before building so Finder records the correct background alias.' \
   "$PRETTY_DMG_SCRIPT"
 mounted_volume_guard_line="$(grep -nF 'MOUNT_PATH="/Volumes/$VOLNAME"' "$PRETTY_DMG_SCRIPT" | cut -d: -f1)"
@@ -249,7 +285,14 @@ case "$*" in
     [ "${MOCK_CODESIGN_VERIFY_FAIL:-0}" = "0" ] || exit 1
     ;;
   *"-dv"*|*" -d "*)
-    printf 'Authority=%s\n' "${MOCK_CODESIGN_AUTHORITY:?}" >&2
+    if [ "${MOCK_CODESIGN_NO_AUTHORITY:-0}" = "0" ]; then
+      printf 'Authority=%s\n' "${MOCK_CODESIGN_AUTHORITY:?}" >&2
+    fi
+    if [ "${MOCK_CODESIGN_VERBOSE_TAIL:-0}" = "1" ]; then
+      for ((i = 0; i < 4096; i++)); do
+        printf 'Detail%04d=verbose codesign output\n' "$i" >&2
+      done
+    fi
     ;;
 esac
 exit 0
@@ -607,6 +650,19 @@ echo "PASS: signed releases verify the exported app before packaging"
 
 set +e
 PATH="$EARLY_SIGN_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_NO_AUTHORITY=1 \
+  APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/missing-authority-release" \
+  "$ROOT/scripts/release/release.sh" \
+  --app "$APP" >/dev/null 2>"$TMP/missing-authority-stderr"
+rc=$?
+set -e
+[ "$rc" -eq 5 ]
+grep -qF "could not read exported app signing authority" "$TMP/missing-authority-stderr"
+[ ! -e "$TMP/missing-authority-release" ]
+echo "PASS: signed releases diagnose missing exported-app signing authority"
+
+set +e
+PATH="$EARLY_SIGN_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
   MOCK_CODESIGN_AUTHORITY="Developer ID Application: Other Test (ZZZZZ99999)" \
   APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/authority-mismatch-release" \
   "$ROOT/scripts/release/release.sh" \
@@ -622,6 +678,7 @@ echo "PASS: signed releases reject exported apps signed by another authority"
 set +e
 PATH="$EARLY_SIGN_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
   MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_VERBOSE_TAIL=1 \
   APPCAST_PATH="$APPCAST" "$ROOT/scripts/release/release.sh" \
   --app "$APP" >/dev/null 2>"$TMP/key-stderr"
 rc=$?
@@ -629,6 +686,7 @@ set -e
 [ "$rc" -eq 6 ]
 grep -qF "SUPublicEDKey must decode to exactly 32 bytes" "$TMP/key-stderr"
 echo "PASS: signed releases verify app identity before later Sparkle gates"
+echo "PASS: signed releases tolerate verbose codesign authority output under pipefail"
 echo "PASS: signed releases reject malformed Sparkle public keys"
 
 TEST_PUBLIC_KEY="$(printf '%032d' 0 | /usr/bin/base64)"
@@ -801,6 +859,9 @@ case "${1:-}" in
     exit 0
     ;;
   notarytool)
+    if [ -n "${MOCK_NOTARYTOOL_ARG_LOG:-}" ]; then
+      printf '%s\n' "$*" >> "$MOCK_NOTARYTOOL_ARG_LOG"
+    fi
     case "${2:-}" in
       submit)
         cat <<'PLIST'
@@ -853,6 +914,39 @@ printf 'int main(void) { return 0; }\n' > "$src"
 /usr/bin/xcrun clang -arch "$arch" -mmacosx-version-min=14.0 "$src" -o "$dir/abendrot"
 SH
 chmod 755 "$MOCK_SIGNED_BIN/"*
+
+MOCK_NOTARY_DMG="$TMP/mock-notary.dmg"
+printf 'mock dmg\n' > "$MOCK_NOTARY_DMG"
+set +e
+PATH="$MOCK_SIGNED_BIN:$PATH" \
+  NOTARY_KEYCHAIN_PROFILE=abendrot-notary ASC_API_KEY_ID=MOCKKEY \
+  "$NOTARIZE_SCRIPT" "$MOCK_NOTARY_DMG" \
+  >/dev/null 2>"$TMP/notary-mixed-profile-stderr"
+rc=$?
+set -e
+[ "$rc" -eq 2 ]
+grep -qF "NOTARY_KEYCHAIN_PROFILE cannot be combined with ASC API-key credentials" \
+  "$TMP/notary-mixed-profile-stderr"
+echo "PASS: notarization profile mode rejects mixed ASC API-key credentials"
+
+MOCK_NOTARY_ARGS="$TMP/notarytool-profile-args.log"
+set +e
+PATH="$MOCK_SIGNED_BIN:$PATH" MOCK_NOTARYTOOL_ARG_LOG="$MOCK_NOTARY_ARGS" \
+  NOTARY_KEYCHAIN_PROFILE=abendrot-notary \
+  NOTARY_KEYCHAIN="$TMP/mock-notary.keychain-db" \
+  "$NOTARIZE_SCRIPT" "$MOCK_NOTARY_DMG" \
+  >"$TMP/notary-profile-out" 2>"$TMP/notary-profile-stderr"
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  cat "$TMP/notary-profile-stderr" >&2
+  exit "$rc"
+fi
+grep -qF "notarytool submit $MOCK_NOTARY_DMG --keychain-profile abendrot-notary --keychain $TMP/mock-notary.keychain-db --wait --output-format plist" \
+  "$MOCK_NOTARY_ARGS"
+grep -qF "notarytool log MOCK-NOTARY-ID --keychain-profile abendrot-notary --keychain $TMP/mock-notary.keychain-db" \
+  "$MOCK_NOTARY_ARGS"
+echo "PASS: notarization profile mode uses identical notarytool submit/log auth args"
 
 cat > "$MOCK_SPARKLE/sign_update" <<'SH'
 #!/usr/bin/env bash

@@ -95,6 +95,15 @@ DMGBUILD="$(resolve_dmgbuild)" || exit $?
 # Absolute paths — the settings module resolves them from its own cwd.
 APP="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
 APP_NAME="$(basename "$APP")"
+VERIFY_APP_SIGNATURE="false"
+if command -v codesign >/dev/null 2>&1 \
+  && codesign -dv "$APP" >/dev/null 2>&1; then
+  codesign --verify --deep --strict "$APP" >/dev/null 2>&1 || {
+    echo "pretty-dmg: signed source app has an invalid signature." >&2
+    exit 6
+  }
+  VERIFY_APP_SIGNATURE="true"
+fi
 OUT_DIR="$(dirname "$OUT")"; mkdir -p "$OUT_DIR"
 OUT="$(cd "$OUT_DIR" && pwd)/$(basename "$OUT")"
 MOUNT_PATH="/Volumes/$VOLNAME"
@@ -138,14 +147,13 @@ APP_ICON_X=170        # Abendrot.app — LEFT glass slot   (box 110..230)
 APP_ICON_Y=210
 DROP_LINK_X=490       # /Applications drop link — RIGHT glass slot (box 430..550)
 DROP_LINK_Y=210
-# The volume's dot-files (.background, .VolumeIcon.icns, ...) are parked off
-# the right edge so the window stays exactly two icons for everyone. They are
-# invisible in a normal Finder; with "show hidden files" on they sit outside
-# the window, which makes the view scrollable — a deliberate trade, chosen
-# over letting them clutter the artwork. PARKED_X must stay clear of the
-# LEFT margin rule above (it does: it is far to the right).
-PARKED_X=$(( CONTENT_W + 100 ))
-PARKED_Y=100
+# Keep the volume's dot-files off the artwork but inside its vertical bounds.
+# Finder still exposes them to the right when hidden files are enabled, without
+# reserving the empty area below the branded background for everyone else.
+HIDDEN_X_LEFT=$(( CONTENT_W + 100 ))
+HIDDEN_X_RIGHT=$(( HIDDEN_X_LEFT + 160 ))
+HIDDEN_Y_TOP=100
+HIDDEN_Y_BOTTOM=280
 # ---------------------------------------------------------------------------
 
 SETTINGS="$(mktemp -t pretty-dmg-settings.XXXXXX).py"
@@ -168,7 +176,9 @@ app_name = os.path.basename(app)
 format = "UDZO"
 files = [app]
 symlinks = {"Applications": "/Applications"}
-hide_extensions = [app_name]
+# dmgbuild implements hide_extensions by writing com.apple.FinderInfo to the
+# app bundle, which invalidates an existing Developer ID signature.
+hide_extensions = []
 
 background = os.environ.get("PDMG_BACKGROUND") or None
 icon = os.environ.get("PDMG_VOLICON") or None
@@ -190,12 +200,12 @@ show_icon_preview = True
 icon_locations = {
     app_name: ($APP_ICON_X, $APP_ICON_Y),
     "Applications": ($DROP_LINK_X, $DROP_LINK_Y),
-    # Dot-files parked off the right edge (see the GEOMETRY block). Extra
-    # names are harmless — dmgbuild writes the Iloc records whether or not
-    # the file exists, which also pins any that a future macOS starts showing.
-    ".VolumeIcon.icns": ($PARKED_X, $PARKED_Y),
-    ".DS_Store": ($PARKED_X, $PARKED_Y + 140),
-    ".fseventsd": ($PARKED_X, $PARKED_Y + 280),
+    # Dot-files use a compact grid to the right (see the GEOMETRY block).
+    # Extra names are harmless — dmgbuild writes the Iloc records whether or
+    # not the file exists, which also pins any a future macOS starts showing.
+    ".VolumeIcon.icns": ($HIDDEN_X_LEFT, $HIDDEN_Y_TOP),
+    ".DS_Store": ($HIDDEN_X_RIGHT, $HIDDEN_Y_TOP),
+    ".fseventsd": ($HIDDEN_X_LEFT, $HIDDEN_Y_BOTTOM),
 }
 
 # dmgbuild stages the art as ".background<ext>" — .tiff when a @2x sibling
@@ -208,7 +218,7 @@ if background:
         for f in os.listdir(_dir)
     )
     icon_locations[".background" + (".tiff" if _has2x else _ext)] = (
-        $PARKED_X, $PARKED_Y + 420
+        $HIDDEN_X_RIGHT, $HIDDEN_Y_BOTTOM
     )
 EOF
 
@@ -238,6 +248,11 @@ if [ ! -d "$MOUNT_POINT/$APP_NAME" ] \
   || [ ! -L "$MOUNT_POINT/Applications" ] \
   || [ "$(readlink "$MOUNT_POINT/Applications")" != "/Applications" ]; then
   echo "pretty-dmg: built image is missing the app or /Applications link." >&2
+  exit 6
+fi
+if [ "$VERIFY_APP_SIGNATURE" = "true" ] \
+  && ! codesign --verify --deep --strict "$MOUNT_POINT/$APP_NAME" >/dev/null 2>&1; then
+  echo "pretty-dmg: signed app signature was invalidated during DMG creation." >&2
   exit 6
 fi
 hdiutil detach "$MOUNT_POINT" -quiet \

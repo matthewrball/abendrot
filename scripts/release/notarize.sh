@@ -12,11 +12,15 @@
 # SIGNED MODE: set the env vars below (or pass --key/--key-id/--issuer) and it
 # performs a real notarize + staple + Gatekeeper verify.
 #
-# Credentials needed when signing is enabled (see the release runbook):
+# Credentials needed when signing is enabled (see the release runbook),
+# either App Store Connect API key credentials:
 # ASC_API_KEY_P8 path to the App Store Connect API key .p8 (or *_BASE64)
 # ASC_API_KEY_ID the key ID (e.g. ABC123XYZ)
 # ASC_API_ISSUER_ID the issuer UUID
 # In CI these come from secrets (ASC_API_KEY_P8_BASE64 is base64-decoded here).
+# or a locally stored notarytool profile:
+# NOTARY_KEYCHAIN_PROFILE profile name created by notarytool store-credentials
+# NOTARY_KEYCHAIN optional keychain path for that profile
 #
 # Usage:
 # scripts/release/notarize.sh <path-to-dmg> \
@@ -34,6 +38,8 @@ TARGET="${1:-}"
 KEY_PATH="${ASC_API_KEY_P8:-}"
 KEY_ID="${ASC_API_KEY_ID:-}"
 ISSUER="${ASC_API_ISSUER_ID:-}"
+KEYCHAIN_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-}"
+KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 TEMP_KEY_PATH=""
 SUBMIT_LOG=""
 MOUNT_POINT=""
@@ -74,9 +80,16 @@ case "$TARGET" in
     ;;
 esac
 
+if [ -n "$KEYCHAIN_PROFILE" ] && {
+  [ -n "$KEY_PATH" ] || [ -n "$KEY_ID" ] || [ -n "$ISSUER" ] || [ -n "${ASC_API_KEY_P8_BASE64:-}" ]
+}; then
+  echo "notarize: NOTARY_KEYCHAIN_PROFILE cannot be combined with ASC API-key credentials." >&2
+  exit 2
+fi
+
 # If a base64 key blob is provided (CI secret) but no path, materialize it.
 if [ -z "$KEY_PATH" ] && [ -n "${ASC_API_KEY_P8_BASE64:-}" ]; then
-  TEMP_KEY_PATH="$(mktemp "${TMPDIR:-/tmp}/asc_key.XXXXXX.p8")"
+  TEMP_KEY_PATH="$(mktemp "${TMPDIR:-/tmp}/asc_key.p8.XXXXXX")"
   KEY_PATH="$TEMP_KEY_PATH"
   printf '%s' "${ASC_API_KEY_P8_BASE64}" | /usr/bin/base64 -D > "$KEY_PATH"
   unset ASC_API_KEY_P8_BASE64
@@ -85,7 +98,15 @@ fi
 # ---------------------------------------------------------------------------
 # Local unsigned short-circuit: no credentials -> explain + exit 0.
 # ---------------------------------------------------------------------------
-if [ -z "$KEY_PATH" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER" ]; then
+AUTH_ARGS=()
+if [ -n "$KEYCHAIN_PROFILE" ]; then
+  AUTH_ARGS=(--keychain-profile "$KEYCHAIN_PROFILE")
+  if [ -n "$KEYCHAIN" ]; then
+    AUTH_ARGS+=(--keychain "$KEYCHAIN")
+  fi
+elif [ -n "$KEY_PATH" ] && [ -n "$KEY_ID" ] && [ -n "$ISSUER" ]; then
+  AUTH_ARGS=(--key "$KEY_PATH" --key-id "$KEY_ID" --issuer "$ISSUER")
+else
   cat >&2 <<'EOF'
 notarize: SKIPPED (local unsigned mode — no notarization credentials configured).
 
@@ -106,14 +127,12 @@ if ! command -v xcrun >/dev/null 2>&1; then
 fi
 
 echo "notarize: submitting '$TARGET' (notarytool submit --wait)..."
-SUBMIT_LOG="$(mktemp "${TMPDIR:-/tmp}/notary-submit.XXXXXX.txt")"
+SUBMIT_LOG="$(mktemp "${TMPDIR:-/tmp}/notary-submit.txt.XXXXXX")"
 
 # --wait blocks until Apple finishes; capture both human output and the request id.
 set +e
 xcrun notarytool submit "$TARGET" \
-  --key "$KEY_PATH" \
-  --key-id "$KEY_ID" \
-  --issuer "$ISSUER" \
+  "${AUTH_ARGS[@]}" \
   --wait \
   --output-format plist > "$SUBMIT_LOG" 2>&1
 SUBMIT_RC=$?
@@ -133,8 +152,7 @@ echo "notarize: status='$STATUS' id='$REQ_ID'"
 # Always fetch + print the detailed log (the audit trail).
 if [ -n "$REQ_ID" ]; then
   echo "notarize: fetching notarytool log for $REQ_ID ..."
-  xcrun notarytool log "$REQ_ID" \
-    --key "$KEY_PATH" --key-id "$KEY_ID" --issuer "$ISSUER" || true
+  xcrun notarytool log "$REQ_ID" "${AUTH_ARGS[@]}" || true
 fi
 
 if [ "$STATUS" != "Accepted" ]; then

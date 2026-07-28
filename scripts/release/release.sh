@@ -155,14 +155,13 @@ verify_input_app_signature_authority() {
   }
 
   local leaf_authority
-  leaf_authority="$(
+  if ! leaf_authority="$(
     codesign -dv --verbose=4 "$APP" 2>&1 \
-      | awk -F= '/^Authority=/{ print $2; exit }'
-  )"
-  [ -n "$leaf_authority" ] || {
+      | awk -F= '/^Authority=/ && !found { print $2; found = 1 } END { if (!found) exit 1 }'
+  )"; then
     echo "release: ABORT — could not read exported app signing authority." >&2
     exit 5
-  }
+  fi
   [ "$leaf_authority" = "$DEVELOPER_ID_APP" ] || {
     echo "release: ABORT — exported app signing authority does not match DEVELOPER_ID_APP." >&2
     echo "         Expected: $DEVELOPER_ID_APP" >&2
@@ -499,6 +498,49 @@ else
   "$REPO_ROOT/scripts/dmg/plain-dmg.sh" --app "$APP" --out "$DMG_OUT" --volname "$APP_DISPLAY_NAME"
 fi
 
+verify_dmg_container_signature() {
+  local dmg="$1"
+  local leaf_authority
+
+  [ "$UNSIGNED" != "true" ] || return 0
+
+  codesign --verify --strict --verbose=2 "$dmg" \
+    || { echo "release: ABORT — DMG container signature failed --verify --strict." >&2; exit 5; }
+
+  if ! leaf_authority="$(
+    codesign -dv --verbose=4 "$dmg" 2>&1 \
+      | awk -F= '/^Authority=/ && !found { print $2; found = 1 } END { if (!found) exit 1 }'
+  )"; then
+    echo "release: ABORT — could not read DMG container signing authority." >&2
+    exit 5
+  fi
+  [ "$leaf_authority" = "$DEVELOPER_ID_APP" ] || {
+    echo "release: ABORT — DMG container signing authority does not match DEVELOPER_ID_APP." >&2
+    echo "         Expected: $DEVELOPER_ID_APP" >&2
+    echo "         Found:    $leaf_authority" >&2
+    exit 5
+  }
+  echo "release: verified DMG container signature authority: $leaf_authority"
+}
+
+sign_dmg_container() {
+  local dmg="$1"
+  local dmg_sign_id="${BUNDLE_ID}.dmg"
+
+  [ "$UNSIGNED" != "true" ] || return 0
+
+  echo "release: signing DMG container (id=$dmg_sign_id, timestamp)..."
+  codesign --force \
+    --sign "$DEVELOPER_ID_APP" \
+    --identifier "$dmg_sign_id" \
+    --timestamp \
+    "$dmg" || { echo "release: ABORT — DMG container codesign failed." >&2; exit 5; }
+
+  verify_dmg_container_signature "$dmg"
+}
+
+sign_dmg_container "$DMG_OUT"
+
 # --- 4. Notarize + staple (when signing enabled) / clean skip otherwise -----
 # notarize.sh exits 0 with a clear message when no Apple credentials exist.
 NOTARIZED="false"
@@ -521,6 +563,7 @@ if [ "$UNSIGNED" != "true" ] && [ "$NOTARIZED" != "true" ]; then
   echo "         Releases are gated on >=1 notarized+stapled DMG." >&2
   exit 4
 fi
+verify_dmg_container_signature "$DMG_OUT"
 if [ "$NOTARIZED" != "true" ]; then
   echo "release: NOTE — unsigned private/local smoke artifact." >&2
   echo "         Do not publish or upload; use right-click>Open / xattr only for local testing." >&2
