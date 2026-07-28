@@ -54,6 +54,8 @@ targets:
     platform: macOS
     sources:
       - path: App/Sources
+        excludes:
+          - .omc/**
       - path: App/Resources
     dependencies:
       # Link only the umbrella product — the app talks to WarmthEngine, never backends.

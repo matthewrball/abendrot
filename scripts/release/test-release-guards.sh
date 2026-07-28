@@ -155,6 +155,8 @@ APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
 UPDATE_MANAGER="$ROOT/App/Sources/Abendrot/Services/UpdateManager.swift"
 PROJECT_SPEC="$ROOT/project.yml"
 INFO_PLIST="$ROOT/App/Resources/Info.plist"
+grep -A2 -F -- '- path: App/Sources' "$PROJECT_SPEC" | grep -qF -- '- .omc/**'
+echo "PASS: ignored agent state is excluded from app resources"
 if sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
   | grep -qF '#if DEBUG'; then
   echo "Debug builds must use the same validated Sparkle configuration." >&2
