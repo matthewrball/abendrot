@@ -19,7 +19,7 @@
 # plain-dmg.sh remains the zero-dependency fallback. Releases are
 # gated on >=1 notarized+stapled DMG when signing is enabled.
 #
-# Install: pipx install 'dmgbuild==1.6.7' && pipx pin dmgbuild
+# Install: pipx install 'dmgbuild[badge-icons]==1.6.7' && pipx pin dmgbuild
 #
 # Usage:
 # scripts/dmg/pretty-dmg.sh --check
@@ -37,7 +37,7 @@ APP=""
 OUT=""
 VOLNAME="Abendrot"
 BACKGROUND="$ASSETS_DIR/dmg-background.png"   # brand art (see assets/README.md)
-VOLICON="$ASSETS_DIR/volume.icns"             # disk silhouette + Abendrot badge
+BADGE_ICON="$ASSETS_DIR/volume-badge.png"
 DMGBUILD_VERSION="1.6.7"
 CHECK_ONLY="false"
 
@@ -58,12 +58,12 @@ done
 resolve_dmgbuild() {
   if ! command -v pipx >/dev/null 2>&1; then
     echo "pretty-dmg: 'pipx' not found." >&2
-    echo "            Install pipx, then: pipx install 'dmgbuild==$DMGBUILD_VERSION'" >&2
+    echo "            Install pipx, then: pipx install 'dmgbuild[badge-icons]==$DMGBUILD_VERSION'" >&2
     return 5
   fi
   if [ "$(pipx list dmgbuild --short 2>/dev/null)" != "dmgbuild $DMGBUILD_VERSION" ]; then
     echo "pretty-dmg: requires dmgbuild $DMGBUILD_VERSION via pipx." >&2
-    echo "            Run: pipx install --upgrade 'dmgbuild==$DMGBUILD_VERSION'" >&2
+    echo "            Run: pipx install --force 'dmgbuild[badge-icons]==$DMGBUILD_VERSION'" >&2
     echo "                 pipx pin dmgbuild" >&2
     echo "            Zero-dependency fallback: scripts/dmg/plain-dmg.sh" >&2
     return 5
@@ -74,13 +74,19 @@ resolve_dmgbuild() {
     echo "pretty-dmg: pipx dmgbuild executable not found." >&2
     return 5
   }
+  if ! pipx runpip dmgbuild show pyobjc-framework-Quartz >/dev/null 2>&1; then
+    echo "pretty-dmg: dmgbuild's badge-icons extra is missing." >&2
+    echo "            Run: pipx install --force 'dmgbuild[badge-icons]==$DMGBUILD_VERSION'" >&2
+    echo "                 pipx pin dmgbuild" >&2
+    return 5
+  fi
   printf '%s\n' "$executable"
 }
 
 if [ "$CHECK_ONLY" = "true" ]; then
   resolve_dmgbuild >/dev/null
-  [ -f "$VOLICON" ] || {
-    echo "pretty-dmg: volume icon not found at '$VOLICON'." >&2
+  [ -f "$BADGE_ICON" ] || {
+    echo "pretty-dmg: volume badge not found at '$BADGE_ICON'." >&2
     exit 5
   }
   exit 0
@@ -184,7 +190,8 @@ symlinks = {"Applications": "/Applications"}
 hide_extensions = []
 
 background = os.environ.get("PDMG_BACKGROUND") or None
-icon = os.environ.get("PDMG_VOLICON") or None
+icon = None
+badge_icon = os.environ.get("PDMG_BADGE_ICON") or None
 
 window_rect = (($WINDOW_X, $WINDOW_Y), ($WINDOW_W, $WINDOW_H))
 default_view = "icon-view"
@@ -231,7 +238,7 @@ else
   BACKGROUND=""
 fi
 echo "pretty-dmg: building branded DMG -> $OUT"
-if ! PDMG_APP="$APP" PDMG_BACKGROUND="$BACKGROUND" PDMG_VOLICON="$VOLICON" \
+if ! PDMG_APP="$APP" PDMG_BACKGROUND="$BACKGROUND" PDMG_BADGE_ICON="$BADGE_ICON" \
      "$DMGBUILD" -s "$SETTINGS" "$VOLNAME" "$OUT"; then
   echo "pretty-dmg: dmgbuild failed." >&2
   echo "            Fallback: scripts/dmg/plain-dmg.sh produces a plain DMG." >&2

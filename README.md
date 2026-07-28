@@ -41,11 +41,7 @@ Requires macOS 14 "Sonoma" or later. Universal for Apple silicon and Intel.
 
 ### Homebrew
 
-```sh
-brew install --cask abendrot
-```
-
-Homebrew is pending and not available yet. Use the `.dmg` above for now.
+Homebrew installation is not available yet. Use the signed, notarized `.dmg` above for now.
 
 > Abendrot is free and open source under the MIT License. If it is useful to you, please [star the repository](https://github.com/matthewrball/abendrot/stargazers).
 

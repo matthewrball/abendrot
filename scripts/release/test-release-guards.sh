@@ -86,17 +86,16 @@ grep -qF "stable publication requires the branded DMG toolchain" "$RELEASE_SCRIP
 grep -qF "ABORT — branded DMG creation failed" "$RELEASE_SCRIPT"
 echo "PASS: automatic release packaging shares the branded builder's exact readiness probe"
 
-grep -qF 'PDMG_VOLICON="$VOLICON"' "$PRETTY_DMG_SCRIPT"
-grep -qF 'icon = os.environ.get("PDMG_VOLICON") or None' "$PRETTY_DMG_SCRIPT"
-[ -f "$ROOT/scripts/dmg/assets/volume.icns" ] \
-  && [ -f "$ROOT/scripts/dmg/assets/volume.png" ] \
-  && ! cmp -s \
-    "$ROOT/scripts/dmg/assets/volume.icns" \
-    "$ROOT/assets/abendrot.icns" || {
-  echo "The mounted DMG must use the distinct branded disk icon." >&2
+grep -qF 'PDMG_BADGE_ICON="$BADGE_ICON"' "$PRETTY_DMG_SCRIPT"
+grep -qF 'badge_icon = os.environ.get("PDMG_BADGE_ICON") or None' "$PRETTY_DMG_SCRIPT"
+[ -f "$ROOT/scripts/dmg/assets/volume-badge.png" ] \
+  && [ ! -e "$ROOT/scripts/dmg/assets/volume.icns" ] \
+  && [ ! -e "$ROOT/scripts/dmg/assets/volume.png" ] \
+  && [ ! -e "$ROOT/scripts/dmg/render-volume-icon.py" ] || {
+  echo "The mounted DMG must use dmgbuild's native removable-disk badge mode." >&2
   exit 1
 }
-echo "PASS: mounted DMG uses the distinct branded disk icon"
+echo "PASS: mounted DMG uses the native removable-disk icon with Abendrot badge"
 
 grep -qF 'local dmg_sign_id="${BUNDLE_ID}.dmg"' "$RELEASE_SCRIPT"
 grep -qF 'codesign --force' "$RELEASE_SCRIPT"
@@ -126,6 +125,7 @@ echo "PASS: signed release DMGs are container-signed before notarization and ver
 grep -qF 'DMGBUILD_VERSION="1.6.7"' "$PRETTY_DMG_SCRIPT"
 grep -qF -- '--check)' "$PRETTY_DMG_SCRIPT"
 grep -qF 'pipx list dmgbuild --short' "$PRETTY_DMG_SCRIPT"
+grep -qF 'pipx runpip dmgbuild show pyobjc-framework-Quartz' "$PRETTY_DMG_SCRIPT"
 grep -qF 'built image is missing the app or /Applications link' "$PRETTY_DMG_SCRIPT"
 grep -qF 'signed app signature was invalidated during DMG creation' "$PRETTY_DMG_SCRIPT"
 if grep -qF 'hide_extensions = [app_name]' "$PRETTY_DMG_SCRIPT"; then

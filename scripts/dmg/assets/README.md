@@ -6,8 +6,6 @@
 |---|---|---|
 | `dmg-background.png` | 660 × 400 px (1×) | Finder window background |
 | `dmg-background@2x.png` | 1320 × 800 px (2×) | Retina background |
-| `volume.png` | 1024 × 1024 px | mounted-volume icon master |
-| `volume.icns` | standard `.icns` | mounted-volume icon |
 
 **Do not edit the PNGs.** They are generated:
 
@@ -20,16 +18,17 @@ script inlines the app icon into the wordmark, renders with headless Chrome at
 2×, and Lanczos-downscales the 1×. `dmgbuild` compiles the pair into a single
 HiDPI TIFF when the DMG is built.
 
-The volume icon is generated separately:
+The mounted volume uses dmgbuild's `badge_icon` mode with the generated
+`volume-badge.png`. dmgbuild composites that padded badge onto macOS's native
+removable-disk artwork at build time, matching Finder's standard volume
+appearance without a separately maintained disk illustration. This requires the
+pinned `dmgbuild[badge-icons]` tool extra documented in the release runbook.
+
+Regenerate the badge after changing the public app icon:
 
 ```bash
-scripts/dmg/render-volume-icon.py
+scripts/dmg/render-volume-badge.py
 ```
-
-It uses an original metallic disk silhouette with the Abendrot sunset as a
-small inset badge. Finder cannot overlay branding on its native disk icon:
-supplying an `.icns` replaces the native icon entirely, so the custom artwork
-must preserve the recognizable storage-volume shape itself.
 
 ## Art direction (matches abendrot.app + the app icon)
 
