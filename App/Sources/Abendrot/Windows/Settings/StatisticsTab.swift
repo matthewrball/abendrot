@@ -9,6 +9,21 @@ struct StatisticsTab: View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "Statistics", subtitle: "How long Abendrot has softened your evenings.")
 
+            HStack {
+                Text("Collect statistics")
+                    .font(Theme.Typography.ui(13))
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { model.statsEnabled },
+                    set: { model.setStatsEnabled($0) }
+                ))
+                .labelsHidden()
+            }
+            .toggleStyle(.switch)
+            .tint(Theme.Color.accent)
+
+            DividerLine()
+
             // Live readout: refresh the elapsed total once a second while the tab is visible.
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 VStack(alignment: .leading, spacing: 18) {
@@ -33,21 +48,6 @@ struct StatisticsTab: View {
                 .buttonStyle(.liquidGlass)
                 Spacer()
             }
-
-            DividerLine()
-
-            HStack {
-                Text("Collect statistics")
-                    .font(Theme.Typography.ui(13))
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { model.statsEnabled },
-                    set: { model.setStatsEnabled($0) }
-                ))
-                .labelsHidden()
-            }
-            .toggleStyle(.switch)
-            .tint(Theme.Color.accent)
         }
     }
 
