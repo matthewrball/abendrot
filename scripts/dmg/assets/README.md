@@ -22,7 +22,7 @@ The mounted volume uses dmgbuild's `badge_icon` mode with the generated
 `volume-badge.png`. dmgbuild composites that padded badge onto macOS's native
 removable-disk artwork at build time, matching Finder's standard volume
 appearance without a separately maintained disk illustration. This requires the
-pinned `dmgbuild[badge-icons]` tool extra documented in the release runbook.
+pinned `dmgbuild[badge-icons]` tool extra documented in the release process.
 
 Regenerate the badge after changing the public app icon:
 
