@@ -36,10 +36,16 @@ struct StatisticsTab: View {
 
             DividerLine()
 
-            Toggle("Collect statistics", isOn: Binding(
-                get: { model.statsEnabled },
-                set: { model.setStatsEnabled($0) }
-            ))
+            HStack {
+                Text("Collect statistics")
+                    .font(Theme.Typography.ui(13))
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { model.statsEnabled },
+                    set: { model.setStatsEnabled($0) }
+                ))
+                .labelsHidden()
+            }
             .toggleStyle(.switch)
             .tint(Theme.Color.accent)
         }
