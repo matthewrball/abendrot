@@ -412,7 +412,7 @@ private var manualDetail: some View {
             Label("Why we recommend Sunset", systemImage: "moon.stars.fill")
                 .font(Theme.Typography.ui(11.5, weight: .semibold))
                 .foregroundStyle(Theme.Color.accentHighlight)
-            Text("International expert consensus recommends keeping evening light low in blue in the hours before bed. Sunset eases your screen off blue automatically as evening falls.")
+            Text("International expert consensus recommends keeping evening light low in blue in the hours before bed. Sunset reduces your screen's blue light automatically as evening falls.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
