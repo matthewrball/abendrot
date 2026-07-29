@@ -5,7 +5,7 @@
 # and at least one release is notarized+stapled (the Homebrew cask publishes only
 # after appcast+DMG are coherent).
 #
-# Distribution: own tap first (homebrew-abendrot) -> later submit to
+# Distribution: own tap first (homebrew-tap) -> later submit to
 # homebrew-cask central. Binaries are hosted on GitHub Releases,
 # so the `url` uses versioned GitHub-release download URLs.
 #
@@ -21,20 +21,20 @@ cask "abendrot" do
   url "https://github.com/matthewrball/abendrot/releases/download/v#{version}/Abendrot-#{version}.dmg",
       verified: "github.com/matthewrball/abendrot/"
   name "Abendrot"
-  desc "Free, open-source per-display screen-warmth app for macOS"
+  desc "Free, open-source per-display screen-warmth app"
   homepage "https://abendrot.app/"
+
+  # Read the latest version straight from the Sparkle appcast (single source of truth).
+  livecheck do
+    url "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
+    strategy :sparkle, &:short_version
+  end
 
   # Sparkle drives in-app updates; declare so brew defers to the app.
   auto_updates true
 
   # macOS 14 "Sonoma" deployment-target floor.
-  depends_on macos: ">= :sonoma"
-
-  # Read the latest version straight from the Sparkle appcast (single source of truth).
-  livecheck do
-    url "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"
-    strategy :sparkle
-  end
+  depends_on macos: :sonoma
 
   app "Abendrot.app"
 

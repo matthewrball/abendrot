@@ -41,7 +41,12 @@ Requires macOS 14 "Sonoma" or later. Universal for Apple silicon and Intel.
 
 ### Homebrew
 
-Homebrew installation is not available yet. Use the signed, notarized `.dmg` above for now.
+```sh
+brew install --cask matthewrball/tap/abendrot
+```
+
+The cask installs the same signed, notarized release and adds the bundled
+`abendrot` command-line tool to your `PATH`.
 
 > Abendrot is free and open source under the MIT License. If it is useful to you, please [star the repository](https://github.com/matthewrball/abendrot/stargazers).
 
@@ -89,7 +94,7 @@ abendrot status --json         # read live state as JSON — pipe it anywhere
 abendrot reveal --hold 10      # momentary true-color peek, then ease back
 ```
 
-**Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. When you install the app, the binary ships inside the bundle; once Homebrew is available, the cask will symlink it onto your `PATH`.
+**Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. The binary ships inside the app bundle; the Homebrew cask symlinks it onto your `PATH`.
 
 Every command supports `--json`, with scriptable exit codes. See [`AGENTS.md`](AGENTS.md) for the complete CLI and agent-control reference.
 
