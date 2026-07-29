@@ -367,7 +367,10 @@ if [ "${1:-}" = "api" ]; then
       printf '%s\n' "$dev"
       ;;
     repos/matthewrball/abendrot/git/ref/tags/v1.0.0)
-      [ "${GH_TAG_EXISTS:-0}" = "1" ] || exit 1
+      if [ "${GH_TAG_EXISTS:-0}" != "1" ]; then
+        printf '%s\n' '{"message":"Not Found","status":"404"}'
+        exit 1
+      fi
       printf '%s\n' "$target"
       ;;
     *)

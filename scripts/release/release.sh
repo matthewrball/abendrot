@@ -252,7 +252,9 @@ require_release_target() {
       exit 9
     }
 
-  tag_sha="$(gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null || true)"
+  if ! tag_sha="$(gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null)"; then
+    tag_sha=""
+  fi
   [ -z "$tag_sha" ] || {
     echo "release: ABORT — remote tag ${TAG} already exists; refusing to publish against a stale tag." >&2
     exit 9
