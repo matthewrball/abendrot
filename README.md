@@ -58,31 +58,12 @@ The cask installs the same signed, notarized release and adds the bundled
 - **Health is the context; reliability is the proof.** Abendrot gives you warmer, lower-blue light in the evening, and links the circadian research instead of making medical claims.
 - **Local and auditable.** MIT-licensed, no telemetry, no account. Settings and usage statistics stay on your Mac; only update checks contact GitHub.
 
-## How it works
+## WarmthKit
 
-Warmth is applied per display using the methods available to that display:
-
-| Layer | What it is | Role |
-|---|---|---|
-| **Gamma** | The system display transfer table (`CGSetDisplayTransferByTable`) | Used when Abendrot identifies gamma warming as supported. |
-| **Hardware (DDC)** | Panel RGB-gain over DDC/CI | Opt-in on compatible external monitors. |
-| **Overlay** | A per-screen Metal veil | Screen-tint fallback when direct display warming is unavailable or disabled. |
-
-## Audit the engine
-
-The automatic fallback is a small, unit-tested path in [`LayerResolver.swift`](WarmthKit/Sources/WarmthCore/LayerResolver.swift):
-
-```swift
-if privateAPIsEnabled, isHardwareDDCEnabled, isSupported(capabilities.hardware) {
-    return .hardware
-}
-if privateAPIsEnabled, isSupported(capabilities.gamma) {
-    return .gamma
-}
-return .overlay
-```
-
-The rest of the engine is open for inspection in [`WarmthKit`](WarmthKit).
+**Warmth that adapts to every display.** [`WarmthKit`](WarmthKit) is Abendrot's
+open-source display engine. It keeps built-in and external screens warm through
+sleep, wake, and reconnects, and falls back to a screen tint instead of silently
+doing nothing when direct warming is unavailable.
 
 ## Scripting & AI control
 
