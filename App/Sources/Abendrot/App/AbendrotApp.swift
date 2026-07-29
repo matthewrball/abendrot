@@ -170,6 +170,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows: Bool
+    ) -> Bool {
+        if hasVisibleWindows { return true }
+        guard let model else { return false }
+        if UserDefaults.standard.object(forKey: AppModel.hasCompletedOnboardingKey) == nil {
+            OnboardingWindowController.show(model: model)
+        } else {
+            SettingsWindowController.show(model: model)
+        }
+        return false
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // Neutral-reset every display before exit.
         // The reset runs on the main actor, so we can't block the main thread waiting

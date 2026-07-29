@@ -4,7 +4,7 @@ Abendrot is a macOS menu-bar app that warms the screen. It ships a small command
 tool, **`abendrot`**, that an AI assistant (Claude Code, Codex, Cursor) or a shell script
 can use to read the app's live state and change its settings. This file is the canonical
 reference for that control surface. Everything here is grounded in the real binary
-(`abendrot --version` → `1.0.1`); no flag is described that the CLI does not implement.
+(`abendrot --version` → `1.0.2`); no flag is described that the CLI does not implement.
 
 This is a **capability** document: it describes what the `abendrot` CLI can do. It makes no
 health or circadian claim — it only documents how to drive the app's visual state.
@@ -36,7 +36,7 @@ package's build directory rather than the app bundle:
 swift build -c release --package-path cli
 # binary lands at:
 cli/.build/release/abendrot          # SwiftPM's stable per-config path (resolves to the arch dir)
-./cli/.build/release/abendrot --version   # → 1.0.1
+./cli/.build/release/abendrot --version   # → 1.0.2
 ```
 
 The CLI is a standalone SwiftPM executable; it controls the same running app via the shared
@@ -68,7 +68,7 @@ app is **not** running, `status` falls back to the last-saved (persisted) values
 
 ```sh
 abendrot status
-# Abendrot 1.0.1 (build 3) — running
+# Abendrot 1.0.2 (build 4) — running
 # Enabled: yes
 # Mode: always-on (warming now)
 # Warmth: 0.80 (~700K, max 500K)
@@ -194,7 +194,7 @@ abendrot reveal --hold 10    # 10s peek
 
 ### `abendrot --version` / `abendrot --help`
 
-`--version` prints the CLI semver (`1.0.1`). `--help` (and `abendrot help <subcommand>`)
+`--version` prints the CLI semver (`1.0.2`). `--help` (and `abendrot help <subcommand>`)
 prints usage.
 
 ---
@@ -233,10 +233,10 @@ Example (app running):
 ```json
 {
   "running": true,
-  "cliVersion": "1.0.1",
+  "cliVersion": "1.0.2",
   "schemaVersion": 1,
   "snapshotSchemaVersion": 1,
-  "appVersion": "1.0.1",
+  "appVersion": "1.0.2",
   "appBuild": "3",
   "pid": 96889,
   "appLaunchID": "70CAA930-6F6B-40F2-91BF-A5E2812818B0",

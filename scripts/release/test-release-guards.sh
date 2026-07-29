@@ -1304,7 +1304,7 @@ SH
   chmod 755 "$PROMOTE_GH/gh"
 
   make_promote_public() {
-    local origin="$1" work="$2" build="$3"
+    local origin="$1" work="$2" build="$3" seed_appcast="${4:-true}"
     local source_sha
     source_sha="$(git -C "$build" rev-parse HEAD)"
     git init --bare -q "$origin"
@@ -1313,7 +1313,10 @@ SH
     git -C "$work" config user.email "release-guard@example.invalid"
     git -C "$work" config gc.auto 0
     printf 'main\n' > "$work/README.md"
-    git -C "$work" add README.md
+    if [ "$seed_appcast" = "true" ]; then
+      cp "$build/appcast.xml" "$work/appcast.xml"
+    fi
+    git -C "$work" add -A
     git -C "$work" commit -qm "test: seed public main"
     git -C "$work" remote add origin "$origin"
     git -C "$work" push -qu origin main
@@ -1395,7 +1398,7 @@ XML
     git -C "$build" add appcast.xml
     git -C "$build" commit -qm "test: add appcast item"
     git -C "$build" push -q origin HEAD:refs/heads/dev
-    make_promote_public "$origin" "$work" "$build"
+    make_promote_public "$origin" "$work" "$build" false
     local publish_sha repo
     publish_sha="$(git -C "$work" rev-parse origin/public-dev)"
     repo="$(git -C "$work" config --get remote.origin.url | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')"

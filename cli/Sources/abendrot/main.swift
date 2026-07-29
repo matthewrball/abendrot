@@ -27,7 +27,7 @@ struct Abendrot: ParsableCommand {
 }
 
 /// The CLI's own semver (independent of the app's MARKETING_VERSION; surfaced in `status --json`).
-let cliVersion = "1.0.1"
+let cliVersion = "1.0.2"
 
 // Custom top-level entry (instead of `Abendrot.main()`) so ArgumentParser's parse and validation
 // failures honor the documented 0/2/3/4 exit contract. ArgumentParser exits parse/ValidationError
