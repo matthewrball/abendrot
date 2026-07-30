@@ -226,12 +226,18 @@ sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE
   | grep -qF 'updater.automaticallyChecksForUpdates = enabled'
 sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE_MANAGER" \
   | grep -qF 'updater.automaticallyDownloadsUpdates = enabled'
-if grep -qF 'checkForUpdatesInBackground()' "$UPDATE_MANAGER"; then
-  echo "Unexpected launch-time background update check in UpdateManager." >&2
+# Sparkle's 24h scheduler alone never re-checks on relaunch, so the delegate forces
+# exactly ONE latched background check per launch and takes over silent
+# install-on-quit with a prompt. The latch and the prompt hook must both stay.
+grep -qF 'updaterDelegate: updaterDelegate' "$UPDATE_MANAGER"
+grep -qF 'guard !didForceLaunchCheck else { return }' "$UPDATE_MANAGER"
+if [ "$(grep -cF 'checkForUpdatesInBackground()' "$UPDATE_MANAGER")" -ne 1 ]; then
+  echo "Expected exactly one latched launch-time update check in UpdateManager." >&2
   exit 1
 fi
+grep -qF 'willInstallUpdateOnQuit' "$UPDATE_MANAGER"
 grep -qF 'Text("Download updates automatically")' "$UPDATE_MANAGER"
-echo "PASS: Release builds rely on Sparkle's scheduler and download updates by default with opt-out"
+echo "PASS: update checks are latched once per launch and install-on-quit prompts instead of installing silently"
 
 grep -qF 'static let warmedSecondsKey = "stats.warmedSeconds"' "$APP_MODEL"
 grep -qF 'static let warmSunsetCountKey = "stats.warmSunsetCount"' "$APP_MODEL"
