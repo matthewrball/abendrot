@@ -11,8 +11,10 @@
 # What it does (the Go CLI's job, our way):
 # 1. Read version + build number from the EXPORTED app's Info.plist (plutil).
 # 2. Require a build number above every build already in the appcast.
-# 3. Build the DMG (headless branded dmgbuild path, else plain).
-# 4. When signing is enabled: notarize + staple + verify via notarize.sh.
+# 3. When signing is enabled: notarize + staple the .app ITSELF via notarize.sh
+# --app-bundle, so the ticket travels with the app out of the DMG.
+# 4. Build the DMG (headless branded dmgbuild path, else plain) around the
+# already-stapled app, then notarize + staple + verify it via notarize.sh.
 # 5. Sparkle-sign the DMG with `sign_update` (EdDSA) — the SINGLE release
 # authority's key (local machine, key in login keychain).
 # 6. Update appcast.xml PRESERVING existing <item> entries (prepend the new one).
@@ -20,9 +22,10 @@
 # and wait for green CI, publish and verify the release asset, then promote
 # the appcast to public main so the feed never exposes a private asset URL.
 #
-# DESIGN RULE: public release is GATED on >=1 notarized+stapled DMG, Developer
-# ID signing, and Sparkle EdDSA signing. --unsigned is private/local dry-run
-# packaging only and cannot publish or upload artifacts.
+# DESIGN RULE: public release is GATED on a notarized+stapled .app, >=1
+# notarized+stapled DMG, Developer ID signing, and Sparkle EdDSA signing.
+# --unsigned is private/local dry-run packaging only and cannot publish or
+# upload artifacts.
 #
 # This file is a working SKELETON: the Sparkle + appcast + gh steps are real
 # command lines, guarded so the script runs end-to-end TODAY without credentials
@@ -466,6 +469,42 @@ verify_macho_deployment_floor() {
 
 verify_macho_deployment_floor
 
+# --- 2.9 Notarize + staple the .app ITSELF (before the DMG is built) --------
+# Stapling the DMG alone is not enough: the moment a user drags Abendrot.app out
+# of the image into /Applications, the copied bundle carries no ticket, so
+# Gatekeeper needs an ONLINE lookup to confirm notarization and a fresh offline
+# Mac shows a first-launch warning. Apple's guidance is to staple the ticket to
+# the .app so it travels WITH the app. We therefore notarize + staple the bundle
+# here, and the DMG below is built around an ALREADY-stapled app (the DMG is then
+# separately notarized + stapled in stage 4 — both end up stapled).
+#
+# Order is load-bearing: this runs AFTER the helper embed re-signs the bundle
+# (stage 2.5) and AFTER the deployment-floor sweep, and BEFORE the DMG is built.
+# notarize.sh exits 0 with a clear message when no Apple credentials exist.
+APP_NOTARIZED="false"
+if [ "$UNSIGNED" = "true" ]; then
+  echo "release: --unsigned -> skipping app notarization."
+else
+  if "$REPO_ROOT/scripts/release/notarize.sh" "$APP" --app-bundle; then
+    # Distinguish "actually notarized" from "skipped" by checking for a stapled ticket.
+    if xcrun stapler validate "$APP" >/dev/null 2>&1; then
+      APP_NOTARIZED="true"
+    fi
+  fi
+fi
+
+# Release gate: every signed release must ship a ticket INSIDE the app bundle so
+# the app still verifies offline after the user copies it to /Applications. Local
+# builds without Apple credentials must opt into the explicit --unsigned path.
+if [ "$UNSIGNED" != "true" ] && [ "$APP_NOTARIZED" != "true" ]; then
+  echo "release: ABORT — signing is configured but the .app is not notarized+stapled." >&2
+  echo "         Releases are gated on a stapled ticket inside the shipped app." >&2
+  exit 4
+fi
+if [ "$APP_NOTARIZED" = "true" ]; then
+  verify_input_app_signature_authority
+fi
+
 # --- 3. Build the DMG -------------------------------------------------------
 DMG_OUT="$RELEASE_SCRATCH/${APP_DISPLAY_NAME}-${VERSION}.dmg"
 mkdir -p "$(dirname "$DMG_OUT")"
@@ -772,4 +811,4 @@ else
     && echo "release: production appcast unchanged; candidate at $APPCAST_CANDIDATE." >&2
 fi
 
-echo "release: complete (version=$VERSION build=$BUILD notarized=$NOTARIZED signed=$SIGNED)."
+echo "release: complete (version=$VERSION build=$BUILD app_notarized=$APP_NOTARIZED notarized=$NOTARIZED signed=$SIGNED)."

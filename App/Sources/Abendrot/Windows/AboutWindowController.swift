@@ -278,7 +278,7 @@ private struct WarmedTimeStat: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             HStack(alignment: .center, spacing: 16) {
-                Text("Abendrot has warmed your Mac for")
+                Text("We've warmed your Mac for")
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textMuted)
 
@@ -287,6 +287,8 @@ private struct WarmedTimeStat: View {
                 Text(model.warmedDurationString)
                     .font(Theme.Typography.serif(25))
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .foregroundStyle(Theme.Gradient.sunsetHorizontal)
                     .shadow(color: Theme.Color.accent.opacity(0.18), radius: 8)
                     .contentTransition(.numericText())

@@ -122,6 +122,23 @@ sed -n '/^sign_dmg_container()/,/^}/p' "$RELEASE_SCRIPT" \
   | grep -qF '[ "$UNSIGNED" != "true" ] || return 0'
 echo "PASS: signed release DMGs are container-signed before notarization and verified before Sparkle signing"
 
+# The ticket must be stapled INSIDE the .app before the DMG is built around it,
+# so the app still verifies offline once a user drags it to /Applications.
+app_notarize_call_line="$(grep -nF 'notarize.sh" "$APP" --app-bundle' "$RELEASE_SCRIPT" | cut -d: -f1)"
+dmg_build_line="$(grep -nF 'release: building DMG (mode=$EFFECTIVE_MODE)' "$RELEASE_SCRIPT" | cut -d: -f1)"
+[ -n "$app_notarize_call_line" ] && [ -n "$dmg_build_line" ] && \
+  [ "$app_notarize_call_line" -lt "$dmg_build_line" ] && \
+  [ "$app_notarize_call_line" -lt "$notarize_call_line" ] || {
+  echo "The .app must be notarized and stapled before the DMG is built around it." >&2
+  exit 1
+}
+grep -qF "signing is configured but the .app is not notarized+stapled" "$RELEASE_SCRIPT"
+sed -n "${app_notarize_call_line},${dmg_build_line}p" "$RELEASE_SCRIPT" \
+  | grep -qF 'Releases are gated on a stapled ticket inside the shipped app.'
+sed -n '/^# --- 2.9 /,/^# --- 3\. /p' "$RELEASE_SCRIPT" \
+  | grep -qF 'release: --unsigned -> skipping app notarization.'
+echo "PASS: the shipped .app is notarized and stapled before DMG packaging"
+
 grep -qF 'DMGBUILD_VERSION="1.6.7"' "$PRETTY_DMG_SCRIPT"
 grep -qF -- '--check)' "$PRETTY_DMG_SCRIPT"
 grep -qF 'pipx list dmgbuild --short' "$PRETTY_DMG_SCRIPT"
@@ -150,6 +167,26 @@ set -e
 [ "$notary_app_rc" -eq 2 ]
 grep -qF "only accepts a finished .dmg" "$TMP/notary-app-err"
 echo "PASS: notarization rejects raw app bundles before credential handling"
+
+# App-bundle mode is explicit and narrow: it must refuse a DMG and refuse a plain
+# file that merely ends in .app, both before any credential handling.
+printf 'not a dmg\n' > "$TMP/notary-type.dmg"
+set +e
+"$NOTARIZE_SCRIPT" "$TMP/notary-type.dmg" --app-bundle \
+  >/dev/null 2>"$TMP/notary-appmode-dmg-err"
+rc=$?
+set -e
+[ "$rc" -eq 2 ]
+grep -qF -- "--app-bundle requires a .app bundle target" "$TMP/notary-appmode-dmg-err"
+printf 'not a bundle\n' > "$TMP/notary-flat.app"
+set +e
+"$NOTARIZE_SCRIPT" "$TMP/notary-flat.app" --app-bundle \
+  >/dev/null 2>"$TMP/notary-appmode-flat-err"
+rc=$?
+set -e
+[ "$rc" -eq 2 ]
+grep -qF "is not an app bundle directory" "$TMP/notary-appmode-flat-err"
+echo "PASS: app-bundle notarization accepts only a real .app bundle"
 
 APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
 UPDATE_MANAGER="$ROOT/App/Sources/Abendrot/Services/UpdateManager.swift"
@@ -873,6 +910,14 @@ cat > "$MOCK_SIGNED_BIN/xcrun" <<'SH'
 set -euo pipefail
 case "${1:-}" in
   stapler)
+    if [ -n "${MOCK_STAPLER_ARG_LOG:-}" ]; then
+      printf '%s\n' "$*" >> "$MOCK_STAPLER_ARG_LOG"
+    fi
+    # Simulate an app bundle that cannot carry a ticket, without disturbing the
+    # DMG's own staple/validate behavior.
+    case "${@: -1}" in
+      *.app) [ "${MOCK_STAPLER_APP_FAIL:-0}" = "0" ] || exit 1;;
+    esac
     exit 0
     ;;
   notarytool)
@@ -965,6 +1010,31 @@ grep -qF "notarytool log MOCK-NOTARY-ID --keychain-profile abendrot-notary --key
   "$MOCK_NOTARY_ARGS"
 echo "PASS: notarization profile mode uses identical notarytool submit/log auth args"
 
+MOCK_APP_NOTARY_ARGS="$TMP/notarytool-app-args.log"
+MOCK_APP_STAPLER_ARGS="$TMP/stapler-app-args.log"
+MOCK_NOTARY_APP="$TMP/mock-notary-Abendrot.app"
+mkdir -p "$MOCK_NOTARY_APP/Contents/MacOS"
+printf 'mock binary\n' > "$MOCK_NOTARY_APP/Contents/MacOS/Abendrot"
+set +e
+PATH="$MOCK_SIGNED_BIN:$PATH" MOCK_NOTARYTOOL_ARG_LOG="$MOCK_APP_NOTARY_ARGS" \
+  MOCK_STAPLER_ARG_LOG="$MOCK_APP_STAPLER_ARGS" \
+  NOTARY_KEYCHAIN_PROFILE=abendrot-notary \
+  "$NOTARIZE_SCRIPT" "$MOCK_NOTARY_APP" --app-bundle \
+  >"$TMP/notary-app-mode-out" 2>"$TMP/notary-app-mode-stderr"
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  cat "$TMP/notary-app-mode-stderr" >&2
+  exit "$rc"
+fi
+grep -qE \
+  'notarytool submit .*/mock-notary-Abendrot\.app\.zip --keychain-profile abendrot-notary --wait --output-format plist' \
+  "$MOCK_APP_NOTARY_ARGS"
+grep -qF "staple $MOCK_NOTARY_APP" "$MOCK_APP_STAPLER_ARGS"
+grep -qF "validate $MOCK_NOTARY_APP" "$MOCK_APP_STAPLER_ARGS"
+grep -qF "notarized, stapled, and Gatekeeper-accepted" "$TMP/notary-app-mode-out"
+echo "PASS: app-bundle notarization submits a ditto zip and staples the .app itself"
+
 cat > "$MOCK_SPARKLE/sign_update" <<'SH'
 #!/usr/bin/env bash
 signature="$(head -c 64 /dev/zero | /usr/bin/base64)"
@@ -1023,6 +1093,26 @@ grep -qF '<sparkle:version>44</sparkle:version>' "$TMP/signed-pass/appcast-1.0.0
 grep -qF -- '--draft' "$TMP/key-pass-out"
 echo "PASS: signed dry-runs keep production appcast unchanged and write a verified candidate"
 echo "PASS: stable signed releases are uploaded as drafts before appcast staging"
+
+# A signed release whose .app cannot carry a ticket must abort BEFORE the DMG is
+# built, so no artifact is ever produced around an unstapled app.
+set +e
+PATH="$MOCK_SIGNED_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
+  MOCK_SWIFT_BUILD_ROOT="$MOCK_SWIFT_BUILD/app-staple-fail" \
+  MOCK_SPARKLE_PUBLIC_KEY="$TEST_PUBLIC_KEY" \
+  MOCK_STAPLER_APP_FAIL=1 \
+  ASC_API_KEY_P8="$TMP/mock-asc.p8" ASC_API_KEY_ID=MOCKKEY ASC_API_ISSUER_ID=MOCKISSUER \
+  APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/app-staple-fail" \
+  SPARKLE_SIGN_UPDATE="$MOCK_SPARKLE/sign_update" \
+  "$ROOT/scripts/release/release.sh" --app "$APP" --dmg-mode plain \
+  >/dev/null 2>"$TMP/app-staple-fail-stderr"
+rc=$?
+set -e
+[ "$rc" -eq 4 ]
+grep -qF "the .app is not notarized+stapled" "$TMP/app-staple-fail-stderr"
+[ ! -e "$TMP/app-staple-fail" ]
+echo "PASS: signed releases abort before packaging when the .app cannot be stapled"
 
 /usr/bin/plutil -replace CFBundleVersion -string "45" "$APP/Contents/Info.plist"
 write_canonical_appcast "$APPCAST"

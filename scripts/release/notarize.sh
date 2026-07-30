@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 #
-# notarize.sh — submit the finished DMG to Apple notarization, staple, verify.
+# notarize.sh — submit a finished DMG (or, with --app-bundle, the .app itself)
+# to Apple notarization, staple, verify.
 #
 # Notarization workflow: notarytool submit --wait + stapler staple, with release
 # gates (spctl -a -vvv, parse notarytool log).
+#
+# TWO TARGET KINDS, same credentials and same staple/verify contract:
+# default <path-to-dmg> the finished disk image
+# --app-bundle <path-to-app> the app bundle itself, submitted as
+# a ditto -c -k --keepParent zip and
+# stapled IN PLACE, so the ticket
+# travels with the app once a user
+# drags it out of the DMG (offline
+# first launch). A bare .app target
+# without --app-bundle is still
+# rejected.
 #
 # LOCAL UNSIGNED MODE: if no App Store Connect API key is configured, this script
 # prints a clear explanation and exits 0 so explicit local smoke packaging remains
@@ -25,10 +37,12 @@
 # Usage:
 # scripts/release/notarize.sh <path-to-dmg> \
 # [--key <p8>] [--key-id <id>] [--issuer <uuid>]
+# scripts/release/notarize.sh <path-to-app> --app-bundle [--key ...]
+# (the target is always FIRST; options follow it)
 #
 # Exit codes: 0 success OR cleanly-skipped (local unsigned); 2 args/type;
 # 3 missing target;
-# 4 notarization rejected; 5 staple/verify failed.
+# 4 notarization rejected; 5 packaging/staple/verify failed.
 
 set -euo pipefail
 
@@ -43,12 +57,15 @@ KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 TEMP_KEY_PATH=""
 SUBMIT_LOG=""
 MOUNT_POINT=""
+ZIP_DIR=""
+APP_BUNDLE="false"
 
 cleanup() {
   if [ -n "$MOUNT_POINT" ]; then
     hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || true
     rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
   fi
+  if [ -n "$ZIP_DIR" ]; then rm -rf -- "$ZIP_DIR"; fi
   if [ -n "$SUBMIT_LOG" ]; then rm -f -- "$SUBMIT_LOG"; fi
   if [ -n "$TEMP_KEY_PATH" ]; then rm -f -- "$TEMP_KEY_PATH"; fi
 }
@@ -56,29 +73,46 @@ trap cleanup EXIT
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --app-bundle) APP_BUNDLE="true"; shift ;;
     --key)    KEY_PATH="${2:-}"; shift 2 ;;
     --key-id) KEY_ID="${2:-}"; shift 2 ;;
     --issuer) ISSUER="${2:-}"; shift 2 ;;
-    -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed -n '1,30p'; exit 0 ;;
+    -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed -n '1,45p'; exit 0 ;;
     *) echo "notarize: unknown arg '$1'" >&2; exit 2;;
   esac
 done
 
 if [ -z "$TARGET" ]; then
-  echo "notarize: usage: notarize.sh <path-to-dmg> [--key ..]" >&2
+  echo "notarize: usage: notarize.sh <path-to-dmg>|<path-to-app> [--app-bundle] [--key ..]" >&2
   exit 2
 fi
 if [ ! -e "$TARGET" ]; then
   echo "notarize: target not found at '$TARGET'." >&2
   exit 3
 fi
-case "$TARGET" in
-  *.dmg);;
-  *)
-    echo "notarize: only accepts a finished .dmg; package app bundles before submission." >&2
+if [ "$APP_BUNDLE" = "true" ]; then
+  # App-bundle mode is explicit and never inferred: the DMG stage must not be
+  # able to reach it by accident, and a bare .app target still fails closed.
+  case "$TARGET" in
+    *.app);;
+    *)
+      echo "notarize: --app-bundle requires a .app bundle target." >&2
+      exit 2
+      ;;
+  esac
+  [ -d "$TARGET" ] || {
+    echo "notarize: --app-bundle target '$TARGET' is not an app bundle directory." >&2
     exit 2
-    ;;
-esac
+  }
+else
+  case "$TARGET" in
+    *.dmg);;
+    *)
+      echo "notarize: only accepts a finished .dmg; package app bundles before submission." >&2
+      exit 2
+      ;;
+  esac
+fi
 
 if [ -n "$KEYCHAIN_PROFILE" ] && {
   [ -n "$KEY_PATH" ] || [ -n "$KEY_ID" ] || [ -n "$ISSUER" ] || [ -n "${ASC_API_KEY_P8_BASE64:-}" ]
@@ -110,8 +144,8 @@ else
   cat >&2 <<'EOF'
 notarize: SKIPPED (local unsigned mode — no notarization credentials configured).
 
-  The DMG is valid only for local unsigned testing. It is NOT notarized and will
-  trip Gatekeeper on another Mac.
+  The artifact is valid only for local unsigned testing. It is NOT notarized and
+  will trip Gatekeeper on another Mac.
 
   For a signed release, provide all three:
       ASC_API_KEY_P8 (or ASC_API_KEY_P8_BASE64), ASC_API_KEY_ID, ASC_API_ISSUER_ID
@@ -126,12 +160,26 @@ if ! command -v xcrun >/dev/null 2>&1; then
   exit 3
 fi
 
+# notarytool cannot ingest a bundle directly. Zip the app with ditto so the
+# bundle (and its symlinks) survive the round trip; the TICKET is still stapled
+# to the .app itself below, not to this throwaway archive.
+SUBMIT_TARGET="$TARGET"
+if [ "$APP_BUNDLE" = "true" ]; then
+  ZIP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/notary-app.XXXXXX")"
+  SUBMIT_TARGET="$ZIP_DIR/$(basename "$TARGET").zip"
+  echo "notarize: packaging '$TARGET' for submission (ditto -c -k --keepParent)..."
+  /usr/bin/ditto -c -k --keepParent "$TARGET" "$SUBMIT_TARGET" || {
+    echo "notarize: could not archive the app bundle for submission." >&2
+    exit 5
+  }
+fi
+
 echo "notarize: submitting '$TARGET' (notarytool submit --wait)..."
 SUBMIT_LOG="$(mktemp "${TMPDIR:-/tmp}/notary-submit.txt.XXXXXX")"
 
 # --wait blocks until Apple finishes; capture both human output and the request id.
 set +e
-xcrun notarytool submit "$TARGET" \
+xcrun notarytool submit "$SUBMIT_TARGET" \
   "${AUTH_ARGS[@]}" \
   --wait \
   --output-format plist > "$SUBMIT_LOG" 2>&1
@@ -168,9 +216,16 @@ if ! xcrun stapler staple "$TARGET"; then
 fi
 xcrun stapler validate "$TARGET" || { echo "notarize: stapler validate failed." >&2; exit 5; }
 
-# Gatekeeper assessment: mount the finished DMG and assess its single app.
-# spctl -a -vvv is the release gate.
+# Gatekeeper assessment: assess the stapled app directly (app-bundle mode) or
+# mount the finished DMG and assess its single app. spctl -a -vvv is the
+# release gate in both cases.
 echo "notarize: Gatekeeper verify (spctl -a -vvv)..."
+if [ "$APP_BUNDLE" = "true" ]; then
+  spctl -a -vvv -t execute "$TARGET" \
+    || { echo "notarize: spctl rejected the stapled app bundle." >&2; exit 5; }
+  echo "notarize: SUCCESS — '$TARGET' notarized, stapled, and Gatekeeper-accepted."
+  exit 0
+fi
 MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/abendrot-verify.XXXXXX")"
 hdiutil attach "$TARGET" -nobrowse -quiet -mountpoint "$MOUNT_POINT" \
   || { echo "notarize: could not mount notarized DMG for verification." >&2; exit 5; }
