@@ -9,6 +9,17 @@
     <language>en</language>
     <!-- release.sh inserts new <item> elements directly below this line. -->
     <item>
+      <title>Abendrot 1.0.4</title>
+      <pubDate>Thu, 30 Jul 2026 12:14:17 +0000</pubDate>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/matthewrball/abendrot/releases/download/v1.0.4/Abendrot-1.0.4.dmg"
+                 length="9318505"
+                 type="application/octet-stream"
+                 sparkle:edSignature="5sybUN76PEK3xZ9RcY5k9qMflSI2/44sEOxCx0FnzElNcZvC4qmjmoNeJ6kVZnRXVls3FoG6BWibou0TIts6BQ==" />
+    </item>
+    <item>
       <title>Abendrot 1.0.3</title>
       <pubDate>Thu, 30 Jul 2026 11:18:02 +0000</pubDate>
       <sparkle:version>5</sparkle:version>
