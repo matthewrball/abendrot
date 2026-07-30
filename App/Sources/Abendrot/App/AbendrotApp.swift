@@ -48,33 +48,6 @@ struct AbendrotApp: App {
             }
         }
 
-        #if DEBUG
-        // Developer-only menu-bar item to replay the onboarding flow on demand for testing. Deliberately
-        // separate from the main popover so it stays out of the product UI.
-        MenuBarExtra("Replay onboarding", systemImage: "sparkles") {
-            Button("Relaunch (latest build)") {
-                relaunchFromLatestBuild()
-            }
-            Divider()
-            Button("Replay onboarding") {
-                OnboardingWindowController.show(model: model)
-            }
-            Button("Reset onboarding + ALL settings (fresh install + relaunch)") {
-                // TRUE fresh-install reset: wipe the ENTIRE app defaults domain — the onboarding flag
-                // plus warmth, schedule, location, excluded apps, stats, everything — then relaunch so a
-                // brand-new instance comes straight up (onboarding shows AND every setting is back to
-                // out-of-box). `synchronize()` flushes the wipe to disk BEFORE the relaunch, and the
-                // relaunch force-kills (SIGKILL) so no orderly shutdown re-flushes state into the wiped
-                // domain.
-                if let domain = Bundle.main.bundleIdentifier {
-                    UserDefaults.standard.removePersistentDomain(forName: domain)
-                    UserDefaults.standard.synchronize()
-                }
-                relaunchFromLatestBuild(force: true)
-            }
-        }
-        #endif
-
         // A SwiftUI Settings scene only so ⌘, / `openSettings()` resolve; the real glass
         // window is the programmatic one. This scene routes to it.
         Settings {
@@ -82,38 +55,6 @@ struct AbendrotApp: App {
         }
     }
 }
-
-#if DEBUG
-// MARK: - Dev relaunch
-
-/// DEV-ONLY: kill this instance and reopen the freshly-built app from the local Release build path
-/// the "restart from latest build" otherwise run by hand. The `/bin/sh` child
-/// is reparented to launchd when the kill takes us down, so `open` still fires; the short sleep lets the
-/// old instance go before the new one launches. Paired with the dev MenuBarExtra above — delete both
-/// before shipping.
-///
-/// `force` (the fresh-install reset) sends SIGKILL so NO orderly shutdown runs — otherwise
-/// `applicationShouldTerminate` would flush in-memory state (e.g. the warmed-time stat) back into the
-/// defaults we just wiped, so the "fresh" instance wouldn't be fresh. Plain relaunch uses SIGTERM so
-/// displays still neutral-reset and stats persist across the restart.
-private func relaunchFromLatestBuild(force: Bool = false) {
-    // Reopen the bundle we're running from (the local Release build path during testing). Derived rather
-    // than hardcoded, so no absolute home path or private repo name lives in source to reach the mirror.
-    let appPath = Bundle.main.bundlePath
-    let signal = force ? "-KILL" : "-TERM"
-    let task = Process()
-    task.executableURL = URL(fileURLWithPath: "/bin/sh")
-    task.arguments = [
-        "-c",
-        "kill \"$1\" \"$2\"; sleep 0.5; exec /usr/bin/open \"$3\"",
-        "abendrot-relaunch",
-        signal,
-        String(ProcessInfo.processInfo.processIdentifier),
-        appPath,
-    ]
-    try? task.run()
-}
-#endif
 
 // MARK: - SettingsLauncher
 //

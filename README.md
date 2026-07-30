@@ -15,7 +15,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FD9228" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-FD9228" alt="macOS 14 Sonoma or later">
   <img src="https://img.shields.io/badge/architecture-universal-FD9228" alt="Universal Apple Silicon and Intel">
-  <a href="https://github.com/matthewrball/abendrot/releases/latest"><img src="https://img.shields.io/badge/release-v1.0.2-FD9228" alt="Release v1.0.2"></a>
+  <a href="https://github.com/matthewrball/abendrot/releases/latest"><img src="https://img.shields.io/github/v/release/matthewrball/abendrot?color=FD9228&label=release" alt="Latest release"></a>
   <a href="https://github.com/matthewrball/abendrot/stargazers"><img src="https://img.shields.io/github/stars/matthewrball/abendrot?color=FD9228" alt="GitHub stars"></a>
 </p>
 

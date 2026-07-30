@@ -7,7 +7,6 @@ import SwiftUI
 // The first-run "3 clicks to warmth" window, shown ONCE on first launch by a direct imperative
 // `OnboardingWindowController.show(model:)` call in `AppModel.applyPersistedState()` (when no
 // completion flag exists). NOT driven by a Scene observer — that has no prior art on `MenuBarExtra`.
-// The dev "Replay onboarding" menu-bar item also calls `show` on demand.
 //
 // Mirrors `AboutWindowController`'s programmatic glass pattern: a SwiftUI `Window` scene can't
 // carry the Liquid Glass chrome (`.fullSizeContentView` must be set at window *creation* and
