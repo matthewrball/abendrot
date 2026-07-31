@@ -71,10 +71,10 @@ private struct GlassBackground<S: InsettableShape>: ViewModifier {
                 }
                 .glassEffect(glassStyle, in: shape)
         } else {
-            // Pre-Tahoe fallback (the app deploys to 26, but keep the build safe).
+            // Pre-Tahoe fallback for the app's macOS 14 deployment floor.
             content
                 .background(.ultraThinMaterial, in: shape)
-                .overlay(shape.fill(glassTintOverlay))
+                .overlay(shape.fill(glassTintOverlay).allowsHitTesting(false))
         }
     }
 
