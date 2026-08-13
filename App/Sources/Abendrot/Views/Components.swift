@@ -28,7 +28,7 @@ struct AbendrotTooltipText: View {
     var body: some View {
         Text(text)
             .font(Theme.Typography.ui(11))
-            .foregroundStyle(Theme.Color.textPrimary)
+            .foregroundStyle(Theme.Color.textCream)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .frame(width: width, alignment: .leading)
@@ -54,12 +54,16 @@ struct AbendrotTooltipText: View {
 /// right of a centered title.
 struct KelvinInfoButton: View {
     static let explanation = "Kelvin is color temperature — lower numbers are warmer and give off less blue light."
+#if DEBUG
+    @State private var show = ProcessInfo.processInfo.environment["ABENDROT_SHOTS_TOOLTIP"] == "1"
+#else
     @State private var show = false
+#endif
 
     var body: some View {
         Image(systemName: "info.circle")
             .font(.system(size: 11))
-            .foregroundStyle(show ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+            .foregroundStyle(show ? Theme.Color.accentText : Theme.Color.textFaint)
             .onHover { show = $0 }
             .accessibilityLabel("What is Kelvin?")
             .accessibilityHint(Self.explanation)
@@ -104,7 +108,7 @@ struct BlueLightReductionLabel: View {
     var body: some View {
         Text("≈\(percent)% less blue light")
             .font(Theme.Typography.ui(11.5, weight: .semibold))
-            .foregroundStyle(Theme.Color.accentHighlight.opacity(0.85))
+            .foregroundStyle(Theme.Color.accentText)
             .contentTransition(animated ? .numericText(value: Double(percent)) : .identity)
             .animation(animated ? Theme.Motion.warm(reduceMotion: reduceMotion) : nil, value: percent)
             .help(infoText)
@@ -158,7 +162,7 @@ struct WarmthPowerSwitch: View {
     private var trackFill: AnyShapeStyle {
         isOn
             ? AnyShapeStyle(Theme.Gradient.sunsetHorizontal)
-            : AnyShapeStyle(Theme.Color.lineStrong.opacity(0.45))
+            : AnyShapeStyle(Theme.Color.textFaint)
     }
 }
 
@@ -188,11 +192,11 @@ struct DisplayRow: View {
                         if tintOnly {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(Theme.Typography.ui(8.5))
-                                .foregroundStyle(Theme.Color.accentHighlight)
+                                .foregroundStyle(Theme.Color.accentText)
                         }
                         Text(subtitle)
                             .font(Theme.Typography.ui(10.5))
-                            .foregroundStyle(tintOnly ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                            .foregroundStyle(tintOnly ? Theme.Color.accentText : Theme.Color.textFaint)
                     }
                     .help(tintOnlyExplanation)
                 }

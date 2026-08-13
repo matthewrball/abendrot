@@ -212,7 +212,7 @@ struct OnboardingView: View {
             Text("\(model.globalKelvin.displayValue) K")
                 .font(Theme.Typography.serif(30))
                 .monospacedDigit()
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
 
             // Same science-backed accent metric as the popover ticker (instant updates here).
             BlueLightReductionLabel(kelvin: model.globalKelvin, animated: !sliderPressing)
@@ -304,7 +304,7 @@ private var manualDetail: some View {
             Text("\(model.globalKelvin.displayValue) K")
                 .font(Theme.Typography.serif(30))
                 .monospacedDigit()
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
             
             KelvinInfoButton()
         }
@@ -373,7 +373,7 @@ private var manualDetail: some View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 46, weight: .light))
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
                 .shadow(color: Theme.Color.accentPress.opacity(0.3), radius: 14, y: 5)
                 .accessibilityHidden(true)
 
@@ -411,7 +411,7 @@ private var manualDetail: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Why we recommend Sunset", systemImage: "moon.stars.fill")
                 .font(Theme.Typography.ui(11.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
             Text("International expert consensus recommends keeping evening light low in blue in the hours before bed. Sunset reduces your screen's blue light automatically as evening falls.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textMuted)
@@ -422,7 +422,7 @@ private var manualDetail: some View {
                     Image(systemName: "arrow.up.right").font(.system(size: 8, weight: .semibold)).accessibilityHidden(true)
                 }
                 .font(Theme.Typography.ui(10, weight: .medium))
-                .foregroundStyle(Theme.Color.accent)
+                .foregroundStyle(Theme.Color.accentText)
             }
             .buttonStyle(.plain)
         }
@@ -480,7 +480,7 @@ private var manualDetail: some View {
             CityAutocomplete(model: model, opensUpward: true)
             Text(model.todaysSunsetReadout)
                 .font(Theme.Typography.ui(12, weight: .semibold))
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
         }
     }
 

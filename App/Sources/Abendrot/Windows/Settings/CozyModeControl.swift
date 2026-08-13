@@ -32,7 +32,7 @@ struct CozyModeControl: View {
         var note = (try? AttributedString(markdown: md)) ?? AttributedString(md)
         note.foregroundColor = Theme.Color.textFaint
         for run in note.runs where run.link != nil {
-            note[run.range].foregroundColor = Theme.Color.accent
+            note[run.range].foregroundColor = Theme.Color.accentText
             note[run.range].underlineStyle = .single
         }
         return note
@@ -66,17 +66,17 @@ struct CozyModeControl: View {
             Image(systemName: isCozy ? "flame.fill" : "flame")
                 .font(.system(size: 22, weight: .semibold))
                 .symbolRenderingMode(.monochrome)
-                .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textMuted)
+                .foregroundStyle(isCozy ? Theme.Color.inkOnAccent : Theme.Color.textMuted)
                 .frame(width: 28)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Cozy mode")
                     .font(Theme.Typography.ui(14, weight: .semibold))
-                    .foregroundStyle(isCozy ? Theme.Color.groundIndigo : Theme.Color.textPrimary)
+                    .foregroundStyle(isCozy ? Theme.Color.inkOnAccent : Theme.Color.textPrimary)
                 Text("The warmest setting.")
                     .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(isCozy ? Theme.Color.groundIndigo.opacity(0.82) : Theme.Color.textMuted)
+                    .foregroundStyle(isCozy ? Theme.Color.inkOnAccent.opacity(0.82) : Theme.Color.textMuted)
                     .fixedSize(horizontal: true, vertical: true)
             }
 
@@ -85,7 +85,7 @@ struct CozyModeControl: View {
             // Display-only switch — the whole card is the hit target; it just mirrors + animates state.
             Toggle("", isOn: .constant(isCozy))
                 .toggleStyle(.switch)
-                .tint(isCozy ? Theme.Color.groundIndigo : Theme.Color.accent)
+                .tint(isCozy ? Theme.Color.inkOnAccent : Theme.Color.accent)
                 .labelsHidden()
                 .allowsHitTesting(false)
         }

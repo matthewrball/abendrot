@@ -27,7 +27,7 @@ struct AdvancedTab: View {
                 HStack(spacing: 10) {
                     Image(systemName: "keyboard")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Theme.Color.accentHighlight)
+                        .foregroundStyle(Theme.Color.accentText)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Keyboard shortcut")
                             .font(Theme.Typography.ui(12.5, weight: .medium))

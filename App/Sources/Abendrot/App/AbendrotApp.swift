@@ -154,17 +154,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum ScreenshotHarness {
     static func runIfRequested() {
         guard let dir = ProcessInfo.processInfo.environment["ABENDROT_SHOTS"], !dir.isEmpty else { return }
+        let colorScheme: ColorScheme = ProcessInfo.processInfo.environment["ABENDROT_SHOTS_APPEARANCE"] == "light"
+            ? .light
+            : .dark
         let out = URL(fileURLWithPath: dir, isDirectory: true)
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 
         NSApp.activate(ignoringOtherApps: true)
-        shot("popover", width: 330, into: out) {
+        shot("popover", width: 330, colorScheme: colorScheme, into: out) {
             PopoverView(model: AppModel(previewState: MockWarmthState.warming))
         }
         for tab in SettingsTab.allCases {
             let model = AppModel(previewState: MockWarmthState.warming)
             model.settingsTab = tab
-            shot("settings-\(tab.rawValue)", width: 720, into: out) {
+            shot("settings-\(tab.rawValue)", width: 720, colorScheme: colorScheme, into: out) {
                 SettingsView(model: model, scrolls: false)
             }
         }
@@ -173,7 +176,7 @@ enum ScreenshotHarness {
                                              ("schedule-alwayson", .schedule, .alwaysOn),
                                              ("warmth", .warmth, .followSunset),
                                              ("allset", .allSet, .followSunset)] {
-            shot("onboarding-\(name)", width: 320, into: out) {
+            shot("onboarding-\(name)", width: 320, colorScheme: colorScheme, into: out) {
                 OnboardingView(model: AppModel(previewState: MockWarmthState.warming),
                                onFinish: {}, initialStep: step, initialScheduleOption: scheduleOption)
             }
@@ -182,12 +185,12 @@ enum ScreenshotHarness {
         exit(0)
     }
 
-    private static func shot<V: View>(_ name: String, width: CGFloat, into dir: URL,
+    private static func shot<V: View>(_ name: String, width: CGFloat, colorScheme: ColorScheme, into dir: URL,
                                       @ViewBuilder _ make: () -> V) {
         let root = make()
             .frame(width: width)
             .fixedSize(horizontal: false, vertical: true)
-            .environment(\.colorScheme, .dark)
+            .environment(\.colorScheme, colorScheme)
             // Uniform window rounding for the product-shot series — continuous corners at the popover's
             // own radius (Theme.Radius.card = 22), so every screen reads as one macOS window. The light
             // rim border + shadow are added downstream in compose_shots.py.

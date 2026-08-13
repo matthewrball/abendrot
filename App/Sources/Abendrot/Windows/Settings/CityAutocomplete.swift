@@ -211,7 +211,7 @@ struct CityAutocomplete: View {
                 if selected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.Color.accentHighlight)
+                        .foregroundStyle(Theme.Color.accentText)
                 }
             }
             .padding(.horizontal, 10)

@@ -80,7 +80,7 @@ struct WarmSlider: View {
                     // width (fits "Warmest") so swapping the word never resizes the slider — only a crossfade.
                     Text(cozy ? "Warmest" : "Warmer")
                         .font(Theme.Typography.ui(11.5, weight: cozy ? .semibold : .regular))
-                        .foregroundStyle(cozy ? Theme.Color.accentHighlight : Theme.Color.textMuted)
+                        .foregroundStyle(cozy ? Theme.Color.accentText : Theme.Color.textMuted)
                         .contentTransition(.opacity)
                         .frame(width: 58, alignment: .leading)
                         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: cozy)
@@ -119,16 +119,16 @@ struct WarmSlider: View {
                         .contentTransition(isPressing ? .identity : .numericText(value: Double(displayKelvin.displayValue)))
                     Text("K")
                         .font(Theme.Typography.serif(23))
-                        .foregroundStyle(Theme.Color.accentHighlight.opacity(0.7))
+                        .foregroundStyle(Theme.Color.accentText)
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
-                        .foregroundStyle(showKelvinInfo ? Theme.Color.accentHighlight : Theme.Color.textFaint)
+                        .foregroundStyle(showKelvinInfo ? Theme.Color.accentText : Theme.Color.textFaint)
                         .onHover { showKelvinInfo = $0 }
                         .accessibilityLabel("What is Kelvin?")
                         .accessibilityHint(kelvinInfoText)
                         .padding(.leading, 6)
                 }
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
                 .shadow(color: Theme.Color.accent.opacity(0.35), radius: 12, y: 1)   // lit-sign glow
                 // Instant while dragging (rapid changes otherwise glitch the digit-roll); smooth roll otherwise.
                 .animation(isPressing ? nil : Theme.Motion.warm(reduceMotion: reduceMotion), value: displayKelvin.displayValue)
@@ -162,7 +162,7 @@ struct WarmSlider: View {
 
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)                       // unfilled groove
-                    .fill(Theme.Color.line.opacity(0.55))
+                    .fill(Theme.Color.textFaint)
                     .frame(height: trackHeight)
 
                 Capsule(style: .continuous)                       // full gradient, masked to the fill
@@ -388,7 +388,7 @@ struct WarmSlider: View {
             Image(systemName: "flame.fill")
                 .font(.system(size: thumbSize * 0.6, weight: .bold))
                 // Match the Cozy-toggle flame (CozyModeControl): the dark ground ink, not a light gradient.
-                .foregroundStyle(Theme.Color.groundIndigo)
+                .foregroundStyle(Theme.Color.inkOnAccent)
                 .shadow(color: .black.opacity(0.18), radius: 0.5)
         }
         .overlay(Circle().strokeBorder(.white.opacity(pressed ? 0.95 : 0.7), lineWidth: 0.5))

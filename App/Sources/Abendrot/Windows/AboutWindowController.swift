@@ -238,7 +238,7 @@ private struct AboutContent: View {
 
             Link(destination: URL(string: "https://abendrot.app/#science")!) {
                 Label("Read the research", systemImage: "book.closed")
-                    .foregroundStyle(Theme.Color.accentHighlight)
+                    .foregroundStyle(Theme.Color.accentText)
             }
             .buttonStyle(.liquidGlass)
             .accessibilityHint("Opens Abendrot’s research references in your browser")
@@ -247,7 +247,7 @@ private struct AboutContent: View {
 
             Text("Free and open source, forever. No ads, no in-app purchases, no paywall.")
                 .font(Theme.Typography.ui(12, weight: .medium))
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
@@ -362,10 +362,10 @@ private struct AboutLink: View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 7) {
                 icon.view()
-                    .foregroundStyle(Theme.Color.accent)
+                    .foregroundStyle(Theme.Color.accentText)
                 Text(title)
                     .font(Theme.Typography.ui(11.5, weight: .medium))
-                    .foregroundStyle(hovering ? Theme.Color.accentHighlight : Theme.Color.textMuted)
+                    .foregroundStyle(hovering ? Theme.Color.accentText : Theme.Color.textMuted)
             }
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: hovering)
         }

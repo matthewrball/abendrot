@@ -61,7 +61,7 @@ struct AdvancedExpansion: View {
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: 8, weight: .semibold))
                     }
-                    .foregroundStyle(Theme.Color.accent)
+                    .foregroundStyle(Theme.Color.accentText)
                 }
                 .contentShape(Rectangle())
             }

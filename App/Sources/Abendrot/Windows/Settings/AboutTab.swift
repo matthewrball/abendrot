@@ -79,8 +79,7 @@ private struct AboutLink: View {
                 icon
             }
             .font(Theme.Typography.ui(12, weight: .medium))
-            .foregroundStyle(Theme.Color.accent)
-            .opacity(hovering ? 1 : 0.85)
+            .foregroundStyle(hovering ? Theme.Color.textPrimary : Theme.Color.accentText)
             .animation(.easeOut(duration: 0.12), value: hovering)
         }
         .buttonStyle(.plain)

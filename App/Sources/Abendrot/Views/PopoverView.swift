@@ -266,7 +266,7 @@ struct PopoverView: View {
                         .accessibilityHidden(true)
                 }
                 .font(Theme.Typography.ui(11, weight: .medium))
-                .foregroundStyle(Theme.Color.accent)
+                .foregroundStyle(Theme.Color.accentText)
             }
             .buttonStyle(.plain)
             .accessibilityHint("Opens Settings to adjust your maximum warmth")
@@ -324,7 +324,7 @@ private struct IncompatibilityNotice: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.accentPress)
+                    .foregroundStyle(ink)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(summary)
                         .font(Theme.Typography.ui(11, weight: .semibold))

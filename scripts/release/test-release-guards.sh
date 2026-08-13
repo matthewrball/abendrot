@@ -17,6 +17,8 @@ PRETTY_DMG_SCRIPT="$ROOT/scripts/dmg/pretty-dmg.sh"
 APPCAST_VALIDATOR="$ROOT/scripts/release/validate-appcast.py"
 SIGN_JOB="$TMP/sign-notarize.yml"
 
+python3 "$ROOT/scripts/release/test-color-contrast.py"
+
 grep -qF 'asc_key.p8.XXXXXX' "$NOTARIZE_SCRIPT"
 grep -qF 'notary-submit.txt.XXXXXX' "$NOTARIZE_SCRIPT"
 if grep -Eq 'XXXXXX\.(p8|txt)' "$NOTARIZE_SCRIPT"; then

@@ -44,7 +44,7 @@ struct StatisticsTab: View {
             Text(value)
                 .font(Theme.Typography.serif(big ? 27 : 17))
                 .monospacedDigit()
-                .foregroundStyle(Theme.Color.accentHighlight)
+                .foregroundStyle(Theme.Color.accentText)
                 .contentTransition(.numericText())
         }
     }

@@ -28,6 +28,8 @@ enum Theme {
         static let accentDeep = SwiftUI.Color("AccentDeep", bundle: .main)
         static let accentHi = SwiftUI.Color("AccentHi", bundle: .main)
         static let accentPress = SwiftUI.Color("AccentPress", bundle: .main)
+        /// Brand-colored foreground: deep ember on cream, golden highlight on dark surfaces.
+        static let accentText = SwiftUI.Color("AccentText", bundle: .main)
 
         // Twilight grounds (dark) / warm cream (light)
         static let groundIndigo = SwiftUI.Color("GroundIndigo", bundle: .main)
