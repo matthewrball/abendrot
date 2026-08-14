@@ -8,11 +8,11 @@ import Foundation
 /// no-permission promise).
 ///
 /// The hard-won fact this encodes (refined by the hardware test): the gamma transfer table
-/// silently no-ops **only on the high-end Apple Silicon variants** (M-series "Pro"/"Max"/"Ultra")
-/// on macOS ≥ 26 — `CGSetDisplayTransferByTable` returns success but the panel never warms (Apple
-/// DTS confirmed the 2026 regression is isolated to those chips; FB22273782). On **base M-series**
-/// (and Intel, and older macOS) the transfer table **takes effect** — verified by direct on-device
-/// test. So gamma is classified `.supported` everywhere EXCEPT that known-broken bracket, where it
+/// silently no-ops on specific 2026 hardware — M5 Pro/Max displays and MacBook Neo external
+/// displays — on macOS ≥ 26. `CGSetDisplayTransferByTable` returns success but the panel never
+/// warms (FB22273730/FB22273782). Earlier Pro/Max chips are unaffected; Apple DTS reproduced the
+/// failure on M5 Max while confirming the same test works on M3 Max. So gamma is classified
+/// `.supported` everywhere EXCEPT the known-broken configurations, where it
 /// stays `.unsupported(.gammaBrokenOnThisOS)` so the engine keeps the overlay floor rather than
 /// falsely badging "Gamma" on a panel that never warms. Where supported, gamma is the **automatic
 /// warm path for ANY display** (`LayerResolver` routes both built-in and external panels to it —
@@ -20,9 +20,9 @@ import Foundation
 ///
 /// Residual risk: a readback probe CANNOT detect the no-op (the bug makes
 /// `CGGetDisplayTransferByTable` read back the written values while the pixels don't change), so
-/// this gates on the chip-class + OS allowlist, not a measurement. A future user-confirmed-gamma
-/// check (a one-tap "did this warm?" in onboarding) would recover any mis-gated config without
-/// needing Screen Recording.
+/// this gates on the exact known-broken hardware + OS list, not a measurement. A future one-tap
+/// "did this warm?" check in onboarding would recover any mis-gated config without needing Screen
+/// Recording.
 ///
 /// This is a *decision function over facts the caller already has* (CPU architecture + OS major
 /// version + whether the private-API kill switch is engaged). The system layer
@@ -37,9 +37,9 @@ public enum GammaClassifier {
         public let isAppleSilicon: Bool
         /// The running macOS major version (e.g. `26` for Tahoe, `15` for Sequoia).
         public let osMajorVersion: Int
-        /// `true` on the high-end Apple Silicon variants (M-series "Pro"/"Max"/"Ultra") where the
-        /// macOS ≥ 26 gamma transfer-table regression is documented. Base M-series → `false`.
-        public let appleSiliconIsProClass: Bool
+        /// `true` only for a hardware/display combination where the macOS ≥ 26 gamma regression
+        /// has been reproduced. This is deliberately narrower than "Pro/Max" as a chip class.
+        public let appleSiliconHasKnownGammaBug: Bool
         /// The global private-API kill switch. Gamma is not a *private* API, but the kill
         /// switch also denylists best-effort capability paths so the product can fall back to
         /// the overlay-only floor on a problem OS build.
@@ -48,53 +48,50 @@ public enum GammaClassifier {
         public init(
             isAppleSilicon: Bool,
             osMajorVersion: Int,
-            appleSiliconIsProClass: Bool = false,
+            appleSiliconHasKnownGammaBug: Bool = false,
             privateAPIsEnabled: Bool
         ) {
             self.isAppleSilicon = isAppleSilicon
             self.osMajorVersion = osMajorVersion
-            self.appleSiliconIsProClass = appleSiliconIsProClass
+            self.appleSiliconHasKnownGammaBug = appleSiliconHasKnownGammaBug
             self.privateAPIsEnabled = privateAPIsEnabled
         }
     }
 
-    /// The first macOS major version on which the high-end Apple Silicon (Pro/Max/Ultra) gamma
-    /// transfer table is known-broken (silent no-op). macOS 26 "Tahoe"+; base M-series unaffected.
+    /// The first macOS major version on which the affected 2026 hardware silently ignores gamma.
     public static let firstBrokenAppleSiliconOSMajor = 26
 
-    /// Pure predicate: is `brand` (the CPU `machdep.cpu.brand_string`) a **base** M-series chip —
-    /// exactly `"Apple M<number>"`, no Pro/Max/Ultra suffix? Only the base class is known to honor
-    /// the gamma transfer table on macOS ≥ 26. Everything else — Pro/Max/Ultra, OR any unrecognized
-    /// Apple-Silicon brand string (format drift, empty read) — returns `false` so the caller fails
-    /// SAFE toward the honest overlay floor rather than risk a false "Gamma" badge on a panel that
-    /// silently no-ops. `GammaBackend` passes the negation as `Environment.appleSiliconIsProClass`.
-    ///
-    public static func isBaseAppleSiliconBrand(_ brand: String) -> Bool {
-        let trimmed = brand.trimmingCharacters(in: .whitespaces)
-        guard trimmed.hasPrefix("Apple M") else { return false }
-        let suffix = trimmed.dropFirst("Apple M".count)   // e.g. "5" for "Apple M5"
-        return !suffix.isEmpty && suffix.allSatisfy(\.isNumber)
+    /// Match only configurations where the gamma no-op has actually been reproduced. In
+    /// particular, M1–M4 Pro/Max/Ultra chips must not be swept into the M5 regression.
+    public static func hasKnownGammaBug(chipBrand: String, isBuiltInDisplay: Bool) -> Bool {
+        switch chipBrand.trimmingCharacters(in: .whitespaces) {
+        case "Apple M5 Pro", "Apple M5 Max":
+            return true
+        case "Apple A18 Pro":
+            return !isBuiltInDisplay // MacBook Neo report is external-display-only.
+        default:
+            return false
+        }
     }
 
     /// Classify the gamma layer for the given environment.
     ///
     /// - Returns:
     /// - `.unsupported(.osDenylisted)` when the kill switch is engaged (overlay-only floor);
-    /// - `.unsupported(.gammaBrokenOnThisOS)` on high-end Apple Silicon (Pro/Max/Ultra) on
-    /// macOS ≥ 26, where the transfer table silently no-ops;
-    /// - `.supported()` otherwise (Intel, pre-26 Apple Silicon, and **base M-series on Tahoe**
-    /// verified working) — where it is the automatic built-in warm path.
+    /// - `.unsupported(.gammaBrokenOnThisOS)` on a known-affected Apple Silicon configuration
+    /// on macOS ≥ 26, where the transfer table silently no-ops;
+    /// - `.supported()` otherwise, where gamma is the automatic true-warm path.
     public static func classify(_ environment: Environment) -> Capability<Void> {
         guard environment.privateAPIsEnabled else {
             // Kill switch: drop best-effort layers and run overlay-only.
             return .unsupported(reason: .osDenylisted)
         }
 
-        // Known-broken bracket ONLY: high-end Apple Silicon (Pro/Max/Ultra) on macOS ≥ 26. Base
-        // M-series round-trips correctly (verified on hardware), so it is NOT denylisted.
+        // Known-broken hardware ONLY on macOS ≥ 26. Do not infer failure from a Pro/Max suffix:
+        // Apple DTS explicitly confirmed the same test works on M3 Max.
         if environment.isAppleSilicon,
            environment.osMajorVersion >= firstBrokenAppleSiliconOSMajor,
-           environment.appleSiliconIsProClass {
+           environment.appleSiliconHasKnownGammaBug {
             return .unsupported(reason: .gammaBrokenOnThisOS)
         }
 

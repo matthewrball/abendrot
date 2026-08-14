@@ -121,7 +121,7 @@ sparkle_sign_line="$(grep -nF 'SIGN_OUT="$("$SIGN_UPDATE" "$DMG_OUT"' "$RELEASE_
   exit 1
 }
 sed -n '/^sign_dmg_container()/,/^}/p' "$RELEASE_SCRIPT" \
-  | grep -qF '[ "$UNSIGNED" != "true" ] || return 0'
+  | grep -F '[ "$UNSIGNED" != "true" ] || return 0' >/dev/null
 echo "PASS: signed release DMGs are container-signed before notarization and verified before Sparkle signing"
 
 # The ticket must be stapled INSIDE the .app before the DMG is built around it,
@@ -136,9 +136,9 @@ dmg_build_line="$(grep -nF 'release: building DMG (mode=$EFFECTIVE_MODE)' "$RELE
 }
 grep -qF "signing is configured but the .app is not notarized+stapled" "$RELEASE_SCRIPT"
 sed -n "${app_notarize_call_line},${dmg_build_line}p" "$RELEASE_SCRIPT" \
-  | grep -qF 'Releases are gated on a stapled ticket inside the shipped app.'
+  | grep -F 'Releases are gated on a stapled ticket inside the shipped app.' >/dev/null
 sed -n '/^# --- 2.9 /,/^# --- 3\. /p' "$RELEASE_SCRIPT" \
-  | grep -qF 'release: --unsigned -> skipping app notarization.'
+  | grep -F 'release: --unsigned -> skipping app notarization.' >/dev/null
 echo "PASS: the shipped .app is notarized and stapled before DMG packaging"
 
 grep -qF 'DMGBUILD_VERSION="1.6.7"' "$PRETTY_DMG_SCRIPT"
@@ -194,10 +194,10 @@ APP_MODEL="$ROOT/App/Sources/Abendrot/ViewModel/AppModel.swift"
 UPDATE_MANAGER="$ROOT/App/Sources/Abendrot/Services/UpdateManager.swift"
 PROJECT_SPEC="$ROOT/project.yml"
 INFO_PLIST="$ROOT/App/Resources/Info.plist"
-grep -A2 -F -- '- path: App/Sources' "$PROJECT_SPEC" | grep -qF -- '- .omc/**'
+grep -A2 -F -- '- path: App/Sources' "$PROJECT_SPEC" | grep -F -- '- .omc/**' >/dev/null
 echo "PASS: ignored agent state is excluded from app resources"
 if sed -n '/private static var hasUsableUpdateConfiguration/,/^    }/p' "$UPDATE_MANAGER" \
-  | grep -qF '#if DEBUG'; then
+  | grep -F '#if DEBUG' >/dev/null; then
   echo "Debug builds must use the same validated Sparkle configuration." >&2
   exit 1
 fi
@@ -223,11 +223,11 @@ if [ -f "$ROOT/landing/index.html" ]; then
 fi
 echo "PASS: app, engine, and CLI share the macOS 14 deployment floor"
 sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
-  | grep -qF 'startingUpdater: true'
+  | grep -F 'startingUpdater: true' >/dev/null
 sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE_MANAGER" \
-  | grep -qF 'updater.automaticallyChecksForUpdates = enabled'
+  | grep -F 'updater.automaticallyChecksForUpdates = enabled' >/dev/null
 sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE_MANAGER" \
-  | grep -qF 'updater.automaticallyDownloadsUpdates = enabled'
+  | grep -F 'updater.automaticallyDownloadsUpdates = enabled' >/dev/null
 # Sparkle's 24h scheduler alone never re-checks on relaunch, so the delegate forces
 # exactly ONE latched background check per launch and takes over silent
 # install-on-quit with a prompt. The latch and the prompt hook must both stay.
