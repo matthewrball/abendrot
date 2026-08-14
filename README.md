@@ -105,7 +105,7 @@ Issues and pull requests are welcome — bug reports from real display setups ar
 
 ## License
 
-[MIT](LICENSE) © Matthew Ball. Free and open source.
+[MIT](LICENSE) © Matthew Ball. Free and open source. If Abendrot is useful to you, you can support its maintenance via GitHub Sponsors.
 
 ---
 

@@ -12,12 +12,14 @@ import Darwin
 /// Gamma is capability-CLASSIFIED, never measured by a runtime screen-capture probe (which
 /// would need Screen Recording permission). The decision itself lives in the pure
 /// `GammaClassifier` (so it is unit-testable headlessly); this backend only gathers the runtime
-/// facts (CPU architecture, OS major version, exact chip/display combination, kill-switch) and
-/// feeds them in. Policy: gamma is the **automatic warm
+/// facts (CPU architecture, OS major version, chip class, kill-switch) and feeds them in.
+/// Policy: gamma is `.supported` on Intel, pre-26 Apple Silicon, and **base M-series on
+/// Tahoe** (the transfer table works there — verified on hardware), and is the **automatic warm
 /// path for ANY display** where supported (`LayerResolver` routes both built-in and external panels
 /// to it — it is OS-level, so it warms buttonless Apple displays that expose no DDC). It is
-/// `.unsupported(.gammaBrokenOnThisOS)` only on configurations where the macOS ≥ 26 no-op has
-/// actually been reproduced. The overlay remains the guaranteed floor there.
+/// `.unsupported(.gammaBrokenOnThisOS)` ONLY on the high-end Apple Silicon variants (Pro/Max/Ultra)
+/// on macOS ≥ 26, where the OS silently no-ops the transfer table. The overlay remains the
+/// guaranteed floor for displays where gamma is unavailable.
 public struct GammaBackend: WarmthBackend {
     public let method: DisplayMethod = .gamma
 
@@ -39,26 +41,23 @@ public struct GammaBackend: WarmthBackend {
         #if DEBUG
         // DEV/preview hook: ABENDROT_FORCE_TINT_ONLY simulates an incompatible config (gamma
         // classified broken) on ANY Mac, so the "this display can only be tinted" UI can be
-        // designed + tested without affected hardware. With gamma forced off and DDC opt-in off,
+        // designed + tested without a Pro/Max device. With gamma forced off and DDC opt-in off,
         // every display falls to the overlay floor — the exact tint-only state.
         if ProcessInfo.processInfo.environment["ABENDROT_FORCE_TINT_ONLY"] != nil {
             return .unsupported(reason: .gammaBrokenOnThisOS)
         }
         #endif
-        return GammaClassifier.classify(Self.currentEnvironment(for: identity))
+        return GammaClassifier.classify(Self.currentEnvironment())
     }
 
     /// Snapshot the cheap, permission-free runtime facts the classifier decides from. Passes
     /// `privateAPIsEnabled: true` because this backend reports pure device capability; the kill
     /// switch is applied separately by `LayerResolver`.
-    static func currentEnvironment(for identity: DisplayIdentity) -> GammaClassifier.Environment {
+    static func currentEnvironment() -> GammaClassifier.Environment {
         GammaClassifier.Environment(
             isAppleSilicon: isAppleSilicon,
             osMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
-            appleSiliconHasKnownGammaBug: GammaClassifier.hasKnownGammaBug(
-                chipBrand: appleSiliconBrand ?? "",
-                isBuiltInDisplay: identity.transport == .builtIn
-            ),
+            appleSiliconIsProClass: appleSiliconIsProClass,
             privateAPIsEnabled: true
         )
     }
@@ -73,22 +72,26 @@ public struct GammaBackend: WarmthBackend {
         #endif
     }
 
-    /// CPU brand used by the exact known-broken hardware list. Unknown hardware is not
-    /// automatically condemned to a tint; gamma is the documented CoreGraphics path and remains
-    /// the default unless a configuration has reproduced the silent no-op.
-    static var appleSiliconBrand: String? {
+    /// `true` when gamma must be DENIED for chip-class reasons — i.e. this is NOT a confirmed base
+    /// M-series chip. Reads the CPU brand string via `sysctl` and delegates the (pure, unit-tested)
+    /// classification to `GammaClassifier.isBaseAppleSiliconBrand`. **Fails SAFE toward overlay:** an
+    /// unreadable or unrecognized brand string returns `true` (gamma denied → the always-honest
+    /// overlay floor), because the dangerous error is a *false* result that would falsely badge
+    /// "Gamma" on a Pro/Max/Ultra panel where the transfer table silently no-ops. A base variant
+    /// that is over-denied can be re-enabled later by the planned one-tap "did this warm?" check.
+    ///
+    static var appleSiliconIsProClass: Bool {
         var size = 0
         guard sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0) == 0, size > 0 else {
-            return nil
+            return true   // unreadable → fail safe (deny gamma, use overlay)
         }
         var buffer = [UInt8](repeating: 0, count: size)
         guard sysctlbyname("machdep.cpu.brand_string", &buffer, &size, nil, 0) == 0 else {
-            return nil
+            return true   // unreadable → fail safe (deny gamma, use overlay)
         }
         // sysctl's length includes the C string's NUL terminator; decode up to (not including) it.
         let brand = String(decoding: buffer.prefix { $0 != 0 }, as: UTF8.self)
-            .trimmingCharacters(in: .whitespaces)
-        return brand.isEmpty ? nil : brand
+        return !GammaClassifier.isBaseAppleSiliconBrand(brand)
     }
 
     // MARK: Apply / reset (only reachable via an explicit override; see LayerResolver)
