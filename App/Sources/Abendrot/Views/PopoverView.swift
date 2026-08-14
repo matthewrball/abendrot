@@ -46,7 +46,6 @@ struct PopoverView: View {
                     WarmSlider(
                         strength: locked ? sunsetLiveBinding : globalWarmthBinding,
                         model: model,
-                        headerTitle: locked ? "Current warmth" : "Warmth",
                         kelvin: locked ? model.liveKelvin : model.globalKelvin,
                         showsTrack: !locked,
                         cozy: isCozy
@@ -252,7 +251,7 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(model.state.isScheduleActiveNow
                  ? ScheduleModeOption.followSunset.subtitle
-                 : "Neutral now. Warmth eases in around sunset.")
+                 : "Warmth eases in around your local sunset.")
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
