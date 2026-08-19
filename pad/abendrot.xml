@@ -48,6 +48,7 @@
     <Program_Change_Info>Clarified Sunset mode during the day. The popover now shows Current warmth and says when the display is neutral. Kept Maximum warmth in Settings so the scheduled target stays clear.</Program_Change_Info>
     <Program_Specific_Category>Desktop</Program_Specific_Category>
     <Program_Categories>Desktop::Other</Program_Categories>
+    <Program_Category_Class>Desktop::Other</Program_Category_Class>
     <Program_System_Requirements>macOS 14 or later, Apple Silicon</Program_System_Requirements>
     <File_Info>
       <File_Size_Bytes>9319846</File_Size_Bytes>
@@ -67,6 +68,7 @@
     <Awards></Awards>
   </Program_Info>
   <Program_Descriptions>
+    <English>
     <Char_Desc_45>Mac screen warmer that cuts blue light</Char_Desc_45>
     <Char_Desc_80>Free open-source Mac screen warmer that cuts nighttime blue light</Char_Desc_80>
     <Char_Desc_250>Abendrot is a free, open-source Mac screen warmer that cuts nighttime blue light. It warms every display around your local sunset so your evenings aren't lit up like daytime.</Char_Desc_250>
@@ -88,6 +90,7 @@ Website: https://abendrot.app
 GitHub: https://github.com/matthewrball/abendrot
 Download: https://github.com/matthewrball/abendrot/releases/download/v1.0.8/Abendrot-1.0.8.dmg</Char_Desc_2000>
     <Keywords>abendrot, blue light, screen warmer, circadian, night shift, f.lux, macos, mac, sleep, melanopic, display</Keywords>
+    </English>
   </Program_Descriptions>
   <Web_Info>
     <Application_URLs>
