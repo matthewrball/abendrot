@@ -3,7 +3,7 @@
   <MASTER_PAD_VERSION_INFO>
     <MASTER_PAD_VERSION>3.11</MASTER_PAD_VERSION>
     <MASTER_PAD_EDITOR>Abendrot</MASTER_PAD_EDITOR>
-    <MASTER_PAD_EDITOR_VERSION>1.0.8</MASTER_PAD_EDITOR_VERSION>
+    <MASTER_PAD_EDITOR_VERSION>1.0.9</MASTER_PAD_EDITOR_VERSION>
     <INFO_CODE_PAGE>UTF-8</INFO_CODE_PAGE>
   </MASTER_PAD_VERSION_INFO>
   <Company_Info>
@@ -35,9 +35,9 @@
   </Company_Info>
   <Program_Info>
     <Program_Name>Abendrot</Program_Name>
-    <Program_Version>1.0.8</Program_Version>
+    <Program_Version>1.0.9</Program_Version>
     <Program_Release_Month>08</Program_Release_Month>
-    <Program_Release_Day>14</Program_Release_Day>
+    <Program_Release_Day>20</Program_Release_Day>
     <Program_Release_Year>2026</Program_Release_Year>
     <Program_Cost_Dollars>0</Program_Cost_Dollars>
     <Program_Type>Freeware</Program_Type>
@@ -45,14 +45,14 @@
     <Program_Install_Support>Install and Uninstall</Program_Install_Support>
     <Program_OS_Support>Mac OS X</Program_OS_Support>
     <Program_Language>English</Program_Language>
-    <Program_Change_Info>Clarified Sunset mode during the day. The popover now shows Current warmth and says when the display is neutral. Kept Maximum warmth in Settings so the scheduled target stays clear.</Program_Change_Info>
+    <Program_Change_Info>Fixed Cozy mode so turning it off restores the configured Manual or Sunset warmth without disabling warming or changing saved settings.</Program_Change_Info>
     <Program_Specific_Category>Desktop</Program_Specific_Category>
     <Program_Categories>Desktop::Other</Program_Categories>
     <Program_Category_Class>Desktop::Other</Program_Category_Class>
-    <Program_System_Requirements>macOS 14 or later, Apple Silicon</Program_System_Requirements>
+    <Program_System_Requirements>macOS 14 or later, Apple Silicon or Intel</Program_System_Requirements>
     <File_Info>
-      <File_Size_Bytes>9319846</File_Size_Bytes>
-      <File_Size_K>9102</File_Size_K>
+      <File_Size_Bytes>9319246</File_Size_Bytes>
+      <File_Size_K>9101</File_Size_K>
       <File_Size_MB>8.89</File_Size_MB>
     </File_Info>
     <Expire_Info>
@@ -88,7 +88,7 @@ Features:
 
 Website: https://abendrot.app
 GitHub: https://github.com/matthewrball/abendrot
-Download: https://github.com/matthewrball/abendrot/releases/download/v1.0.8/Abendrot-1.0.8.dmg</Char_Desc_2000>
+Download: https://github.com/matthewrball/abendrot/releases/download/v1.0.9/Abendrot-1.0.9.dmg</Char_Desc_2000>
     <Keywords>abendrot, blue light, screen warmer, circadian, night shift, f.lux, macos, mac, sleep, melanopic, display</Keywords>
     </English>
   </Program_Descriptions>
@@ -101,7 +101,7 @@ Download: https://github.com/matthewrball/abendrot/releases/download/v1.0.8/Aben
       <Application_XML_File_URL>https://raw.githubusercontent.com/matthewrball/abendrot/main/pad/abendrot.xml</Application_XML_File_URL>
     </Application_URLs>
     <Download_URLs>
-      <Primary_Download_URL>https://github.com/matthewrball/abendrot/releases/download/v1.0.8/Abendrot-1.0.8.dmg</Primary_Download_URL>
+      <Primary_Download_URL>https://github.com/matthewrball/abendrot/releases/download/v1.0.9/Abendrot-1.0.9.dmg</Primary_Download_URL>
       <Secondary_Download_URL>https://github.com/matthewrball/abendrot/releases/latest</Secondary_Download_URL>
       <Additional_Download_URL_1></Additional_Download_URL_1>
       <Additional_Download_URL_2></Additional_Download_URL_2>
