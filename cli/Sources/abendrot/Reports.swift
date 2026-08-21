@@ -5,8 +5,7 @@ import AbendrotControl
 // MARK: - WarmthCurve
 //
 // Invert `WarmthLevel.kelvin(warmestPoint:)` — monotonic non-increasing in strength — by binary
-// search, exactly as AppModel's `setGlobalWarmthToKelvin` does. No duplicated mired math; this
-// tracks the engine's own curve so `set warmth --kelvin K` lands where the app would put it.
+// search. This tracks the engine's own curve so `set warmth --kelvin K` lands consistently.
 enum WarmthCurve {
     static func strength(forKelvin target: Kelvin, warmestPoint: Kelvin) -> Double {
         var lo = 0.0, hi = 1.0

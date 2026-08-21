@@ -227,9 +227,7 @@ struct OnboardingView: View {
             // Advanced control, compact (no section header / science caption). Enabling runs the slider all
             // the way to the warmest + ignites the fireball thumb (the deepest ember); the choice
             // (warmestPoint) persists past onboarding.
-            CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
-                            enablesAtWarmest: true,
-                            mirrorsToSunsetMaximum: scheduleOption == .followSunset)
+            CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
 
             Spacer(minLength: 0)
 
@@ -318,8 +316,7 @@ private var manualDetail: some View {
         ), model: model, showsHeader: false, cozy: isCozy,
         onPressingChanged: { sliderPressing = $0 })
 
-        CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false,
-                        enablesAtWarmest: true)
+        CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
     }
 }
 

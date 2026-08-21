@@ -13,12 +13,6 @@ struct CozyModeControl: View {
     var showsSectionLabel: Bool = true
     /// Hide the when-on science caption (onboarding keeps it compact; the detail lives in Settings).
     var showsExplanation: Bool = true
-    /// Onboarding behaviour: turning Cozy ON unlocks the deepest ember AND runs the slider all the way to
-    /// the warmest, so the screen blooms to the maximum (rather than holding a mid-slider spot); OFF restores
-    /// the everyday 1900K ceiling. (Settings keeps the richer "preserve current warmth, unlock headroom".)
-    var enablesAtWarmest: Bool = false
-    var mirrorsToSunsetMaximum: Bool = false
-
     /// Derived from the actual warmest point so the toggle can never disagree with the engine.
     private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
     private var cardShape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
@@ -112,25 +106,8 @@ struct CozyModeControl: View {
     }
 
     private func toggle() {
-        if enablesAtWarmest {
-            // Onboarding: Cozy means "give me the coziest." Turning ON unlocks the deepest ember AND runs the
-            // slider all the way to the warmest, so the screen blooms to the maximum instead of holding a
-            // mid-slider spot; OFF restores the everyday 1900K ceiling.
-            model.playCozyFireSound(starting: !isCozy)
-            if isCozy {
-                model.setWarmestPoint(Kelvin.everydayWarmest)
-            } else {
-                model.setWarmestPoint(Kelvin.warmestSupported)
-                if mirrorsToSunsetMaximum {
-                    model.setSunsetMaximumWarmth(1.0)
-                }
-                model.setGlobalWarmth(1.0)
-            }
-            return
-        }
-        // Settings: preserve the user's warmth and just unlock headroom.
-        // The actual ceiling + warmth move lives in `model.setCozy`, the ONE path the CLI shares, so the
-        // card, onboarding's "Looks right", and `abendrot cozy on|off` can never drift.
+        // Settings, onboarding, and CLI share one temporary override, so Cozy never rewrites the user's
+        // saved Sunset maximum or Manual warmth.
         model.setCozy(!isCozy)
     }
 }

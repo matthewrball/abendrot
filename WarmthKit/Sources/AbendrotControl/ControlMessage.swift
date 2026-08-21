@@ -21,11 +21,9 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
     public var userLongitude: Double?
     /// `true` == `--auto`: clear the manual coordinate (remove both lat/lon keys).
     public var clearUserCoordinate: Bool?
-    /// Cozy mode — the expanded-warmth master toggle. `true` drops the warmest-point ceiling to
-    /// `Kelvin.warmestSupported` (~500K) holding the on-screen warmth; `false` restores the everyday
-    /// `Kelvin.everydayWarmest` (1900K). The app routes this through `AppModel.setCozy`, the SAME path
-    /// the Settings card uses, so it moves the ceiling AND re-pins warmth (no jump). It is NOT a raw
-    /// `warmestPointKelvin` write — that field sets the ceiling alone, leaving the screen to follow.
+    /// Cozy mode — a temporary full-strength override at `Kelvin.warmestSupported` (~500K). `false`
+    /// restores the active mode's saved warmth at `Kelvin.everydayWarmest` (1900K). The app routes this
+    /// through the same `AppModel.setCozy` path as Settings and onboarding; it is not a raw ceiling write.
     public var cozy: Bool?
 
     public init(

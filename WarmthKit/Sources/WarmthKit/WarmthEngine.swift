@@ -257,6 +257,14 @@ public actor WarmthEngine {
         publish()
     }
 
+    /// Update both inputs to the warmth curve before one display apply/publish cycle.
+    public func setWarmth(_ level: WarmthLevel, warmestPoint: Kelvin) async {
+        box.value.globalWarmth = level
+        box.value.warmestPoint = warmestPoint
+        await reapply()
+        publish()
+    }
+
     public func setScheduleMode(_ mode: ScheduleMode) async {
         box.value.scheduleMode = mode
         await reapply()

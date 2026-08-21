@@ -114,10 +114,9 @@ struct Off: ParsableCommand {
 
 // MARK: - cozy on|off
 
-/// Cozy mode — the expanded-warmth master toggle. `on` drops the warmest-point ceiling to the deepest
-/// candle & ember (~500K); `off` restores the everyday 1900K cap. Sends a `cozy` patch, NOT a raw
-/// `max-warmth` write: the app applies it through `setCozy`, which moves the ceiling AND holds the
-/// on-screen warmth (no jump) — the exact behaviour of the Settings card's toggle.
+/// Cozy mode — a temporary full-strength override at the deepest supported warmth (~500K). `off`
+/// restores the active mode's saved warmth at the everyday 1900K ceiling. Sends a `cozy` patch so the
+/// app uses the same behavior as the Settings and onboarding toggle.
 struct Cozy: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Turn cozy mode (expanded warmth, ~500K) on or off.")
     @Argument(help: "on | off") var state: String

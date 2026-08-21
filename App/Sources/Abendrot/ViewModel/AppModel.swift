@@ -566,10 +566,9 @@ final class AppModel {
             setUserCoordinate(.init(latitude: coord.lat, longitude: coord.lon))
             accepted = true
         }
-        // Cozy — the expanded-warmth master toggle — routes through `setCozy` (the SAME path the
-        // Settings card uses), which moves the ceiling AND re-pins the on-screen warmth. Applied after
-        // the raw `warmestPointKelvin` setter so, in the (CLI never sends this) both-set case, the cozy
-        // toggle's ceiling wins. No validation needed — it's a plain Bool master toggle.
+        // Cozy routes through the same temporary full-strength override used by Settings/onboarding.
+        // Applied after the raw `warmestPointKelvin` setter so, in the (CLI never sends this) both-set
+        // case, the Cozy toggle's ceiling wins. No validation needed — it's a plain Bool.
         if let cozy = patch.cozy {
             setCozy(cozy, userInitiated: false)
             accepted = true
@@ -771,35 +770,21 @@ final class AppModel {
         }
     }
 
-    private func warmth(for mode: ScheduleMode) -> WarmthLevel {
+    private func configuredWarmth(for mode: ScheduleMode) -> WarmthLevel {
         ScheduleModeOption(mode) == .alwaysOn ? manualWarmth : sunsetMaximumWarmth
     }
 
+    private func activeWarmth(for mode: ScheduleMode) -> WarmthLevel {
+        state.warmestPoint.value < Kelvin.everydayWarmest.value
+            ? WarmthLevel(strength: 1)
+            : configuredWarmth(for: mode)
+    }
+
     private func applyActiveWarmth() {
-        let level = warmth(for: state.scheduleMode)
+        let level = activeWarmth(for: state.scheduleMode)
         state.globalWarmth = level
         stampWarmthWrite()
         pushWarmthToEngine(level)
-    }
-
-    /// Set the global warmth so the *effective Kelvin* lands at (or as near as the curve allows) `target`,
-    /// at the current `warmestPoint`. Inverts `WarmthLevel.kelvin(warmestPoint:)` — which is monotonic in
-    /// strength — by binary search, so there's no duplicated mired math and it tracks the engine's own
-    /// curve exactly. Used by Cozy mode to keep the screen where it is while the warmest ceiling expands.
-    func setGlobalWarmthToKelvin(_ target: Kelvin) {
-        let wp = state.warmestPoint
-        var lo = 0.0, hi = 1.0
-        // kelvin() is non-increasing in strength (warmer = lower K): if a strength is warm enough
-        // (≤ target), we don't need more; otherwise we need more.
-        for _ in 0..<24 {
-            let mid = (lo + hi) / 2
-            if WarmthLevel(strength: mid).kelvin(warmestPoint: wp).value <= target.value {
-                hi = mid
-            } else {
-                lo = mid
-            }
-        }
-        setGlobalWarmth((lo + hi) / 2)
     }
 
     func setScheduleMode(_ mode: ScheduleMode, userInitiated: Bool = true) {
@@ -808,7 +793,7 @@ final class AppModel {
         let changed = ScheduleModeOption(mode) != ScheduleModeOption(state.scheduleMode)
         if changed { pendingScheduleMode = ScheduleModeOption(mode) }
         state.scheduleMode = mode
-        state.globalWarmth = warmth(for: mode)
+        state.globalWarmth = activeWarmth(for: mode)
         // ScheduleMode carries associated values (.solar/.custom) → encode as Codable JSON,
         // not a bare string.
         if let data = try? JSONEncoder().encode(mode) {
@@ -867,32 +852,19 @@ final class AppModel {
     /// Cozy mode — the master "expanded warmth" toggle, in ONE place so the Settings card, onboarding,
     /// and the `abendrot cozy on|off` CLI all share this exact path (UI and CLI can never disagree).
     ///
-    /// ON drops the warmest-point ceiling to `Kelvin.warmestSupported` (~500K — the deepest candle &
-    /// ember). OFF restores the everyday `Kelvin.everydayWarmest` (1900K) ceiling. In both directions
-    /// the *on-screen warmth holds*: we capture the current effective Kelvin first, move the ceiling,
-    /// then re-pin the screen to that same Kelvin via `setGlobalWarmthToKelvin` — so expanding the
-    /// range never jumps the picture. The one richer-than-pin nuance is Always-on turning cozy ON:
-    /// there the screen warms straight to the new maximum (1.0), matching the Settings card today.
+    /// Cozy is a temporary full-strength override. ON applies the deepest supported warmth without
+    /// changing the saved Sunset maximum or Manual warmth. OFF restores the active mode's saved warmth
+    /// at the everyday 1900K ceiling. Warmth + ceiling move atomically so the display never sees an
+    /// intermediate curve.
     func setCozy(_ on: Bool, userInitiated: Bool = true) {
         let changed = on != (state.warmestPoint.value < Kelvin.everydayWarmest.value)
-        if on {
-            // Turning ON: unlock the deepest candle & ember (~500K). In Always-on, warm to that maximum
-            // right away; otherwise keep the current warmth exactly where it is and just hand over the
-            // headroom to push warmer. Capture BEFORE moving the ceiling so the pin uses the old Kelvin.
-            let current = globalKelvin
-            setWarmestPoint(Kelvin.warmestSupported)
-            if ScheduleModeOption(state.scheduleMode) == .alwaysOn {
-                setGlobalWarmth(1.0)
-            } else {
-                setGlobalWarmthToKelvin(current)
-            }
-        } else {
-            // Turning OFF: restore the everyday 1900K ceiling, keeping the screen where it is — a
-            // deeper-than-everyday pick is pulled up to exactly 1900K (the new cap).
-            let restore = Kelvin(max(globalKelvin.value, Kelvin.everydayWarmest.value))
-            setWarmestPoint(Kelvin.everydayWarmest)
-            setGlobalWarmthToKelvin(restore)
-        }
+        let level = on ? WarmthLevel(strength: 1) : configuredWarmth(for: state.scheduleMode)
+        let warmestPoint = on ? Kelvin.warmestSupported : Kelvin.everydayWarmest
+        state.globalWarmth = level
+        state.warmestPoint = warmestPoint
+        stampWarmthWrite()
+        UserDefaults.standard.set(warmestPoint.value, forKey: Self.warmestPointKey)
+        Task { await engine?.setWarmth(level, warmestPoint: warmestPoint) }
         if userInitiated, changed { playCozyFireSound(starting: on) }
     }
 
