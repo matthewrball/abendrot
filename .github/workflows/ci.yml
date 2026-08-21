@@ -286,6 +286,7 @@ jobs:
             "SECURITY.md"
             "assets/abendrot-icon.png"
             "assets/abendrot-demo.gif"
+            "pad/abendrot.xml"
           )
 
           missing=()
