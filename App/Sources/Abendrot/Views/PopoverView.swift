@@ -62,9 +62,9 @@ struct PopoverView: View {
                     }
                     modeSection
                         .padding(.top, 16)
-                    if !locked {
-                        // Cozy mode (the maximum-warmth control) right under Mode — hidden while Sunset
-                        // owns warmth and points users to Settings for the maximum.
+                    if locked && model.isWarmingActive {
+                        // Let users choose Cozy while Sunset is actively warming; keep the automatic
+                        // schedule's daytime-neutral surface compact.
                         CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
                             .padding(.top, 16)
                             .transition(.opacity)
