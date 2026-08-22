@@ -32,8 +32,8 @@ settings:
     CODE_SIGN_IDENTITY: "-"
     DEVELOPMENT_TEAM: ""
     PRODUCT_BUNDLE_IDENTIFIER: app.abendrot.Abendrot
-    MARKETING_VERSION: "1.0.10"
-    CURRENT_PROJECT_VERSION: "12"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "13"
     # Release builds override this with `git rev-parse HEAD`. release.sh refuses
     # to publish an artifact whose embedded source revision is missing or stale.
     ABENDROT_SOURCE_COMMIT: "development"
