@@ -206,6 +206,22 @@ grep -qF 'feedURLString == "https://raw.githubusercontent.com/matthewrball/abend
   "$UPDATE_MANAGER"
 echo "PASS: Debug and release builds use validated Sparkle configuration"
 
+# `glassEffect`/`Glass` exist only in the macOS 26 SDK, so `#available` alone still fails to
+# compile on Xcode 16 — which is what packagers use for the macOS 14 floor. Every Tahoe-only
+# symbol must sit behind `#if compiler(>=6.2)` with a pre-Tahoe fallback in the `#else`.
+GLASS_SURFACE="$ROOT/App/Sources/Abendrot/Theme/GlassSurface.swift"
+GLASS_TAHOE="$TMP/glass-tahoe-only.swift"
+awk '/#if compiler\(>=6\.2\)/ { in_tahoe = 1; next } /#else|#endif/ { in_tahoe = 0 } in_tahoe' \
+  "$GLASS_SURFACE" > "$GLASS_TAHOE"
+grep -qF '.glassEffect(glassStyle, in: shape)' "$GLASS_TAHOE"
+grep -qF 'private var glassStyle: Glass {' "$GLASS_TAHOE"
+grep -qF '@available(macOS 26.0, *)' "$GLASS_TAHOE"
+[ "$(grep -cF 'glassEffect(' "$GLASS_SURFACE")" -eq 1 ]
+[ "$(grep -cF ': Glass {' "$GLASS_SURFACE")" -eq 1 ]
+[ "$(grep -cF '@available(macOS 26.0, *)' "$GLASS_SURFACE")" -eq 1 ]
+[ "$(grep -cF '.background(.ultraThinMaterial, in: shape)' "$GLASS_SURFACE")" -eq 2 ]
+echo "PASS: macOS 26 Liquid Glass API is compile-guarded so the macOS 14 floor builds on Xcode 16"
+
 grep -qF 'SUEnableAutomaticChecks: true' "$PROJECT_SPEC"
 grep -qF 'SUAutomaticallyUpdate: true' "$PROJECT_SPEC"
 grep -qF 'SUScheduledCheckInterval: 86400' "$PROJECT_SPEC"
