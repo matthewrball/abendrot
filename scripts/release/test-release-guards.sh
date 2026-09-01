@@ -54,7 +54,8 @@ grep -qF \
 grep -qF 'echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -' \
   "$CI_WORKFLOW"
 grep -qF '"$RUNNER_TEMP/xcodegen/bin/xcodegen" --version' "$CI_WORKFLOW"
-[ "$(grep -cF -- '-onlyUsePackageVersionsFromResolvedFile' "$CI_WORKFLOW")" -eq 2 ]
+# Unsigned, package-manager, and signed builds must all pin resolved package versions.
+[ "$(grep -cF -- '-onlyUsePackageVersionsFromResolvedFile' "$CI_WORKFLOW")" -eq 3 ]
 [ "$(grep -cF -- '--only-use-versions-from-resolved-file' "$RELEASE_SCRIPT")" -eq 2 ]
 APP_PACKAGE_LOCK="$ROOT/Abendrot.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 grep -qF '"identity" : "sparkle"' "$APP_PACKAGE_LOCK"
@@ -205,6 +206,29 @@ grep -qF 'localizedCaseInsensitiveContains("PLACEHOLDER")' "$UPDATE_MANAGER"
 grep -qF 'feedURLString == "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"' \
   "$UPDATE_MANAGER"
 echo "PASS: Debug and release builds use validated Sparkle configuration"
+
+# Package managers (MacPorts) own their own update path: they drop the Sparkle dependency
+# and build with ABENDROT_MACPORTS defined. Sparkle must remain the DEFAULT and only real
+# updater, the stub must stay Sparkle-free with the API the Settings views bind to, and CI
+# must actually compile that branch so it cannot rot.
+MACPORTS_STUB="$TMP/macports-update-stub.swift"
+awk '/^#else$/ { in_stub = 1; next } /^#endif$/ { in_stub = 0 } in_stub' \
+  "$UPDATE_MANAGER" > "$MACPORTS_STUB"
+grep -qF '#if !ABENDROT_MACPORTS' "$UPDATE_MANAGER"
+grep -qF 'import Sparkle' "$UPDATE_MANAGER"
+grep -qF 'product: Sparkle' "$PROJECT_SPEC"
+[ -s "$MACPORTS_STUB" ]
+grep -qF 'static let shared = UpdateManager()' "$MACPORTS_STUB"
+grep -qF 'let updaterUnavailableReason: String? =' "$MACPORTS_STUB"
+grep -qF 'func checkForUpdates() {}' "$MACPORTS_STUB"
+grep -qF 'func setAutomaticallyDownloadsUpdates(_ enabled: Bool) {}' "$MACPORTS_STUB"
+grep -qF 'func refresh() {}' "$MACPORTS_STUB"
+if grep -v '^[[:space:]]*//' "$MACPORTS_STUB" | grep -qiF 'sparkle'; then
+  echo "The ABENDROT_MACPORTS UpdateManager stub must not reference Sparkle." >&2
+  exit 1
+fi
+grep -qF 'ABENDROT_MACPORTS' "$CI_WORKFLOW"
+echo "PASS: package-manager builds stub the updater without touching the Sparkle default"
 
 # `glassEffect`/`Glass` exist only in the macOS 26 SDK, so `#available` alone still fails to
 # compile on Xcode 16 — which is what packagers use for the macOS 14 floor. Every Tahoe-only
