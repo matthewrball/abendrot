@@ -31,6 +31,9 @@ xcuserdata/
 *.moved-aside
 Packages/
 .swiftpm/
+# Offline dependency checkouts staged by a packager (see CONTRIBUTING.md). The manifests
+# prefer Vendor/<name> when present; these sources are never committed here.
+Vendor/
 
 # Secrets / signing (NEVER commit)
 *.p12

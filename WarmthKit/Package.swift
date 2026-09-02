@@ -12,7 +12,38 @@
 //
 // Deploys to macOS 14 "Sonoma"; verify with the Xcode 26 / macOS 26 SDK.
 
+import Foundation
 import PackageDescription
+
+// Offline packaging (MacPorts today) cannot resolve dependencies over the network, so a
+// packager stages each checkout at <repo>/Vendor/<name> and expects the manifest to use it.
+// `Vendor/` is NEVER committed here and is git-ignored, so a normal clone always takes the
+// remote package below — this is the only difference between the two builds.
+//
+// A staged checkout must satisfy the version range declared alongside its URL. The versions
+// currently pinned in Package.resolved (and vendored by the MacPorts port) are
+// KeyboardShortcuts 2.4.0 and swift-log 1.13.2.
+//
+// The same helper is duplicated in cli/Package.swift — SwiftPM gives a manifest no way to
+// share code, and the two packages are resolved independently.
+enum Vendored {
+    /// `<repo>/Vendor` — the sibling of this package directory.
+    static let root = URL(fileURLWithPath: Context.packageDirectory)
+        .deletingLastPathComponent()
+        .appendingPathComponent("Vendor")
+
+    /// The staged checkout of `name`, or the canonical remote package when none is staged.
+    /// Keyed on the vendored manifest rather than the directory, so a stray empty folder
+    /// cannot silently replace a real dependency.
+    static func orRemote(_ name: String, url: String, from version: Version) -> Package.Dependency {
+        let vendored = root.appendingPathComponent(name)
+        let manifest = vendored.appendingPathComponent("Package.swift")
+        guard FileManager.default.fileExists(atPath: manifest.path) else {
+            return .package(url: url, from: version)
+        }
+        return .package(path: vendored.path)
+    }
+}
 
 let package = Package(
     name: "WarmthKit",
@@ -32,9 +63,17 @@ let package = Package(
     dependencies: [
         // Carbon RegisterEventHotKey wrapper — true-global hotkey, no Accessibility
         // permission, exposes keyDown AND keyUp (exact fit for hold-to-reveal).
-        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.2.0"),
+        Vendored.orRemote(
+            "KeyboardShortcuts",
+            url: "https://github.com/sindresorhus/KeyboardShortcuts",
+            from: "2.2.0"
+        ),
         // Structured logging (bridged to OSLog at the app boundary).
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
+        Vendored.orRemote(
+            "swift-log",
+            url: "https://github.com/apple/swift-log",
+            from: "1.6.0"
+        ),
     ],
     targets: [
         // ── WarmthCore ───────────────────────────────────────────────────────

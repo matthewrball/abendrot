@@ -4,8 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TMP="$(mktemp -d)"
 DIRTY_MARKER=""
+VENDOR_PROBE=""
 cleanup() {
   [ -z "$DIRTY_MARKER" ] || rm -f "$DIRTY_MARKER"
+  [ -z "$VENDOR_PROBE" ] || rm -rf "$VENDOR_PROBE"
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -54,7 +56,8 @@ grep -qF \
 grep -qF 'echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -' \
   "$CI_WORKFLOW"
 grep -qF '"$RUNNER_TEMP/xcodegen/bin/xcodegen" --version' "$CI_WORKFLOW"
-[ "$(grep -cF -- '-onlyUsePackageVersionsFromResolvedFile' "$CI_WORKFLOW")" -eq 2 ]
+# Unsigned, package-manager, and signed builds must all pin resolved package versions.
+[ "$(grep -cF -- '-onlyUsePackageVersionsFromResolvedFile' "$CI_WORKFLOW")" -eq 3 ]
 [ "$(grep -cF -- '--only-use-versions-from-resolved-file' "$RELEASE_SCRIPT")" -eq 2 ]
 APP_PACKAGE_LOCK="$ROOT/Abendrot.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 grep -qF '"identity" : "sparkle"' "$APP_PACKAGE_LOCK"
@@ -205,6 +208,100 @@ grep -qF 'localizedCaseInsensitiveContains("PLACEHOLDER")' "$UPDATE_MANAGER"
 grep -qF 'feedURLString == "https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml"' \
   "$UPDATE_MANAGER"
 echo "PASS: Debug and release builds use validated Sparkle configuration"
+
+# Package managers (MacPorts) own their own update path: they drop the Sparkle dependency
+# and build with ABENDROT_MACPORTS defined. Sparkle must remain the DEFAULT and only real
+# updater, the stub must stay Sparkle-free with the API the Settings views bind to, and CI
+# must actually compile that branch so it cannot rot.
+MACPORTS_STUB="$TMP/macports-update-stub.swift"
+awk '/^#else$/ { in_stub = 1; next } /^#endif$/ { in_stub = 0 } in_stub' \
+  "$UPDATE_MANAGER" > "$MACPORTS_STUB"
+grep -qF '#if !ABENDROT_MACPORTS' "$UPDATE_MANAGER"
+grep -qF 'import Sparkle' "$UPDATE_MANAGER"
+grep -qF 'product: Sparkle' "$PROJECT_SPEC"
+[ -s "$MACPORTS_STUB" ]
+grep -qF 'static let shared = UpdateManager()' "$MACPORTS_STUB"
+grep -qF 'let updaterUnavailableReason: String? =' "$MACPORTS_STUB"
+grep -qF 'func checkForUpdates() {}' "$MACPORTS_STUB"
+grep -qF 'func setAutomaticallyDownloadsUpdates(_ enabled: Bool) {}' "$MACPORTS_STUB"
+grep -qF 'func refresh() {}' "$MACPORTS_STUB"
+if grep -v '^[[:space:]]*//' "$MACPORTS_STUB" | grep -qiF 'sparkle'; then
+  echo "The ABENDROT_MACPORTS UpdateManager stub must not reference Sparkle." >&2
+  exit 1
+fi
+grep -qF 'ABENDROT_MACPORTS' "$CI_WORKFLOW"
+echo "PASS: package-manager builds stub the updater without touching the Sparkle default"
+
+# A network-free build stages each dependency at <repo>/Vendor/<name>. The manifests must
+# prefer a staged checkout and otherwise resolve the canonical GitHub package, so packagers
+# need no manifest patch — and vendored sources must never land in this repo.
+WARMTHKIT_MANIFEST="$ROOT/WarmthKit/Package.swift"
+CLI_MANIFEST="$ROOT/cli/Package.swift"
+grep -qF 'https://github.com/sindresorhus/KeyboardShortcuts' "$WARMTHKIT_MANIFEST"
+grep -qF 'https://github.com/apple/swift-log' "$WARMTHKIT_MANIFEST"
+grep -qF 'https://github.com/apple/swift-argument-parser' "$CLI_MANIFEST"
+grep -qF 'Vendor/' "$ROOT/.gitignore"
+if [ -n "$(git -C "$ROOT" ls-files Vendor)" ]; then
+  echo "Vendored dependency sources must never be committed to this repository." >&2
+  exit 1
+fi
+
+# Prove both branches against the real manifests. Each dump gets its own cache and scratch
+# paths so SwiftPM cannot hand back a cached evaluation from the previous case.
+dump_manifest() {
+  local package_dir="$1" tag="$2"
+  swift package \
+    --package-path "$ROOT/$package_dir" \
+    --cache-path "$TMP/manifest-cache-$tag" \
+    --scratch-path "$TMP/manifest-scratch-$tag" \
+    dump-package
+}
+
+if [ -e "$ROOT/Vendor" ]; then
+  echo "SKIP: vendored-manifest probe (a Vendor/ checkout is already staged in this tree)"
+else
+  dump_manifest WarmthKit remote-warmthkit > "$TMP/remote-warmthkit.json"
+  dump_manifest cli remote-cli > "$TMP/remote-cli.json"
+  grep -qF 'sindresorhus/KeyboardShortcuts' "$TMP/remote-warmthkit.json"
+  grep -qF 'apple/swift-log' "$TMP/remote-warmthkit.json"
+  grep -qF 'apple/swift-argument-parser' "$TMP/remote-cli.json"
+
+  VENDOR_PROBE="$ROOT/Vendor"
+  for name in KeyboardShortcuts swift-log swift-argument-parser; do
+    mkdir -p "$VENDOR_PROBE/$name"
+    printf '// swift-tools-version: 6.0\nimport PackageDescription\nlet package = Package(name: "%s")\n' \
+      "$name" > "$VENDOR_PROBE/$name/Package.swift"
+  done
+  dump_manifest WarmthKit vendored-warmthkit > "$TMP/vendored-warmthkit.json"
+  dump_manifest cli vendored-cli > "$TMP/vendored-cli.json"
+  grep -qF 'Vendor/KeyboardShortcuts' "$TMP/vendored-warmthkit.json"
+  grep -qF 'Vendor/swift-log' "$TMP/vendored-warmthkit.json"
+  grep -qF 'Vendor/swift-argument-parser' "$TMP/vendored-cli.json"
+  if grep -qF 'sindresorhus/KeyboardShortcuts' "$TMP/vendored-warmthkit.json" \
+    || grep -qF 'apple/swift-argument-parser' "$TMP/vendored-cli.json"; then
+    echo "A staged Vendor/ checkout must REPLACE the remote dependency, not sit beside it." >&2
+    exit 1
+  fi
+  rm -rf "$VENDOR_PROBE"
+  VENDOR_PROBE=""
+  echo "PASS: manifests prefer staged Vendor/ checkouts and fall back to the canonical remotes"
+fi
+
+# `glassEffect`/`Glass` exist only in the macOS 26 SDK, so `#available` alone still fails to
+# compile on Xcode 16 — which is what packagers use for the macOS 14 floor. Every Tahoe-only
+# symbol must sit behind `#if compiler(>=6.2)` with a pre-Tahoe fallback in the `#else`.
+GLASS_SURFACE="$ROOT/App/Sources/Abendrot/Theme/GlassSurface.swift"
+GLASS_TAHOE="$TMP/glass-tahoe-only.swift"
+awk '/#if compiler\(>=6\.2\)/ { in_tahoe = 1; next } /#else|#endif/ { in_tahoe = 0 } in_tahoe' \
+  "$GLASS_SURFACE" > "$GLASS_TAHOE"
+grep -qF '.glassEffect(glassStyle, in: shape)' "$GLASS_TAHOE"
+grep -qF 'private var glassStyle: Glass {' "$GLASS_TAHOE"
+grep -qF '@available(macOS 26.0, *)' "$GLASS_TAHOE"
+[ "$(grep -cF 'glassEffect(' "$GLASS_SURFACE")" -eq 1 ]
+[ "$(grep -cF ': Glass {' "$GLASS_SURFACE")" -eq 1 ]
+[ "$(grep -cF '@available(macOS 26.0, *)' "$GLASS_SURFACE")" -eq 1 ]
+[ "$(grep -cF '.background(.ultraThinMaterial, in: shape)' "$GLASS_SURFACE")" -eq 2 ]
+echo "PASS: macOS 26 Liquid Glass API is compile-guarded so the macOS 14 floor builds on Xcode 16"
 
 grep -qF 'SUEnableAutomaticChecks: true' "$PROJECT_SPEC"
 grep -qF 'SUAutomaticallyUpdate: true' "$PROJECT_SPEC"

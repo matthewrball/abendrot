@@ -234,6 +234,28 @@ jobs:
             --out "build/${ABENDROT_APP_SCHEME}-ci.dmg" \
             --volname "Abendrot"
 
+      - name: Build Abendrot.app (package-manager configuration)
+        run: |
+          set -euo pipefail
+          # Package managers (MacPorts) build these exact sources with the Sparkle
+          # dependency removed and ABENDROT_MACPORTS defined, which compiles the
+          # Sparkle-free UpdateManager stub. That branch is dead code in every other
+          # build, so compile it HERE or it rots unnoticed and breaks the port.
+          # Runs last and reuses the derived-data dir (keeping the resolved package
+          # checkouts warm); the DMG step above already consumed the default build.
+          xcodebuild \
+            -project "${ABENDROT_APP_SCHEME}.xcodeproj" \
+            -scheme "$ABENDROT_APP_SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) ABENDROT_MACPORTS' \
+            build
+
   public-release-gate:
     name: public-dev/release-gate
     if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/public-dev' }}
