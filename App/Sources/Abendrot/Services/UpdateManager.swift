@@ -1,6 +1,15 @@
+import SwiftUI
+
+// Package-manager builds (MacPorts today) install and update Abendrot themselves, so they
+// drop the Sparkle SPM dependency entirely and compile with
+// `SWIFT_ACTIVE_COMPILATION_CONDITIONS=ABENDROT_MACPORTS`. That flag — and ONLY that flag —
+// swaps the Sparkle-backed updater below for the inert stub at the bottom of this file, so
+// the Settings UI still builds and reads as "handled elsewhere" instead of broken.
+// A normal (default) build is untouched: Sparkle stays the one and only update path.
+#if !ABENDROT_MACPORTS
+
 import AppKit
 import Sparkle
-import SwiftUI
 
 @MainActor
 final class UpdateManager: ObservableObject {
@@ -132,6 +141,30 @@ final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
         if response == .alertFirstButtonReturn { install() }
     }
 }
+
+#else
+
+// Package-manager build: no Sparkle, no updater, no silent second update channel. The
+// same API surface the views bind to, permanently reporting "nothing to check here" so
+// the Updates section renders disabled with an honest reason instead of vanishing.
+@MainActor
+final class UpdateManager: ObservableObject {
+    static let shared = UpdateManager()
+
+    @Published private(set) var canCheckForUpdates = false
+    @Published private(set) var automaticallyDownloadsUpdates = false
+    let updaterUnavailableReason: String? = "Updates are managed by MacPorts."
+
+    private init() {}
+
+    func checkForUpdates() {}
+
+    func setAutomaticallyDownloadsUpdates(_ enabled: Bool) {}
+
+    func refresh() {}
+}
+
+#endif
 
 @MainActor
 struct CheckForUpdatesView: View {

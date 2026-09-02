@@ -44,6 +44,10 @@ settings:
 packages:
   WarmthKit:
     path: WarmthKit
+  # In-app updates. Package-manager builds (MacPorts) update the app themselves: they
+  # drop this dependency and pass SWIFT_ACTIVE_COMPILATION_CONDITIONS=ABENDROT_MACPORTS,
+  # which compiles the Sparkle-free UpdateManager stub (App/Sources/Abendrot/Services/
+  # UpdateManager.swift). Nothing here changes for a normal build.
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     revision: b6496a74a087257ef5e6da1c5b29a447a60f5bd7 # Sparkle 2.9.4
