@@ -99,7 +99,7 @@ final class AboutWindowController: NSWindowController, NSWindowDelegate {
 // A landscape brand plaque: identity on the left, product story on the right. Everything uses
 // existing theme tokens and shared components; the copy and warmed-time stat are unchanged.
 private struct AboutView: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
 
@@ -140,7 +140,6 @@ private struct AboutView: View {
                     AboutContent(model: model)
                         .frame(minHeight: 400)
                 }
-                .scrollIndicators(.hidden)
             }
         }
         .opacity(appeared ? 1 : 0)
@@ -148,7 +147,7 @@ private struct AboutView: View {
         .frame(width: 660, height: 400)
         .onAppear {
             guard !reduceMotion else { appeared = true; return }
-            withAnimation(.smooth(duration: 0.45)) { appeared = true }
+            withAnimation(.easeInOut(duration: 0.45)) { appeared = true }
         }
     }
 }
@@ -220,7 +219,7 @@ private struct VersionLine: View {
 // MARK: - Product story
 
 private struct AboutContent: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -273,7 +272,7 @@ private struct AboutContent: View {
 // MARK: - Live warmed-time stat
 
 private struct WarmedTimeStat: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -291,7 +290,6 @@ private struct WarmedTimeStat: View {
                     .minimumScaleFactor(0.8)
                     .foregroundStyle(Theme.Gradient.sunsetHorizontal)
                     .shadow(color: Theme.Color.accent.opacity(0.18), radius: 8)
-                    .contentTransition(.numericText())
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 12)

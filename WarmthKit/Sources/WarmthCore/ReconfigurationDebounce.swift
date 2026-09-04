@@ -17,7 +17,7 @@ public struct ReconfigurationDebounce: Sendable {
 
     /// The quiet-gap window: fire once the stream has been silent for this long. The contract
     /// calls for ~300–500 ms; 400 ms is the midpoint default.
-    public let window: Duration
+    public let window: TimeInterval
 
     /// The instant of the most recently observed event, in monotonic seconds (the caller's
     /// clock domain — only differences matter, never the absolute value).
@@ -27,14 +27,13 @@ public struct ReconfigurationDebounce: Sendable {
     /// deadline rather than scheduling a second fire).
     private var firePending: Bool = false
 
-    public init(window: Duration = .milliseconds(400)) {
+    public init(window: TimeInterval = 0.4) {
         self.window = window
     }
 
     /// The window expressed in seconds (the unit `now`/`record` use).
     public var windowSeconds: Double {
-        let c = window.components
-        return Double(c.seconds) + Double(c.attoseconds) / 1e18
+        window
     }
 
     /// Record an event observed at monotonic time `now` (seconds).

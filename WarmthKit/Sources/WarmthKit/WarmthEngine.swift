@@ -2,9 +2,7 @@ import Foundation
 import CoreGraphics
 import WarmthCore
 import DisplayServices
-import HardwareDDC
 import OverlayRenderer
-import NightShiftBridge
 import Logging
 
 // MARK: - WarmthEngine
@@ -28,13 +26,13 @@ public actor WarmthEngine {
     private let gamma: any WarmthBackend
     private let ddc: any WarmthBackend
     private let registry: DisplayRegistry
-    private let nightShiftFollower: SystemNightShiftStateFollower
+    private let nightShiftFollower: any NightShiftStateFollowing
 
     /// Persisted DDC native-state snapshot + write-ahead dirty flag, shared with the DDC transport
     /// so launch-time recovery (engine-driven) and native-gain restore (transport-driven) read the
     /// same record. Crash/exit handlers can't reliably do async DDC, so recovery is driven
     /// from this store on the next `start()`, not from teardown hooks (invariant 7).
-    private let snapshotStore: any DDCSnapshotStore
+    private let snapshotStore: any WarmthSnapshotStore
 
     /// Test-only fixed display list. When non-nil the engine is in test mode: it enumerates these
     /// identities instead of the live CoreGraphics registry, and does NOT start the real system
@@ -72,7 +70,7 @@ public actor WarmthEngine {
     /// there are no notifications, so time-varying schedules need their own tick. Static schedules
     /// return before touching a backend.
     private var rampTask: Task<Void, Never>?
-    private let rampTickInterval: Duration = .seconds(60)
+    private let rampTickInterval: TimeInterval = 60
 
     /// Short post-launch / wake / reconfiguration re-assert burst. Some panels (notably the built-in,
     /// whose gamma macOS rewrites as True Tone / auto-brightness / Night Shift settle, and displays that
@@ -81,7 +79,7 @@ public actor WarmthEngine {
     /// the backend each pass, so it overcomes an external reset; re-applying the same value is imperceptible.
     private var catchUpTask: Task<Void, Never>?
     /// Debounce policy (the timing arithmetic is pure / unit-tested in `ReconfigurationDebounce`).
-    private let rebaselineDebounceWindow: Duration = .milliseconds(400)
+    private let rebaselineDebounceWindow: TimeInterval = 0.4
 
     // MARK: Observation
 
@@ -93,18 +91,14 @@ public actor WarmthEngine {
     // MARK: Init
 
     public init(configuration: EngineConfiguration) {
-        // Production wiring: the DDC transport and the engine share ONE snapshot store so the
-        // transport's persisted native gains and the engine's dirty flag stay coherent across a
-        // crash/relaunch.
-        let store = FileDDCSnapshotStore()
-        let transport = IOAVServiceDDCTransport(store: store)
+        let store = NoopWarmthSnapshotStore()
         self.init(
             configuration: configuration,
             overlay: OverlayBackend(),
             gamma: GammaBackend(),
-            ddc: transport,
+            ddc: NoopBackend(method: .hardware),
             snapshotStore: store,
-            nightShiftFollower: SystemNightShiftStateFollower(),
+            nightShiftFollower: NoopNightShiftFollower(),
             injectedDisplays: nil
         )
     }
@@ -113,13 +107,13 @@ public actor WarmthEngine {
     /// widen the frozen public surface; the public `init(configuration:)` delegates here with
     /// production defaults, and `test(...)` uses it to inject fakes for the failure-injection suite
     /// neither changes the contract.
-    init(
+    package init(
         configuration: EngineConfiguration,
         overlay: any WarmthBackend,
         gamma: any WarmthBackend,
         ddc: any WarmthBackend,
-        snapshotStore: any DDCSnapshotStore,
-        nightShiftFollower: SystemNightShiftStateFollower,
+        snapshotStore: any WarmthSnapshotStore,
+        nightShiftFollower: any NightShiftStateFollowing,
         injectedDisplays: [DisplayIdentity]?
     ) {
         self.configuration = configuration
@@ -155,7 +149,7 @@ public actor WarmthEngine {
     static func test(
         configuration: EngineConfiguration = EngineConfiguration(),
         backends: [any WarmthBackend],
-        store: any DDCSnapshotStore,
+        store: any WarmthSnapshotStore,
         displays: [DisplayIdentity]
     ) -> WarmthEngine {
         func backend(_ method: DisplayMethod) -> any WarmthBackend {
@@ -167,7 +161,7 @@ public actor WarmthEngine {
             gamma: backend(.gamma),
             ddc: backend(.hardware),
             snapshotStore: store,
-            nightShiftFollower: SystemNightShiftStateFollower(),
+            nightShiftFollower: NoopNightShiftFollower(),
             injectedDisplays: displays
         )
     }
@@ -522,23 +516,16 @@ public actor WarmthEngine {
     /// The pure debounce policy (timing arithmetic) for the in-flight burst. The actor below
     /// drives its timers; the policy itself is unit-tested headlessly in `ReconfigurationDebounce`.
     private lazy var rebaselineDebounce = ReconfigurationDebounce(window: rebaselineDebounceWindow)
-    /// The monotonic clock the debounce times against. Only differences are used.
-    private let rebaselineClock = ContinuousClock()
-    /// The fixed origin the monotonic seconds are measured from (so the policy sees a stable,
-    /// increasing seconds value across the run).
-    private let rebaselineEpoch = ContinuousClock().now
-
     /// Seconds elapsed since the engine's clock epoch — the monotonic domain the debounce policy
     /// records against.
     private func nowSeconds() -> Double {
-        let d = rebaselineEpoch.duration(to: rebaselineClock.now).components
-        return Double(d.seconds) + Double(d.attoseconds) / 1e18
+        ProcessInfo.processInfo.systemUptime
     }
 
     /// Record a reconfiguration/wake event and ensure exactly one debounced re-baseline fires for
     /// the burst. Re-entrant-safe on the actor: overlapping events extend the burst's quiet window
     /// (via `ReconfigurationDebounce`) rather than scheduling a second re-baseline.
-    private func coalesceRebaseline(window: Duration) async {
+    private func coalesceRebaseline(window: TimeInterval) async {
         // `record` returns true only when this event STARTS a new burst; subsequent events while a
         // fire is pending merely push the deadline out and return false, so only one waiter runs.
         guard rebaselineDebounce.record(at: nowSeconds()) else { return }
@@ -546,7 +533,7 @@ public actor WarmthEngine {
         // Drain the burst: sleep for the remaining quiet window, re-checking after each nap since
         // late events extend it.
         while let remaining = rebaselineDebounce.remainingDelay(at: nowSeconds()), remaining > 0 {
-            try? await rebaselineClock.sleep(for: .seconds(remaining))
+            try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
             if Task.isCancelled { rebaselineDebounce.consumeFire(); return }
         }
 
@@ -581,8 +568,8 @@ public actor WarmthEngine {
         guard injectedDisplays == nil else { return }
         catchUpTask?.cancel()
         catchUpTask = Task { [weak self] in
-            for interval in [Duration.seconds(1), .seconds(2), .seconds(3), .seconds(6)] {
-                try? await Task.sleep(for: interval)
+            for interval in [1.0, 2.0, 3.0, 6.0] {
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 if Task.isCancelled { return }
                 await self?.reapply()
             }
@@ -684,9 +671,8 @@ public actor WarmthEngine {
     private func startRampTicker() {
         let interval = rampTickInterval
         rampTask = Task { [weak self] in
-            let clock = ContinuousClock()
             while !Task.isCancelled {
-                try? await clock.sleep(for: interval)
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 if Task.isCancelled { return }
                 await self?.tickRamp()
             }
@@ -951,4 +937,30 @@ struct NoopBackend: WarmthBackend {
     }
     func apply(_ kelvin: Kelvin, to identity: DisplayIdentity) async throws {}
     func reset(_ identity: DisplayIdentity) async throws {}
+}
+
+// MARK: - Store-safe adapter seams
+
+package protocol WarmthSnapshotStore: Sendable {
+    func setDirty(_ dirty: Bool, for key: String) async throws
+    func dirtyKeys() async throws -> Set<String>
+}
+
+package actor NoopWarmthSnapshotStore: WarmthSnapshotStore {
+    package init() {}
+    package func setDirty(_ dirty: Bool, for key: String) {}
+    package func dirtyKeys() -> Set<String> { [] }
+}
+
+package protocol NightShiftStateFollowing: Sendable {
+    var currentlyActive: Capability<Bool> { get }
+    func start(onChange: (@Sendable () -> Void)?)
+    func stop()
+}
+
+package final class NoopNightShiftFollower: NightShiftStateFollowing {
+    package init() {}
+    package var currentlyActive: Capability<Bool> { .unknown(reason: .privateSymbolUnavailable) }
+    package func start(onChange: (@Sendable () -> Void)? = nil) {}
+    package func stop() {}
 }

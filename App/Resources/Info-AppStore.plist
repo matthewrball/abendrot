@@ -22,23 +22,15 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>12.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Abendrot. Warm into the evening.</string>
-	<key>SUAutomaticallyUpdate</key>
-	<true/>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/matthewrball/abendrot/main/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>HW5DAqjbnmoAtvM/DVUj9iFHNC9YSjFn2vNkZguu6iM=</string>
-	<key>SUScheduledCheckInterval</key>
-	<integer>86400</integer>
-	<key>SUVerifyUpdateBeforeExtraction</key>
-	<true/>
 </dict>
 </plist>

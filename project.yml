@@ -1,24 +1,26 @@
 # Abendrot — XcodeGen project spec (app UI).
 #
-# Generates `Abendrot.xcodeproj` (scheme `Abendrot`, matching .github/workflows/ci.yml
-# env ABENDROT_APP_SCHEME) wiring the SwiftUI/AppKit menu-bar app to the local
-# WarmthKit Swift package. Regenerate after editing this file or adding sources:
+# Generates `Abendrot.xcodeproj` with the direct-distribution `Abendrot` scheme and
+# the sandboxed `AbendrotAppStore` scheme. Both reuse the same SwiftUI/AppKit app;
+# only their engine wiring, updater, signing, and entitlements differ. Regenerate
+# after editing this file or adding sources:
 #
 # xcodegen generate
 #
 # The generated .xcodeproj is a BUILD ARTIFACT — it is git-ignored. project.yml is the
 # source of truth (App/README.md documents the workflow).
 #
-# Deploys to macOS 14 "Sonoma" and later; builds with the macOS 26 SDK for native
+# Deploys to macOS 12 Monterey and later; builds with the macOS 26 SDK for native
 # Liquid Glass on Tahoe; Swift 6 strict concurrency; LSUIElement agent app (no Dock icon).
-# Builds UNSIGNED/local — no Apple Developer account needed for development.
+# The direct target builds unsigned locally. The App Store target uses the owner's
+# Apple Developer team and can still be built ad hoc by overriding signing on the CLI.
 
 name: Abendrot
 
 options:
   bundleIdPrefix: app.abendrot
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "12.0"
   createIntermediateGroups: true
   defaultConfig: Debug
 
@@ -26,14 +28,10 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
-    # Unsigned/local development builds — no Apple account required.
-    CODE_SIGN_STYLE: Automatic
-    CODE_SIGN_IDENTITY: "-"
-    DEVELOPMENT_TEAM: ""
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
     PRODUCT_BUNDLE_IDENTIFIER: app.abendrot.Abendrot
-    MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "13"
+    MARKETING_VERSION: "1.1.1"
+    CURRENT_PROJECT_VERSION: "14"
     # Release builds override this with `git rev-parse HEAD`. release.sh refuses
     # to publish an artifact whose embedded source revision is missing or stale.
     ABENDROT_SOURCE_COMMIT: "development"
@@ -44,10 +42,6 @@ settings:
 packages:
   WarmthKit:
     path: WarmthKit
-  # In-app updates. Package-manager builds (MacPorts) update the app themselves: they
-  # drop this dependency and pass SWIFT_ACTIVE_COMPILATION_CONDITIONS=ABENDROT_MACPORTS,
-  # which compiles the Sparkle-free UpdateManager stub (App/Sources/Abendrot/Services/
-  # UpdateManager.swift). Nothing here changes for a normal build.
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     revision: b6496a74a087257ef5e6da1c5b29a447a60f5bd7 # Sparkle 2.9.4
@@ -61,10 +55,17 @@ targets:
         excludes:
           - .omc/**
       - path: App/Resources
+        excludes:
+          - Info-AppStore.plist
+          - AbendrotAppStore.entitlements
     dependencies:
       # Link only the umbrella product — the app talks to WarmthEngine, never backends.
       - package: WarmthKit
         product: WarmthKit
+      # Direct distribution retains the private DDC/Night Shift adapters. The App Store
+      # target never links this product, so those symbols are absent from its binary.
+      - package: WarmthKit
+        product: WarmthKitPrivate
       # The shared control-surface schema (preference keys, notification name, message/snapshot
       # DTOs) the app uses to observe + apply CLI/AI control messages and write state.json.
       - package: WarmthKit
@@ -81,7 +82,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         AbendrotSourceCommit: "$(ABENDROT_SOURCE_COMMIT)"
-        LSMinimumSystemVersion: "14.0"
+        LSMinimumSystemVersion: "12.0"
         NSHumanReadableCopyright: "Abendrot. Warm into the evening."
         # No camera/mic/location/accessibility usage strings — core function needs no
         # permissions. A notification usage prompt is requested at
@@ -102,11 +103,61 @@ targets:
         SUPublicEDKey: "HW5DAqjbnmoAtvM/DVUj9iFHNC9YSjFn2vNkZguu6iM="
     settings:
       base:
+        # Unsigned/local development builds — no Apple account required.
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentBase
         # App (Finder / DMG / About-box) icon — the sunset-glass AppIcon in
         # Colors.xcassets, generated from assets/abendrot.png via
         # scripts/icon/build-icons.py. (The menu-bar glyph is separate, drawn
         # programmatically as MenuBarGlyph.)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    scheme:
+      testTargets: []
+      gatherCoverageData: false
+
+  AbendrotAppStore:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+        excludes:
+          - .omc/**
+      - path: App/Resources
+        excludes:
+          - Info.plist
+          - AbendrotAppStore.entitlements
+    dependencies:
+      # Store-safe engine only: public CoreGraphics gamma + overlay, with no private
+      # DDC/Night Shift adapter product in this target's link graph.
+      - package: WarmthKit
+        product: WarmthKit
+      - package: WarmthKit
+        product: AbendrotControl
+    info:
+      path: App/Resources/Info-AppStore.plist
+      properties:
+        LSUIElement: true
+        CFBundleName: Abendrot
+        CFBundleDisplayName: Abendrot
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        AbendrotSourceCommit: "$(ABENDROT_SOURCE_COMMIT)"
+        LSMinimumSystemVersion: "12.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        ITSAppUsesNonExemptEncryption: false
+        NSHumanReadableCopyright: "Abendrot. Warm into the evening."
+    settings:
+      base:
+        PRODUCT_NAME: Abendrot
+        PRODUCT_BUNDLE_IDENTIFIER: app.abendrot.Abendrot
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: XGFJEZS3MA
+        CODE_SIGN_ENTITLEMENTS: App/Resources/AbendrotAppStore.entitlements
+        ENABLE_APP_SANDBOX: YES
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentBase
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       testTargets: []

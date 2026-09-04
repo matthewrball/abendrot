@@ -14,9 +14,10 @@ Abendrot stores only the local data needed to operate:
   an optional city coordinate you choose.
 - Local statistics such as warmed time and warm-evening count. These statistics
   never leave your Mac and can be disabled or reset in Settings.
-- A small display-recovery file containing display identifiers and native color
-  gains, used to restore an external display after a crash or restart.
-- A local runtime status file used by the bundled `abendrot` command-line tool.
+- The direct-download edition keeps a small display-recovery file containing
+  display identifiers and native color gains, plus a local status file for its
+  bundled `abendrot` command-line tool. The Mac App Store edition includes
+  neither hardware display control nor the command-line tool.
 
 These files are stored in your user Library and are protected with user-only
 file permissions. Abendrot does not read screen contents or collect health,
@@ -26,12 +27,13 @@ sleep, or precise GPS data.
 
 Core screen warming works without a network connection.
 
-By default, Sparkle automatically checks for and downloads updates from GitHub
-over HTTPS. You can disable automatic updates in Settings; manual update checks
-also contact GitHub. As with any web request, GitHub may receive standard
-connection metadata such as an IP address under its own privacy policy.
-Abendrot does not add an account, device identifier, analytics payload, or app
-settings to those requests.
+The Mac App Store edition does not make update requests itself; Apple delivers
+its updates through the Mac App Store. The direct-download edition uses Sparkle
+to check for and download updates from GitHub over HTTPS. You can disable those
+automatic checks in Settings. As with any web request, GitHub may receive
+standard connection metadata such as an IP address under its own privacy
+policy. Abendrot does not add an account, device identifier, analytics payload,
+or app settings to those requests.
 
 Links you choose to open from the app, such as the project website, GitHub, or
 research references, open in your default browser and are governed by those
@@ -50,6 +52,9 @@ settings and recovery files, delete:
 
 - `~/Library/Application Support/Abendrot`
 - `~/Library/Preferences/app.abendrot.Abendrot.plist`
+
+The sandboxed Mac App Store edition keeps its files in the macOS container at
+`~/Library/Containers/app.abendrot.Abendrot`.
 
 ## Changes and contact
 

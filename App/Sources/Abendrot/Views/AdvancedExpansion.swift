@@ -14,7 +14,7 @@ import WarmthKit
 // entirely — they're troubleshooting/compatibility details that live in the Settings window's
 // "Displays → (per-display) Advanced" compatibility section.
 struct AdvancedExpansion: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     @AppStorage("softConfirmationTone") private var softTone = true
 
     var body: some View {
@@ -92,7 +92,6 @@ struct AdvancedExpansion: View {
                 title: { Text("Sounds") },
                 icon: {
                     Image(systemName: softTone ? "speaker.wave.2" : "speaker.slash")
-                        .contentTransition(.symbolEffect(.replace))
                         .frame(width: 16, height: 16)
                 }
             )

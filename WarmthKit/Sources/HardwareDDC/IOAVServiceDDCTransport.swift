@@ -261,8 +261,9 @@ public actor IOAVServiceDDCTransport: WarmthBackend {
         }
     }
 
-    private func sleep(_ duration: Duration) async {
-        guard duration > .zero else { return }
-        try? await Task.sleep(for: duration)
+    private func sleep(_ seconds: TimeInterval) async {
+        guard seconds.isFinite, seconds > 0 else { return }
+        let nanoseconds = min(seconds, Double(UInt64.max) / 1_000_000_000) * 1_000_000_000
+        try? await Task.sleep(nanoseconds: UInt64(nanoseconds))
     }
 }

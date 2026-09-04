@@ -3,7 +3,7 @@ import WarmthKit
 
 // Internal (not private) so onboarding step 3 reuses the exact same liquid-glass city picker.
 struct CityAutocomplete: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     /// Onboarding sits this field near the card's bottom, so the dropdown must open UPWARD there or it's
     /// clipped by the card edge and overlaps the primary button. Settings has room below (default).
     var opensUpward: Bool = false
@@ -65,10 +65,10 @@ struct CityAutocomplete: View {
             }
             .zIndex(isOpen ? 10 : 0)
             .onAppear { syncQueryToSelection() }
-        .onChange(of: model.userCoordinate) { _, _ in
+        .onChange(of: model.userCoordinate) { _ in
             if !fieldFocused { syncQueryToSelection() }
         }
-        .onChange(of: fieldFocused) { _, focused in
+        .onChange(of: fieldFocused) { focused in
             if focused {
                 open()
             } else {
@@ -92,25 +92,10 @@ struct CityAutocomplete: View {
                 .foregroundStyle(Theme.Color.textPrimary)
                 .focused($fieldFocused)
                 .onSubmit { selectHighlightedOrFirst() }
-                .onChange(of: query) { _, _ in
+                .onChange(of: query) { _ in
                     if fieldFocused { isOpen = true }
                     highlightedID = filteredCities.first?.id
                 }
-                .onKeyPress(.downArrow) {
-                    if isOpen { moveHighlight(by: 1) } else { open() }
-                    return .handled
-                }
-                .onKeyPress(.upArrow) {
-                    if isOpen { moveHighlight(by: -1) } else { open() }
-                    return .handled
-                }
-                .onKeyPress(.escape) {
-                    guard isOpen || fieldFocused else { return .ignored }
-                    fieldFocused = false
-                    close()
-                    return .handled
-                }
-
             // Always an X: clears the input and opens the list; when there's nothing left to
             // clear, it dismisses — so the dropdown is always closable (the chevron used to only re-open).
             Button {

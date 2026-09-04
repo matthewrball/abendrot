@@ -103,8 +103,8 @@ enum Theme {
         }
 
         /// The reveal for the warmth group (slider + display rows) dropping in/out when "Warm my
-        /// displays" toggles. `.smooth` is critically damped — no overshoot or jitter, eases cleanly.
-        static let controlReveal = Animation.smooth(duration: 0.38)
+        /// displays" toggles. Ease-in-out is available on the full supported OS range.
+        static let controlReveal = Animation.easeInOut(duration: 0.38)
         static func controlReveal(reduceMotion: Bool) -> Animation? {
             reduceMotion ? nil : controlReveal
         }

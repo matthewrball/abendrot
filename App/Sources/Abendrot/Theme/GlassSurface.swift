@@ -62,38 +62,22 @@ private struct GlassBackground<S: InsettableShape>: ViewModifier {
             // Ember-tinted SOLID fallback — warm, never grey (critical a11y/brand fix).
             // (The screenshot harness forces this too — see `abendrotShootingSolidGlass`.)
             content.background(solidFallback)
+        } else if #available(macOS 26.0, *) {
+            // Native Liquid Glass material.
+            content
+                .background {
+                    shape
+                        .fill(glassTintOverlay)
+                }
+                .glassEffect(glassStyle, in: shape)
         } else {
-            // `glassEffect`/`Glass` ship in the macOS 26 SDK, which only Xcode 26
-            // (Swift 6.2) carries. `#available` alone is a RUNTIME check — an older
-            // toolchain still has to resolve the symbols at compile time and fails.
-            // Downstream packagers build this macOS 14 floor with Xcode 16, so the
-            // Tahoe path stays behind a COMPILE-time guard as well. On Xcode 26 this
-            // is exactly the pre-existing `#available` behaviour.
-            #if compiler(>=6.2)
-            if #available(macOS 26.0, *) {
-                // Native Liquid Glass material.
-                content
-                    .background {
-                        shape
-                            .fill(glassTintOverlay)
-                    }
-                    .glassEffect(glassStyle, in: shape)
-            } else {
-                // Pre-Tahoe fallback for the app's macOS 14 deployment floor.
-                content
-                    .background(.ultraThinMaterial, in: shape)
-                    .overlay(shape.fill(glassTintOverlay).allowsHitTesting(false))
-            }
-            #else
-            // Pre-Tahoe fallback for the app's macOS 14 deployment floor.
+            // Pre-Tahoe fallback for the app's macOS 12 deployment floor.
             content
                 .background(.ultraThinMaterial, in: shape)
                 .overlay(shape.fill(glassTintOverlay).allowsHitTesting(false))
-            #endif
         }
     }
 
-    #if compiler(>=6.2)
     @available(macOS 26.0, *)
     private var glassStyle: Glass {
         // Interactive on the transient popover; plain (calmer) on the Settings frost.
@@ -102,7 +86,6 @@ private struct GlassBackground<S: InsettableShape>: ViewModifier {
         case .frost: return .regular
         }
     }
-    #endif
 
     /// A faint warm tint laid over the system glass so the material reads as ember,
     /// not neutral system glass. Subtle by design (the real recipe lives in tokens).

@@ -109,7 +109,6 @@ struct BlueLightReductionLabel: View {
         Text("≈\(percent)% less blue light")
             .font(Theme.Typography.ui(11.5, weight: .semibold))
             .foregroundStyle(Theme.Color.accentText)
-            .contentTransition(animated ? .numericText(value: Double(percent)) : .identity)
             .animation(animated ? Theme.Motion.warm(reduceMotion: reduceMotion) : nil, value: percent)
             .help(infoText)
             .accessibilityElement()
@@ -170,7 +169,7 @@ struct WarmthPowerSwitch: View {
 
 /// A glanceable per-display row: name + method badge.
 struct DisplayRow: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     let display: DisplayState
     /// True when this display can ONLY be tinted — no true-warm path is available to it. Surfaced
     /// honestly (plain language, no jargon) so we never imply true warming where the hardware/OS

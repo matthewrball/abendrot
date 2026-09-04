@@ -16,8 +16,9 @@ import Darwin
 /// feeds them in. Policy: gamma is the **automatic warm
 /// path for ANY display** where supported (`LayerResolver` routes both built-in and external panels
 /// to it — it is OS-level, so it warms buttonless Apple displays that expose no DDC). It is
-/// `.unsupported(.gammaBrokenOnThisOS)` only on configurations where the macOS ≥ 26 no-op has
-/// actually been reproduced. The overlay remains the guaranteed floor there.
+/// `.unsupported(.gammaBrokenOnThisOS)` on reproduced failures and uses a conservative overlay
+/// fallback for unknown Apple-silicon hardware on macOS ≥ 26. The overlay remains the guaranteed
+/// floor there.
 public struct GammaBackend: WarmthBackend {
     public let method: DisplayMethod = .gamma
 
@@ -59,6 +60,9 @@ public struct GammaBackend: WarmthBackend {
                 chipBrand: appleSiliconBrand ?? "",
                 isBuiltInDisplay: identity.transport == .builtIn
             ),
+            appleSiliconChipIsKnown: !isAppleSilicon || GammaClassifier.isKnownAppleSiliconChip(
+                chipBrand: appleSiliconBrand ?? ""
+            ),
             privateAPIsEnabled: true
         )
     }
@@ -74,8 +78,8 @@ public struct GammaBackend: WarmthBackend {
     }
 
     /// CPU brand used by the exact known-broken hardware list. Unknown hardware is not
-    /// automatically condemned to a tint; gamma is the documented CoreGraphics path and remains
-    /// the default unless a configuration has reproduced the silent no-op.
+    /// automatically condemned to a tint; known hardware keeps the documented CoreGraphics path,
+    /// while unknown Apple-silicon Tahoe hardware uses the safer overlay fallback.
     static var appleSiliconBrand: String? {
         var size = 0
         guard sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0) == 0, size > 0 else {

@@ -3,7 +3,7 @@ import ServiceManagement
 import WarmthKit
 
 struct GeneralTab: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("softConfirmationTone") private var softTone = true
@@ -100,6 +100,7 @@ struct GeneralTab: View {
                 Spacer()
                 Toggle("", isOn: launchAtLoginBinding)
                     .labelsHidden()
+                    .disabled(!supportsLaunchAtLogin)
             }
             if let launchAtLoginError {
                 Text(launchAtLoginError)
@@ -124,7 +125,11 @@ struct GeneralTab: View {
         .onAppear {
             // Reflect the real login-item state, which can change outside the app
             // (System Settings → General → Login Items), so the toggle never lies.
-            launchAtLogin = SMAppService.mainApp.status == .enabled
+            if #available(macOS 13.0, *) {
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            } else {
+                launchAtLogin = false
+            }
             launchAtLoginError = nil
         }
     }
@@ -134,6 +139,11 @@ struct GeneralTab: View {
     /// has the item disabled in System Settings, which requires their approval).
     private func setLaunchAtLogin(_ enable: Bool) {
         launchAtLoginError = nil
+        guard #available(macOS 13.0, *) else {
+            launchAtLogin = false
+            launchAtLoginError = "Launch at login requires macOS 13 or later."
+            return
+        }
         do {
             if enable {
                 try SMAppService.mainApp.register()
@@ -146,6 +156,11 @@ struct GeneralTab: View {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             launchAtLoginError = "Couldn't \(enable ? "enable" : "disable") launch at login: \(error.localizedDescription)"
         }
+    }
+
+    private var supportsLaunchAtLogin: Bool {
+        if #available(macOS 13.0, *) { return true }
+        return false
     }
 
     private var isCozy: Bool {
@@ -205,7 +220,7 @@ struct GeneralTab: View {
             withAnimation(nil) { showsMaximumWarmthFocusCue = false }
             await Task.yield()
         }
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.18)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
             showsMaximumWarmthFocusCue = true
         }
         do {
@@ -213,7 +228,7 @@ struct GeneralTab: View {
         } catch {
             return
         }
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.42)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.42)) {
             showsMaximumWarmthFocusCue = false
         }
         do {

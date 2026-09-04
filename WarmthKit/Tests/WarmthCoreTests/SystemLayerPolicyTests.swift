@@ -11,12 +11,14 @@ struct GammaClassifierTests {
         appleSilicon: Bool,
         os: Int,
         knownGammaBug: Bool = false,
+        chipKnown: Bool = true,
         privateAPIs: Bool = true
     ) -> GammaClassifier.Environment {
         GammaClassifier.Environment(
             isAppleSilicon: appleSilicon,
             osMajorVersion: os,
             appleSiliconHasKnownGammaBug: knownGammaBug,
+            appleSiliconChipIsKnown: chipKnown,
             privateAPIsEnabled: privateAPIs
         )
     }
@@ -46,6 +48,14 @@ struct GammaClassifierTests {
         #expect(!isSupported(cap))
         #expect(reason(cap) == .gammaBrokenOnThisOS)
         #expect(reason(GammaClassifier.classify(env(appleSilicon: true, os: 30, knownGammaBug: true))) == .gammaBrokenOnThisOS)
+    }
+
+    @Test("unknown Apple Silicon on macOS 26+ conservatively uses the overlay")
+    func unknownAppleSiliconTahoeUsesOverlay() {
+        let cap = GammaClassifier.classify(env(appleSilicon: true, os: 26, chipKnown: false))
+        #expect(!isSupported(cap))
+        #expect(reason(cap) == .gammaConservativeFallback)
+        #expect(reason(GammaClassifier.classify(env(appleSilicon: true, os: 30, chipKnown: false))) == .gammaConservativeFallback)
     }
 
     @Test("Apple Silicon on a pre-26 OS → supported (even Pro/Max — the regression is ≥ 26 only)")
@@ -95,6 +105,12 @@ struct GammaClassifierTests {
         for unaffected in ["Apple M3 Max", "Apple M4 Pro", "Apple M2 Ultra", "Apple M5", "Apple M6 Pro", ""] {
             #expect(!GammaClassifier.hasKnownGammaBug(chipBrand: unaffected, isBuiltInDisplay: true))
         }
+        for known in ["Apple M1", "Apple M2 Ultra", "Apple M3 Max", "Apple M3 Ultra", "Apple M4 Pro", "Apple M5", "Apple A18 Pro"] {
+            #expect(GammaClassifier.isKnownAppleSiliconChip(chipBrand: known))
+        }
+        #expect(!GammaClassifier.isKnownAppleSiliconChip(chipBrand: "Apple M6 Pro"))
+        #expect(!GammaClassifier.isKnownAppleSiliconChip(chipBrand: "Apple M4 Ultra"))
+        #expect(!GammaClassifier.isKnownAppleSiliconChip(chipBrand: ""))
     }
 }
 
@@ -105,13 +121,13 @@ struct ReconfigurationDebounceTests {
 
     @Test("the configured window is reported in seconds")
     func windowSeconds() {
-        #expect(abs(ReconfigurationDebounce(window: .milliseconds(400)).windowSeconds - 0.4) < 1e-9)
-        #expect(abs(ReconfigurationDebounce(window: .milliseconds(500)).windowSeconds - 0.5) < 1e-9)
+        #expect(abs(ReconfigurationDebounce(window: 0.4).windowSeconds - 0.4) < 1e-9)
+        #expect(abs(ReconfigurationDebounce(window: 0.5).windowSeconds - 0.5) < 1e-9)
     }
 
     @Test("first event starts a burst; a second within the window does NOT start a new one")
     func firstStartsBurst() {
-        var d = ReconfigurationDebounce(window: .milliseconds(400))
+        var d = ReconfigurationDebounce(window: 0.4)
         #expect(d.record(at: 0.0) == true)     // starts the burst → caller schedules a waiter
         #expect(d.record(at: 0.1) == false)    // within window, fire already pending → no 2nd waiter
         #expect(d.record(at: 0.2) == false)
@@ -119,7 +135,7 @@ struct ReconfigurationDebounceTests {
 
     @Test("does not fire until the quiet window has fully elapsed since the LAST event")
     func quietWindowFromLastEvent() {
-        var d = ReconfigurationDebounce(window: .milliseconds(400))
+        var d = ReconfigurationDebounce(window: 0.4)
         _ = d.record(at: 0.0)
         #expect(!d.shouldFire(at: 0.30))       // 0.30 since last event (0.0) < 0.4
         _ = d.record(at: 0.35)                 // late event extends the window
@@ -129,7 +145,7 @@ struct ReconfigurationDebounceTests {
 
     @Test("remainingDelay tracks the extended deadline and never goes negative")
     func remainingDelay() {
-        var d = ReconfigurationDebounce(window: .milliseconds(400))
+        var d = ReconfigurationDebounce(window: 0.4)
         _ = d.record(at: 1.0)
         #expect(abs((d.remainingDelay(at: 1.1) ?? -1) - 0.3) < 1e-9)
         _ = d.record(at: 1.2)                  // extend
@@ -139,7 +155,7 @@ struct ReconfigurationDebounceTests {
 
     @Test("consumeFire resets the burst so the next event starts fresh")
     func consumeResets() {
-        var d = ReconfigurationDebounce(window: .milliseconds(400))
+        var d = ReconfigurationDebounce(window: 0.4)
         _ = d.record(at: 0.0)
         #expect(d.shouldFire(at: 0.5))
         d.consumeFire()
@@ -150,7 +166,7 @@ struct ReconfigurationDebounceTests {
 
     @Test("no fire and no delay before any event is recorded")
     func idleState() {
-        let d = ReconfigurationDebounce(window: .milliseconds(400))
+        let d = ReconfigurationDebounce(window: 0.4)
         #expect(!d.shouldFire(at: 5.0))
         #expect(d.remainingDelay(at: 5.0) == nil)
     }

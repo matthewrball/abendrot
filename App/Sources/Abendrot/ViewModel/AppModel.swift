@@ -1,8 +1,11 @@
 import Foundation
-import Observation
+import Combine
 import AppKit
 import WarmthKit
 import AbendrotControl
+#if !APP_STORE
+import WarmthKitPrivate
+#endif
 
 // MARK: - AppModel
 //
@@ -20,49 +23,48 @@ import AbendrotControl
 // seeds `state` from `MockWarmthState` and does NOT start the actor — so the UI
 // renders without a live engine.
 @MainActor
-@Observable
-final class AppModel {
+final class AppModel: ObservableObject {
 
     // MARK: Observed surface (what the views render)
 
     /// Latest snapshot from the engine (or a seeded mock in previews).
-    private(set) var state: WarmthState
+    @Published private(set) var state: WarmthState
 
     /// UI mode for the menu-bar popover (left-click = simple, ⌥/right = advanced).
-    var isAdvancedExpanded: Bool = false
+    @Published var isAdvancedExpanded: Bool = false
 
     /// Which Settings tab is selected — bound to the sidebar so the popover can deep-link (e.g. the
     /// "Per-app exclusions" row opens Settings → Advanced).
-    var settingsTab: SettingsTab = .general
+    @Published var settingsTab: SettingsTab = .general
 
     /// One-shot focus cue for Settings -> Advanced -> Excluded apps.
-    var excludedAppsFocusRequest: UUID?
+    @Published var excludedAppsFocusRequest: UUID?
 
     /// One-shot focus cue for Settings -> General -> Maximum warmth.
-    var maximumWarmthFocusRequest: UUID?
+    @Published var maximumWarmthFocusRequest: UUID?
 
     /// Whether the menu-bar icon is shown (Settings → General). When false the app
     /// keeps running and is reachable via the global hotkey + relaunch.
-    var showInMenuBar: Bool = true
+    @Published var showInMenuBar: Bool = true
 
     /// Reveal-True-Color behaviour: hold (default) vs toggle. Mirrors
     /// `HotkeyService.mode`; surfaced here so the Settings picker can bind and previews (no live
     /// service) still render. Persisted; restored in `applyPersistedState()`.
-    var revealMode: RevealMode = .hold
+    @Published var revealMode: RevealMode = .hold
 
     /// Bundle ids the user has excluded — while one is frontmost the engine suspends warmth (true
     /// colour) across all displays. The UI source of truth for the Advanced → Excluded apps picker;
     /// mirrored into the engine via `setExcludedApps`. Persisted; restored in `applyPersistedState()`.
-    var excludedApps: Set<String> = []
+    @Published var excludedApps: Set<String> = []
 
     /// Manual Sunset location override. nil = Auto from system time zone; no permission or network.
-    var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
+    @Published var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
 
-    @ObservationIgnored private var sunsetMaximumWarmth = WarmthLevel(strength: 0.7)
-    @ObservationIgnored private var manualWarmth = WarmthLevel(strength: 1.0)
-    @ObservationIgnored private var pendingEnabled: Bool?
-    @ObservationIgnored private var pendingScheduleMode: ScheduleModeOption?
-    @ObservationIgnored private var persistedDisplaySettings: [String: DisplaySettingsPreference] = [:]
+    private var sunsetMaximumWarmth = WarmthLevel(strength: 0.7)
+    private var manualWarmth = WarmthLevel(strength: 1.0)
+    private var pendingEnabled: Bool?
+    private var pendingScheduleMode: ScheduleModeOption?
+    private var persistedDisplaySettings: [String: DisplaySettingsPreference] = [:]
 
     // MARK: Warmth drag hold (stops the engine echo from fighting the slider)
     //
@@ -80,9 +82,9 @@ final class AppModel {
     // reports press state via `@GestureState`, which never fires its `false` if the popover closes
     // mid-drag — a flag would stick on and freeze warmth until the next drag. A stamp cannot stick.
     // ponytail: one window for both sliders; the user only drags one at a time.
-    @ObservationIgnored private var warmthWriteAt: TimeInterval = 0
+    private var warmthWriteAt: TimeInterval = 0
     /// Which slider was last written — nil = the global one, otherwise that display's own slider.
-    @ObservationIgnored private var warmthWriteDisplay: DisplayIdentity?
+    private var warmthWriteDisplay: DisplayIdentity?
     /// How long a local warmth value outranks the engine's echo. Comfortably longer than a drag's
     /// ~8–16ms frame cadence, short enough that release reconciles immediately.
     private static let warmthHoldWindow: TimeInterval = 0.3
@@ -104,39 +106,39 @@ final class AppModel {
     // latest-wins slot with a single in-flight task fixes the ordering AND collapses the
     // intermediate values, which cuts engine publishes (and the main-thread snapshot write each
     // one triggered) by roughly an order of magnitude during a drag.
-    @ObservationIgnored private var pendingGlobalWarmth: WarmthLevel?
-    @ObservationIgnored private var globalWarmthDrain: Task<Void, Never>?
-    @ObservationIgnored private var pendingDisplayWarmth: [DisplayIdentity: WarmthLevel] = [:]
-    @ObservationIgnored private var displayWarmthDrain: Task<Void, Never>?
+    private var pendingGlobalWarmth: WarmthLevel?
+    private var globalWarmthDrain: Task<Void, Never>?
+    private var pendingDisplayWarmth: [DisplayIdentity: WarmthLevel] = [:]
+    private var displayWarmthDrain: Task<Void, Never>?
 
     /// Throttle bookkeeping for the engine-stream snapshot write. See `writeControlSnapshotThrottled`.
-    @ObservationIgnored private var lastSnapshotWriteAt: TimeInterval = 0
-    @ObservationIgnored private var snapshotTrailingWrite: Task<Void, Never>?
+    private var lastSnapshotWriteAt: TimeInterval = 0
+    private var snapshotTrailingWrite: Task<Void, Never>?
     private static let snapshotWriteInterval: TimeInterval = 0.25
 
     // MARK: Statistics (local-only — never leaves this Mac, "Private by default")
 
     /// Total seconds Abendrot has actively warmed, EXCLUDING any in-flight period (the live total
     /// adds the open period via `totalWarmedSeconds`). Persisted.
-    private(set) var warmedSecondsBase: Double = 0
+    @Published private(set) var warmedSecondsBase: Double = 0
     /// Sunsets that occurred while in Sunset mode + enabled — counted once per local day. Persisted.
-    private(set) var warmSunsetCount: Int = 0
+    @Published private(set) var warmSunsetCount: Int = 0
     /// Whether to accumulate the local stats at all (default on; nothing leaves the Mac either way).
-    private(set) var statsEnabled: Bool = true
+    @Published private(set) var statsEnabled: Bool = true
     /// Start of the current warming period, or nil when not warming. In-memory bookkeeping only.
-    @ObservationIgnored private var warmingStartedAt: Date?
+    private var warmingStartedAt: Date?
     /// Start-of-day (timeIntervalSince1970) of the last counted warm sunset — de-dupes per day.
-    @ObservationIgnored private var lastWarmSunsetDay: Double = 0
+    private var lastWarmSunsetDay: Double = 0
     /// Reusable chime graph: the system "Glass" sound, played bright on warming-ON and PITCHED-DOWN
     /// (deeper, dampened) on warming-OFF. Built lazily on first toggle; nil if the sound file is missing.
-    @ObservationIgnored private lazy var confirmationChime: ConfirmationChime? = ConfirmationChime()
+    private lazy var confirmationChime: ConfirmationChime? = ConfirmationChime()
 
     /// Airy, synthesized "swoosh" for the advanced popover panel — rising on expand, falling on collapse.
     /// Built lazily on first toggle; nil only if the audio buffers can't be allocated. See `toggleAdvanced()`.
-    @ObservationIgnored private lazy var expandSwoosh: SwooshSound? = SwooshSound()
+    private lazy var expandSwoosh: SwooshSound? = SwooshSound()
 
     /// Soft native fire cues for Cozy mode — ignite on ON, snuff on OFF.
-    @ObservationIgnored private lazy var cozyFireSound: CozyFireSound? = CozyFireSound()
+    private lazy var cozyFireSound: CozyFireSound? = CozyFireSound()
 
     // MARK: Engine wiring (nil in previews)
 
@@ -149,25 +151,29 @@ final class AppModel {
 
     /// Regenerated once per app launch. Lets the CLI tell "this is the same running instance" apart
     /// from a relaunch even if the pid is reused. Written into every `ControlStateSnapshot`.
-    @ObservationIgnored private let appLaunchID = UUID().uuidString
+    private let appLaunchID = UUID().uuidString
 
     /// The `requestID` of the last control message this app applied. The CLI polls
     /// `state.json.lastAppliedRequestID` to confirm its own command landed (the live ack).
-    @ObservationIgnored private(set) var lastAppliedRequestID: String?
+    private(set) var lastAppliedRequestID: String?
 
     /// Distributed-notification observer token for `settingsChanged` (CLI/AI control). Registered in
     /// `start()`, removed in `shutdown()`.
-    @ObservationIgnored private var controlObserver: NSObjectProtocol?
+    private var controlObserver: NSObjectProtocol?
 
     /// Pending reveal auto-end task from a `reveal` control action (cancelled if superseded).
-    @ObservationIgnored private var controlRevealTask: Task<Void, Never>?
+    private var controlRevealTask: Task<Void, Never>?
 
     // MARK: Init
 
     /// Live initializer — owns a real engine. Call `start()` from the App entry.
     init(configuration: EngineConfiguration = EngineConfiguration()) {
         UserDefaults.standard.register(defaults: ["softConfirmationTone": true])
+        #if APP_STORE
         let engine = WarmthEngine(configuration: configuration)
+        #else
+        let engine = WarmthEngine.directDistribution(configuration: configuration)
+        #endif
         self.engine = engine
         self.state = WarmthState(scheduleMode: configuration.defaultScheduleMode)
         self.frontmostMonitor = FrontmostAppMonitor(engine: engine)
@@ -206,9 +212,12 @@ final class AppModel {
                 // ON THE MAIN ACTOR, and it used to run once per engine publish — i.e. once per
                 // drag frame. That jammed the same main thread the drag runs on, which is what made
                 // the slider's echo race intermittent. Trailing-edge, so the final state still lands.
+                #if !APP_STORE
                 self?.writeControlSnapshotThrottled()
+                #endif
             }
         }
+        #if !APP_STORE
         // Observe CLI/AI control messages. The CLI posts with `deliverImmediately: true`,
         // so a command applies even when the app is idle. Same login session only — never
         // postToAllSessions. Torn down in `shutdown()`. The block runs on `.main`; under Swift 6 the
@@ -227,6 +236,7 @@ final class AppModel {
                 self?.handleControlMessage(decoded)
             }
         }
+        #endif
         // Start the engine, THEN replay persisted user state in the same task so the
         // restore is ordered strictly after start() — avoiding a reentrancy race where it could
         // land before the engine finishes booting.
@@ -235,7 +245,9 @@ final class AppModel {
             self?.applyPersistedState()
             // Write an initial snapshot so the CLI sees a live app immediately, before the first
             // engine state tick (a healthy idle app may not emit one for a while).
+            #if !APP_STORE
             self?.writeControlSnapshot()
+            #endif
         }
     }
 
@@ -593,7 +605,7 @@ final class AppModel {
             beginReveal()
             controlRevealTask?.cancel()
             controlRevealTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(hold))
+                try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
                 guard !Task.isCancelled else { return }
                 self?.endReveal()
                 self?.writeControlSnapshot()
@@ -618,7 +630,7 @@ final class AppModel {
         }
         guard snapshotTrailingWrite == nil else { return }   // one already queued
         snapshotTrailingWrite = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.snapshotWriteInterval))
+            try? await Task.sleep(nanoseconds: UInt64(Self.snapshotWriteInterval * 1_000_000_000))
             guard !Task.isCancelled, let self else { return }
             self.snapshotTrailingWrite = nil
             self.lastSnapshotWriteAt = ProcessInfo.processInfo.systemUptime
@@ -678,6 +690,7 @@ final class AppModel {
         globalWarmthDrain = nil
         displayWarmthDrain?.cancel()
         displayWarmthDrain = nil
+        #if !APP_STORE
         // Drop any queued trailing write and flush synchronously — the throttle must never be the
         // reason the CLI's `state.json` misses the final state.
         snapshotTrailingWrite?.cancel()
@@ -687,6 +700,7 @@ final class AppModel {
             DistributedNotificationCenter.default().removeObserver(controlObserver)
             self.controlObserver = nil
         }
+        #endif
         frontmostMonitor?.stop()
         await engine?.shutdown()
     }

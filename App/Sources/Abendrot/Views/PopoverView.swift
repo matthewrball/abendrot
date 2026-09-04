@@ -16,7 +16,7 @@ import WarmthKit
 // Renders entirely from `AppModel.state` (a contract `WarmthState`). All mutations go
 // back through `AppModel` → `WarmthEngine`.
 struct PopoverView: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -346,7 +346,6 @@ private struct IncompatibilityNotice: View {
                             Text(showWhy ? "Hide" : "Why?")
                                 .font(Theme.Typography.ui(10, weight: .semibold))
                                 .foregroundStyle(ink)
-                                .underline()
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(showWhy ? "Hide explanation" : "Why is true warming unavailable?")
@@ -355,7 +354,7 @@ private struct IncompatibilityNotice: View {
             }
 
             if showWhy {
-                Text("Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s color at the system level, so here Abendrot can only lay a warm tint over the screen — it can’t remove blue light the way it does on other Macs. Nothing is broken; it’s a macOS limitation. An external monitor with its own color controls can still be truly warmed via Hardware control (Settings → Displays).")
+                Text(whyExplanation)
                     .font(Theme.Typography.ui(10.5))
                     .foregroundStyle(ink.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
@@ -366,6 +365,14 @@ private struct IncompatibilityNotice: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Color.accentHi, in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
         .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: showWhy)
+    }
+
+    private var whyExplanation: String {
+        #if APP_STORE
+        "Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s color at the system level, so Abendrot uses a warm screen tint instead. The tint still changes how the screen looks, but it can’t remove blue light at the system level. Nothing is broken; it’s a macOS limitation."
+        #else
+        "Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s color at the system level, so here Abendrot can only lay a warm tint over the screen — it can’t remove blue light the way it does on other Macs. Nothing is broken; it’s a macOS limitation. An external monitor with its own color controls can still be truly warmed via Hardware control (Settings → Displays)."
+        #endif
     }
 }
 

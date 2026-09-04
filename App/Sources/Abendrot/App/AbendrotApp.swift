@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 import WarmthKit
 
 // MARK: - AbendrotApp
@@ -13,45 +14,36 @@ import WarmthKit
 // neutral-resets every display on quit.
 @main
 struct AbendrotApp: App {
-    @State private var model = AppModel()
+    @StateObject private var model = AppModel()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
+        #if !APP_STORE
         _ = UpdateManager.shared
+        #endif
         // Hand the model to the delegate so the app-quit hook can neutral-reset displays.
         appDelegate.bind(model: model)
     }
 
     var body: some Scene {
-        MenuBarExtra(isInserted: $model.showInMenuBar) {
-            PopoverView(model: model)
-        } label: {
-            // "One Ripple" sunset-arc glyph: a monochrome template until warmth is actually being
-            // applied, ember-amber while active. Reactive via @Observable model.
-            Image(nsImage: model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template())
+        WindowGroup {
+            // WindowGroup is only the cross-version scene anchor. The host closes immediately;
+            // the actual UI is the AppKit status-item popover and the existing settings windows.
+            Color.clear
+                .frame(width: 1, height: 1)
+                .background(SettingsHostWindowDismisser())
         }
-        .menuBarExtraStyle(.window)
-        // (First-run onboarding is presented imperatively from `AppModel.applyPersistedState()`, not via
-        // a Scene `.onChange` here — that has no prior art on `MenuBarExtra` and isn't guaranteed to fire
-        // on a cold launch where the menu is never clicked.)
-        // Replace AppKit's default About panel: the standard "About Abendrot" menu item
-        // (and any caller of `orderFrontStandardAboutPanel`) opens our branded glass
-        // `AboutWindowController` instead. `model` is in scope from the App body.
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Abendrot") {
                     AboutWindowController.show(model: model)
                 }
             }
+            #if !APP_STORE
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView()
             }
-        }
-
-        // A SwiftUI Settings scene only so ⌘, / `openSettings()` resolve; the real glass
-        // window is the programmatic one. This scene routes to it.
-        Settings {
-            SettingsLauncher(model: model)
+            #endif
         }
     }
 }
@@ -61,7 +53,7 @@ struct AbendrotApp: App {
 // Bridges SwiftUI's `Settings` scene (and the `openSettings` action used from the
 // popover footer) to the programmatic glass `SettingsWindowController`.
 private struct SettingsLauncher: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     var body: some View {
         Color.clear
             .frame(width: 1, height: 1)
@@ -90,12 +82,19 @@ private struct SettingsHostWindowDismisser: NSViewRepresentable {
 
 /// Owns app-level lifecycle the SwiftUI `App` can't express directly: engine start on
 /// launch, neutral-reset on quit, and the menu-bar-only activation policy.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var model: AppModel?
+    private var legacyStatusItem: NSStatusItem?
+    private var legacyPopover: NSPopover?
+    private var modelChanges: AnyCancellable?
 
     @MainActor
     func bind(model: AppModel) {
         self.model = model
+        modelChanges = model.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.syncLegacyMenuBar() }
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -106,9 +105,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         // Start as a menu-bar-only agent; windows raise it via AppActivationPolicy.
         NSApp.setActivationPolicy(.accessory)
+        installLegacyMenuBar()
         Task { @MainActor in
             model?.start()
         }
+    }
+
+    private func installLegacyMenuBar() {
+        guard let model else { return }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template()
+        item.button?.target = self
+        item.button?.action = #selector(toggleLegacyPopover)
+        legacyStatusItem = item
+
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentSize = NSSize(width: 330, height: 520)
+        popover.contentViewController = NSHostingController(rootView: PopoverView(model: model))
+        legacyPopover = popover
+        syncLegacyMenuBar()
+    }
+
+    @objc private func toggleLegacyPopover() {
+        guard let button = legacyStatusItem?.button, let popover = legacyPopover else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.becomeKey()
+        }
+    }
+
+    private func syncLegacyMenuBar() {
+        guard let model else { return }
+        legacyStatusItem?.isVisible = model.showInMenuBar
+        legacyStatusItem?.button?.image = model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template()
     }
 
     func applicationShouldHandleReopen(

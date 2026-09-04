@@ -17,7 +17,9 @@
 # physical-hardware testing. It is manual-dispatch only, never runs on push/PR,
 # never sees fork secrets, and intentionally cannot pass until real hardware
 # runners and tests exist. The hosted `test-warmthcore` check runs the complete
-# headless WarmthKit and CLI suites on every push/PR.
+# headless WarmthKit and CLI suites on every push/PR across supported OS
+# generations. The app is built on macOS 26 because its source uses the macOS
+# 26 SDK behind availability checks; runtime coverage still needs real Macs.
 #
 # Repository signing/ASC secrets are read only inside `sign-notarize`, which
 # can run only for manual dispatch on exact
@@ -108,7 +110,12 @@ jobs:
   # here means every local headless suite actually ran and passed.
   # ---------------------------------------------------------------------------
   test-warmthcore:
-    runs-on: macos-26
+    name: headless-${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, macos-15, macos-26]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -153,7 +160,9 @@ jobs:
           done < <(find scripts -type f -name '*.sh' -print0)
 
       - name: Release guard tests
-        run: scripts/release/test-release-guards.sh
+        run: |
+          scripts/release/test-release-guards.sh
+          scripts/release/test-mac-app-store.sh
 
   # ---------------------------------------------------------------------------
   # 3. App build (unsigned compile) — REQUIRED gate, always, no secrets.
@@ -210,6 +219,21 @@ jobs:
             ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \
             build
 
+      - name: Build Mac App Store variant (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "${ABENDROT_APP_SCHEME}.xcodeproj" \
+            -scheme AbendrotAppStore \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build/DerivedData-AppStore \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \
+            build
+
       - name: Build plain DMG
         run: |
           set -euo pipefail
@@ -234,27 +258,13 @@ jobs:
             --out "build/${ABENDROT_APP_SCHEME}-ci.dmg" \
             --volname "Abendrot"
 
-      - name: Build Abendrot.app (package-manager configuration)
-        run: |
-          set -euo pipefail
-          # Package managers (MacPorts) build these exact sources with the Sparkle
-          # dependency removed and ABENDROT_MACPORTS defined, which compiles the
-          # Sparkle-free UpdateManager stub. That branch is dead code in every other
-          # build, so compile it HERE or it rots unnoticed and breaks the port.
-          # Runs last and reuses the derived-data dir (keeping the resolved package
-          # checkouts warm); the DMG step above already consumed the default build.
-          xcodebuild \
-            -project "${ABENDROT_APP_SCHEME}.xcodeproj" \
-            -scheme "$ABENDROT_APP_SCHEME" \
-            -configuration Release \
-            -destination 'generic/platform=macOS' \
-            -derivedDataPath build/DerivedData \
-            -onlyUsePackageVersionsFromResolvedFile \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            ABENDROT_SOURCE_COMMIT="$GITHUB_SHA" \
-            SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) ABENDROT_MACPORTS' \
-            build
+      - name: Check macOS compatibility metadata
+        run: scripts/qa/check-macos-compatibility.sh \
+          "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
+
+      - name: Launch unsigned app bundle smoke test
+        run: scripts/qa/smoke-launch.sh \
+          "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
 
   public-release-gate:
     name: public-dev/release-gate

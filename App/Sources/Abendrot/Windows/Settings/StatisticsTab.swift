@@ -3,7 +3,7 @@ import SwiftUI
 /// How long Abendrot has actively warmed the Mac. The headline total ticks live via a
 /// `TimelineView` while the tab is open; `AppModel` owns the accrual.
 struct StatisticsTab: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -45,7 +45,6 @@ struct StatisticsTab: View {
                 .font(Theme.Typography.serif(big ? 27 : 17))
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.accentText)
-                .contentTransition(.numericText())
         }
     }
 }

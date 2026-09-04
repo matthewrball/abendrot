@@ -41,7 +41,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 // deep editors (custom-schedule picker, exclusion picker, shortcut recorder) are
 // marked TODO and wired in a later milestone.
 struct SettingsView: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     /// Screenshot harness only: render the detail column WITHOUT its ScrollView so the view hugs the
     /// tab's natural height (the live window does this via `fitDetailContentHeight`; ImageRenderer can't).
     var scrolls: Bool = true
@@ -102,7 +102,6 @@ struct SettingsView: View {
 
             if scrolls {
                 ScrollView { detailColumn }
-                    .scrollContentBackground(.hidden)
                     .onPreferenceChange(SettingsContentHeightKey.self) { height in
                         Task { @MainActor in SettingsWindowController.fitDetailContentHeight(height) }
                     }

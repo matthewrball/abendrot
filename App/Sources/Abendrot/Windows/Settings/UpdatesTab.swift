@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct UpdatesTab: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {

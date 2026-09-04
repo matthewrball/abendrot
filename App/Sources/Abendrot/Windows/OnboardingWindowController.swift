@@ -85,7 +85,6 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         )
         hosting.frame = contentView.bounds
         hosting.autoresizingMask = [.width, .height]
-        hosting.sizingOptions = []
         hosting.wantsLayer = true
         hosting.layer?.masksToBounds = true
         contentView.addSubview(hosting)

@@ -47,7 +47,7 @@ final class OneShotPlayer {
         idleTask?.cancel()
         idleTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(for: .seconds(seconds))
+                try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
             } catch {
                 return
             }
