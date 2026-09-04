@@ -259,12 +259,14 @@ jobs:
             --volname "Abendrot"
 
       - name: Check macOS compatibility metadata
-        run: scripts/qa/check-macos-compatibility.sh \
-          "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
+        run: |
+          scripts/qa/check-macos-compatibility.sh \
+            "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
 
       - name: Launch unsigned app bundle smoke test
-        run: scripts/qa/smoke-launch.sh \
-          "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
+        run: |
+          scripts/qa/smoke-launch.sh \
+            "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
 
   public-release-gate:
     name: public-dev/release-gate
