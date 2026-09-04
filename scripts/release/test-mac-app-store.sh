@@ -28,11 +28,11 @@ pass "sandbox and local App Store export settings are locked"
 
 STORE_TARGET=$(awk '/^  AbendrotAppStore:/{found=1} found{print}' "$STORE_CONFIG")
 [[ -n "$STORE_TARGET" ]] || fail "AbendrotAppStore target is missing"
-rg -q 'SWIFT_ACTIVE_COMPILATION_CONDITIONS:.*APP_STORE' <<<"$STORE_TARGET" \
+grep -Eq 'SWIFT_ACTIVE_COMPILATION_CONDITIONS:.*APP_STORE' <<<"$STORE_TARGET" \
     || fail "App Store compile condition is missing"
-rg -q 'CODE_SIGN_ENTITLEMENTS: App/Resources/AbendrotAppStore.entitlements' <<<"$STORE_TARGET" \
+grep -Eq 'CODE_SIGN_ENTITLEMENTS: App/Resources/AbendrotAppStore.entitlements' <<<"$STORE_TARGET" \
     || fail "App Store target does not use its entitlements"
-if rg -q 'product: (Sparkle|WarmthKitPrivate)' <<<"$STORE_TARGET"; then
+if grep -Eq 'product: (Sparkle|WarmthKitPrivate)' <<<"$STORE_TARGET"; then
     fail "App Store target links a direct-distribution product"
 fi
 for sparkle_key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks SUAutomaticallyUpdate SUScheduledCheckInterval; do
@@ -45,7 +45,7 @@ pass "App Store target excludes Sparkle and private engine wiring"
 [[ "$(plutil -extract NSPrivacyTracking raw -o - "$PRIVACY_MANIFEST")" == "false" ]] \
     || fail "privacy manifest enables tracking"
 for reason in CA92.1 C617.1 35F9.1; do
-    rg -q "<string>$reason</string>" "$PRIVACY_MANIFEST" \
+    grep -Eq "<string>$reason</string>" "$PRIVACY_MANIFEST" \
         || fail "privacy manifest is missing required-reason code $reason"
 done
 pass "privacy manifest declares no tracking and the used required-reason APIs"
@@ -103,22 +103,22 @@ ARCHS=$(lipo -archs "$EXECUTABLE")
 [[ " $ARCHS " == *" arm64 "* && " $ARCHS " == *" x86_64 "* ]] \
     || fail "built app is not universal (arm64 + x86_64)"
 
-if otool -L "$EXECUTABLE" | rg -q 'Sparkle|CoreBrightness|CoreDisplay'; then
+if otool -L "$EXECUTABLE" | grep -Eq 'Sparkle|CoreBrightness|CoreDisplay'; then
     fail "built executable links a forbidden framework"
 fi
-if rg -a -q 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|SUPublicEDKey|SUFeedURL' "$APP"; then
+if grep -aEq 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|SUPublicEDKey|SUFeedURL' "$APP"; then
     fail "built app contains private API or Sparkle strings"
 fi
-if xattr -lr "$APP" 2>/dev/null | rg -q 'com\.apple\.quarantine'; then
+if xattr -lr "$APP" 2>/dev/null | grep -Eq 'com\.apple\.quarantine'; then
     fail "built app contains a quarantine attribute"
 fi
 
 if [[ "$DISTRIBUTION" == true ]]; then
     SIGNATURE=$(codesign -dvv "$APP" 2>&1)
-    rg -q '^TeamIdentifier=XGFJEZS3MA$' <<<"$SIGNATURE" \
+    grep -Eq '^TeamIdentifier=XGFJEZS3MA$' <<<"$SIGNATURE" \
         || fail "distribution archive is not signed by team XGFJEZS3MA"
     if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.get-task-allow' "$ENTITLEMENTS_ACTUAL" 2>/dev/null \
-        | rg -q '^true$'; then
+        | grep -Eq '^true$'; then
         fail "distribution archive enables get-task-allow"
     fi
 fi
