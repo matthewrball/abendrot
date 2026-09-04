@@ -298,6 +298,7 @@ jobs:
             "WarmthKit/Sources"
             "WarmthKit/Tests"
             "scripts/dmg"
+            "scripts/qa"
             "scripts/release"
             "cli/Sources"
             "cli/Tests"
