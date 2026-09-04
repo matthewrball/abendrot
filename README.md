@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-FD9228" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-FD9228" alt="macOS 14 Sonoma or later">
+  <img src="https://img.shields.io/badge/macOS-12%2B-FD9228" alt="macOS 12 Monterey or later">
   <img src="https://img.shields.io/badge/architecture-universal-FD9228" alt="Universal Apple Silicon and Intel">
   <a href="https://github.com/matthewrball/abendrot/releases/latest"><img src="https://img.shields.io/github/v/release/matthewrball/abendrot?color=FD9228&label=release" alt="Latest release"></a>
   <a href="https://github.com/matthewrball/abendrot/stargazers"><img src="https://img.shields.io/github/stars/matthewrball/abendrot?color=FD9228" alt="GitHub stars"></a>
@@ -37,7 +37,7 @@
 
 Download the signed, notarized `.dmg` from [abendrot.app/download](https://abendrot.app/download/), or from [GitHub Releases](https://github.com/matthewrball/abendrot/releases/latest).
 
-Requires macOS 14 "Sonoma" or later. Universal for Apple silicon and Intel.
+Requires macOS 12 "Monterey" or later. Universal for Apple silicon and Intel.
 
 ### Homebrew
 
@@ -88,7 +88,7 @@ Every command supports `--json`, with scriptable exit codes. See [`AGENTS.md`](A
 
 ## Tech
 
-Native **Swift 6** (SwiftUI + AppKit), **macOS 14 "Sonoma" or later**, distributed as a
+Native **Swift 6** (SwiftUI + AppKit), **macOS 12 "Monterey" or later**, distributed as a
 universal Apple silicon + Intel app. Tahoe uses native Liquid Glass; Sonoma and Sequoia
 use the built-in material fallback. No Electron, no bundled runtime. The warmth
 engine lives in a standalone, unit-tested Swift package (`WarmthKit`); the app

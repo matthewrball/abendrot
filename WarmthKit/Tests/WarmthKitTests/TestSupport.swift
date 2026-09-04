@@ -2,6 +2,9 @@ import Foundation
 import CoreGraphics
 @testable import WarmthCore
 @testable import HardwareDDC
+@testable import WarmthKit
+
+extension InMemoryDDCSnapshotStore: WarmthSnapshotStore {}
 
 // MARK: - DisplayIdentity fixture
 

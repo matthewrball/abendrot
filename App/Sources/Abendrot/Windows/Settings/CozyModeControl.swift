@@ -8,7 +8,7 @@ import WarmthKit
 /// 1900K is a real but minimal extra circadian reduction at a real legibility cost — see
 /// the circadian research (Brown et al. 2022; CIE S 026:2018).
 struct CozyModeControl: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     /// Hide the "Maximum warmth" section header (onboarding shows the card bare, under its own title).
     var showsSectionLabel: Bool = true
     /// Hide the when-on science caption (onboarding keeps it compact; the detail lives in Settings).

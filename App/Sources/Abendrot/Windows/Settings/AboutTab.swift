@@ -27,7 +27,7 @@ struct AboutTab: View {
 
             // What makes it different (the marketing angle).
             VStack(alignment: .leading, spacing: 8) {
-                aboutPoint("Private by design", "No account, analytics, or usage telemetry. Your settings and usage statistics stay on your Mac. Update checks and downloads use GitHub.")
+                aboutPoint("Private by design", privacySummary)
                 aboutPoint("Free & open source", "MIT-licensed. Read every line of the engine that touches your screen.")
                 aboutPoint("Built for the newest Macs", "Uses the best warming method each display supports — and says so plainly when macOS only allows a tint, not true warming.")
             }
@@ -47,6 +47,14 @@ struct AboutTab: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private var privacySummary: String {
+        #if APP_STORE
+        "No account, analytics, or usage telemetry. Your settings and usage statistics stay on your Mac. Updates are delivered through the Mac App Store."
+        #else
+        "No account, analytics, or usage telemetry. Your settings and usage statistics stay on your Mac. Update checks and downloads use GitHub."
+        #endif
     }
 
     private func aboutPoint(_ title: String, _ body: String) -> some View {

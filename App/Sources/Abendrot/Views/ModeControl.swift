@@ -92,7 +92,7 @@ struct ModeControl: View {
                 .strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5)
         )
         .animation(selectionAnimation, value: selection)
-        .onChange(of: selection) { _, option in
+        .onChange(of: selection) { option in
             guard !reduceMotion else { return }
             switch option {
             case .followSunset: sunsetGlyphTrigger &+= 1
@@ -118,17 +118,6 @@ struct ModeControl: View {
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(ink)
                     .frame(width: glyphSize, height: glyphSize)
-                    .symbolEffect(
-                        .bounce.down.wholeSymbol,
-                        options: .nonRepeating.speed(1.4),
-                        value: option == .followSunset ? sunsetGlyphTrigger : 0
-                    )
-                    .symbolEffect(
-                        .bounce.up.wholeSymbol,
-                        options: .nonRepeating.speed(1.4),
-                        value: option == .alwaysOn ? manualGlyphTrigger : 0
-                    )
-                    .symbolEffectsRemoved(reduceMotion)
                     .accessibilityHidden(true)
                 Text(option.label)
                     // Keep label metrics stable; the moving pill and ink color carry selection.

@@ -47,7 +47,7 @@ enum OnboardingLayout {
 // daylight and says exactly when it will kick in); the warmth step then forces a "preview of your evening"
 // so the screen blooms regardless of the chosen mode/time — the guaranteed payoff beat.
 struct OnboardingView: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     var onFinish: () -> Void
     var onHeightChange: (CGFloat, Bool) -> Void
 
@@ -58,7 +58,7 @@ struct OnboardingView: View {
         initialScheduleOption: ScheduleModeOption = .followSunset,
         onHeightChange: @escaping (CGFloat, Bool) -> Void = { _, _ in }
     ) {
-        self._model = Bindable(wrappedValue: model)
+        self._model = ObservedObject(wrappedValue: model)
         self.onFinish = onFinish
         self.onHeightChange = onHeightChange
         self._step = State(initialValue: initialStep)
@@ -113,7 +113,7 @@ struct OnboardingView: View {
         .onAppear {
             onHeightChange(targetContentHeight, false)
         }
-        .onChange(of: targetContentHeight) { _, height in
+        .onChange(of: targetContentHeight) { height in
             onHeightChange(height, !reduceMotion)
         }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: step)
@@ -669,19 +669,6 @@ private struct OnboardingStepper: View {
                 .frame(width: pillW, height: pillH)
                 .offset(x: pillOffset)
                 .animation(travel, value: current)   // springy, faintly-overshooting glide
-                // Squash-stretch along the travel axis on each step change, then settle — the liquid delight.
-                .keyframeAnimator(initialValue: Stretch(), trigger: reduceMotion ? 0 : current) { pill, s in
-                    pill.scaleEffect(x: s.x, y: s.y, anchor: .center)
-                } keyframes: { _ in
-                    KeyframeTrack(\.x) {
-                        CubicKeyframe(1.25, duration: 0.20)
-                        SpringKeyframe(1.0, duration: 0.36, spring: .snappy)
-                    }
-                    KeyframeTrack(\.y) {
-                        CubicKeyframe(0.82, duration: 0.20)
-                        SpringKeyframe(1.0, duration: 0.36, spring: .snappy)
-                    }
-                }
         }
         .accessibilityElement()
         .accessibilityLabel("Step \(current) of \(total)")

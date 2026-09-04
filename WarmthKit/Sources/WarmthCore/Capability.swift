@@ -14,6 +14,7 @@ public enum CapabilityReason: String, Sendable, Codable {
     case ok
     case buttonlessAppleDisplay     // exposes no DDC colour VCP → overlay
     case gammaBrokenOnThisOS        // M5 Tahoe silent no-op → overlay
+    case gammaConservativeFallback   // unknown Apple-silicon Tahoe hardware → overlay
     case privateSymbolUnavailable   // dlsym returned null on this OS build → kill-switch path
     case ddcProbeFailed             // VCP 0x16 read failed
     case osDenylisted               // OS build on the private-API denylist

@@ -5,7 +5,7 @@ import WarmthKit
 // MARK: - Advanced
 
 struct AdvancedTab: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: "Advanced", subtitle: "Maximum warmth, the reveal shortcut, and per-app exclusions.")
@@ -93,7 +93,7 @@ struct AdvancedTab: View {
 /// observed `model.excludedApps`; rows resolve a friendly name + icon from the bundle id, and "Add
 /// app…" picks an `.app` via `NSOpenPanel` (the app is not sandboxed, so no entitlement is needed).
 private struct ExcludedAppsControl: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsFocusCue = false
 
@@ -155,7 +155,7 @@ private struct ExcludedAppsControl: View {
             withAnimation(nil) { showsFocusCue = false }
             await Task.yield()
         }
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.18)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
             showsFocusCue = true
         }
         do {
@@ -163,7 +163,7 @@ private struct ExcludedAppsControl: View {
         } catch {
             return
         }
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.42)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.42)) {
             showsFocusCue = false
         }
         do {
@@ -176,8 +176,9 @@ private struct ExcludedAppsControl: View {
         }
     }
 
-    /// Pick an application bundle and add its bundle id to the exclusion set. The panel + `Bundle`
-    /// read work without entitlements because the app is not sandboxed.
+    /// Pick an application bundle and add its bundle id to the exclusion set. In the App Store
+    /// build, the Powerbox grants this one selection read-only access through the user-selected-file
+    /// entitlement; the direct build remains unsandboxed.
     private func addApp() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.application]

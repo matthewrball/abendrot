@@ -175,7 +175,7 @@ struct EngineRecoveryTests {
 
 }
 
-private actor FailingDirtyStore: DDCSnapshotStore {
+private actor FailingDirtyStore: DDCSnapshotStore, WarmthSnapshotStore {
     enum StoreError: Error { case failed }
 
     func snapshot(for key: String) async throws -> DDCDisplaySnapshot? { nil }

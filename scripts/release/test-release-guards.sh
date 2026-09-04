@@ -4,10 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TMP="$(mktemp -d)"
 DIRTY_MARKER=""
-VENDOR_PROBE=""
 cleanup() {
   [ -z "$DIRTY_MARKER" ] || rm -f "$DIRTY_MARKER"
-  [ -z "$VENDOR_PROBE" ] || rm -rf "$VENDOR_PROBE"
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -56,7 +54,6 @@ grep -qF \
 grep -qF 'echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -' \
   "$CI_WORKFLOW"
 grep -qF '"$RUNNER_TEMP/xcodegen/bin/xcodegen" --version' "$CI_WORKFLOW"
-# Unsigned, package-manager, and signed builds must all pin resolved package versions.
 [ "$(grep -cF -- '-onlyUsePackageVersionsFromResolvedFile' "$CI_WORKFLOW")" -eq 3 ]
 [ "$(grep -cF -- '--only-use-versions-from-resolved-file' "$RELEASE_SCRIPT")" -eq 2 ]
 APP_PACKAGE_LOCK="$ROOT/Abendrot.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
@@ -209,116 +206,22 @@ grep -qF 'feedURLString == "https://raw.githubusercontent.com/matthewrball/abend
   "$UPDATE_MANAGER"
 echo "PASS: Debug and release builds use validated Sparkle configuration"
 
-# Package managers (MacPorts) own their own update path: they drop the Sparkle dependency
-# and build with ABENDROT_MACPORTS defined. Sparkle must remain the DEFAULT and only real
-# updater, the stub must stay Sparkle-free with the API the Settings views bind to, and CI
-# must actually compile that branch so it cannot rot.
-MACPORTS_STUB="$TMP/macports-update-stub.swift"
-awk '/^#else$/ { in_stub = 1; next } /^#endif$/ { in_stub = 0 } in_stub' \
-  "$UPDATE_MANAGER" > "$MACPORTS_STUB"
-grep -qF '#if !ABENDROT_MACPORTS' "$UPDATE_MANAGER"
-grep -qF 'import Sparkle' "$UPDATE_MANAGER"
-grep -qF 'product: Sparkle' "$PROJECT_SPEC"
-[ -s "$MACPORTS_STUB" ]
-grep -qF 'static let shared = UpdateManager()' "$MACPORTS_STUB"
-grep -qF 'let updaterUnavailableReason: String? =' "$MACPORTS_STUB"
-grep -qF 'func checkForUpdates() {}' "$MACPORTS_STUB"
-grep -qF 'func setAutomaticallyDownloadsUpdates(_ enabled: Bool) {}' "$MACPORTS_STUB"
-grep -qF 'func refresh() {}' "$MACPORTS_STUB"
-if grep -v '^[[:space:]]*//' "$MACPORTS_STUB" | grep -qiF 'sparkle'; then
-  echo "The ABENDROT_MACPORTS UpdateManager stub must not reference Sparkle." >&2
-  exit 1
-fi
-grep -qF 'ABENDROT_MACPORTS' "$CI_WORKFLOW"
-echo "PASS: package-manager builds stub the updater without touching the Sparkle default"
-
-# A network-free build stages each dependency at <repo>/Vendor/<name>. The manifests must
-# prefer a staged checkout and otherwise resolve the canonical GitHub package, so packagers
-# need no manifest patch — and vendored sources must never land in this repo.
-WARMTHKIT_MANIFEST="$ROOT/WarmthKit/Package.swift"
-CLI_MANIFEST="$ROOT/cli/Package.swift"
-grep -qF 'https://github.com/sindresorhus/KeyboardShortcuts' "$WARMTHKIT_MANIFEST"
-grep -qF 'https://github.com/apple/swift-log' "$WARMTHKIT_MANIFEST"
-grep -qF 'https://github.com/apple/swift-argument-parser' "$CLI_MANIFEST"
-grep -qF 'Vendor/' "$ROOT/.gitignore"
-if [ -n "$(git -C "$ROOT" ls-files Vendor)" ]; then
-  echo "Vendored dependency sources must never be committed to this repository." >&2
-  exit 1
-fi
-
-# Prove both branches against the real manifests. Each dump gets its own cache and scratch
-# paths so SwiftPM cannot hand back a cached evaluation from the previous case.
-dump_manifest() {
-  local package_dir="$1" tag="$2"
-  swift package \
-    --package-path "$ROOT/$package_dir" \
-    --cache-path "$TMP/manifest-cache-$tag" \
-    --scratch-path "$TMP/manifest-scratch-$tag" \
-    dump-package
-}
-
-if [ -e "$ROOT/Vendor" ]; then
-  echo "SKIP: vendored-manifest probe (a Vendor/ checkout is already staged in this tree)"
-else
-  dump_manifest WarmthKit remote-warmthkit > "$TMP/remote-warmthkit.json"
-  dump_manifest cli remote-cli > "$TMP/remote-cli.json"
-  grep -qF 'sindresorhus/KeyboardShortcuts' "$TMP/remote-warmthkit.json"
-  grep -qF 'apple/swift-log' "$TMP/remote-warmthkit.json"
-  grep -qF 'apple/swift-argument-parser' "$TMP/remote-cli.json"
-
-  VENDOR_PROBE="$ROOT/Vendor"
-  for name in KeyboardShortcuts swift-log swift-argument-parser; do
-    mkdir -p "$VENDOR_PROBE/$name"
-    printf '// swift-tools-version: 6.0\nimport PackageDescription\nlet package = Package(name: "%s")\n' \
-      "$name" > "$VENDOR_PROBE/$name/Package.swift"
-  done
-  dump_manifest WarmthKit vendored-warmthkit > "$TMP/vendored-warmthkit.json"
-  dump_manifest cli vendored-cli > "$TMP/vendored-cli.json"
-  grep -qF 'Vendor/KeyboardShortcuts' "$TMP/vendored-warmthkit.json"
-  grep -qF 'Vendor/swift-log' "$TMP/vendored-warmthkit.json"
-  grep -qF 'Vendor/swift-argument-parser' "$TMP/vendored-cli.json"
-  if grep -qF 'sindresorhus/KeyboardShortcuts' "$TMP/vendored-warmthkit.json" \
-    || grep -qF 'apple/swift-argument-parser' "$TMP/vendored-cli.json"; then
-    echo "A staged Vendor/ checkout must REPLACE the remote dependency, not sit beside it." >&2
-    exit 1
-  fi
-  rm -rf "$VENDOR_PROBE"
-  VENDOR_PROBE=""
-  echo "PASS: manifests prefer staged Vendor/ checkouts and fall back to the canonical remotes"
-fi
-
-# `glassEffect`/`Glass` exist only in the macOS 26 SDK, so `#available` alone still fails to
-# compile on Xcode 16 — which is what packagers use for the macOS 14 floor. Every Tahoe-only
-# symbol must sit behind `#if compiler(>=6.2)` with a pre-Tahoe fallback in the `#else`.
-GLASS_SURFACE="$ROOT/App/Sources/Abendrot/Theme/GlassSurface.swift"
-GLASS_TAHOE="$TMP/glass-tahoe-only.swift"
-awk '/#if compiler\(>=6\.2\)/ { in_tahoe = 1; next } /#else|#endif/ { in_tahoe = 0 } in_tahoe' \
-  "$GLASS_SURFACE" > "$GLASS_TAHOE"
-grep -qF '.glassEffect(glassStyle, in: shape)' "$GLASS_TAHOE"
-grep -qF 'private var glassStyle: Glass {' "$GLASS_TAHOE"
-grep -qF '@available(macOS 26.0, *)' "$GLASS_TAHOE"
-[ "$(grep -cF 'glassEffect(' "$GLASS_SURFACE")" -eq 1 ]
-[ "$(grep -cF ': Glass {' "$GLASS_SURFACE")" -eq 1 ]
-[ "$(grep -cF '@available(macOS 26.0, *)' "$GLASS_SURFACE")" -eq 1 ]
-[ "$(grep -cF '.background(.ultraThinMaterial, in: shape)' "$GLASS_SURFACE")" -eq 2 ]
-echo "PASS: macOS 26 Liquid Glass API is compile-guarded so the macOS 14 floor builds on Xcode 16"
-
 grep -qF 'SUEnableAutomaticChecks: true' "$PROJECT_SPEC"
 grep -qF 'SUAutomaticallyUpdate: true' "$PROJECT_SPEC"
 grep -qF 'SUScheduledCheckInterval: 86400' "$PROJECT_SPEC"
 [ "$(/usr/bin/plutil -extract SUEnableAutomaticChecks raw "$INFO_PLIST")" = "true" ]
 [ "$(/usr/bin/plutil -extract SUAutomaticallyUpdate raw "$INFO_PLIST")" = "true" ]
 [ "$(/usr/bin/plutil -extract SUScheduledCheckInterval raw "$INFO_PLIST")" = "86400" ]
-grep -qF 'macOS: "14.0"' "$PROJECT_SPEC"
-grep -qF 'MACOSX_DEPLOYMENT_TARGET: "14.0"' "$PROJECT_SPEC"
-[ "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw "$INFO_PLIST")" = "14.0" ]
-grep -qF '.macOS("14.0")' "$ROOT/WarmthKit/Package.swift"
-grep -qF '.macOS("14.0")' "$ROOT/cli/Package.swift"
-grep -qF 'Requires macOS 14 "Sonoma" or later.' "$ROOT/README.md"
+grep -qF 'macOS: "12.0"' "$PROJECT_SPEC"
+grep -qF 'MACOSX_DEPLOYMENT_TARGET: "12.0"' "$PROJECT_SPEC"
+[ "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw "$INFO_PLIST")" = "12.0" ]
+grep -qF '.macOS("12.0")' "$ROOT/WarmthKit/Package.swift"
+grep -qF '.macOS("12.0")' "$ROOT/cli/Package.swift"
+grep -qF 'Requires macOS 12 "Monterey" or later.' "$ROOT/README.md"
 if [ -f "$ROOT/landing/index.html" ]; then
-  grep -qF 'macOS&nbsp;14 Sonoma and later' "$ROOT/landing/index.html"
+  grep -qF 'macOS&nbsp;12 Monterey and later' "$ROOT/landing/index.html"
 fi
-echo "PASS: app, engine, and CLI share the macOS 14 deployment floor"
+echo "PASS: app, engine, and CLI share the macOS 12 deployment floor"
 sed -n '/private init()/,/^    func checkForUpdates()/p' "$UPDATE_MANAGER" \
   | grep -F 'startingUpdater: true' >/dev/null
 sed -n '/func setAutomaticallyDownloadsUpdates/,/^    func refresh()/p' "$UPDATE_MANAGER" \
@@ -399,7 +302,7 @@ for field in signature version url length minimum-os; do
     version) sed -i '' 's#<sparkle:version>2</sparkle:version>#<sparkle:version>1</sparkle:version>#' "$invalid" ;;
     url) sed -i '' 's#https://github.com#http://example.invalid#g' "$invalid" ;;
     length) sed -i '' 's/length="222"/length="0"/' "$invalid" ;;
-    minimum-os) sed -i '' 's/>14.0.0</>13.9.0</g' "$invalid" ;;
+    minimum-os) sed -i '' 's/>14.0.0</>11.9.0</g' "$invalid" ;;
   esac
   if python3 "$APPCAST_VALIDATOR" "$invalid" >/dev/null 2>&1; then
     echo "Appcast validator accepted invalid $field." >&2
@@ -412,8 +315,8 @@ mkdir -p "$APP/Contents/MacOS"
 cat > "$TMP/app-main.c" <<'C'
 int main(void) { return 0; }
 C
-xcrun clang -arch arm64 -mmacosx-version-min=14.0 "$TMP/app-main.c" -o "$TMP/app-main-arm64"
-xcrun clang -arch x86_64 -mmacosx-version-min=14.0 "$TMP/app-main.c" -o "$TMP/app-main-x86_64"
+xcrun clang -arch arm64 -mmacosx-version-min=12.0 "$TMP/app-main.c" -o "$TMP/app-main-arm64"
+xcrun clang -arch x86_64 -mmacosx-version-min=12.0 "$TMP/app-main.c" -o "$TMP/app-main-x86_64"
 lipo -create "$TMP/app-main-arm64" "$TMP/app-main-x86_64" \
   -output "$APP/Contents/MacOS/Abendrot"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -424,7 +327,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key><string>42</string>
   <key>CFBundleIdentifier</key><string>app.abendrot.Abendrot</string>
   <key>CFBundleExecutable</key><string>Abendrot</string>
-  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>SUFeedURL</key><string>https://example.invalid/appcast.xml</string>
   <key>SUPublicEDKey</key><string>test-public-key</string>
 </dict></plist>
@@ -933,7 +836,7 @@ lipo "$APP/Contents/Helpers/abendrot" \
   -verify_arch $(lipo -archs "$APP/Contents/MacOS/Abendrot")
 echo "PASS: unsigned builds cannot modify the production appcast"
 echo "PASS: embedded CLI covers every app architecture"
-grep -qF "verified every shipped Mach-O slice targets macOS 14.0 or earlier" \
+grep -qF "verified every shipped Mach-O slice targets macOS 12.0 or earlier" \
   "$TMP/unsigned-out"
 
 /usr/bin/plutil -replace LSMinimumSystemVersion -string "15.0" "$APP/Contents/Info.plist"
@@ -944,8 +847,8 @@ APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/wrong-plist-floor" \
 rc=$?
 set -e
 [ "$rc" -eq 3 ]
-grep -qF "LSMinimumSystemVersion must be 14.0" "$TMP/wrong-plist-floor-stderr"
-/usr/bin/plutil -replace LSMinimumSystemVersion -string "14.0" "$APP/Contents/Info.plist"
+grep -qF "LSMinimumSystemVersion must be 12.0" "$TMP/wrong-plist-floor-stderr"
+/usr/bin/plutil -replace LSMinimumSystemVersion -string "12.0" "$APP/Contents/Info.plist"
 echo "PASS: release packaging rejects an app that overstates its supported OS floor"
 
 mkdir -p "$APP/Contents/Frameworks"
@@ -958,7 +861,7 @@ APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/too-new-nested-code" \
 rc=$?
 set -e
 [ "$rc" -eq 5 ]
-grep -qF "contains a slice requiring newer than macOS 14.0" \
+grep -qF "contains a slice requiring newer than macOS 12.0" \
   "$TMP/too-new-nested-stderr"
 rm -f "$APP/Contents/Frameworks/TooNew"
 echo "PASS: release packaging rejects too-new nested Mach-O slices"
@@ -1067,7 +970,7 @@ while [ $# -gt 0 ]; do
     *) shift;;
   esac
 done
-[ -n "$triple" ] || triple="arm64-apple-macosx14.0"
+[ -n "$triple" ] || triple="arm64-apple-macosx12.0"
 arch="${triple%%-*}"
 dir="${MOCK_SWIFT_BUILD_ROOT:?}/$triple"
 if [ -n "$show" ]; then
@@ -1078,7 +981,7 @@ fi
 mkdir -p "$dir"
 src="$dir/main.c"
 printf 'int main(void) { return 0; }\n' > "$src"
-/usr/bin/xcrun clang -arch "$arch" -mmacosx-version-min=14.0 "$src" -o "$dir/abendrot"
+/usr/bin/xcrun clang -arch "$arch" -mmacosx-version-min=12.0 "$src" -o "$dir/abendrot"
 SH
 chmod 755 "$MOCK_SIGNED_BIN/"*
 

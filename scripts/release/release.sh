@@ -59,7 +59,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_DISPLAY_NAME="Abendrot"
 GH_REPO="matthewrball/abendrot"
 EXPECTED_BUNDLE_ID="app.abendrot.Abendrot"
-EXPECTED_MINIMUM_SYSTEM_VERSION="14.0"
+EXPECTED_MINIMUM_SYSTEM_VERSION="12.0"
 APPCAST_PATH="${APPCAST_PATH:-$REPO_ROOT/appcast.xml}"  # hosted via GitHub (raw)
 RELEASE_SCRATCH="${RELEASE_SCRATCH:-$REPO_ROOT/release-scratch}"
 DOWNLOAD_URL_BASE="https://github.com/${GH_REPO}/releases/download"
@@ -351,7 +351,7 @@ embed_cli_helper() {
       arm64|x86_64) ;;
       *) echo "release: ABORT — unsupported app architecture '$arch'." >&2; exit 5;;
     esac
-    triple="${arch}-apple-macosx14.0"
+    triple="${arch}-apple-macosx12.0"
     bin_dir="$(swift build -c release --package-path "$CLI_PKG" \
       --only-use-versions-from-resolved-file \
       --scratch-path "$cli_build_root" --triple "$triple" --show-bin-path)" || {
@@ -429,7 +429,7 @@ embed_cli_helper() {
 embed_cli_helper "$APP"
 
 # Every executable slice inside the shipped bundle must honor the public macOS
-# 14 floor. Info.plist alone is not enough: one too-new nested helper/framework
+# 12 floor. Info.plist alone is not enough: one too-new nested helper/framework
 # makes the app fail at runtime on a supported system.
 verify_macho_deployment_floor() {
   local candidate build_info relative
@@ -703,7 +703,7 @@ if [ "$PUBLISH_APPCAST" = "true" ]; then
       <pubDate>${PUBDATE}</pubDate>
       <sparkle:version>${BUILD}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>12.0.0</sparkle:minimumSystemVersion>
       ${ENCLOSURE}
     </item>
 EOF

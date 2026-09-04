@@ -82,8 +82,8 @@ def validate(path: Path) -> int:
         minimum_os = one_text(item, f"{NS}minimumSystemVersion", "sparkle:minimumSystemVersion")
         if MINIMUM_OS_RE.fullmatch(minimum_os) is None:
             fail("every sparkle:minimumSystemVersion must use major.minor.patch.")
-        if tuple(map(int, minimum_os.split("."))) < (14, 0, 0):
-            fail("every sparkle:minimumSystemVersion must be at least 14.0.0.")
+        if tuple(map(int, minimum_os.split("."))) < (12, 0, 0):
+            fail("every sparkle:minimumSystemVersion must be at least 12.0.0.")
 
         enclosures = item.findall("enclosure")
         if len(enclosures) != 1:

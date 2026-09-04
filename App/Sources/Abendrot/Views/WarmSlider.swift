@@ -81,7 +81,6 @@ struct WarmSlider: View {
                     Text(cozy ? "Warmest" : "Warmer")
                         .font(Theme.Typography.ui(11.5, weight: cozy ? .semibold : .regular))
                         .foregroundStyle(cozy ? Theme.Color.accentText : Theme.Color.textMuted)
-                        .contentTransition(.opacity)
                         .frame(width: 58, alignment: .leading)
                         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: cozy)
                 }
@@ -98,7 +97,7 @@ struct WarmSlider: View {
         .animation(.spring(response: 0.30, dampingFraction: 0.82), value: showKelvinInfo)
         // Surface the press/drag state so callers can gate animations (onboarding silences the
         // blue-light % roll during a live drag, but lets it animate on discrete changes).
-        .onChange(of: isPressing) { _, pressing in onPressingChanged(pressing) }
+        .onChange(of: isPressing) { pressing in onPressingChanged(pressing) }
     }
 
     // MARK: Warmth ticker (big "gas-price" Kelvin readout + info tooltip, above the slider)
@@ -116,7 +115,6 @@ struct WarmSlider: View {
                     Text(displayKelvin.displayValue.formatted(.number))
                         .font(Theme.Typography.serif(42))
                         .monospacedDigit()
-                        .contentTransition(isPressing ? .identity : .numericText(value: Double(displayKelvin.displayValue)))
                     Text("K")
                         .font(Theme.Typography.serif(23))
                         .foregroundStyle(Theme.Color.accentText)
@@ -208,20 +206,12 @@ struct WarmSlider: View {
                     .animation(.spring(response: 0.2, dampingFraction: 0.86), value: isPressing)
                     // Visual "click": a quick scale pop on each detent (multiplies with the press scale
                     // above). Re-fires when `popTrigger` bumps; settles back to 1.0 between clicks.
-                    .keyframeAnimator(initialValue: 1.0, trigger: popTrigger) { view, scale in
-                        view.scaleEffect(scale)
-                    } keyframes: { _ in
-                        KeyframeTrack {
-                            CubicKeyframe(1.12, duration: 0.05)
-                            CubicKeyframe(1.0, duration: 0.13)
-                        }
-                    }
                     .offset(x: thumbX)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             // Thumb + fill glide to a tapped position; during an actual drag the per-update transaction
             // (below) disables this so the thumb tracks the finger 1:1 — no lag, no jitter.
-            .animation(reduceMotion ? nil : .smooth(duration: 0.16), value: displayStrength)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: displayStrength)
             .contentShape(Rectangle())
             // Visual "dial" feedback: a thumb pop each time the thumb crosses a notch. Driven here (not
             // via onChange) so a 1:1 drag and a glide-on-tap are told apart. (Slider click sounds removed.)
@@ -284,7 +274,7 @@ struct WarmSlider: View {
         guard interactionStrength != nil else { return }
         interactionReleaseTask?.cancel()
         interactionReleaseTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(180))
+            try? await Task.sleep(nanoseconds: 180_000_000)
             guard !Task.isCancelled else { return }
             interactionStrength = nil
             interactionReleaseTask = nil

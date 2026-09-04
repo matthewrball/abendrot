@@ -26,7 +26,7 @@ public final class HotkeyService {
     public var mode: RevealMode = .hold
 
     /// Watchdog: if a key-up is lost, auto-resume warmth after this interval. Default 8s.
-    public var watchdogTimeout: Duration = .seconds(8)
+    public var watchdogTimeout: TimeInterval = 8
 
     private var watchdogTask: Task<Void, Never>?
     private var isRevealActive = false
@@ -93,7 +93,7 @@ public final class HotkeyService {
         watchdogTask?.cancel()
         let timeout = watchdogTimeout
         watchdogTask = Task { [weak self] in
-            try? await Task.sleep(for: timeout)
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             guard !Task.isCancelled else { return }
             self?.endReveal()
         }

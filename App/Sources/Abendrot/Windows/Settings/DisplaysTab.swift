@@ -4,7 +4,7 @@ import WarmthKit
 // MARK: - Displays
 
 struct DisplaysTab: View {
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             TabHeader(title: model.state.displays.count == 1 ? "Display" : "Displays", subtitle: "Each connected display and its warming settings.")
@@ -49,7 +49,7 @@ struct DisplaysTab: View {
 /// here and nowhere else.
 private struct DisplayConfigRow: View {
     let display: DisplayState
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -104,7 +104,7 @@ private struct DisplayConfigRow: View {
 /// AND warming method; the popover stays the quick, override-only version.
 private struct PerDisplayWarmthControl: View {
     let display: DisplayState
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -154,7 +154,7 @@ private struct PerDisplayWarmthControl: View {
 /// communicate what the hardware/OS supports.
 private struct WarmingMethodPicker: View {
     let display: DisplayState
-    @Bindable var model: AppModel
+    @ObservedObject var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

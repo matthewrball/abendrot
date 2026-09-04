@@ -41,11 +41,11 @@ package protocol DDCBusProvider: Sendable {
 /// the transport's verify/retry state machine is unit-testable headlessly without real waits.
 public struct DDCTiming: Sendable {
     /// Settle before each write.
-    public var writeSleep: Duration
+    public var writeSleep: TimeInterval
     /// Settle after a get-request write, before reading the reply (DDC/CI mandates ≥40ms).
-    public var readSleep: Duration
+    public var readSleep: TimeInterval
     /// Backoff between attempts.
-    public var retrySleep: Duration
+    public var retrySleep: TimeInterval
     /// Write cycles per attempt (fire-and-forget double-send to beat dropped packets).
     public var writeCycles: Int
     /// Max attempts (e.g. 4 retries + 1) for read/verify operations.
@@ -54,9 +54,9 @@ public struct DDCTiming: Sendable {
     public var verifyTolerance: Int
 
     public init(
-        writeSleep: Duration = .milliseconds(10),
-        readSleep: Duration = .milliseconds(50),
-        retrySleep: Duration = .milliseconds(20),
+        writeSleep: TimeInterval = 0.01,
+        readSleep: TimeInterval = 0.05,
+        retrySleep: TimeInterval = 0.02,
         writeCycles: Int = 2,
         maxAttempts: Int = 5,
         verifyTolerance: Int = 2
