@@ -147,6 +147,18 @@ jobs:
           }
           swift test --parallel
 
+  # Keep the exact required status context used by protected main. The matrix
+  # job above remains the real test gate; this job only aggregates its result.
+  test-warmthcore-required:
+    name: test-warmthcore
+    if: always()
+    needs: [test-warmthcore]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require headless test matrix
+        if: needs.test-warmthcore.result != 'success'
+        run: exit 1
+
   shell-release-guards:
     runs-on: macos-26
     steps:
