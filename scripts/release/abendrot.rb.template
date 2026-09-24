@@ -18,8 +18,7 @@ cask "abendrot" do
   version "1.0.0"                       # PLACEHOLDER — sync to the GitHub release tag (vX.Y.Z)
   sha256 :no_check                      # PLACEHOLDER — set real DMG SHA256 before publishing
 
-  url "https://github.com/matthewrball/abendrot/releases/download/v#{version}/Abendrot-#{version}.dmg",
-      verified: "github.com/matthewrball/abendrot/"
+  url "https://github.com/matthewrball/abendrot/releases/download/v#{version}/Abendrot-#{version}.dmg"
   name "Abendrot"
   desc "Free, open-source per-display screen-warmth app"
   homepage "https://abendrot.app/"
@@ -34,7 +33,7 @@ cask "abendrot" do
   auto_updates true
 
   # macOS 12 "Monterey" deployment-target floor.
-  depends_on macos: :sonoma
+  depends_on macos: :monterey
 
   app "Abendrot.app"
 

@@ -79,9 +79,9 @@ codesign -d --entitlements :- "$APP" >"$ENTITLEMENTS_ACTUAL" 2>/dev/null \
     || fail "built app has the wrong bundle identifier"
 [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw -o - "$APP_INFO")" == "false" ]] \
     || fail "built app does not declare its export-compliance status"
-[[ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP_INFO")" == "1.1.1" ]] \
+[[ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP_INFO")" == "1.1.2" ]] \
     || fail "built app has the wrong marketing version"
-[[ "$(plutil -extract CFBundleVersion raw -o - "$APP_INFO")" == "14" ]] \
+[[ "$(plutil -extract CFBundleVersion raw -o - "$APP_INFO")" == "15" ]] \
     || fail "built app has the wrong build number"
 [[ "$(plutil -extract LSMinimumSystemVersion raw -o - "$APP_INFO")" == "12.0" ]] \
     || fail "built app has the wrong minimum macOS version"

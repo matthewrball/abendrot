@@ -6,7 +6,7 @@ import WarmthKit
 // MARK: - AbendrotApp
 //
 // The app entry. An `LSUIElement` agent app (set in Info.plist via project.yml): no
-// Dock icon, no Cmd-Tab. The whole UI hangs off a `MenuBarExtra` with the provisional
+// Dock icon, no Cmd-Tab. The whole UI hangs off an AppKit status item with the
 // sunset-arc template glyph. Settings open as a programmatic glass window
 // (`SettingsWindowController`), NOT a SwiftUI `Window` scene (see that file's note).
 //
@@ -14,15 +14,13 @@ import WarmthKit
 // neutral-resets every display on quit.
 @main
 struct AbendrotApp: App {
-    @StateObject private var model = AppModel()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    private var model: AppModel { appDelegate.model }
 
     init() {
         #if !APP_STORE
         _ = UpdateManager.shared
         #endif
-        // Hand the model to the delegate so the app-quit hook can neutral-reset displays.
-        appDelegate.bind(model: model)
     }
 
     var body: some Scene {
@@ -84,18 +82,12 @@ private struct SettingsHostWindowDismisser: NSViewRepresentable {
 /// launch, neutral-reset on quit, and the menu-bar-only activation policy.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private weak var model: AppModel?
+    // The delegate owns the model for the full app lifetime. Reading a StateObject
+    // in App.init creates a temporary instance before SwiftUI installs its storage.
+    let model = AppModel()
     private var legacyStatusItem: NSStatusItem?
     private var legacyPopover: NSPopover?
     private var modelChanges: AnyCancellable?
-
-    @MainActor
-    func bind(model: AppModel) {
-        self.model = model
-        modelChanges = model.objectWillChange.sink { [weak self] _ in
-            DispatchQueue.main.async { self?.syncLegacyMenuBar() }
-        }
-    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
@@ -105,14 +97,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         // Start as a menu-bar-only agent; windows raise it via AppActivationPolicy.
         NSApp.setActivationPolicy(.accessory)
+        modelChanges = model.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.syncLegacyMenuBar() }
+        }
         installLegacyMenuBar()
         Task { @MainActor in
-            model?.start()
+            model.start()
         }
     }
 
     private func installLegacyMenuBar() {
-        guard let model else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template()
         item.button?.target = self
@@ -138,7 +132,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func syncLegacyMenuBar() {
-        guard let model else { return }
         legacyStatusItem?.isVisible = model.showInMenuBar
         legacyStatusItem?.button?.image = model.isWarmingActive ? MenuBarGlyph.active() : MenuBarGlyph.template()
     }
@@ -148,7 +141,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hasVisibleWindows: Bool
     ) -> Bool {
         if hasVisibleWindows { return true }
-        guard let model else { return false }
         if UserDefaults.standard.object(forKey: AppModel.hasCompletedOnboardingKey) == nil {
             OnboardingWindowController.show(model: model)
         } else {
@@ -164,7 +156,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Instead defer termination with .terminateLater, run the async shutdown, then
         // tell AppKit it's safe to exit. The displays are neutral-reset before the
         // process exits, without blocking the main thread.
-        guard let model else { return .terminateNow }
         Task { @MainActor in
             await model.shutdown()
             NSApp.reply(toApplicationShouldTerminate: true)
