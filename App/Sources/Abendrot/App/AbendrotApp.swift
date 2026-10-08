@@ -187,6 +187,16 @@ enum ScreenshotHarness {
         shot("popover", width: 330, colorScheme: colorScheme, into: out) {
             PopoverView(model: AppModel(previewState: MockWarmthState.warming))
         }
+        for cozy in [false, true] {
+            var state = MockWarmthState.warming
+            state.scheduleMode = .alwaysOn
+            state.warmestPoint = cozy ? .warmestSupported : .everydayWarmest
+            state.globalWarmth = WarmthLevel(strength: 0.6)
+            shot(cozy ? "popover-manual-cozy" : "popover-manual", width: 330,
+                 colorScheme: colorScheme, into: out) {
+                PopoverView(model: AppModel(previewState: state))
+            }
+        }
         for tab in SettingsTab.allCases {
             let model = AppModel(previewState: MockWarmthState.warming)
             model.settingsTab = tab

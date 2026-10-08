@@ -124,11 +124,22 @@ enum Control {
     }
 
     static func configuredWarmthStrength() -> Double? {
-        if configuredScheduleMode() == .alwaysOn {
-            return configuredDouble(PreferenceKey.manualWarmthStrength)
+        let key = warmthPreferenceKey(
+            mode: configuredScheduleMode(),
+            cozy: ControlStateSnapshot.isCozy(warmestPointKelvin: configuredWarmestPoint().value))
+        if key == PreferenceKey.manualCozyWarmthStrength {
+            return (try? ControlValidation.validatedStrength(configuredDouble(key) ?? 1)) ?? 1
+        }
+        if key == PreferenceKey.manualWarmthStrength {
+            return configuredDouble(key)
                 ?? configuredDouble(PreferenceKey.globalWarmthStrength)
         }
-        return configuredDouble(PreferenceKey.globalWarmthStrength)
+        return configuredDouble(key)
+    }
+
+    static func warmthPreferenceKey(mode: ControlScheduleMode, cozy: Bool) -> String {
+        guard mode == .alwaysOn else { return PreferenceKey.globalWarmthStrength }
+        return cozy ? PreferenceKey.manualCozyWarmthStrength : PreferenceKey.manualWarmthStrength
     }
 
     /// The persisted exclusion set (sorted), empty when unset.
@@ -153,7 +164,9 @@ enum Control {
         }
         if let v = patch.globalWarmthStrength {
             let mode = patch.scheduleMode ?? configuredScheduleMode()
-            let key = mode == .alwaysOn ? PreferenceKey.manualWarmthStrength : PreferenceKey.globalWarmthStrength
+            // Match AppModel: apply mode and strength before any ceiling/Cozy change.
+            let cozy = ControlStateSnapshot.isCozy(warmestPointKelvin: configuredWarmestPoint().value)
+            let key = warmthPreferenceKey(mode: mode, cozy: cozy)
             setPreference(key, v as CFNumber)
         }
         if let v = patch.warmestPointKelvin {

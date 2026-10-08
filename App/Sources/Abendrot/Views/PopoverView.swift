@@ -62,9 +62,9 @@ struct PopoverView: View {
                     }
                     modeSection
                         .padding(.top, 16)
-                    if locked && model.isWarmingActive {
-                        // Let users choose Cozy while Sunset is actively warming; keep the automatic
-                        // schedule's daytime-neutral surface compact.
+                    if !locked || model.isWarmingActive {
+                        // Manual always offers Cozy, including at zero warmth; Sunset offers it
+                        // while actively warming.
                         CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
                             .padding(.top, 16)
                             .transition(.opacity)

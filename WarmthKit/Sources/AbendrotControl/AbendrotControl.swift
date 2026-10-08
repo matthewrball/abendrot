@@ -56,6 +56,7 @@ public enum PreferenceKey {
     public static let isEnabled = "isEnabled"
     public static let globalWarmthStrength = "globalWarmthStrength"
     public static let manualWarmthStrength = "manualWarmthStrength"
+    public static let manualCozyWarmthStrength = "manualCozyWarmthStrength"
     public static let warmestPointKelvin = "warmestPointKelvin"
     public static let scheduleMode = "scheduleMode"
     public static let revealMode = "revealMode"

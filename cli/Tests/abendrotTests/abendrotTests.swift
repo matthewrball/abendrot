@@ -116,6 +116,19 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(off.cozy, false)
     }
 
+    func testWarmthPreferenceKeepsManualCozySeparateFromNormalModes() {
+        XCTAssertEqual(Control.warmthPreferenceKey(mode: .alwaysOn, cozy: true),
+                       PreferenceKey.manualCozyWarmthStrength)
+        XCTAssertEqual(Control.warmthPreferenceKey(mode: .alwaysOn, cozy: false),
+                       PreferenceKey.manualWarmthStrength)
+        for mode in [ControlScheduleMode.sunset, .off] {
+            for cozy in [false, true] {
+                XCTAssertEqual(Control.warmthPreferenceKey(mode: mode, cozy: cozy),
+                               PreferenceKey.globalWarmthStrength)
+            }
+        }
+    }
+
     // MARK: set location argument shape
 
     func testSetLocationRejectsAutoWithCoordinates() throws {

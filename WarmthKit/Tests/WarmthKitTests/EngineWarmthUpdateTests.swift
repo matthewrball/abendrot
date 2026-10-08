@@ -26,6 +26,12 @@ struct EngineWarmthUpdateTests {
         #expect(await backend.callLog.filter { $0 == "apply" }.count == before + 1)
         #expect(await backend.applied[display] == .warmestSupported)
 
+        let adjusted = WarmthLevel(strength: 0.6)
+        await engine.setWarmth(adjusted)
+        #expect(await engine.state.globalWarmth == adjusted)
+        #expect(await engine.state.warmestPoint == .warmestSupported)
+        #expect(await backend.applied[display] == adjusted.kelvin(warmestPoint: .warmestSupported))
+
         before = await backend.callLog.filter { $0 == "apply" }.count
         await engine.setWarmth(configured, warmestPoint: .everydayWarmest)
         #expect(await backend.callLog.filter { $0 == "apply" }.count == before + 1)

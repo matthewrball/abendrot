@@ -62,6 +62,7 @@ final class AppModel: ObservableObject {
 
     private var sunsetMaximumWarmth = WarmthLevel(strength: 0.7)
     private var manualWarmth = WarmthLevel(strength: 1.0)
+    private var manualCozyWarmth = WarmthLevel(strength: 1.0)
     private var pendingEnabled: Bool?
     private var pendingScheduleMode: ScheduleModeOption?
     private var persistedDisplaySettings: [String: DisplaySettingsPreference] = [:]
@@ -413,6 +414,9 @@ final class AppModel: ObservableObject {
         } else if let strength = savedSunsetStrength {
             manualWarmth = WarmthLevel(strength: strength)
         }
+        let cozyStrength = cfPrefDouble(PreferenceKey.manualCozyWarmthStrength)
+            .flatMap { try? ControlValidation.validatedStrength($0) } ?? 1
+        manualCozyWarmth = WarmthLevel(strength: cozyStrength)
         if let restoredMode {
             setScheduleMode(restoredMode, userInitiated: false)   // restore must not tick
         } else {
@@ -766,8 +770,14 @@ final class AppModel: ObservableObject {
     func setGlobalWarmth(_ strength: Double) {
         let level = WarmthLevel(strength: strength)
         if ScheduleModeOption(state.scheduleMode) == .alwaysOn {
-            manualWarmth = level
-            UserDefaults.standard.set(level.strength, forKey: Self.manualWarmthStrengthKey)
+            if state.warmestPoint.value < Kelvin.everydayWarmest.value {
+                // Cozy adjustments must not overwrite the normal Manual warmth restored on exit.
+                manualCozyWarmth = level
+                UserDefaults.standard.set(level.strength, forKey: PreferenceKey.manualCozyWarmthStrength)
+            } else {
+                manualWarmth = level
+                UserDefaults.standard.set(level.strength, forKey: Self.manualWarmthStrengthKey)
+            }
         } else {
             sunsetMaximumWarmth = level
             UserDefaults.standard.set(level.strength, forKey: Self.globalWarmthStrengthKey)
@@ -789,9 +799,10 @@ final class AppModel: ObservableObject {
     }
 
     private func activeWarmth(for mode: ScheduleMode) -> WarmthLevel {
-        state.warmestPoint.value < Kelvin.everydayWarmest.value
-            ? WarmthLevel(strength: 1)
-            : configuredWarmth(for: mode)
+        guard state.warmestPoint.value < Kelvin.everydayWarmest.value else {
+            return configuredWarmth(for: mode)
+        }
+        return ScheduleModeOption(mode) == .alwaysOn ? manualCozyWarmth : WarmthLevel(strength: 1)
     }
 
     private func applyActiveWarmth() {
@@ -866,16 +877,20 @@ final class AppModel: ObservableObject {
     /// Cozy mode — the master "expanded warmth" toggle, in ONE place so the Settings card, onboarding,
     /// and the `abendrot cozy on|off` CLI all share this exact path (UI and CLI can never disagree).
     ///
-    /// Cozy is a temporary full-strength override. ON applies the deepest supported warmth without
-    /// changing the saved Sunset maximum or Manual warmth. OFF restores the active mode's saved warmth
+    /// Cozy starts at full strength, with an adjustable Manual level kept separate from normal warmth.
+    /// ON leaves the saved Sunset maximum and Manual warmth intact. OFF restores the active mode's saved warmth
     /// at the everyday 1900K ceiling. Warmth + ceiling move atomically so the display never sees an
     /// intermediate curve.
     func setCozy(_ on: Bool, userInitiated: Bool = true) {
         let changed = on != (state.warmestPoint.value < Kelvin.everydayWarmest.value)
-        let level = on ? WarmthLevel(strength: 1) : configuredWarmth(for: state.scheduleMode)
+        if on && changed {
+            manualCozyWarmth = WarmthLevel(strength: 1)
+            UserDefaults.standard.set(1.0, forKey: PreferenceKey.manualCozyWarmthStrength)
+        }
         let warmestPoint = on ? Kelvin.warmestSupported : Kelvin.everydayWarmest
-        state.globalWarmth = level
         state.warmestPoint = warmestPoint
+        let level = activeWarmth(for: state.scheduleMode)
+        state.globalWarmth = level
         stampWarmthWrite()
         UserDefaults.standard.set(warmestPoint.value, forKey: Self.warmestPointKey)
         Task { await engine?.setWarmth(level, warmestPoint: warmestPoint) }
