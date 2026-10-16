@@ -131,7 +131,7 @@ let package = Package(
         .target(
             name: "WarmthKitPrivate",
             dependencies: [
-                "WarmthKit", "HardwareDDC", "NightShiftBridge",
+                "WarmthKit", "WarmthCore", "DisplayServices", "HardwareDDC", "NightShiftBridge", "CInterop",
             ]
         ),
 
@@ -155,7 +155,7 @@ let package = Package(
         // exercised through the engine's injectable test seams.
         .testTarget(
             name: "WarmthKitTests",
-            dependencies: ["WarmthKit", "HardwareDDC", "OverlayRenderer", "WarmthCore"]
+            dependencies: ["WarmthKit", "WarmthKitPrivate", "HardwareDDC", "OverlayRenderer", "WarmthCore"]
         ),
     ],
     swiftLanguageModes: [.v6]

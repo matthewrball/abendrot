@@ -29,7 +29,7 @@ struct AboutTab: View {
             VStack(alignment: .leading, spacing: 8) {
                 aboutPoint("Private by design", privacySummary)
                 aboutPoint("Free & open source", "MIT-licensed. Read every line of the engine that touches your screen.")
-                aboutPoint("Built for the newest Macs", "Uses the best warming method each display supports — and says so plainly when macOS only allows a tint, not true warming.")
+                aboutPoint("Built for the newest Macs", "Uses the best warming method available to Abendrot for each display, with Screen tint as a fallback.")
             }
 
             DividerLine()

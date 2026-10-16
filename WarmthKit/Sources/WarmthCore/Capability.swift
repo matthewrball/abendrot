@@ -28,6 +28,7 @@ public struct DisplayCapabilities: Sendable {
     public let identity: DisplayIdentity
     public let hardware: Capability<DDCColorCaps>    // DDC gain support
     public let gamma: Capability<Void>               // classified, NOT measured
+    public let colorFilter: Capability<Void>
     public let overlay: Capability<Void>             // ~always .supported
     /// Best layer the engine will use by default given current opt-ins.
     public var recommendedMethod: DisplayMethod
@@ -37,11 +38,13 @@ public struct DisplayCapabilities: Sendable {
         hardware: Capability<DDCColorCaps>,
         gamma: Capability<Void>,
         overlay: Capability<Void>,
-        recommendedMethod: DisplayMethod
+        recommendedMethod: DisplayMethod,
+        colorFilter: Capability<Void> = .unsupported(reason: .notYetProbed)
     ) {
         self.identity = identity
         self.hardware = hardware
         self.gamma = gamma
+        self.colorFilter = colorFilter
         self.overlay = overlay
         self.recommendedMethod = recommendedMethod
     }

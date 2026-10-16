@@ -20,6 +20,18 @@
 #include <stddef.h>
 #include <IOKit/IOKitLib.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <stdbool.h>
+
+/* Private compositor objects are constructed defensively in Objective-C so exceptions never
+ * cross into Swift. Only the direct-distribution factory links these functions. */
+bool WKColorFilterAvailable(void);
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+@class CALayer, NSWindow;
+CALayer *WKCreateColorFilterLayer(void) NS_RETURNS_RETAINED;
+bool WKSetColorFilterGain(CALayer *layer, float red, float green, float blue);
+bool WKConfigureColorFilterWindow(NSWindow *window);
+#endif
 
 /* ── IOAVService (private, IOKit) ─────────────────────────────────────────────
  * The DDC/CI write path. `IOAVServiceCreate` / `IOAVServiceCreateWithService` return an

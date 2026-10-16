@@ -8,14 +8,16 @@ private func makeCaps(
     hardware: Capability<DDCColorCaps> = .unsupported(reason: .buttonlessAppleDisplay),
     gamma: Capability<Void> = .unsupported(reason: .gammaBrokenOnThisOS),
     overlay: Capability<Void> = .supported(()),
-    transport: DisplayTransport = .unknown
+    transport: DisplayTransport = .unknown,
+    colorFilter: Capability<Void> = .unsupported(reason: .notYetProbed)
 ) -> DisplayCapabilities {
     DisplayCapabilities(
         identity: DisplayIdentity(cgUUID: UUID(), transport: transport),
         hardware: hardware,
         gamma: gamma,
         overlay: overlay,
-        recommendedMethod: .overlay
+        recommendedMethod: .overlay,
+        colorFilter: colorFilter
     )
 }
 
@@ -165,6 +167,45 @@ struct LayerResolverTests {
                 privateAPIsEnabled: true
             ) == .overlay
         )
+    }
+
+    @Test("color filter warms a built-in display when gamma is unavailable")
+    func colorFilterFallback() {
+        #expect(LayerResolver.resolveLayer(
+            capabilities: makeCaps(transport: .builtIn, colorFilter: .supported(())),
+            isHardwareDDCEnabled: false, override: nil, privateAPIsEnabled: true
+        ) == .colorFilter)
+    }
+
+    @Test("automatic resolution prefers opted-in DDC, then gamma, then color filter")
+    func colorFilterPrecedence() {
+        let caps = makeCaps(hardware: ddcSupported, gamma: .supported(()), colorFilter: .supported(()))
+        #expect(LayerResolver.resolveLayer(
+            capabilities: caps, isHardwareDDCEnabled: true, override: nil, privateAPIsEnabled: true
+        ) == .hardware)
+        #expect(LayerResolver.resolveLayer(
+            capabilities: caps, isHardwareDDCEnabled: false, override: nil, privateAPIsEnabled: true
+        ) == .gamma)
+    }
+
+    @Test("color filter override requires support and the private API switch")
+    func colorFilterOverridePolicy() {
+        #expect(LayerResolver.resolveLayer(
+            capabilities: makeCaps(gamma: .supported(()), colorFilter: .supported(())),
+            isHardwareDDCEnabled: false, override: .colorFilter, privateAPIsEnabled: true
+        ) == .colorFilter)
+        #expect(LayerResolver.resolveLayer(
+            capabilities: makeCaps(gamma: .supported(())),
+            isHardwareDDCEnabled: false, override: .colorFilter, privateAPIsEnabled: true
+        ) == .gamma)
+        #expect(LayerResolver.resolveLayer(
+            capabilities: makeCaps(colorFilter: .supported(())),
+            isHardwareDDCEnabled: false, override: .colorFilter, privateAPIsEnabled: false
+        ) == .overlay)
+        #expect(LayerResolver.resolveLayer(
+            capabilities: makeCaps(colorFilter: .supported(())),
+            isHardwareDDCEnabled: false, override: nil, privateAPIsEnabled: false
+        ) == .overlay)
     }
 
     @Test("never returns .off (off is a warmth decision, not a layer)")

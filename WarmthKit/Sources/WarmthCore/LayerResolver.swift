@@ -11,9 +11,9 @@ import Foundation
 /// supported — a real per-channel multiply (not a tint). It is OS-level and display-agnostic, so
 /// it warms built-in AND external panels (incl. buttonless Apple displays that expose no DDC).
 /// DDC, when opted in, ranks above it as a hardware upgrade.
-/// - **Overlay is the guaranteed floor** (the universal fallback): built-in panels where gamma is
-/// broken, and externals without a DDC opt-in.
-/// - The kill switch (`privateAPIsEnabled == false`) removes DDC *and* gamma, dropping to overlay.
+/// - **Color filters** provide per-channel warmth when gamma is unavailable.
+/// - **Overlay is the guaranteed floor** when the other methods are unavailable.
+/// - The kill switch (`privateAPIsEnabled == false`) removes DDC, gamma, and color filters, dropping to overlay.
 /// - A user **override** (`setPreferredMethod`) is honored only when it is actually *usable*.
 ///
 /// Crucially this never returns `.off`: "off" is a *warmth* decision (engine disabled, schedule
@@ -52,20 +52,16 @@ public enum LayerResolver {
         if privateAPIsEnabled, isHardwareDDCEnabled, isSupported(capabilities.hardware) {
             return .hardware
         }
-        // Gamma is the universal TRUE white-point warm path — a real per-channel multiply that
-        // removes blue, not an overlay tint — for ANY display where the transfer table is supported
-        // (base M-series / Intel / pre-26; NOT the M5 Pro/Max no-op bracket). It is OS-level and
-        // display-agnostic, so it warms the built-in AND external panels identically and needs no
-        // per-monitor DDC support. Crucially it is the ONLY true-warm path for buttonless Apple
-        // displays (LG UltraFine / Studio Display / Pro Display XDR), which expose no DDC gain VCP —
-        // verified warming an LG UltraFine over Thunderbolt on a base M5. DDC (checked above) stays
-        // the opt-in hardware upgrade for monitors that support it; gamma is the default.
-        // (the "external gamma is unreliable" assumption was disproven on hardware.)
+        // Prefer transfer tables when supported, then a per-channel color matrix.
         if privateAPIsEnabled, isSupported(capabilities.gamma) {
             return .gamma
         }
 
-        // Overlay is the guaranteed floor (built-in where gamma is unavailable, external w/o DDC).
+        if privateAPIsEnabled, isSupported(capabilities.colorFilter) {
+            return .colorFilter
+        }
+
+        // Overlay is the guaranteed floor when other warming methods are unavailable.
         return .overlay
     }
 
@@ -83,6 +79,8 @@ public enum LayerResolver {
             // Gamma is a best-effort path; the kill switch denylists it alongside the private
             // APIs so an engaged kill switch drops the whole machine to the overlay-only floor.
             return privateAPIsEnabled && isSupported(capabilities.gamma)
+        case .colorFilter:
+            return privateAPIsEnabled && isSupported(capabilities.colorFilter)
         case .overlay:
             return true                 // the always-available safe floor
         case .off:

@@ -308,22 +308,20 @@ private struct SoftRevealModifier: ViewModifier {
 
 // MARK: - IncompatibilityNotice
 
-/// The app-level "this Mac can only tint" notice, shown when EVERY connected display is tint-only.
-/// Names the user's actual chip + macOS version (so the limitation is concrete, not vague) and offers
-/// a tappable "Why?" that reveals a plain-language, non-medical explanation. Dark ink on the amber
-/// fill for contrast. DRAFT copy/visual — pending final design direction.
+/// Explains Abendrot's fallback when no connected display has a supported standard warming path.
+/// Capability classification describes Abendrot's current support, not the Mac's physical limits.
 private struct IncompatibilityNotice: View {
     @State private var showWhy = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let ink = Theme.Color.inkOnAccent
-    private let summary = "This Mac can only tint your displays"
-    private let explanation = "True warming isn’t available on this Mac, so Abendrot can only add a warm color tint to your displays — a known limitation on some Apple-silicon chips and macOS versions."
+    private let summary = "Abendrot uses Screen tint here"
+    private let explanation = "Abendrot’s other warming methods are unavailable or unverified for this setup. Screen tint adds a warm overlay to your displays."
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
+                Image(systemName: "info.circle.fill")
                     .font(Theme.Typography.ui(12))
                     .foregroundStyle(ink)
                 VStack(alignment: .leading, spacing: 6) {
@@ -348,7 +346,7 @@ private struct IncompatibilityNotice: View {
                                 .foregroundStyle(ink)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(showWhy ? "Hide explanation" : "Why is true warming unavailable?")
+                        .accessibilityLabel(showWhy ? "Hide explanation" : "Why does Abendrot use Screen tint?")
                     }
                 }
             }
@@ -369,9 +367,9 @@ private struct IncompatibilityNotice: View {
 
     private var whyExplanation: String {
         #if APP_STORE
-        "Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s color at the system level, so Abendrot uses a warm screen tint instead. The tint still changes how the screen looks, but it can’t remove blue light at the system level. Nothing is broken; it’s a macOS limitation."
+        "Abendrot’s compatibility checks select Screen tint when its other warming methods are unavailable or unverified for this setup. This describes Abendrot’s current support. macOS Night Shift may still be available."
         #else
-        "Some Apple-silicon Macs on newer macOS versions don’t let apps shift the display’s color at the system level, so here Abendrot can only lay a warm tint over the screen — it can’t remove blue light the way it does on other Macs. Nothing is broken; it’s a macOS limitation. An external monitor with its own color controls can still be truly warmed via Hardware control (Settings → Displays)."
+        "Abendrot’s compatibility checks select Screen tint when its other warming methods are unavailable or unverified for this setup. This describes Abendrot’s current support. macOS Night Shift may still be available. External displays that support Hardware control offer another warming method in Settings → Displays."
         #endif
     }
 }

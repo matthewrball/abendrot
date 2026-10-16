@@ -832,8 +832,9 @@ if [ "$rc" -ne 0 ]; then
   exit "$rc"
 fi
 cmp "$TMP/appcast-before.xml" "$APPCAST"
-lipo "$APP/Contents/Helpers/abendrot" \
-  -verify_arch $(lipo -archs "$APP/Contents/MacOS/Abendrot")
+for arch in $(lipo -archs "$APP/Contents/MacOS/Abendrot"); do
+  lipo "$APP/Contents/Helpers/abendrot" -verify_arch "$arch"
+done
 echo "PASS: unsigned builds cannot modify the production appcast"
 echo "PASS: embedded CLI covers every app architecture"
 grep -qF "verified every shipped Mach-O slice targets macOS 12.0 or earlier" \
@@ -868,8 +869,7 @@ echo "PASS: release packaging rejects too-new nested Mach-O slices"
 
 MOCK_SIGNED_BIN="$TMP/mock-signed-bin"
 MOCK_SPARKLE="$TMP/mock-sparkle-tools"
-MOCK_SWIFT_BUILD="$TMP/mock-swift-build"
-mkdir -p "$MOCK_SIGNED_BIN" "$MOCK_SPARKLE" "$MOCK_SWIFT_BUILD"
+mkdir -p "$MOCK_SIGNED_BIN" "$MOCK_SPARKLE"
 cat > "$MOCK_SIGNED_BIN/codesign" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -963,16 +963,19 @@ cat > "$MOCK_SIGNED_BIN/swift" <<'SH'
 set -euo pipefail
 show=""
 triple=""
+scratch=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --show-bin-path) show=1; shift ;;
     --triple) triple="${2:-}"; shift 2 ;;
+    --scratch-path) scratch="${2:-}"; shift 2 ;;
     *) shift;;
   esac
 done
 [ -n "$triple" ] || triple="arm64-apple-macosx12.0"
 arch="${triple%%-*}"
-dir="${MOCK_SWIFT_BUILD_ROOT:?}/$triple"
+# Match SwiftPM's Xcode build system: the triple does not distinguish outputs.
+dir="${scratch:?}/out/Products/Release"
 if [ -n "$show" ]; then
   mkdir -p "$dir"
   printf '%s\n' "$dir"
@@ -1064,7 +1067,6 @@ MISMATCH_PUBLIC_KEY="$(printf '%032d' 1 | /usr/bin/base64)"
 set +e
 PATH="$MOCK_SIGNED_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
   MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
-  MOCK_SWIFT_BUILD_ROOT="$MOCK_SWIFT_BUILD/mismatch" \
   MOCK_SPARKLE_PUBLIC_KEY="$MISMATCH_PUBLIC_KEY" \
   ASC_API_KEY_P8="$TMP/mock-asc.p8" ASC_API_KEY_ID=MOCKKEY ASC_API_ISSUER_ID=MOCKISSUER \
   APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/signed-mismatch" \
@@ -1082,7 +1084,6 @@ cp "$APPCAST" "$TMP/signed-appcast-before.xml"
 set +e
 PATH="$MOCK_SIGNED_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
   MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
-  MOCK_SWIFT_BUILD_ROOT="$MOCK_SWIFT_BUILD/pass" \
   MOCK_SPARKLE_PUBLIC_KEY="$TEST_PUBLIC_KEY" \
   ASC_API_KEY_P8="$TMP/mock-asc.p8" ASC_API_KEY_ID=MOCKKEY ASC_API_ISSUER_ID=MOCKISSUER \
   APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/signed-pass" \
@@ -1107,7 +1108,6 @@ echo "PASS: stable signed releases are uploaded as drafts before appcast staging
 set +e
 PATH="$MOCK_SIGNED_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
   MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
-  MOCK_SWIFT_BUILD_ROOT="$MOCK_SWIFT_BUILD/app-staple-fail" \
   MOCK_SPARKLE_PUBLIC_KEY="$TEST_PUBLIC_KEY" \
   MOCK_STAPLER_APP_FAIL=1 \
   ASC_API_KEY_P8="$TMP/mock-asc.p8" ASC_API_KEY_ID=MOCKKEY ASC_API_ISSUER_ID=MOCKISSUER \
@@ -1119,7 +1119,7 @@ rc=$?
 set -e
 [ "$rc" -eq 4 ]
 grep -qF "the .app is not notarized+stapled" "$TMP/app-staple-fail-stderr"
-[ ! -e "$TMP/app-staple-fail" ]
+[ ! -e "$TMP/app-staple-fail/Abendrot-1.0.0.dmg" ]
 echo "PASS: signed releases abort before packaging when the .app cannot be stapled"
 
 /usr/bin/plutil -replace CFBundleVersion -string "45" "$APP/Contents/Info.plist"
@@ -1128,7 +1128,6 @@ cp "$APPCAST" "$TMP/prerelease-appcast-before.xml"
 set +e
 PATH="$MOCK_SIGNED_BIN:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
   MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
-  MOCK_SWIFT_BUILD_ROOT="$MOCK_SWIFT_BUILD/prerelease" \
   MOCK_SPARKLE_PUBLIC_KEY="$TEST_PUBLIC_KEY" \
   ASC_API_KEY_P8="$TMP/mock-asc.p8" ASC_API_KEY_ID=MOCKKEY ASC_API_ISSUER_ID=MOCKISSUER \
   APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/signed-prerelease" \
@@ -1184,7 +1183,6 @@ GH_RELEASE_LOG="$TMP/gh-release-create.log"
 set +e
 PATH="$MOCK_SIGNED_BIN:$MOCK_GH:$PATH" DEVELOPER_ID_APP="$MOCK_DEVELOPER_ID_APP" \
   MOCK_CODESIGN_AUTHORITY="$MOCK_DEVELOPER_ID_APP" \
-  MOCK_SWIFT_BUILD_ROOT="$MOCK_SWIFT_BUILD/publish" \
   MOCK_SPARKLE_PUBLIC_KEY="$TEST_PUBLIC_KEY" \
   ASC_API_KEY_P8="$TMP/mock-asc.p8" ASC_API_KEY_ID=MOCKKEY ASC_API_ISSUER_ID=MOCKISSUER \
   RELEASE_PUBLISH=1 RELEASE_TARGET_SHA="$TARGET_MAIN" \

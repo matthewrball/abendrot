@@ -1215,16 +1215,15 @@ final class AppModel: ObservableObject {
 
     // MARK: ── Incompatibility ("can only be tinted") detection — ──────────
 
-    /// A display can only be TINTED when no true-warm path is available to it: gamma is not
-    /// supported on this chip/OS (or private APIs are off) AND it is not DDC-capable. Capability-
-    /// based, so it reads honestly even before warming is enabled. Lives here (not in a view) so the
-    /// app-level banner in PopoverView and the per-display rows in AdvancedExpansion share one
-    /// source of truth.
+    /// Whether Abendrot currently falls back to Screen tint: gamma and color filters are unsupported or unverified
+    /// (or advanced methods are off) and hardware control is unavailable. This is app capability,
+    /// not a claim about the Mac's physical limits. Shared by the popover and per-display rows.
     func isTintOnly(_ display: DisplayState) -> Bool {
         let priv = state.privateAPIsEnabled
         let gammaPossible = priv && display.capabilities.gamma.isSupported
+        let colorFilterPossible = priv && display.capabilities.colorFilter.isSupported
         let ddcPossible = priv && display.capabilities.hardware.isSupported
-        return !(gammaPossible || ddcPossible)
+        return !(gammaPossible || colorFilterPossible || ddcPossible)
     }
 }
 

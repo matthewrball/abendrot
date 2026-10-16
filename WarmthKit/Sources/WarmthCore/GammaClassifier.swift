@@ -9,9 +9,10 @@ import Foundation
 ///
 /// The hard-won fact this encodes (refined by the hardware test): the gamma transfer table
 /// silently no-ops on specific 2026 hardware — M5 Pro/Max displays and MacBook Neo external
-/// displays — on macOS ≥ 26. `CGSetDisplayTransferByTable` returns success but the panel never
+/// displays — on affected macOS 26 releases. `CGSetDisplayTransferByTable` returns success but the panel never
 /// warms (FB22273730/FB22273782). Earlier Pro/Max chips are unaffected; Apple DTS reproduced the
-/// failure on M5 Max while confirming the same test works on M3 Max. Known-good hardware keeps
+/// failure on M5 Max while confirming the same test works on base M5. M5 Pro on macOS 26.6
+/// was subsequently verified warming an external display; its built-in panel remains on fallback. Known-good hardware keeps
 /// gamma, known-broken hardware uses the overlay, and unknown Apple-silicon hardware on Tahoe
 /// also uses the overlay conservatively. That last rule prevents a future chip from silently
 /// reporting success while producing no visible warmth. Where supported, gamma is the **automatic
@@ -68,9 +69,21 @@ public enum GammaClassifier {
 
     /// Match only configurations where the gamma no-op has actually been reproduced. In
     /// particular, M1–M4 Pro/Max/Ultra chips must not be swept into the M5 regression.
-    public static func hasKnownGammaBug(chipBrand: String, isBuiltInDisplay: Bool) -> Bool {
+    public static func hasKnownGammaBug(
+        chipBrand: String,
+        isBuiltInDisplay: Bool,
+        osVersion: OperatingSystemVersion? = nil
+    ) -> Bool {
         switch chipBrand.trimmingCharacters(in: .whitespaces) {
-        case "Apple M5 Pro", "Apple M5 Max":
+        case "Apple M5 Pro":
+            // External warming was visually verified on 26.6. Built-in panels, other major
+            // versions, and callers without point-version information keep the fallback.
+            if !isBuiltInDisplay, let osVersion,
+               osVersion.majorVersion == 26, osVersion.minorVersion >= 6 {
+                return false
+            }
+            return true
+        case "Apple M5 Max":
             return true
         case "Apple A18 Pro":
             return !isBuiltInDisplay // MacBook Neo report is external-display-only.
@@ -114,7 +127,7 @@ public enum GammaClassifier {
 
         // Known-broken hardware gets the precise reason. Unknown/future Apple Silicon uses the
         // conservative overlay floor because the transfer API can report success while doing
-        // nothing visible. Apple DTS explicitly confirmed the same test works on M3 Max.
+        // nothing visible. Apple DTS explicitly confirmed the same test works on base M5.
         if environment.isAppleSilicon,
            environment.osMajorVersion >= firstBrokenAppleSiliconOSMajor {
             if environment.appleSiliconHasKnownGammaBug {

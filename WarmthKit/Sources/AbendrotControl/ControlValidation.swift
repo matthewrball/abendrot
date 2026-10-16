@@ -158,7 +158,7 @@ public enum ControlValidation {
         switch raw.preferredMethod {
         case "hardware": method = .hardware
         case "overlay": method = .overlay
-        case "gamma", "off", nil: method = nil
+        case "gamma", "colorFilter", "off", nil: method = nil
         default: method = nil
         }
         return normalizedPersistedDisplaySetting(
@@ -198,7 +198,7 @@ public enum ControlValidation {
         case .overlay:
             method = .overlay
             ddcEnabled = false
-        case .gamma, .off, nil:
+        case .gamma, .colorFilter, .off, nil:
             method = nil
         }
         return DisplaySettingsPreference(

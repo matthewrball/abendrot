@@ -11,6 +11,7 @@ extension WarmthEngine {
             configuration: configuration,
             overlay: OverlayBackend(),
             gamma: GammaBackend(),
+            colorFilter: ColorFilterBackend(),
             ddc: IOAVServiceDDCTransport(store: store),
             snapshotStore: store,
             nightShiftFollower: SystemNightShiftStateFollower(),

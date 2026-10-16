@@ -24,6 +24,7 @@ public actor WarmthEngine {
 
     private let overlay: any WarmthBackend
     private let gamma: any WarmthBackend
+    private let colorFilter: any WarmthBackend
     private let ddc: any WarmthBackend
     private let registry: DisplayRegistry
     private let nightShiftFollower: any NightShiftStateFollowing
@@ -96,6 +97,7 @@ public actor WarmthEngine {
             configuration: configuration,
             overlay: OverlayBackend(),
             gamma: GammaBackend(),
+            colorFilter: NoopBackend(method: .colorFilter),
             ddc: NoopBackend(method: .hardware),
             snapshotStore: store,
             nightShiftFollower: NoopNightShiftFollower(),
@@ -111,6 +113,7 @@ public actor WarmthEngine {
         configuration: EngineConfiguration,
         overlay: any WarmthBackend,
         gamma: any WarmthBackend,
+        colorFilter: any WarmthBackend,
         ddc: any WarmthBackend,
         snapshotStore: any WarmthSnapshotStore,
         nightShiftFollower: any NightShiftStateFollowing,
@@ -119,6 +122,7 @@ public actor WarmthEngine {
         self.configuration = configuration
         self.overlay = overlay
         self.gamma = gamma
+        self.colorFilter = colorFilter
         self.ddc = ddc
         self.snapshotStore = snapshotStore
         self.registry = DisplayRegistry()
@@ -159,6 +163,7 @@ public actor WarmthEngine {
             configuration: configuration,
             overlay: backend(.overlay),
             gamma: backend(.gamma),
+            colorFilter: backend(.colorFilter),
             ddc: backend(.hardware),
             snapshotStore: store,
             nightShiftFollower: NoopNightShiftFollower(),
@@ -221,6 +226,7 @@ public actor WarmthEngine {
 
         for display in box.value.displays {
             try? await overlay.reset(display.id)
+            try? await colorFilter.reset(display.id)
             try? await gamma.reset(display.id)
             // Restore native DDC gain and, on a verified restore, clear the write-ahead dirty flag
             // so a clean quit doesn't trigger launch-time recovery next run; a failed restore keeps
@@ -437,6 +443,7 @@ public actor WarmthEngine {
         for id in ids {
             try? await gamma.reset(id)
             try? await overlay.reset(id)
+            try? await colorFilter.reset(id)
             await restoreHardwareAndClearDirty(id)
             if let index = box.value.displays.firstIndex(where: { $0.id == id }) {
                 box.value.displays[index].appliedMethod = .off
@@ -580,12 +587,16 @@ public actor WarmthEngine {
     /// can restore native state before any warm write. Preserves per-display settings across the
     /// rebuild by stable identity.
     private func rebuildDisplayRows(for identities: [DisplayIdentity]) async {
+        for removed in box.value.displays where !identities.contains(removed.id) {
+            try? await colorFilter.reset(removed.id)
+        }
         var rows: [DisplayState] = []
         rows.reserveCapacity(identities.count)
 
         for identity in identities {
             let hardwareCap = await ddc.classify(identity)
             let gammaCap = await gamma.classify(identity)
+            let colorFilterCap = await colorFilter.classify(identity)
             let overlayCap = await overlay.classify(identity)
 
             let caps = DisplayCapabilities(
@@ -593,7 +604,8 @@ public actor WarmthEngine {
                 hardware: mapToDDCCaps(hardwareCap),
                 gamma: gammaCap,
                 overlay: overlayCap,
-                recommendedMethod: recommend(overlay: overlayCap, gamma: gammaCap, privateAPIsEnabled: box.value.privateAPIsEnabled)
+                recommendedMethod: recommend(overlay: overlayCap, gamma: gammaCap, colorFilter: colorFilterCap, privateAPIsEnabled: box.value.privateAPIsEnabled),
+                colorFilter: colorFilterCap
             )
 
             // Preserve per-display settings across re-baseline: the live row if present, else the
@@ -642,6 +654,7 @@ public actor WarmthEngine {
         for id in staleIDs {
             await restoreHardwareAndClearDirty(id)   // DDC restore from snapshot; keep dirty if it fails
             try? await gamma.reset(id)                // gamma reset is global/idempotent
+            try? await colorFilter.reset(id)
             if let index = box.value.displays.firstIndex(where: { $0.id == id }) {
                 box.value.displays[index].appliedMethod = .off
             }
@@ -798,6 +811,20 @@ public actor WarmthEngine {
                             message: "Hardware DDC unavailable; using overlay."
                         )
                     }
+                } else if layer == .colorFilter {
+                    do {
+                        try await colorFilter.apply(kelvin, to: id)
+                        appliedMethod = .colorFilter
+                        lastError = nil
+                    } catch {
+                        try? await colorFilter.reset(id)
+                        appliedMethod = .off
+                        lastError = EngineErrorSummary(
+                            method: .colorFilter,
+                            reason: .privateSymbolUnavailable,
+                            message: "Color filter unavailable. Warming is off for this display."
+                        )
+                    }
                 } else {
                     try? await backend(for: layer)?.apply(kelvin, to: id)
                     appliedMethod = layer
@@ -842,6 +869,8 @@ public actor WarmthEngine {
             await restoreHardwareAndClearDirty(id)
         case .gamma:
             try? await gamma.reset(id)
+        case .colorFilter:
+            try? await colorFilter.reset(id)
         case .overlay:
             try? await overlay.reset(id)
         case .off:
@@ -853,6 +882,7 @@ public actor WarmthEngine {
         switch method {
         case .overlay:  overlay
         case .gamma:    gamma
+        case .colorFilter: colorFilter
         case .hardware: ddc
         case .off:      nil
         }
@@ -861,6 +891,7 @@ public actor WarmthEngine {
     private func recommend(
         overlay: Capability<Void>,
         gamma: Capability<Void>,
+        colorFilter: Capability<Void>,
         privateAPIsEnabled: Bool
     ) -> DisplayMethod {
         // The recommended *default* badge mirrors LayerResolver's automatic resolution BEFORE any
@@ -870,6 +901,9 @@ public actor WarmthEngine {
         // becomes the badge once the user enables it for a display.
         if privateAPIsEnabled, case .supported = gamma {
             return .gamma
+        }
+        if privateAPIsEnabled, case .supported = colorFilter {
+            return .colorFilter
         }
         if case .supported = overlay { return .overlay }
         return .off

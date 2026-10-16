@@ -52,7 +52,7 @@ struct SettingsView: View {
             if tab == .displays {
                 if model.state.displays.count > 1 { return true }
                 if let singleDisplay = model.state.displays.first {
-                    return model.isTintOnly(singleDisplay)
+                    return model.isTintOnly(singleDisplay) || singleDisplay.lastError?.method == .colorFilter
                 }
                 return false
             }

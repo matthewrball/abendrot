@@ -79,9 +79,9 @@ codesign -d --entitlements :- "$APP" >"$ENTITLEMENTS_ACTUAL" 2>/dev/null \
     || fail "built app has the wrong bundle identifier"
 [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw -o - "$APP_INFO")" == "false" ]] \
     || fail "built app does not declare its export-compliance status"
-[[ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP_INFO")" == "1.1.3" ]] \
+[[ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP_INFO")" == "1.1.4" ]] \
     || fail "built app has the wrong marketing version"
-[[ "$(plutil -extract CFBundleVersion raw -o - "$APP_INFO")" == "16" ]] \
+[[ "$(plutil -extract CFBundleVersion raw -o - "$APP_INFO")" == "17" ]] \
     || fail "built app has the wrong build number"
 [[ "$(plutil -extract LSMinimumSystemVersion raw -o - "$APP_INFO")" == "12.0" ]] \
     || fail "built app has the wrong minimum macOS version"
@@ -103,12 +103,19 @@ ARCHS=$(lipo -archs "$EXECUTABLE")
 [[ " $ARCHS " == *" arm64 "* && " $ARCHS " == *" x86_64 "* ]] \
     || fail "built app is not universal (arm64 + x86_64)"
 
-if otool -L "$EXECUTABLE" | grep -Eq 'Sparkle|CoreBrightness|CoreDisplay'; then
-    fail "built executable links a forbidden framework"
-fi
-if grep -aEq 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|SUPublicEDKey|SUFeedURL' "$APP"; then
-    fail "built app contains private API or Sparkle strings"
-fi
+# Inspect every packaged Mach-O binary, including embedded frameworks and helpers.
+# grep on the app directory itself does not inspect any executable bytes.
+while IFS= read -r -d '' binary; do
+    if ! file -b "$binary" | grep -q 'Mach-O'; then
+        continue
+    fi
+    if otool -L "$binary" | grep -Eq 'Sparkle|CoreBrightness|CoreDisplay'; then
+        fail "packaged binary links a forbidden framework: $binary"
+    fi
+    if grep -aEq 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|CABackdropLayer|CAFilter|inputColorMatrix|SUPublicEDKey|SUFeedURL' "$binary"; then
+        fail "packaged binary contains private API or Sparkle strings: $binary"
+    fi
+done < <(find "$APP/Contents" -type f -print0)
 if xattr -lr "$APP" 2>/dev/null | grep -Eq 'com\.apple\.quarantine'; then
     fail "built app contains a quarantine attribute"
 fi

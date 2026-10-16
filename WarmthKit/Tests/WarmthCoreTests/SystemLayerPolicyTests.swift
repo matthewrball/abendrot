@@ -100,7 +100,7 @@ struct GammaClassifierTests {
         #expect(!GammaClassifier.hasKnownGammaBug(chipBrand: "Apple A18 Pro", isBuiltInDisplay: true))
         #expect(GammaClassifier.hasKnownGammaBug(chipBrand: "Apple A18 Pro", isBuiltInDisplay: false))
 
-        // M3 Max was Apple's unaffected comparison machine. Other older Pro/Max chips and unknown
+        // Base M5 was Apple's unaffected comparison machine. Other older Pro/Max chips and unknown
         // future strings must likewise keep true gamma warmth instead of being forced to tint.
         for unaffected in ["Apple M3 Max", "Apple M4 Pro", "Apple M2 Ultra", "Apple M5", "Apple M6 Pro", ""] {
             #expect(!GammaClassifier.hasKnownGammaBug(chipBrand: unaffected, isBuiltInDisplay: true))
@@ -111,6 +111,26 @@ struct GammaClassifierTests {
         #expect(!GammaClassifier.isKnownAppleSiliconChip(chipBrand: "Apple M6 Pro"))
         #expect(!GammaClassifier.isKnownAppleSiliconChip(chipBrand: "Apple M4 Ultra"))
         #expect(!GammaClassifier.isKnownAppleSiliconChip(chipBrand: ""))
+    }
+
+    @Test("M5 Pro on macOS 26.6 uses gamma externally and keeps built-in fallback")
+    func m5ProTahoe266SupportsGamma() {
+        let versions: [(Int, Int, Int, Bool)] = [
+            (26, 5, 1, false), (26, 6, 0, true), (26, 6, 1, true), (27, 0, 0, false)
+        ]
+        for (major, minor, patch, supported) in versions {
+            let version = OperatingSystemVersion(majorVersion: major, minorVersion: minor, patchVersion: patch)
+            for builtIn in [true, false] {
+                let knownBug = GammaClassifier.hasKnownGammaBug(
+                    chipBrand: "Apple M5 Pro", isBuiltInDisplay: builtIn, osVersion: version
+                )
+                let capability = GammaClassifier.classify(env(appleSilicon: true, os: major, knownGammaBug: knownBug))
+                #expect(isSupported(capability) == (supported && !builtIn))
+                #expect(GammaClassifier.hasKnownGammaBug(
+                    chipBrand: "Apple M5 Max", isBuiltInDisplay: builtIn, osVersion: version
+                ))
+            }
+        }
     }
 }
 

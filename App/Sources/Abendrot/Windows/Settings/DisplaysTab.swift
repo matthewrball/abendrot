@@ -76,11 +76,16 @@ private struct DisplayConfigRow: View {
     }
 
     private var statusLine: String {
+        if let error = display.lastError, error.method == .colorFilter {
+            return error.message
+        }
         switch display.appliedMethod {
         case .hardware:
             return "Using display hardware"
         case .gamma:
             return "Using standard color adjustment"
+        case .colorFilter:
+            return "Color filter"
         case .overlay:
             return "Using a warm screen tint"
         case .off:
@@ -206,7 +211,7 @@ private struct WarmingMethodPicker: View {
         Binding(
             get: {
                 switch display.preferredMethod {
-                case .gamma:
+                case .gamma, .colorFilter:
                     if availableChoices.contains(.standard) { return .standard }
                 case .overlay:
                     if availableChoices.contains(.screenTint) { return .screenTint }
@@ -239,10 +244,15 @@ private struct WarmingMethodPicker: View {
     private var unavailableNote: String? {
         let priv = model.state.privateAPIsEnabled
         if !priv {
-            return "Advanced warming isn’t available on this Mac, so only a screen tint is possible."
+            return "Advanced warming is turned off in Abendrot. Screen tint remains available."
         }
-        if !display.capabilities.gamma.isSupported, !display.capabilities.hardware.isSupported {
-            return "This display can’t be truly warmed on this Mac — only a screen tint is available."
+        if let error = display.lastError, error.method == .colorFilter {
+            return error.message
+        }
+        if !display.capabilities.gamma.isSupported,
+           !display.capabilities.colorFilter.isSupported,
+           !display.capabilities.hardware.isSupported {
+            return "Abendrot uses Screen tint for this display. Its other warming methods are unavailable or unverified for this setup."
         }
         return nil
     }

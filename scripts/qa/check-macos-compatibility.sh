@@ -28,10 +28,12 @@ while IFS= read -r -d '' file; do
     continue
   fi
   mach_o_count=$((mach_o_count + 1))
-  /usr/bin/lipo "$file" -verify_arch arm64 x86_64 || {
-    echo "not universal (arm64 + x86_64): $file" >&2
-    exit 1
-  }
+  for arch in arm64 x86_64; do
+    /usr/bin/lipo "$file" -verify_arch "$arch" || {
+      echo "missing $arch architecture: $file" >&2
+      exit 1
+    }
+  done
   build_info="$(/usr/bin/xcrun vtool -show-build "$file" 2>/dev/null)" || {
     echo "could not inspect deployment floor: $file" >&2
     exit 1

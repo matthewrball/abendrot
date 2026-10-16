@@ -337,7 +337,7 @@ embed_cli_helper() {
   local helpers_dir="$app/Contents/Helpers"
   local dest="$helpers_dir/abendrot"
   local app_archs arch triple bin_dir cli_bin
-  local cli_build_root="$RELEASE_SCRATCH/cli-helper-build"
+  local cli_build_root
   local cli_bins=()
   app_archs="$(lipo -archs "$APP_BINARY" 2>/dev/null)" || {
     echo "release: ABORT — could not inspect app architectures at '$APP_BINARY'." >&2
@@ -352,6 +352,8 @@ embed_cli_helper() {
       *) echo "release: ABORT — unsupported app architecture '$arch'." >&2; exit 5;;
     esac
     triple="${arch}-apple-macosx12.0"
+    # SwiftPM's Xcode build system shares output paths across target triples.
+    cli_build_root="$RELEASE_SCRATCH/cli-helper-build/$arch"
     bin_dir="$(swift build -c release --package-path "$CLI_PKG" \
       --only-use-versions-from-resolved-file \
       --scratch-path "$cli_build_root" --triple "$triple" --show-bin-path)" || {
@@ -383,10 +385,12 @@ embed_cli_helper() {
     }
   fi
   chmod 755 "$dest"
-  lipo "$dest" -verify_arch $app_archs || {
-    echo "release: ABORT — helper architectures do not cover app architectures '$app_archs'." >&2
-    exit 5
-  }
+  for arch in $app_archs; do
+    lipo "$dest" -verify_arch "$arch" || {
+      echo "release: ABORT — helper architectures do not cover app architectures '$app_archs'." >&2
+      exit 5
+    }
+  done
 
   # Sign the helper FIRST, inside-out — ONLY when a Developer ID identity is
   # configured and this is a SIGNED build. Otherwise leave it unsigned

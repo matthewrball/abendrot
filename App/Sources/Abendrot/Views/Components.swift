@@ -171,9 +171,7 @@ struct WarmthPowerSwitch: View {
 struct DisplayRow: View {
     @ObservedObject var model: AppModel
     let display: DisplayState
-    /// True when this display can ONLY be tinted — no true-warm path is available to it. Surfaced
-    /// honestly (plain language, no jargon) so we never imply true warming where the hardware/OS
-    /// can't deliver it.
+    /// True when Abendrot's capability checks select the Screen tint fallback for this display.
     var tintOnly: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -186,10 +184,10 @@ struct DisplayRow: View {
                         .font(Theme.Typography.ui(12.5))
                         .foregroundStyle(Theme.Color.textPrimary)
                     HStack(spacing: 4) {
-                        // Small warning glyph so the tint-only tooltip is
+                        // Small information glyph so the fallback tooltip is
                         // discoverable, not just hover-anywhere. Hovering either icon or text shows it.
                         if tintOnly {
-                            Image(systemName: "exclamationmark.triangle.fill")
+                            Image(systemName: "info.circle.fill")
                                 .font(Theme.Typography.ui(8.5))
                                 .foregroundStyle(Theme.Color.accentText)
                         }
@@ -226,13 +224,13 @@ struct DisplayRow: View {
     }
 
     private var subtitle: String {
-        if tintOnly { return "Tint only" }
+        if tintOnly { return "Screen tint fallback" }
         return display.warmthOverridden ? "Custom warmth" : "Follows global warmth"
     }
 
     private var tintOnlyExplanation: String {
         tintOnly
-            ? "Abendrot can only add a warm color tint to this display on this Mac — true warming (removing blue light) isn’t available for it."
+            ? "Abendrot uses Screen tint for this display because its other warming methods are unavailable or unverified for this setup."
             : subtitle
     }
 

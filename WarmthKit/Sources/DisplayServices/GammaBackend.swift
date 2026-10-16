@@ -58,7 +58,8 @@ public struct GammaBackend: WarmthBackend {
             osMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
             appleSiliconHasKnownGammaBug: GammaClassifier.hasKnownGammaBug(
                 chipBrand: appleSiliconBrand ?? "",
-                isBuiltInDisplay: identity.transport == .builtIn
+                isBuiltInDisplay: identity.transport == .builtIn,
+                osVersion: ProcessInfo.processInfo.operatingSystemVersion
             ),
             appleSiliconChipIsKnown: !isAppleSilicon || GammaClassifier.isKnownAppleSiliconChip(
                 chipBrand: appleSiliconBrand ?? ""
@@ -80,7 +81,7 @@ public struct GammaBackend: WarmthBackend {
     /// CPU brand used by the exact known-broken hardware list. Unknown hardware is not
     /// automatically condemned to a tint; known hardware keeps the documented CoreGraphics path,
     /// while unknown Apple-silicon Tahoe hardware uses the safer overlay fallback.
-    static var appleSiliconBrand: String? {
+    package static var appleSiliconBrand: String? {
         var size = 0
         guard sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0) == 0, size > 0 else {
             return nil

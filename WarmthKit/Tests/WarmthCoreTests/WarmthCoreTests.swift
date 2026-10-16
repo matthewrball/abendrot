@@ -344,6 +344,7 @@ struct DisplayMethodTests {
     func badges() {
         #expect(DisplayMethod.hardware.badge == "Hardware")
         #expect(DisplayMethod.gamma.badge == "Gamma")
+        #expect(DisplayMethod.colorFilter.badge == "Color filter")
         #expect(DisplayMethod.overlay.badge == "Overlay")
         #expect(DisplayMethod.off.badge == "Off")
     }
