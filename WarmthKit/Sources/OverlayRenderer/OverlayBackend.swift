@@ -61,7 +61,6 @@ package func veilAlpha(for gain: RGBGain) -> Double {
 /// ## Documented limits — the badge says `Overlay`, never "hardware"
 /// A standalone shielding-level panel may NOT cover, and warmth may be absent on:
 /// - **native fullscreen Spaces** — a fullscreen window can sit above auxiliary panels;
-/// - **Mission Control / Exposé** — the window server takes over compositing;
 /// - **the login window and the lock screen** — owned by `loginwindow`, out of our process;
 /// - **protected / HDR / EDR video** (DRM surfaces, EDR tone-mapping) — composited past us;
 /// - **screenshots & screen recordings** — see `sharingType` below;
@@ -170,7 +169,8 @@ final class OverlayPanel {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.ignoresMouseEvents = true                 // clicks pass through — essential
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Raised windows otherwise default to transient and disappear in Mission Control.
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false

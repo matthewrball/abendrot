@@ -72,7 +72,8 @@ private final class ColorFilterPanel {
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Raised windows otherwise default to transient and disappear in Mission Control.
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.sharingType = .readOnly
         let content = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
         content.wantsLayer = true
