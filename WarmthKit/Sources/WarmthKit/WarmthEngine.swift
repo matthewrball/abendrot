@@ -76,8 +76,7 @@ public actor WarmthEngine {
     /// Short post-launch / wake / reconfiguration re-assert burst. Some panels (notably the built-in,
     /// whose gamma macOS rewrites as True Tone / auto-brightness / Night Shift settle, and displays that
     /// enumerate a beat late) come up un-warmed and would otherwise wait up to a full 60s ramp tick to be
-    /// re-asserted. The burst re-applies at ~1/3/6/12s and recreates compositor filters: a stale
-    /// WindowServer attachment can accept gain writes without visibly warming the screen.
+    /// re-asserted. The burst re-applies at ~1/3/6/12s without resetting an already-active backend.
     private var catchUpTask: Task<Void, Never>?
     /// Backend calls suspend the actor; serialize writes so a newer Off/Reveal finishes last.
     private var applyTask: Task<Void, Never>?
@@ -176,6 +175,34 @@ public actor WarmthEngine {
 
     // MARK: ── Lifecycle ───────────────────────────────────────────────────────
 
+    /// The native helper restored its displays or exited; the old applied badge is no longer valid.
+    public func colorFilterFailed(recoveryVerified: Bool = true) {
+        colorFilterFailureGeneration &+= 1
+        colorFilterRecoveryPending = !recoveryVerified
+        for index in box.value.displays.indices {
+            let display = box.value.displays[index]
+            if display.appliedMethod != .colorFilter {
+                guard display.appliedMethod == .off,
+                      colorFilterRecoveryPending || display.lastError?.method == .colorFilter,
+                      case .supported = display.capabilities.colorFilter else { continue }
+            }
+            box.value.displays[index].appliedMethod = .off
+            box.value.displays[index].lastError = EngineErrorSummary(
+                method: .colorFilter, reason: .privateSymbolUnavailable,
+                message: colorFilterFailureMessage
+            )
+        }
+        publish()
+    }
+
+    private var colorFilterFailureGeneration: UInt64 = 0
+    private var colorFilterRecoveryPending = false
+    private var colorFilterFailureMessage: String {
+        colorFilterRecoveryPending
+            ? "Display color restoration could not be verified. Recovery is pending."
+            : "Color filter unavailable. Warming is off for this display."
+    }
+
     /// Build the display registry, run launch-time stale-state recovery, baseline
     /// capabilities, then apply current settings. Safe to call once at app launch.
     public func start() async {
@@ -231,13 +258,18 @@ public actor WarmthEngine {
 
         for display in box.value.displays {
             try? await overlay.reset(display.id)
-            try? await colorFilter.reset(display.id)
+            await resetColorFilter(display.id)
             try? await gamma.reset(display.id)
             // Restore native DDC gain and, on a verified restore, clear the write-ahead dirty flag
             // so a clean quit doesn't trigger launch-time recovery next run; a failed restore keeps
             // it dirty for recovery.
             await restoreHardwareAndClearDirty(display.id)
+            if let index = box.value.displays.firstIndex(where: { $0.id == display.id }) {
+                box.value.displays[index].appliedMethod = .off
+                box.value.displays[index].lastError = pendingColorFilterError(for: display.id)
+            }
         }
+        publish()
         finishContinuations()
     }
 
@@ -448,11 +480,11 @@ public actor WarmthEngine {
         for id in ids {
             try? await gamma.reset(id)
             try? await overlay.reset(id)
-            try? await colorFilter.reset(id)
+            await resetColorFilter(id)
             await restoreHardwareAndClearDirty(id)
             if let index = box.value.displays.firstIndex(where: { $0.id == id }) {
                 box.value.displays[index].appliedMethod = .off
-                box.value.displays[index].lastError = nil
+                box.value.displays[index].lastError = pendingColorFilterError(for: id)
             }
         }
         publish()
@@ -572,10 +604,9 @@ public actor WarmthEngine {
         scheduleCatchUpReasserts()
     }
 
-    /// Recreate private compositor resources after display/session changes. Gain writes alone
-    /// cannot recover a stale WindowServer attachment; gamma and tint retain their usual paths.
+    /// Resend current warmth after display/session changes without an intervening neutral reset.
     private func reassertDisplayWarmth() async {
-        await reapply(recreatingColorFilters: true)
+        await reapply()
     }
 
     /// Fire a short re-assert burst at ~1/3/6/12s after launch / wake / reconfiguration. Live mode only
@@ -599,7 +630,7 @@ public actor WarmthEngine {
     /// rebuild by stable identity.
     private func rebuildDisplayRows(for identities: [DisplayIdentity]) async {
         for removed in box.value.displays where !identities.contains(removed.id) {
-            try? await colorFilter.reset(removed.id)
+            await resetColorFilter(removed.id)
         }
         var rows: [DisplayState] = []
         rows.reserveCapacity(identities.count)
@@ -665,7 +696,7 @@ public actor WarmthEngine {
         for id in staleIDs {
             await restoreHardwareAndClearDirty(id)   // DDC restore from snapshot; keep dirty if it fails
             try? await gamma.reset(id)                // gamma reset is global/idempotent
-            try? await colorFilter.reset(id)
+            await resetColorFilter(id)
             if let index = box.value.displays.firstIndex(where: { $0.id == id }) {
                 box.value.displays[index].appliedMethod = .off
             }
@@ -728,24 +759,19 @@ public actor WarmthEngine {
 
     /// Resolve the schedule + master enable + reveal and push the target to each display via
     /// its applied layer. Minimal for this scaffold — full layer selection is a later milestone.
-    private func reapply(recreatingColorFilters: Bool = false) async {
+    private func reapply() async {
         guard !isShuttingDown else { return }
         let previous = applyTask
         let task = Task { [weak self] in
             await previous?.value
-            await self?.applyCurrentState(recreatingColorFilters: recreatingColorFilters)
+            await self?.applyCurrentState()
         }
         applyTask = task
         await task.value
     }
 
-    private func applyCurrentState(recreatingColorFilters: Bool) async {
+    private func applyCurrentState() async {
         guard !isShuttingDown else { return }
-        if recreatingColorFilters {
-            for display in box.value.displays where display.appliedMethod == .colorFilter {
-                try? await colorFilter.reset(display.id)
-            }
-        }
         let privateOn = box.value.privateAPIsEnabled
 
         // The Night Shift follower is "available" only when private APIs are on AND it reports a
@@ -810,18 +836,26 @@ public actor WarmthEngine {
 
             // Clean up a layer we are LEAVING this pass (user disabled DDC, capability changed) so a
             // display can't stay warm on two layers at once.
-            await tearDownPreviousLayer(display.appliedMethod, leavingFor: layer, id: id)
+            guard await tearDownPreviousLayer(display.appliedMethod, leavingFor: layer, id: id) else {
+                if let index = box.value.displays.firstIndex(where: { $0.id == id }) {
+                    box.value.displays[index].appliedMethod = .off
+                    box.value.displays[index].lastError = pendingColorFilterError(for: id)
+                }
+                continue
+            }
 
             let appliedMethod: DisplayMethod
             let lastError: EngineErrorSummary?
             if effective == .off {
                 if layer == .hardware {
                     await restoreHardwareAndClearDirty(id)
+                } else if layer == .colorFilter {
+                    await resetColorFilter(id)
                 } else {
                     try? await backend(for: layer)?.reset(id)
                 }
                 appliedMethod = .off
-                lastError = nil
+                lastError = pendingColorFilterError(for: id)
             } else {
                 let kelvin = effective.kelvin(warmestPoint: warmestPoint)
                 if layer == .hardware {
@@ -847,16 +881,25 @@ public actor WarmthEngine {
                     }
                 } else if layer == .colorFilter {
                     do {
+                        var generation = colorFilterFailureGeneration
                         try await colorFilter.apply(kelvin, to: id)
+                        if generation != colorFilterFailureGeneration {
+                            // An old helper's callback can arrive while its replacement starts.
+                            // Confirm once with the current generation, without a neutral reset.
+                            generation = colorFilterFailureGeneration
+                            try await colorFilter.apply(kelvin, to: id)
+                        }
+                        guard generation == colorFilterFailureGeneration else { throw CancellationError() }
+                        colorFilterRecoveryPending = false
                         appliedMethod = .colorFilter
                         lastError = nil
                     } catch {
-                        try? await colorFilter.reset(id)
+                        await resetColorFilter(id)
                         appliedMethod = .off
                         lastError = EngineErrorSummary(
                             method: .colorFilter,
                             reason: .privateSymbolUnavailable,
-                            message: "Color filter unavailable. Warming is off for this display."
+                            message: colorFilterFailureMessage
                         )
                     }
                 } else {
@@ -896,19 +939,49 @@ public actor WarmthEngine {
     /// the previously-applied method differs from the layer we're switching to.
     private func tearDownPreviousLayer(
         _ previous: DisplayMethod, leavingFor layer: DisplayMethod, id: DisplayIdentity
-    ) async {
-        guard previous != layer else { return }
+    ) async -> Bool {
+        if (previous == .colorFilter && previous != layer) || pendingColorFilterError(for: id) != nil {
+            guard await resetColorFilter(id) else { return false }
+        }
+        guard previous != layer else { return true }
         switch previous {
         case .hardware:
             await restoreHardwareAndClearDirty(id)
         case .gamma:
             try? await gamma.reset(id)
         case .colorFilter:
-            try? await colorFilter.reset(id)
+            break // Already verified above; never stack another layer after a failed restore.
         case .overlay:
             try? await overlay.reset(id)
         case .off:
             break
+        }
+        return true
+    }
+
+    private func pendingColorFilterError(for id: DisplayIdentity) -> EngineErrorSummary? {
+        guard colorFilterRecoveryPending, id.transport == .builtIn else { return nil }
+        return EngineErrorSummary(method: .colorFilter, reason: .privateSymbolUnavailable,
+                                  message: colorFilterFailureMessage)
+    }
+
+    @discardableResult
+    private func resetColorFilter(_ id: DisplayIdentity) async -> Bool {
+        let generation = colorFilterFailureGeneration
+        do {
+            try await colorFilter.reset(id)
+            // A new unverified helper failure during this await must remain pending.
+            if id.transport == .builtIn, generation == colorFilterFailureGeneration {
+                colorFilterRecoveryPending = false
+            }
+            return pendingColorFilterError(for: id) == nil
+        } catch {
+            if id.transport == .builtIn { colorFilterRecoveryPending = true }
+            if let index = box.value.displays.firstIndex(where: { $0.id == id }) {
+                box.value.displays[index].appliedMethod = .off
+                box.value.displays[index].lastError = pendingColorFilterError(for: id)
+            }
+            return false
         }
     }
 

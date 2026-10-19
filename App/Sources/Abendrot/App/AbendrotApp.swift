@@ -2,6 +2,19 @@ import SwiftUI
 import AppKit
 import Combine
 import WarmthKit
+#if !APP_STORE
+import WarmthKitPrivate
+#endif
+
+@main
+enum AbendrotEntry {
+    @MainActor static func main() {
+        #if !APP_STORE
+        if let status = NativeColorFilterHelper.runIfRequested() { exit(status) }
+        #endif
+        AbendrotApp.main()
+    }
+}
 
 // MARK: - AbendrotApp
 //
@@ -12,7 +25,6 @@ import WarmthKit
 //
 // Lifecycle: `AppModel.start()` boots the engine + reveal hotkey; `shutdown()`
 // neutral-resets every display on quit.
-@main
 struct AbendrotApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private var model: AppModel { appDelegate.model }

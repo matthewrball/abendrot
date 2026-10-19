@@ -22,16 +22,16 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <stdbool.h>
 
-/* Private compositor objects are constructed defensively in Objective-C so exceptions never
- * cross into Swift. Only the direct-distribution factory links these functions. */
-bool WKColorFilterAvailable(void);
-#ifdef __OBJC__
-#import <Foundation/Foundation.h>
-@class CALayer, NSWindow;
-CALayer *WKCreateColorFilterLayer(void) NS_RETURNS_RETAINED;
-bool WKSetColorFilterGain(CALayer *layer, float red, float green, float blue);
-bool WKConfigureColorFilterWindow(NSWindow *window);
-#endif
+/* Direct-distribution native display matrix primitives. The caller owns crash
+ * recovery and the WindowServer connection; these functions never reset globally.
+ * Matrices are row-major 3x3 floats without a bias. Coefficients must be finite
+ * and within [-16, 16]. Failed copy/compose calls leave the output untouched. */
+bool WKNativeColorFilterAvailable(void);
+bool WKCopySystemColorFilterMatrix(float outMatrix[9]);
+bool WKApplyNativeColorMatrix(uint32_t displayID, CFStringRef expectedUUID,
+                              const float matrix[9]);
+bool WKComposeNativeColorMatrix(const float baseline[9], float red, float green,
+                                float blue, float outMatrix[9]);
 
 /* ── IOAVService (private, IOKit) ─────────────────────────────────────────────
  * The DDC/CI write path. `IOAVServiceCreate` / `IOAVServiceCreateWithService` return an

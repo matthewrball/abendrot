@@ -242,7 +242,35 @@ final class AppModel: ObservableObject {
         // restore is ordered strictly after start() — avoiding a reentrancy race where it could
         // land before the engine finishes booting.
         Task { [weak self] in
+            #if !APP_STORE
+            await NativeColorFilterController.shared.setFailureHandler { [weak engine] recovery in
+                guard let engine else { return }
+                let verified: Bool
+                switch recovery {
+                case .restored: verified = true
+                case .unknown: verified = false
+                case let .pending(uuids):
+                    let displays = await engine.state.displays
+                    verified = !displays.contains(where: { uuids.contains($0.id.cgUUID) })
+                }
+                await engine.colorFilterFailed(recoveryVerified: verified)
+            }
+            // Recovery runs even when the persisted settings disable warming.
+            try? await NativeColorFilterController.shared.start()
+            #endif
             await engine.start()
+            #if !APP_STORE
+            switch await NativeColorFilterController.shared.latestRecoveryState {
+            case .restored: break
+            case let .pending(uuids):
+                let displays = await engine.state.displays
+                if displays.contains(where: { uuids.contains($0.id.cgUUID) }) {
+                    await engine.colorFilterFailed(recoveryVerified: false)
+                }
+            case .unknown:
+                await engine.colorFilterFailed(recoveryVerified: false)
+            }
+            #endif
             self?.applyPersistedState()
             // Write an initial snapshot so the CLI sees a live app immediately, before the first
             // engine state tick (a healthy idle app may not emit one for a while).
@@ -707,6 +735,9 @@ final class AppModel: ObservableObject {
         #endif
         frontmostMonitor?.stop()
         await engine?.shutdown()
+        #if !APP_STORE
+        try? await NativeColorFilterController.shared.shutdown()
+        #endif
     }
 
     // MARK: ── Global intents ────────────────────────────────────────────────

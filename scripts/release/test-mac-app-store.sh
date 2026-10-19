@@ -109,10 +109,10 @@ while IFS= read -r -d '' binary; do
     if ! file -b "$binary" | grep -q 'Mach-O'; then
         continue
     fi
-    if otool -L "$binary" | grep -Eq 'Sparkle|CoreBrightness|CoreDisplay'; then
+    if otool -L "$binary" | grep -Eq 'Sparkle|CoreBrightness|CoreDisplay|SkyLight'; then
         fail "packaged binary links a forbidden framework: $binary"
     fi
-    if grep -aEq 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|CABackdropLayer|CAFilter|inputColorMatrix|SUPublicEDKey|SUFeedURL' "$binary"; then
+    if grep -aEq 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|SLSSetAccessibilityAdjustments|kSLSAccessibilityAdjustmentMatrix|kSLSAccessibilityTargetDisplay|MADisplayFilter|CABackdropLayer|CAFilter|inputColorMatrix|SUPublicEDKey|SUFeedURL' "$binary"; then
         fail "packaged binary contains private API or Sparkle strings: $binary"
     fi
 done < <(find "$APP/Contents" -type f -print0)
