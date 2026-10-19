@@ -22,14 +22,14 @@ bool WKSetColorFilterGain(CALayer *layer, float red, float green, float blue) {
     if (!isfinite(red) || !isfinite(green) || !isfinite(blue) ||
         red < 0 || red > 1 || green < 0 || green > 1 || blue < 0 || blue > 1) return false;
     @try {
-        id filter = layer.filters.firstObject;
+        // Publish a fresh filter so WindowServer receives changed channel gains.
+        id filter = [NSClassFromString(@"CAFilter") filterWithType:@"colorMatrix"];
         if (!filter) return false;
         WKColorMatrix matrix = { .values = {red,0,0,0,0, 0,green,0,0,0, 0,0,blue,0,0, 0,0,0,1,0} };
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
         @try {
             [filter setValue:[NSValue valueWithCAColorMatrix:matrix] forKey:@"inputColorMatrix"];
-            // Reassigning filters invalidates the WindowServer's cached filter state.
             layer.filters = @[filter];
         } @finally {
             [CATransaction commit];
@@ -44,15 +44,13 @@ CALayer *WKCreateColorFilterLayer(void) {
     @try {
         if (!WKColorFilterAvailable()) return nil;
         CALayer *layer = [NSClassFromString(@"CABackdropLayer") layer];
-        id filter = [NSClassFromString(@"CAFilter") filterWithType:@"colorMatrix"];
-        if (!layer || !filter) return nil;
+        if (!layer) return nil;
         [layer setValue:@YES forKey:@"windowServerAware"];
         [layer setValue:@1.0 forKey:@"scale"];
         [layer setValue:@0.0 forKey:@"bleedAmount"];
         [layer setValue:@NO forKey:@"allowsInPlaceFiltering"];
         [layer setValue:NSUUID.UUID.UUIDString forKey:@"groupName"];
         layer.actions = @{@"filters": NSNull.null, @"bounds": NSNull.null, @"position": NSNull.null};
-        layer.filters = @[filter];
         return WKSetColorFilterGain(layer, 1, 1, 1) ? layer : nil;
     } @catch (NSException *exception) {
         return nil;

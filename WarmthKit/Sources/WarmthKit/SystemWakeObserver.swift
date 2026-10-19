@@ -1,13 +1,12 @@
 import Foundation
-import Logging
 #if canImport(AppKit)
 import AppKit
 #endif
 
 // MARK: - SystemWakeObserver
 
-/// Observes **system wake** (`NSWorkspace.didWakeNotification`) and forwards a single `Void` per
-/// wake into an `AsyncStream`, so the engine can re-baseline displays after the machine sleeps.
+/// Observes system/display wake, session activation, and Space changes so the engine can
+/// re-baseline displays when macOS resets their warmth state.
 ///
 /// Display reconfiguration callbacks (`DisplayReconfigurationObserver`) cover hotplug, but a wake
 /// from sleep does not always re-fire them even though the display state (and any applied gamma)
@@ -19,15 +18,15 @@ import AppKit
 /// on macOS, but this keeps the target portable) the stream simply never yields.
 @MainActor
 public final class SystemWakeObserver {
-    private let logger = Logger(label: "com.abendrot.WarmthKit.SystemWakeObserver")
-
-    /// One `Void` per system wake. Consume on the engine and debounce alongside reconfiguration.
+    /// Recovery signals, coalesced when buffered. Debounce alongside display reconfiguration.
     public let events: AsyncStream<Void>
     private let continuation: AsyncStream<Void>.Continuation
 
     #if canImport(AppKit)
-    private var token: NSObjectProtocol?
+    private var tokens: [NSObjectProtocol] = []
+    private var notificationCenter: NotificationCenter?
     #endif
+    private var stopped = false
 
     /// Nonisolated so the `WarmthEngine` actor can construct the observer from its own
     /// nonisolated initializer without a main-actor hop. Only the `AsyncStream` is built here; no
@@ -40,29 +39,42 @@ public final class SystemWakeObserver {
         self.continuation = continuation
     }
 
-    /// Begin observing wake notifications. Idempotent.
+    #if canImport(AppKit)
+    /// Isolate notification delivery in tests without observing the real workspace.
+    convenience init(notificationCenter: NotificationCenter) {
+        self.init()
+        self.notificationCenter = notificationCenter
+    }
+    #endif
+
+    /// Begin observing workspace recovery notifications. Idempotent.
     public func start() {
         #if canImport(AppKit)
-        guard token == nil else { return }
+        guard tokens.isEmpty, !stopped else { return }
+        let center = notificationCenter ?? NSWorkspace.shared.notificationCenter
+        notificationCenter = center
         let continuation = self.continuation
-        token = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // `queue: .main` guarantees main-thread delivery; the continuation is Sendable.
-            continuation.yield(())
+        tokens = [
+            NSWorkspace.didWakeNotification,
+            NSWorkspace.screensDidWakeNotification,
+            NSWorkspace.sessionDidBecomeActiveNotification,
+            NSWorkspace.activeSpaceDidChangeNotification,
+        ].map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                continuation.yield(())
+            }
         }
         #endif
     }
 
     /// Stop observing and finish the stream. Safe to call repeatedly.
     public func stop() {
+        stopped = true
         #if canImport(AppKit)
-        if let token {
-            NSWorkspace.shared.notificationCenter.removeObserver(token)
-            self.token = nil
+        for token in tokens {
+            notificationCenter?.removeObserver(token)
         }
+        tokens.removeAll()
         #endif
         continuation.finish()
     }

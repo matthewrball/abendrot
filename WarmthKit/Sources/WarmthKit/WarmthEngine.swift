@@ -76,9 +76,12 @@ public actor WarmthEngine {
     /// Short post-launch / wake / reconfiguration re-assert burst. Some panels (notably the built-in,
     /// whose gamma macOS rewrites as True Tone / auto-brightness / Night Shift settle, and displays that
     /// enumerate a beat late) come up un-warmed and would otherwise wait up to a full 60s ramp tick to be
-    /// re-asserted. The burst re-applies at ~1/3/6/12s so warmth lands within seconds. `reapply` re-writes
-    /// the backend each pass, so it overcomes an external reset; re-applying the same value is imperceptible.
+    /// re-asserted. The burst re-applies at ~1/3/6/12s and recreates compositor filters: a stale
+    /// WindowServer attachment can accept gain writes without visibly warming the screen.
     private var catchUpTask: Task<Void, Never>?
+    /// Backend calls suspend the actor; serialize writes so a newer Off/Reveal finishes last.
+    private var applyTask: Task<Void, Never>?
+    private var isShuttingDown = false
     /// Debounce policy (the timing arithmetic is pure / unit-tested in `ReconfigurationDebounce`).
     private let rebaselineDebounceWindow: TimeInterval = 0.4
 
@@ -214,6 +217,7 @@ public actor WarmthEngine {
 
     /// Neutral-reset every display via every active layer, then tear down. Called on quit.
     public func shutdown() async {
+        isShuttingDown = true
         rebaselineTask?.cancel()
         rebaselineTask = nil
         rampTask?.cancel()
@@ -223,6 +227,7 @@ public actor WarmthEngine {
         reconfigurationObserver.stop()
         await wakeObserver.stop()
         nightShiftFollower.stop()
+        await applyTask?.value
 
         for display in box.value.displays {
             try? await overlay.reset(display.id)
@@ -563,8 +568,14 @@ public actor WarmthEngine {
     private func rebaselineDisplays() async {
         await rebuildDisplayRows(for: currentDisplays())
         await recoverStaleDisplays()
-        await reapply()
+        await reassertDisplayWarmth()
         scheduleCatchUpReasserts()
+    }
+
+    /// Recreate private compositor resources after display/session changes. Gain writes alone
+    /// cannot recover a stale WindowServer attachment; gamma and tint retain their usual paths.
+    private func reassertDisplayWarmth() async {
+        await reapply(recreatingColorFilters: true)
     }
 
     /// Fire a short re-assert burst at ~1/3/6/12s after launch / wake / reconfiguration. Live mode only
@@ -578,7 +589,7 @@ public actor WarmthEngine {
             for interval in [1.0, 2.0, 3.0, 6.0] {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 if Task.isCancelled { return }
-                await self?.reapply()
+                await self?.reassertDisplayWarmth()
             }
         }
     }
@@ -672,9 +683,15 @@ public actor WarmthEngine {
     }
 
     #if DEBUG
+    var shutdownHasStartedForTesting: Bool { isShuttingDown }
+
     /// Test seam for the live minute ticker.
     func simulateRampTick() async {
         await tickRamp()
+    }
+
+    func simulateCatchUpReassert() async {
+        await reassertDisplayWarmth()
     }
     #endif
 
@@ -711,7 +728,24 @@ public actor WarmthEngine {
 
     /// Resolve the schedule + master enable + reveal and push the target to each display via
     /// its applied layer. Minimal for this scaffold — full layer selection is a later milestone.
-    private func reapply() async {
+    private func reapply(recreatingColorFilters: Bool = false) async {
+        guard !isShuttingDown else { return }
+        let previous = applyTask
+        let task = Task { [weak self] in
+            await previous?.value
+            await self?.applyCurrentState(recreatingColorFilters: recreatingColorFilters)
+        }
+        applyTask = task
+        await task.value
+    }
+
+    private func applyCurrentState(recreatingColorFilters: Bool) async {
+        guard !isShuttingDown else { return }
+        if recreatingColorFilters {
+            for display in box.value.displays where display.appliedMethod == .colorFilter {
+                try? await colorFilter.reset(display.id)
+            }
+        }
         let privateOn = box.value.privateAPIsEnabled
 
         // The Night Shift follower is "available" only when private APIs are on AND it reports a

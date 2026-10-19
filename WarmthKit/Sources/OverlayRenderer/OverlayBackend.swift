@@ -205,19 +205,19 @@ final class OverlayPanel {
         veilLayer.frame = panel.contentView?.bounds ?? veilLayer.frame
     }
 
-    /// Push a new warmth gain into the veil. Idempotent: no-ops when unchanged (draw-on-change
-    /// only). At the neutral gain (≈ identity, e.g. a 6500K apply) the veil is fully transparent,
+    /// Paint only when gain changes, but always restore visibility after display/Space changes.
+    /// At the neutral gain (≈ identity, e.g. a 6500K apply) the veil is fully transparent,
     /// so the display is effectively native.
     func setVeilGain(_ gain: RGBGain) {
-        guard gain != currentGain else { return }   // draw-on-change only → ~0% idle GPU
-        currentGain = gain
-
         let (color, alpha) = Self.veil(for: gain)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)        // no implicit animation; instant update
-        veilLayer.backgroundColor = color
-        veilLayer.opacity = Float(alpha)
-        CATransaction.commit()
+        if gain != currentGain {
+            currentGain = gain
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)        // no implicit animation; instant update
+            veilLayer.backgroundColor = color
+            veilLayer.opacity = Float(alpha)
+            CATransaction.commit()
+        }
 
         if alpha <= 0 {
             // Identity (neutral) → nothing to show; order out so the panel stops participating.

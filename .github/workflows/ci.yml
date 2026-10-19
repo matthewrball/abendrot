@@ -17,9 +17,10 @@
 # physical-hardware testing. It is manual-dispatch only, never runs on push/PR,
 # never sees fork secrets, and intentionally cannot pass until real hardware
 # runners and tests exist. The hosted `test-warmthcore` check runs the complete
-# headless WarmthKit and CLI suites on every push/PR across supported OS
-# generations. The app is built on macOS 26 because its source uses the macOS
-# 26 SDK behind availability checks; runtime coverage still needs real Macs.
+# headless WarmthKit and CLI suites on macOS 15 (Apple Silicon + Intel) and 26
+# (Apple Silicon). App builds and launch smoke tests cover macOS 15 Intel and
+# macOS 26 Apple Silicon with a macOS 26 SDK. The deployment floor remains macOS
+# 12; hosted checks do not prove runtime behavior on 12–14 or physical warming.
 #
 # Repository signing/ASC secrets are read only inside `sign-notarize`, which
 # can run only for manual dispatch on exact
@@ -114,15 +115,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-15, macos-26]
+        include:
+          - runner: macos-15
+            developer-dir: /Applications/Xcode_26.3.app/Contents/Developer
+          - runner: macos-15-intel
+            developer-dir: /Applications/Xcode_26.3.app/Contents/Developer
+          - runner: macos-26
+            developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
     runs-on: ${{ matrix.runner }}
+    env:
+      DEVELOPER_DIR: ${{ matrix.developer-dir }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Show toolchain
+      - name: Verify selected toolchain
         run: |
-          xcodebuild -version || true
-          swift --version || true
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          swift --version
+          xcrun --sdk macosx --show-sdk-version
 
       - name: Build + test WarmthKit (SPM, headless)
         working-directory: ${{ env.WARMTHKIT_PACKAGE_PATH }}
@@ -184,12 +196,30 @@ jobs:
   # "no project file" can no longer silently pass (the previous bug).
   # ---------------------------------------------------------------------------
   build-app-unsigned:
-    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            developer-dir: /Applications/Xcode_26.3.app/Contents/Developer
+          - runner: macos-26
+            developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
+    runs-on: ${{ matrix.runner }}
+    env:
+      DEVELOPER_DIR: ${{ matrix.developer-dir }}
     # lint is advisory (continue-on-error) and intentionally NOT a dependency here, so a style
     # finding can never block the real app-build gate.
     needs: [test-warmthcore]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Verify selected toolchain
+        run: |
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          swift --version
+          xcrun --sdk macosx --show-sdk-version
 
       - name: Install verified XcodeGen
         run: |
@@ -279,6 +309,17 @@ jobs:
         run: |
           scripts/qa/smoke-launch.sh \
             "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
+
+  # Preserve the protected-main status context while requiring every app-build row.
+  build-app-unsigned-required:
+    name: build-app-unsigned
+    if: always()
+    needs: [build-app-unsigned]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require app build matrix
+        if: needs.build-app-unsigned.result != 'success'
+        run: exit 1
 
   public-release-gate:
     name: public-dev/release-gate
