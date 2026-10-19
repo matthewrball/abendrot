@@ -165,6 +165,7 @@ final class OverlayPanel {
         )
 
         // ── Transparent, shadowless, click-through, always-floating chrome ──────────────
+        panel.animationBehavior = .none
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false

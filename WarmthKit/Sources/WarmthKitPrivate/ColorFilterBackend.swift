@@ -64,6 +64,7 @@ private final class ColorFilterPanel {
         guard let layer = WKCreateColorFilterLayer() else { throw ColorFilterError.unavailable }
         self.layer = layer
         panel = NSPanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false
         panel.isOpaque = false
         // Nonzero alpha keeps WindowServer surface masking active; black adds no channel bias.
