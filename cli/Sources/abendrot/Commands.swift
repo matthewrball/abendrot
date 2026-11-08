@@ -300,6 +300,111 @@ struct ExcludeList: ParsableCommand {
     }
 }
 
+// MARK: - pause
+
+enum PauseCommand {
+    static func requireWarmth(_ enabled: Bool?) throws {
+        guard enabled == true else {
+            throw fail("warmth is off", code: CLIExit.badInput)
+        }
+    }
+
+    static func hourPatch(at date: Date) -> SettingsPatch {
+        SettingsPatch(
+            pauseUntil: date.addingTimeInterval(PausePolicy.oneHour),
+            pauseKind: TimedPause.Kind.oneHour.rawValue
+        )
+    }
+
+    static func sunrisePatch(at date: Date, latitude: Double, longitude: Double) throws -> SettingsPatch {
+        guard let until = PausePolicy.nextSunrise(
+            at: date, latitude: latitude, longitude: longitude
+        ) else {
+            throw fail("sunrise isn't available for this location today", code: CLIExit.badInput)
+        }
+        return SettingsPatch(pauseUntil: until, pauseKind: TimedPause.Kind.untilSunrise.rawValue)
+    }
+
+    static func resumePatch() -> SettingsPatch {
+        SettingsPatch(clearPause: true)
+    }
+
+    static func fullscreenPatch(_ state: String) throws -> SettingsPatch {
+        guard let on = boolFromOnOff(state) else {
+            throw fail("fullscreen must be on|off, got \(state)", code: CLIExit.badInput)
+        }
+        return SettingsPatch(pausesForFullScreen: on)
+    }
+}
+
+struct Pause: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Pause warmth for an hour, until local sunrise, or while a window covers its display.",
+        subcommands: [PauseHour.self, PauseSunrise.self, PauseResume.self, PauseFullScreen.self]
+    )
+}
+
+struct PauseHour: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "hour",
+        abstract: "Pause warmth for one hour. Does not change the master toggle or the schedule."
+    )
+    @Flag(name: .long) var json = false
+
+    func run() throws {
+        try PauseCommand.requireWarmth(Control.configuredBool(PreferenceKey.isEnabled))
+        try applySettings(PauseCommand.hourPatch(at: Date()), json: json)
+    }
+}
+
+struct PauseSunrise: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "sunrise",
+        abstract: "Pause warmth until the next local sunrise. Does not change the schedule."
+    )
+    @Flag(name: .long) var json = false
+
+    func run() throws {
+        try PauseCommand.requireWarmth(Control.configuredBool(PreferenceKey.isEnabled))
+        let coordinate: TimeZoneCoordinates.Coordinate
+        if let saved = Control.configuredCoordinate() {
+            coordinate = .init(latitude: saved.lat, longitude: saved.lon)
+        } else {
+            coordinate = TimeZoneCoordinates.current()
+        }
+        try applySettings(
+            PauseCommand.sunrisePatch(
+                at: Date(), latitude: coordinate.latitude, longitude: coordinate.longitude),
+            json: json
+        )
+    }
+}
+
+struct PauseResume: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "resume",
+        abstract: "End a timed pause. The master toggle is unchanged."
+    )
+    @Flag(name: .long) var json = false
+
+    func run() throws {
+        try applySettings(PauseCommand.resumePatch(), json: json)
+    }
+}
+
+struct PauseFullScreen: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "fullscreen",
+        abstract: "Pause a display while its frontmost window covers it."
+    )
+    @Argument(help: "on | off") var state: String
+    @Flag(name: .long) var json = false
+
+    func run() throws {
+        try applySettings(try PauseCommand.fullscreenPatch(state), json: json)
+    }
+}
+
 // MARK: - reveal
 
 struct Reveal: ParsableCommand {

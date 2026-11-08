@@ -203,11 +203,26 @@ enum ScreenshotHarness {
             var state = MockWarmthState.warming
             state.scheduleMode = .alwaysOn
             state.warmestPoint = cozy ? .warmestSupported : .everydayWarmest
-            state.globalWarmth = WarmthLevel(strength: 0.6)
+            state.globalWarmth = WarmthLevel(strength: cozy ? 1 : 0.6)
             shot(cozy ? "popover-manual-cozy" : "popover-manual", width: 330,
                  colorScheme: colorScheme, into: out) {
                 PopoverView(model: AppModel(previewState: state))
             }
+        }
+        let pauseModel = AppModel(previewState: MockWarmthState.warming)
+        pauseModel.frontAppBundleID = "com.apple.Preview"
+        pauseModel.frontAppIsLive = true
+        pauseModel.previewSunrise = Date(timeIntervalSinceNow: 8 * 3600)
+        shot("popover-pause", width: 330, colorScheme: colorScheme, into: out) {
+            PopoverView(model: pauseModel)
+        }
+        var paused = MockWarmthState.warming
+        paused.timedPause = TimedPause(until: Date(timeIntervalSinceNow: 3600), kind: .oneHour)
+        let pausedModel = AppModel(previewState: paused)
+        pausedModel.frontAppBundleID = "com.apple.Preview"
+        pausedModel.frontAppIsLive = true
+        shot("popover-paused", width: 330, colorScheme: colorScheme, into: out) {
+            PopoverView(model: pausedModel)
         }
         for tab in SettingsTab.allCases {
             let model = AppModel(previewState: MockWarmthState.warming)

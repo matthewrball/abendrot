@@ -67,6 +67,8 @@ struct AdvancedTab: View {
                 .padding(.top, 2)
             }
             DividerLine()
+            FullScreenPauseSetting(model: model)
+            DividerLine()
             ExcludedAppsControl(model: model)
 
             if model.state.isEnabled {
@@ -88,10 +90,10 @@ struct AdvancedTab: View {
 
 // MARK: - Excluded apps (suspend-while-frontmost picker)
 
-/// Settings → Advanced → Excluded apps. While one of these apps is the frontmost app, Abendrot
-/// suspends warming across all displays (true color) — for color-critical work. The list is the
-/// observed `model.excludedApps`; rows resolve a friendly name + icon from the bundle id, and "Add
-/// app…" picks an `.app` via `NSOpenPanel` (the app is not sandboxed, so no entitlement is needed).
+/// Settings → Advanced → Excluded apps. While one of these apps is frontmost, Abendrot pauses
+/// warmth on the display that app is using. Other displays stay warm. The list is the observed
+/// `model.excludedApps`; rows resolve a friendly name + icon from the bundle id, and "Add app…"
+/// picks an `.app` via `NSOpenPanel`.
 private struct ExcludedAppsControl: View {
     @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -100,7 +102,7 @@ private struct ExcludedAppsControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             SectionLabel("Excluded apps")
-            Text("Abendrot pauses warming (shows true color) while one of these apps is frontmost — for color-critical work.")
+            Text("While one of these apps is in front, warmth pauses on the display that app is using. Other displays stay warm. macOS warms a whole display, so one window cannot stay neutral on its own.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
 
@@ -238,5 +240,35 @@ private struct ExcludedAppRow: View {
         // Drop a trailing ".app" the display name can carry when the Finder localization is absent.
         let trimmed = name.hasSuffix(".app") ? String(name.dropLast(4)) : name
         return (trimmed, NSWorkspace.shared.icon(forFile: url.path))
+    }
+}
+
+private struct FullScreenPauseSetting: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Full screen")
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Pause while a window covers its display")
+                        .font(Theme.Typography.ui(13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.textPrimary)
+                    Text("Other displays stay warm. A game that hides its window may stay warm — Abendrot does not ask for Screen Recording to look for it. Native full screen on a notched built-in display isn't detected; macOS places that window under the camera housing, the same as a zoomed window.")
+                        .font(Theme.Typography.ui(12))
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                Toggle("", isOn: Binding(
+                    get: { model.state.pausesForFullScreen },
+                    set: { model.setPausesForFullScreen($0) }
+                ))
+                .toggleStyle(.switch)
+                .tint(Theme.Color.accent)
+                .labelsHidden()
+                .accessibilityLabel("Pause while a window covers its display")
+            }
+        }
     }
 }

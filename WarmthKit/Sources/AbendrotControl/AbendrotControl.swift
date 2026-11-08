@@ -64,6 +64,12 @@ public enum PreferenceKey {
     public static let userLatitude = "userLatitude"
     public static let userLongitude = "userLongitude"
     public static let displaySettings = "displaySettings"
+    /// Absolute pause end, `timeIntervalSince1970`. Absent or expired means no timed pause.
+    public static let pauseUntil = "pauseUntil"
+    /// `TimedPause.Kind` raw value. Meaningful only with `pauseUntil`.
+    public static let pauseKind = "pauseKind"
+    /// Pause a display while its frontmost window covers it.
+    public static let pausesForFullScreen = "pausesForFullScreen"
 }
 
 // MARK: - DisplaySettingsPreference

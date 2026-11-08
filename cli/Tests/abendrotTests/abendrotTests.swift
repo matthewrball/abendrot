@@ -44,6 +44,53 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(next, ["com.a.app"])
     }
 
+    func testHourPatchLastsOneHourAndLeavesTheToggleAlone() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let patch = PauseCommand.hourPatch(at: now)
+        XCTAssertEqual(patch.pauseUntil, now.addingTimeInterval(PausePolicy.oneHour))
+        XCTAssertEqual(patch.pauseKind, TimedPause.Kind.oneHour.rawValue)
+        XCTAssertNil(patch.isEnabled)
+        XCTAssertNil(patch.clearPause)
+    }
+
+    func testSunrisePatchUsesTheComputedSunrise() throws {
+        let now = Date(timeIntervalSince1970: 1_782_057_600)
+        let until = try XCTUnwrap(PausePolicy.nextSunrise(
+            at: now, latitude: 34.05, longitude: -118.24))
+        let patch = try PauseCommand.sunrisePatch(at: now, latitude: 34.05, longitude: -118.24)
+        XCTAssertEqual(patch.pauseUntil, until)
+        XCTAssertEqual(patch.pauseKind, TimedPause.Kind.untilSunrise.rawValue)
+        XCTAssertNil(patch.isEnabled)
+    }
+
+    func testSunrisePatchRejectsALocationWithNoSunrise() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 12, day: 21, hour: 12))!
+        XCTAssertNil(PausePolicy.nextSunrise(at: now, latitude: 80, longitude: 0))
+        assertBadInput(try { _ = try PauseCommand.sunrisePatch(at: now, latitude: 80, longitude: 0) }())
+    }
+
+    func testPauseRequiresWarmthOn() {
+        XCTAssertNoThrow(try PauseCommand.requireWarmth(true))
+        assertBadInput(try PauseCommand.requireWarmth(false))
+        assertBadInput(try PauseCommand.requireWarmth(nil))
+    }
+
+    func testResumeClearsThePauseWithoutTouchingTheToggle() {
+        let patch = PauseCommand.resumePatch()
+        XCTAssertEqual(patch.clearPause, true)
+        XCTAssertNil(patch.isEnabled)
+        XCTAssertNil(patch.pauseUntil)
+        XCTAssertNil(patch.pauseKind)
+    }
+
+    func testFullscreenPatchAcceptsOnlyOnOrOff() throws {
+        XCTAssertEqual(try PauseCommand.fullscreenPatch("on").pausesForFullScreen, true)
+        XCTAssertEqual(try PauseCommand.fullscreenPatch("off").pausesForFullScreen, false)
+        assertBadInput(try { _ = try PauseCommand.fullscreenPatch("maybe") }())
+    }
+
     // MARK: Kelvin → strength curve (must invert WarmthLevel.kelvin and stay monotonic)
 
     func testWarmthCurveEndpoints() {

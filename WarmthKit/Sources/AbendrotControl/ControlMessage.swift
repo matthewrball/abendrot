@@ -25,6 +25,14 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
     /// restores the active mode's saved warmth at `Kelvin.everydayWarmest` (1900K). The app routes this
     /// through the same `AppModel.setCozy` path as Settings and onboarding; it is not a raw ceiling write.
     public var cozy: Bool?
+    /// Absolute pause end. Honored only with `pauseKind`, and only while still in the future.
+    public var pauseUntil: Date?
+    /// `TimedPause.Kind` raw value.
+    public var pauseKind: String?
+    /// Clear a timed pause without changing `isEnabled`.
+    public var clearPause: Bool?
+    /// Standing fullscreen-cover preference.
+    public var pausesForFullScreen: Bool?
 
     public init(
         isEnabled: Bool? = nil,
@@ -36,7 +44,11 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         userLatitude: Double? = nil,
         userLongitude: Double? = nil,
         clearUserCoordinate: Bool? = nil,
-        cozy: Bool? = nil
+        cozy: Bool? = nil,
+        pauseUntil: Date? = nil,
+        pauseKind: String? = nil,
+        clearPause: Bool? = nil,
+        pausesForFullScreen: Bool? = nil
     ) {
         self.isEnabled = isEnabled
         self.globalWarmthStrength = globalWarmthStrength
@@ -48,6 +60,10 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         self.userLongitude = userLongitude
         self.clearUserCoordinate = clearUserCoordinate
         self.cozy = cozy
+        self.pauseUntil = pauseUntil
+        self.pauseKind = pauseKind
+        self.clearPause = clearPause
+        self.pausesForFullScreen = pausesForFullScreen
     }
 
     /// True when no field is set — used by the app to decide a message is a no-op patch.
@@ -55,7 +71,8 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         isEnabled == nil && globalWarmthStrength == nil && warmestPointKelvin == nil
             && scheduleMode == nil && revealMode == nil && excludedApps == nil
             && userLatitude == nil && userLongitude == nil && clearUserCoordinate == nil
-            && cozy == nil
+            && cozy == nil && pauseUntil == nil && pauseKind == nil
+            && clearPause == nil && pausesForFullScreen == nil
     }
 }
 

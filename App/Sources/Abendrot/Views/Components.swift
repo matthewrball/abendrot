@@ -85,9 +85,8 @@ struct KelvinInfoButton: View {
 // the EXACT attenuation the app applies to the blue channel vs the neutral 6500K white point —
 // `rgbGain(for:).blue` is 1.0 at 6500K and falls toward 0 as it warms, so (1 − blueGain) is the
 // fraction of blue-channel light removed — already ~1.0 by ~1900K (blue hits 0 there). The 99% cap
-// stops short of a "total elimination" claim (residual backlight / panel leakage). An estimate of
-// emitted blue vs the standard white point, NOT a measured
-// melanopic/circadian dose (that needs the panel's spectrum, which we don't have).
+// stops short of a "total elimination" claim (residual backlight / panel leakage). Cozy, below that
+// ceiling, rolls the same figure to 99.99% — still not 100%, and still not a melanopic dose.
 struct BlueLightReductionLabel: View {
     let kelvin: Kelvin
     /// When false (e.g. live-dragging), the value updates instantly instead of rolling — rapid
@@ -96,9 +95,18 @@ struct BlueLightReductionLabel: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var percent: Int {
+    /// 0...99 until the everyday ceiling. Cozy (below 1900K, where blue is already gone) shows 99.99.
+    private var displayedPercent: Double {
         let reduction = min(0.99, max(0, 1 - rgbGain(for: kelvin).blue))
-        return Int((reduction * 100).rounded())
+        let capped = (reduction * 100).rounded()
+        if kelvin.value < Kelvin.everydayWarmest.value {
+            return 99.99
+        }
+        return capped
+    }
+
+    private var percentText: String {
+        displayedPercent >= 99.99 ? "99.99" : "\(Int(displayedPercent.rounded()))"
     }
 
     private var infoText: String {
@@ -106,13 +114,28 @@ struct BlueLightReductionLabel: View {
     }
 
     var body: some View {
-        Text("≈\(percent)% less blue light")
+        percentLabel
             .font(Theme.Typography.ui(11.5, weight: .semibold))
             .foregroundStyle(Theme.Color.accentText)
-            .animation(animated ? Theme.Motion.warm(reduceMotion: reduceMotion) : nil, value: percent)
+            .monospacedDigit()
+            .animation(roll, value: percentText)
             .help(infoText)
             .accessibilityElement()
-            .accessibilityLabel("Approximately \(percent) percent less blue light")
+            .accessibilityLabel("Approximately \(percentText) percent less blue light")
+    }
+
+    private var roll: Animation? {
+        animated && !reduceMotion ? Theme.Motion.warm : nil
+    }
+
+    @ViewBuilder
+    private var percentLabel: some View {
+        let text = Text("≈\(percentText)% less blue light")
+        if #available(macOS 13.0, *) {
+            text.contentTransition(.numericText())
+        } else {
+            text
+        }
     }
 }
 

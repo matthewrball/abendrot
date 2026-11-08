@@ -57,6 +57,19 @@ final class AppModel: ObservableObject {
     /// mirrored into the engine via `setExcludedApps`. Persisted; restored in `applyPersistedState()`.
     @Published var excludedApps: Set<String> = []
 
+    /// Last suitable frontmost app. Kept when Abendrot or a system agent activates, so the popover
+    /// can still exclude the app the user was in.
+    @Published var frontAppBundleID: String?
+    /// True when `frontAppBundleID` is the app actually in front.
+    @Published var frontAppIsLive = false
+    /// Screenshot/preview override for the sunrise pill. Nil in the live app.
+    var previewSunrise: Date?
+    /// `nextSunriseDate` scans the day. The popover reads it several times per frame while the slider drags.
+    private var sunriseCache: (latitude: Double, longitude: Double, minute: Double, value: Date?)?
+    /// Optimistic pause held until the engine snapshot echoes it, including a cleared pause.
+    private var pauseHold: (active: Bool, pause: TimedPause?)?
+    private var pendingFullScreenPreference: Bool?
+
     /// Manual Sunset location override. nil = Auto from system time zone; no permission or network.
     @Published var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
 
@@ -178,6 +191,9 @@ final class AppModel: ObservableObject {
         self.engine = engine
         self.state = WarmthState(scheduleMode: configuration.defaultScheduleMode)
         self.frontmostMonitor = FrontmostAppMonitor(engine: engine)
+        frontmostMonitor?.onFrontmostBundleID = { [weak self] bundleID in
+            self?.noteFrontmostApp(bundleID)
+        }
         self.hotkeyService = HotkeyService(engine: engine) { [weak self] in
             guard let self else { return }
             self.setEnabled(!self.state.isEnabled)
@@ -201,9 +217,7 @@ final class AppModel: ObservableObject {
     func start() {
         guard let engine else { return }
         hotkeyService?.installRevealHotkey()
-        // Seeds the current frontmost app immediately. If that `setFrontmostApp` lands before the
-        // `engine.start()` Task below, it's harmless — the engine recomputes suspend wholesale each pass.
-        frontmostMonitor?.start()
+        // The frontmost seed waits until the restored pause is installed, so launch cannot flash warm.
         observationTask = Task { [weak self] in
             for await snapshot in await engine.stateUpdates() {
                 self?.applyEngineSnapshot(snapshot)
@@ -258,6 +272,11 @@ final class AppModel: ObservableObject {
             // Recovery runs even when the persisted settings disable warming.
             try? await NativeColorFilterController.shared.start()
             #endif
+            let pause = self?.validatedPersistedPause()
+            let fullscreen = self?.cfPrefBool(PreferenceKey.pausesForFullScreen) ?? false
+            await engine.prepareSessionPause(pause, pausesForFullScreen: fullscreen)
+            self?.frontmostMonitor?.watchesFullScreen = fullscreen
+            self?.frontmostMonitor?.start()
             await engine.start()
             #if !APP_STORE
             switch await NativeColorFilterController.shared.latestRecoveryState {
@@ -296,6 +315,14 @@ final class AppModel: ObservableObject {
             } else {
                 next.isEnabled = state.isEnabled
             }
+        }
+        if let hold = pauseHold {
+            next.timedPause = hold.pause
+            if snapshot.timedPause == hold.pause { pauseHold = nil }
+        }
+        if let pending = pendingFullScreenPreference {
+            next.pausesForFullScreen = pending
+            if snapshot.pausesForFullScreen == pending { pendingFullScreenPreference = nil }
         }
         // A warmth the user set moments ago outranks the engine's echo of the frame before it —
         // otherwise the echo rewinds the thumb mid-drag. Only the slider actually being dragged is
@@ -473,6 +500,13 @@ final class AppModel: ObservableObject {
                 setExcludedApps(Set(validApps))
             }
         }
+        discardStalePausePreference()
+        if let pause = validatedPersistedPause() {
+            applyTimedPause(pause, userInitiated: false)
+        }
+        if let fullscreen = cfPrefBool(PreferenceKey.pausesForFullScreen) {
+            setPausesForFullScreen(fullscreen, userInitiated: false)
+        }
 
         if let data = cfPrefData(PreferenceKey.displaySettings) {
             if let decoded = ControlValidation.decodedPersistedDisplaySettings(from: data) {
@@ -617,7 +651,23 @@ final class AppModel: ObservableObject {
             setCozy(cozy, userInitiated: false)
             accepted = true
         }
-        // Enabled last (mild nicety; the engine recomputes from the whole box regardless).
+        if patch.clearPause == true {
+            applyTimedPause(nil, userInitiated: false)
+            accepted = true
+        } else if let until = patch.pauseUntil, let kindRaw = patch.pauseKind,
+                  let kind = TimedPause.Kind(rawValue: kindRaw),
+                  state.isEnabled {
+            let pause = TimedPause(until: until, kind: kind)
+            if PausePolicy.active(pause, at: Date()) != nil {
+                applyTimedPause(pause, userInitiated: false)
+                accepted = true
+            }
+        }
+        if let fullscreen = patch.pausesForFullScreen {
+            setPausesForFullScreen(fullscreen, userInitiated: false)
+            accepted = true
+        }
+        // Enabled last so turning warmth off clears a pause set earlier in this same patch.
         if let enabled = patch.isEnabled {
             setEnabled(enabled, userInitiated: false)
             accepted = true
@@ -688,6 +738,9 @@ final class AppModel: ObservableObject {
             warmestPointKelvin: state.warmestPoint.value,
             revealMode: revealMode.rawValue,
             excludedApps: excludedApps.sorted(),
+            pauseUntil: state.timedPause?.until,
+            pauseKind: state.timedPause?.kind.rawValue,
+            pausesForFullScreen: state.pausesForFullScreen,
             displays: state.displays.map { display in
                 DisplaySnapshot(
                     id: display.id.cgUUID.uuidString,
@@ -745,12 +798,118 @@ final class AppModel: ObservableObject {
     func setEnabled(_ enabled: Bool, userInitiated: Bool = true) {
         // Optimistic UI (no spinners): reflect immediately, engine confirms.
         let changed = enabled != state.isEnabled
+        if !enabled && state.isEnabled {
+            // An explicit off is stronger than a temporary pause, and must not resume later.
+            holdPause(nil)
+            persistPause(nil)
+            Task { await engine?.setTimedPause(nil) }
+        }
         state.isEnabled = enabled
         pendingEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.isEnabledKey)
         Task { await engine?.setEnabled(enabled) }
         // Tone only on a real user toggle (not the launch-time restore, which passes userInitiated: false).
         if userInitiated, changed { playSoftConfirmationTone(warming: enabled) }
+    }
+
+    func pauseForOneHour() {
+        guard state.isEnabled else { return }
+        applyTimedPause(PausePolicy.oneHour(from: Date()), userInitiated: true)
+    }
+
+    func pauseUntilSunrise() {
+        guard state.isEnabled, let until = nextSunriseDate() else { return }
+        applyTimedPause(TimedPause(until: until, kind: .untilSunrise), userInitiated: true)
+    }
+
+    func resumeTimedPause() {
+        applyTimedPause(nil, userInitiated: true)
+    }
+
+    func setPausesForFullScreen(_ enabled: Bool, userInitiated: Bool = true) {
+        frontmostMonitor?.watchesFullScreen = enabled
+        let current = pendingFullScreenPreference ?? state.pausesForFullScreen
+        guard enabled != current else { return }
+        pendingFullScreenPreference = enabled
+        state.pausesForFullScreen = enabled
+        UserDefaults.standard.set(enabled, forKey: PreferenceKey.pausesForFullScreen)
+        Task { await engine?.setPausesForFullScreen(enabled) }
+        if userInitiated { playSoftToggleTone(on: enabled) }
+    }
+
+    func toggleFrontAppExclusion() {
+        guard let id = frontAppBundleID, FrontAppPolicy.isSuitable(id) else { return }
+        if excludedApps.contains(id) {
+            removeExcludedApp(id)
+        } else {
+            addExcludedApp(id)
+        }
+    }
+
+    /// Next local sunrise from the same coordinate Sunset mode uses. Nil in polar day or polar night.
+    func nextSunriseDate(at date: Date = Date()) -> Date? {
+        if let previewSunrise { return previewSunrise }
+        let coordinate = userCoordinate ?? TimeZoneCoordinates.current()
+        let minute = (date.timeIntervalSince1970 / 60).rounded(.down)
+        if let cache = sunriseCache,
+           cache.latitude == coordinate.latitude,
+           cache.longitude == coordinate.longitude,
+           cache.minute == minute {
+            return cache.value
+        }
+        let value = PausePolicy.nextSunrise(
+            at: date, latitude: coordinate.latitude, longitude: coordinate.longitude)
+        sunriseCache = (coordinate.latitude, coordinate.longitude, minute, value)
+        return value
+    }
+
+    func noteFrontmostApp(_ bundleID: String?) {
+        if FrontAppPolicy.isSuitable(bundleID) {
+            frontAppBundleID = bundleID
+            frontAppIsLive = true
+        } else {
+            frontAppIsLive = false
+        }
+    }
+
+    private func applyTimedPause(_ pause: TimedPause?, userInitiated: Bool) {
+        let active = pause.flatMap { PausePolicy.active($0, at: Date()) }
+        holdPause(active)
+        persistPause(active)
+        Task { await engine?.setTimedPause(active) }
+        if userInitiated { playSoftConfirmationTone(warming: active == nil) }
+    }
+
+    private func holdPause(_ pause: TimedPause?) {
+        pauseHold = (active: true, pause: pause)
+        state.timedPause = pause
+    }
+
+    private func persistPause(_ pause: TimedPause?) {
+        let defaults = UserDefaults.standard
+        if let pause {
+            defaults.set(pause.until.timeIntervalSince1970, forKey: PreferenceKey.pauseUntil)
+            defaults.set(pause.kind.rawValue, forKey: PreferenceKey.pauseKind)
+        } else {
+            defaults.removeObject(forKey: PreferenceKey.pauseUntil)
+            defaults.removeObject(forKey: PreferenceKey.pauseKind)
+        }
+    }
+
+    private func validatedPersistedPause() -> TimedPause? {
+        CFPreferencesAppSynchronize(AbendrotControl.preferenceDomain as CFString)
+        guard cfPrefBool(PreferenceKey.isEnabled) == true,
+              let until = cfPrefDouble(PreferenceKey.pauseUntil), until.isFinite,
+              let kindRaw = cfPrefString(PreferenceKey.pauseKind),
+              let kind = TimedPause.Kind(rawValue: kindRaw) else { return nil }
+        return PausePolicy.active(
+            TimedPause(until: Date(timeIntervalSince1970: until), kind: kind), at: Date())
+    }
+
+    private func discardStalePausePreference() {
+        let hasKey = cfPrefDouble(PreferenceKey.pauseUntil) != nil || cfPrefString(PreferenceKey.pauseKind) != nil
+        guard hasKey, validatedPersistedPause() == nil else { return }
+        persistPause(nil)
     }
 
     /// A pleasant chime when the user toggles warming, if "Soft confirmation tone" is on (General tab;
@@ -1167,7 +1326,7 @@ final class AppModel: ObservableObject {
         // "Actively warming" = enabled, the schedule says warm NOW, and not mid-reveal. NOT merely
         // "enabled with strength > 0", which is also true in daytime Sunset mode (the solar ramp applies
         // 0 while the schedule is inactive) and would over-count the daylight hours.
-        let warmingNow = statsEnabled && state.isEnabled && state.isScheduleActiveNow && !state.isRevealing
+        let warmingNow = statsEnabled && state.isEnabled && state.isScheduleActiveNow && !state.isRevealing && state.timedPause == nil
         let now = Date()
         if warmingNow {
             if let start = warmingStartedAt {
@@ -1241,7 +1400,7 @@ final class AppModel: ObservableObject {
     /// "active" state. Mirrors the `warmingNow` stats signal (minus the analytics-only `statsEnabled`
     /// gate): enabled, the schedule says warm now, and not mid-reveal.
     var isWarmingActive: Bool {
-        state.isEnabled && state.isScheduleActiveNow && !state.isRevealing
+        state.isEnabled && state.isScheduleActiveNow && !state.isRevealing && state.timedPause == nil
     }
 
     // MARK: ── Incompatibility ("can only be tinted") detection — ──────────

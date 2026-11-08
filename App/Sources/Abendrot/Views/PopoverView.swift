@@ -40,35 +40,43 @@ struct PopoverView: View {
             // scale-fade. (Per-display "Override" rows live in the Advanced section now.)
             if model.state.isEnabled {
                 let locked = model.isWarmthLockedInSunset
+                let paused = model.state.timedPause != nil
+                let readoutKelvin = locked ? model.liveKelvin : model.globalKelvin
                 VStack(alignment: .leading, spacing: 0) {
-                    // In Sunset mode the readout stays LIVE but the slider disappears: the clock owns
-                    // the current warmth, and Settings owns the maximum. Always-on keeps it editable.
+                    // While paused the screen is neutral. Do not present the schedule's Kelvin or
+                    // blue-light figure as if they were applied.
                     WarmSlider(
                         strength: locked ? sunsetLiveBinding : globalWarmthBinding,
                         model: model,
-                        headerTitle: locked ? "Current warmth" : "Warmth",
-                        kelvin: locked ? model.liveKelvin : model.globalKelvin,
+                        headerTitle: paused ? "Neutral now" : (locked ? "Current warmth" : "Warmth"),
+                        kelvin: paused ? nil : readoutKelvin,
                         showsTrack: !locked,
                         cozy: isCozy
                     )
                     .zIndex(1)
-                    // Always-on's slider path is 7pt shorter than Sunset's caption path; reserve it here
-                    // so Mode and the footer share one y-position across modes.
-                    .padding(.bottom, locked ? 0 : 7)
-                    if locked {
+                    .padding(.bottom, locked && !paused ? 0 : 7)
+                    if paused {
+                        Text(pausedReturnCaption(kelvin: readoutKelvin))
+                            .font(Theme.Typography.ui(11))
+                            .foregroundStyle(Theme.Color.textFaint)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
+                    } else if locked {
                         sunsetLockCaption
                             .padding(.top, 10)
                             .transition(.opacity)
                     }
                     modeSection
                         .padding(.top, 16)
-                    if !locked || model.isWarmingActive {
-                        // Manual always offers Cozy, including at zero warmth; Sunset offers it
-                        // while actively warming.
+                    if !locked || model.isWarmingActive || paused {
+                        // Manual always offers Cozy. Sunset offers it while warming, and while a
+                        // timed pause is holding the screen neutral, so the returning warmth stays editable.
                         CozyModeControl(model: model, showsSectionLabel: false, showsExplanation: false)
                             .padding(.top, 16)
                             .transition(.opacity)
                     }
+                    SessionPauseControl(model: model)
+                        .padding(.top, 16)
                 }
                 .transition(.softReveal)
                 // Caption crossfades while the popover shell keeps a steady natural height.
@@ -160,6 +168,21 @@ struct PopoverView: View {
     /// and hides with the master toggle (it lives inside the `isEnabled` `.softReveal` group).
     /// Defaults to Sunset until the user picks here. Per-display "Override" rows live in the advanced
     /// (⌥-click) expansion now, not in the simple view.
+    /// Manual returns to a fixed Kelvin. Sunset does not: a one-hour pause ends wherever the ramp
+    /// is then, and a sunrise pause ends after the morning ramp, so warmth returns at the next sunset.
+    private func pausedReturnCaption(kelvin: Kelvin) -> String {
+        if model.state.scheduleMode == .alwaysOn {
+            return "Returns to \(kelvin.displayValue.formatted())K when the pause ends."
+        }
+        if model.state.scheduleMode == .followSystemNightShift {
+            if model.state.timedPause?.kind == .untilSunrise {
+                return "Warmth returns at sunset."
+            }
+            return "Warmth follows your schedule when the pause ends."
+        }
+        return "Warmth stays off when the pause ends."
+    }
+
     private var modeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel("Mode")

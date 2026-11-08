@@ -161,6 +161,10 @@ enum Control {
     static func persist(_ patch: SettingsPatch) {
         if let v = patch.isEnabled {
             setPreference(PreferenceKey.isEnabled, v as CFBoolean)
+            if v == false {
+                setPreference(PreferenceKey.pauseUntil, nil)
+                setPreference(PreferenceKey.pauseKind, nil)
+            }
         }
         if let v = patch.globalWarmthStrength {
             let mode = patch.scheduleMode ?? configuredScheduleMode()
@@ -188,6 +192,16 @@ enum Control {
         } else if let lat = patch.userLatitude, let lon = patch.userLongitude {
             setPreference(PreferenceKey.userLatitude, lat as CFNumber)
             setPreference(PreferenceKey.userLongitude, lon as CFNumber)
+        }
+        if patch.clearPause == true {
+            setPreference(PreferenceKey.pauseUntil, nil)
+            setPreference(PreferenceKey.pauseKind, nil)
+        } else if let until = patch.pauseUntil, let kind = patch.pauseKind {
+            setPreference(PreferenceKey.pauseUntil, until.timeIntervalSince1970 as CFNumber)
+            setPreference(PreferenceKey.pauseKind, kind as CFString)
+        }
+        if let fullscreen = patch.pausesForFullScreen {
+            setPreference(PreferenceKey.pausesForFullScreen, fullscreen as CFBoolean)
         }
         synchronize()
     }

@@ -29,9 +29,27 @@ import AppKit
 public final class FrontmostAppMonitor {
     private let engine: WarmthEngine
     private let logger = Logger(label: "com.abendrot.WarmthKit.FrontmostAppMonitor")
+    /// UI hook for the app in front. Not consulted by the engine. Nil bundle ids are reported too,
+    /// so the popover can say there is nothing suitable to exclude.
+    public var onFrontmostBundleID: ((String?) -> Void)?
 
     #if canImport(AppKit)
     private var token: NSObjectProtocol?
+    private var spaceToken: NSObjectProtocol?
+    private var spaceFollowUp: Task<Void, Never>?
+    /// While the full-screen preference is on, sample every 2s. A zoomed or borderless cover can
+    /// start or end without an app activation or a Space change.
+    private var coverFollowUp: Task<Void, Never>?
+    public var watchesFullScreen = false {
+        didSet {
+            if watchesFullScreen {
+                scheduleCoverFollowUp()
+            } else {
+                coverFollowUp?.cancel()
+                coverFollowUp = nil
+            }
+        }
+    }
     #endif
 
     public init(engine: WarmthEngine) {
@@ -43,34 +61,91 @@ public final class FrontmostAppMonitor {
     public func start() {
         #if canImport(AppKit)
         guard token == nil else { return }
-        let engine = self.engine
-        token = NSWorkspace.shared.notificationCenter.addObserver(
+        let center = NSWorkspace.shared.notificationCenter
+        token = center.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
-        ) { note in
-            // `queue: .main` guarantees main-thread delivery; read the activated app here and hop to
-            // the actor with just the (Sendable) bundle id + display-id set.
+        ) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            let bundleID = app?.bundleIdentifier
-            let displayIDs = app.flatMap { Self.displayIDs(forPID: $0.processIdentifier) }
-            Task { await engine.setFrontmostApp(bundleID, onDisplays: displayIDs) }
+            MainActor.assumeIsolated {
+                self?.deliver(app)
+            }
         }
-        // Seed once so a launch while an excluded app is already frontmost suspends immediately,
-        // rather than waiting for the next activation.
-        let seed = NSWorkspace.shared.frontmostApplication
-        let seedDisplays = seed.flatMap { Self.displayIDs(forPID: $0.processIdentifier) }
-        let seedBundle = seed?.bundleIdentifier
-        Task { await engine.setFrontmostApp(seedBundle, onDisplays: seedDisplays) }
+        // Entering or leaving native full screen switches Spaces without activating a new app.
+        spaceToken = center.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.deliverFrontmostAfterSpaceChange()
+            }
+        }
+        deliver(NSWorkspace.shared.frontmostApplication)
         #endif
     }
+
+    #if canImport(AppKit)
+    private func deliverFrontmostAfterSpaceChange() {
+        deliver(NSWorkspace.shared.frontmostApplication)
+        // The window list can lag the Space change; sample again once it has settled.
+        spaceFollowUp?.cancel()
+        spaceFollowUp = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.deliver(NSWorkspace.shared.frontmostApplication)
+        }
+    }
+
+    private func deliver(_ app: NSRunningApplication?, notifyUI: Bool = true) {
+        if notifyUI {
+            onFrontmostBundleID?(app?.bundleIdentifier)
+        }
+        let report = app.map { Self.windowReport(forPID: $0.processIdentifier) }
+            ?? FrontmostWindowReport(displayIDs: nil, fullScreenDisplayIDs: [])
+        scheduleCoverFollowUp()
+        let engine = self.engine
+        let bundleID = app?.bundleIdentifier
+        Task {
+            await engine.setFrontmostApp(
+                bundleID,
+                onDisplays: report.displayIDs,
+                fullScreenDisplays: report.fullScreenDisplayIDs
+            )
+        }
+    }
+
+    private func scheduleCoverFollowUp() {
+        guard watchesFullScreen else {
+            coverFollowUp?.cancel()
+            coverFollowUp = nil
+            return
+        }
+        coverFollowUp?.cancel()
+        coverFollowUp = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.deliver(NSWorkspace.shared.frontmostApplication, notifyUI: false)
+        }
+    }
+    #endif
 
     /// Stop observing. Safe to call repeatedly.
     public func stop() {
         #if canImport(AppKit)
+        spaceFollowUp?.cancel()
+        spaceFollowUp = nil
+        coverFollowUp?.cancel()
+        coverFollowUp = nil
+        let center = NSWorkspace.shared.notificationCenter
         if let token {
-            NSWorkspace.shared.notificationCenter.removeObserver(token)
+            center.removeObserver(token)
             self.token = nil
+        }
+        if let spaceToken {
+            center.removeObserver(spaceToken)
+            self.spaceToken = nil
         }
         #endif
     }
@@ -94,31 +169,88 @@ public final class FrontmostAppMonitor {
     /// minimised, panels-only, or unresolvable) — the engine reads `nil` as "all displays", preserving
     /// the legacy whole-app suspend (and the single-display case where there is nothing to refine).
     nonisolated static func displayIDs(forPID pid: pid_t) -> Set<CGDirectDisplayID>? {
+        windowReport(forPID: pid).displayIDs
+    }
+
+    /// Focused-window geometry for `pid`. `displayIDs` is the first layer-0 window of that app, so
+    /// exclusion still follows the focused window. `fullScreenDisplayIDs` is any layer-0 window that
+    /// covers a display, including one left up on another display after focus moves away.
+    nonisolated static func windowReport(forPID pid: pid_t) -> FrontmostWindowReport {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
-            return nil
+            return FrontmostWindowReport(displayIDs: nil, fullScreenDisplayIDs: [])
         }
 
+        var firstContent: CGRect?
+        var layerZero: [PausePolicy.ListedWindow] = []
         for window in windows {
-            // Owner PID — the canonical owner key, always present without permission.
-            guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t, ownerPID == pid else {
-                continue
-            }
-            // Normal application windows are layer 0; skip panels/menus/utility layers so we land on the
-            // real focused document window, not a helper that may sit on a different screen.
             guard (window[kCGWindowLayer as String] as? Int ?? 0) == 0 else { continue }
-            // Window geometry — present and correct without permission. Deliberately NOT reading
-            // kCGWindowName (the one Screen-Recording-gated field).
             guard let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
                   let rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
                   !rect.isEmpty else {
                 continue
             }
-            // First (frontmost) normal window wins — that's the one the user is focused on.
-            let ids = Set(displayIDs(intersecting: rect))
-            return ids.isEmpty ? nil : ids
+            let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t ?? -1
+            // Exclusion still follows the focused window. Full screen only counts a normal
+            // dock app. An accessory overlay such as Cua Driver can cover the built-in display
+            // without being full screen, and must not turn warmth off.
+            if countsAsFullScreenWindow(window, ownerPID: ownerPID) {
+                layerZero.append(PausePolicy.ListedWindow(bounds: rect, layer: 0, owner: ownerPID))
+            }
+            if firstContent == nil, ownerPID == pid {
+                firstContent = rect
+            }
         }
-        return nil
+        let listed = onlineDisplays()
+        let covered = PausePolicy.fullScreenDisplayIDs(
+            ownedWindows: layerZero,
+            displays: listed.displays,
+            mirroring: listed.mirroring
+        )
+        guard let firstContent else {
+            return FrontmostWindowReport(displayIDs: nil, fullScreenDisplayIDs: covered)
+        }
+        let ids = Set(displayIDs(intersecting: firstContent))
+        return FrontmostWindowReport(
+            displayIDs: ids.isEmpty ? nil : ids,
+            fullScreenDisplayIDs: covered
+        )
+    }
+
+    /// A covering window counts only when a person could be using that app full screen.
+    /// Invisible windows and accessory overlays (Cua Driver covers this Mac's built-in display)
+    /// are not full screen.
+    nonisolated private static func countsAsFullScreenWindow(
+        _ window: [String: Any],
+        ownerPID: pid_t
+    ) -> Bool {
+        let alpha = window[kCGWindowAlpha as String] as? Double ?? 1
+        guard alpha > 0.01 else { return false }
+        #if canImport(AppKit)
+        guard let app = NSRunningApplication(processIdentifier: ownerPID) else { return false }
+        return app.activationPolicy == .regular
+        #else
+        return true
+        #endif
+    }
+
+    /// Online, not merely active: a hardware mirror is not drawable, so `CGGetActiveDisplayList`
+    /// omits it, but gamma and DDC still warm it. `mirroring` maps that display to the one it copies.
+    nonisolated private static func onlineDisplays() -> (
+        displays: [PausePolicy.ListedDisplay],
+        mirroring: [CGDirectDisplayID: CGDirectDisplayID]
+    ) {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return ([], [:]) }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetOnlineDisplayList(count, &ids, &count) == .success else { return ([], [:]) }
+        var mirroring: [CGDirectDisplayID: CGDirectDisplayID] = [:]
+        let displays = ids.prefix(Int(count)).map { id -> PausePolicy.ListedDisplay in
+            let source = CGDisplayMirrorsDisplay(id)
+            if source != 0, source != id { mirroring[id] = source }
+            return PausePolicy.ListedDisplay(id: id, bounds: CGDisplayBounds(id))
+        }
+        return (displays, mirroring)
     }
 
     /// The online displays whose `CGDisplayBounds` intersect `rect` (both in the same global,
@@ -130,5 +262,16 @@ public final class FrontmostAppMonitor {
         var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
         guard CGGetDisplaysWithRect(rect, count, &ids, &count) == .success else { return [] }
         return Array(ids.prefix(Int(count)))
+    }
+}
+
+/// Permission-free geometry of the frontmost normal window. No window title, no pixel capture.
+public struct FrontmostWindowReport: Sendable, Equatable {
+    public var displayIDs: Set<CGDirectDisplayID>?
+    public var fullScreenDisplayIDs: Set<CGDirectDisplayID>
+
+    public init(displayIDs: Set<CGDirectDisplayID>?, fullScreenDisplayIDs: Set<CGDirectDisplayID>) {
+        self.displayIDs = displayIDs
+        self.fullScreenDisplayIDs = fullScreenDisplayIDs
     }
 }

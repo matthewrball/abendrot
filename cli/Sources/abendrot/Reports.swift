@@ -52,10 +52,20 @@ enum StatusReport {
         var lines: [String] = []
         lines.append("Abendrot \(snapshot.appVersion) (build \(snapshot.appBuild)) — \(running ? "running" : "not running")")
         lines.append("Enabled:  \(snapshot.isEnabled ? "yes" : "no")")
-        lines.append("Mode:     \(snapshot.scheduleMode.rawValue)\(snapshot.isScheduleActiveNow ? " (warming now)" : "")")
+        let paused = snapshot.pauseUntil.map { $0 > Date() } ?? false
+        let warmingNow = snapshot.isEnabled && snapshot.isScheduleActiveNow && !snapshot.isRevealing && !paused
+        lines.append("Mode:     \(snapshot.scheduleMode.rawValue)\(warmingNow ? " (warming now)" : "")")
         lines.append("Warmth:   \(String(format: "%.2f", snapshot.globalWarmthStrength)) (~\(snapshot.globalKelvin)K, max \(snapshot.warmestPointKelvin)K)")
         lines.append("Cozy:     \(snapshot.cozy ? "on" : "off")")
         lines.append("Reveal:   \(snapshot.revealMode)\(snapshot.isRevealing ? " (revealing now)" : "")")
+        if paused, let until = snapshot.pauseUntil {
+            let when = until.formatted(date: .omitted, time: .shortened)
+            let kind = snapshot.pauseKind == TimedPause.Kind.untilSunrise.rawValue ? "sunrise" : "one hour"
+            lines.append("Pause:    until \(when) (\(kind))")
+        }
+        if snapshot.pausesForFullScreen == true {
+            lines.append("Full screen: pause while a window covers its display")
+        }
         if !snapshot.excludedApps.isEmpty {
             lines.append("Excluded: \(snapshot.excludedApps.joined(separator: ", "))")
         }
@@ -97,6 +107,15 @@ enum StatusReport {
         lines.append("Cozy:     \(ControlStateSnapshot.isCozy(warmestPointKelvin: maxWarmth) ? "on" : "off")")
         let excluded = Control.configuredExcludedApps()
         if !excluded.isEmpty { lines.append("Excluded: \(excluded.joined(separator: ", "))") }
+        if let until = Control.configuredDouble(PreferenceKey.pauseUntil),
+           let kind = Control.configuredString(PreferenceKey.pauseKind),
+           let pauseKind = TimedPause.Kind(rawValue: kind),
+           PausePolicy.active(TimedPause(until: Date(timeIntervalSince1970: until), kind: pauseKind), at: Date()) != nil {
+            lines.append("Pause:    until \(Date(timeIntervalSince1970: until).formatted(date: .omitted, time: .shortened))")
+        }
+        if Control.configuredBool(PreferenceKey.pausesForFullScreen) == true {
+            lines.append("Full screen: pause while a window covers its display")
+        }
         return lines.joined(separator: "\n")
     }
 
@@ -122,6 +141,16 @@ enum StatusReport {
             fields["revealMode"] = revealMode
         }
         fields["excludedApps"] = Control.configuredExcludedApps()
+        if let until = Control.configuredDouble(PreferenceKey.pauseUntil),
+           let kind = Control.configuredString(PreferenceKey.pauseKind),
+           let pauseKind = TimedPause.Kind(rawValue: kind),
+           PausePolicy.active(TimedPause(until: Date(timeIntervalSince1970: until), kind: pauseKind), at: Date()) != nil {
+            fields["pauseUntil"] = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: until))
+            fields["pauseKind"] = pauseKind.rawValue
+        }
+        if let fullscreen = Control.configuredBool(PreferenceKey.pausesForFullScreen) {
+            fields["pausesForFullScreen"] = fullscreen
+        }
         return fields
     }
 }

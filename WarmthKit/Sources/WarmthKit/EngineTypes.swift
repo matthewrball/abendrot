@@ -60,6 +60,13 @@ public struct WarmthState: Sendable, Equatable {
     public var warmestPoint: Kelvin
     public var privateAPIsEnabled: Bool
     public var displays: [DisplayState]           // one per connected display
+    /// Absolute temporary pause. Nil when warmth is not being held for a clock time.
+    /// Independent of `isEnabled` and the schedule.
+    public var timedPause: TimedPause?
+    /// Standing preference: pause a display while its frontmost window covers it.
+    public var pausesForFullScreen: Bool
+    /// True when that preference is on and at least one frontmost window currently covers a display.
+    public var isFullScreenPauseActive: Bool
 
     public init(
         isEnabled: Bool = false,
@@ -70,7 +77,10 @@ public struct WarmthState: Sendable, Equatable {
         resolvedWarmth: WarmthLevel = .off,
         warmestPoint: Kelvin = Kelvin.everydayWarmest,
         privateAPIsEnabled: Bool = true,
-        displays: [DisplayState] = []
+        displays: [DisplayState] = [],
+        timedPause: TimedPause? = nil,
+        pausesForFullScreen: Bool = false,
+        isFullScreenPauseActive: Bool = false
     ) {
         self.isEnabled = isEnabled
         self.scheduleMode = scheduleMode
@@ -81,6 +91,9 @@ public struct WarmthState: Sendable, Equatable {
         self.warmestPoint = warmestPoint
         self.privateAPIsEnabled = privateAPIsEnabled
         self.displays = displays
+        self.timedPause = timedPause
+        self.pausesForFullScreen = pausesForFullScreen
+        self.isFullScreenPauseActive = isFullScreenPauseActive
     }
 }
 

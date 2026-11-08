@@ -33,6 +33,12 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
     public var cozy: Bool
     public var revealMode: String
     public var excludedApps: [String]
+    /// Absolute timed-pause end, when one is active. Omitted by older snapshots.
+    public var pauseUntil: Date?
+    /// `TimedPause.Kind` raw value.
+    public var pauseKind: String?
+    /// Standing fullscreen-cover preference. Nil on a snapshot that predates the field.
+    public var pausesForFullScreen: Bool?
     public var displays: [DisplaySnapshot]
 
     /// The single source of truth for "is cozy on": the warmest-point ceiling is below the everyday
@@ -58,6 +64,9 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
         warmestPointKelvin: Int,
         revealMode: String,
         excludedApps: [String],
+        pauseUntil: Date? = nil,
+        pauseKind: String? = nil,
+        pausesForFullScreen: Bool? = nil,
         displays: [DisplaySnapshot]
     ) {
         self.schemaVersion = schemaVersion
@@ -78,6 +87,9 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
         self.cozy = Self.isCozy(warmestPointKelvin: warmestPointKelvin)
         self.revealMode = revealMode
         self.excludedApps = excludedApps
+        self.pauseUntil = pauseUntil
+        self.pauseKind = pauseKind
+        self.pausesForFullScreen = pausesForFullScreen
         self.displays = displays
     }
 

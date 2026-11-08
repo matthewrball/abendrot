@@ -30,6 +30,9 @@ final class AbendrotControlTests: XCTestCase {
         XCTAssertEqual(PreferenceKey.userLatitude, "userLatitude")
         XCTAssertEqual(PreferenceKey.userLongitude, "userLongitude")
         XCTAssertEqual(PreferenceKey.displaySettings, "displaySettings")
+        XCTAssertEqual(PreferenceKey.pauseUntil, "pauseUntil")
+        XCTAssertEqual(PreferenceKey.pauseKind, "pauseKind")
+        XCTAssertEqual(PreferenceKey.pausesForFullScreen, "pausesForFullScreen")
     }
 
     func testIdentityConstants() {

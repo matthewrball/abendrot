@@ -21,7 +21,7 @@ struct Abendrot: ParsableCommand {
         version: cliVersion,
         subcommands: [
             Status.self, Get.self, On.self, Off.self, Cozy.self,
-            SetCommand.self, Exclude.self, Reveal.self,
+            SetCommand.self, Exclude.self, Pause.self, Reveal.self,
         ]
     )
 }

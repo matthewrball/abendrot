@@ -71,6 +71,8 @@ public actor WarmthEngine {
     /// there are no notifications, so time-varying schedules need their own tick. Static schedules
     /// return before touching a backend.
     private var rampTask: Task<Void, Never>?
+    /// Fires at a timed pause's absolute end so Manual mode does not wait for the sunset ramp tick.
+    private var pauseTask: Task<Void, Never>?
     private let rampTickInterval: TimeInterval = 60
 
     /// Short post-launch / wake / reconfiguration re-assert burst. Some panels (notably the built-in,
@@ -251,6 +253,8 @@ public actor WarmthEngine {
         rampTask = nil
         catchUpTask?.cancel()
         catchUpTask = nil
+        pauseTask?.cancel()
+        pauseTask = nil
         reconfigurationObserver.stop()
         await wakeObserver.stop()
         nightShiftFollower.stop()
@@ -283,9 +287,45 @@ public actor WarmthEngine {
     // MARK: ── Global controls ──────────────────────────────────────────────────
 
     public func setEnabled(_ enabled: Bool) async {
+        let wasEnabled = box.value.isEnabled
         box.value.isEnabled = enabled
+        // Turning warmth off is a stronger choice than a temporary pause. Turning it back on
+        // must not resurrect that pause.
+        if !enabled && wasEnabled {
+            clearTimedPause()
+        }
         await reapply()
         publish()
+    }
+
+    /// Hold warmth off until `pause.until`, or clear the hold when `pause` is nil or already expired.
+    /// Does not write `isEnabled` or the schedule. An expired or absurdly distant instant is discarded
+    /// so a stale preference cannot leave displays neutral.
+    public func setTimedPause(_ pause: TimedPause?) async {
+        let active = PausePolicy.active(pause, at: Date())
+        guard active != box.timedPause else { return }
+        box.timedPause = active
+        refreshPublishedPauseFlags()
+        schedulePauseExpiry()
+        await reapply()
+        publish()
+    }
+
+    /// Standing preference. When on, a frontmost window that covers a display suspends that display only.
+    public func setPausesForFullScreen(_ enabled: Bool) async {
+        guard enabled != box.pausesForFullScreen else { return }
+        box.pausesForFullScreen = enabled
+        refreshPublishedPauseFlags()
+        await reapply()
+        publish()
+    }
+
+    /// Install a restored pause before `start()` so the first apply cannot flash warmth and then drop it.
+    public func prepareSessionPause(_ pause: TimedPause?, pausesForFullScreen: Bool) {
+        box.timedPause = PausePolicy.active(pause, at: Date())
+        box.pausesForFullScreen = pausesForFullScreen
+        refreshPublishedPauseFlags()
+        schedulePauseExpiry()
     }
 
     public func setWarmth(_ level: WarmthLevel) async {
@@ -437,12 +477,23 @@ public actor WarmthEngine {
     /// Accessibility). When the frontmost app is excluded, only THOSE displays go true-colour and the
     /// rest stay warm. `nil` (the default, and the legacy behaviour) means "all displays" — so a caller
     /// that can't or doesn't compute the set, and every existing test, suspends everywhere as before.
-    public func setFrontmostApp(_ bundleID: String?, onDisplays displayIDs: Set<CGDirectDisplayID>? = nil) async {
+    public func setFrontmostApp(
+        _ bundleID: String?,
+        onDisplays displayIDs: Set<CGDirectDisplayID>? = nil,
+        fullScreenDisplays: Set<CGDirectDisplayID> = []
+    ) async {
+        let fullScreenBefore = effectiveFullScreenIDs()
         box.frontmostBundleID = bundleID
         box.frontmostDisplayIDs = displayIDs
-        // Publish-on-change only (deliberately unlike setExcludedApps): the frontmost id isn't part of
-        // the published WarmthState, so when suspend doesn't flip there is nothing new to publish.
-        if recomputeExcludedSuspend() { await reapply(); publish() }
+        box.fullScreenDisplayIDs = fullScreenDisplays
+        let exclusionChanged = recomputeExcludedSuspend()
+        let fullScreenChanged = fullScreenBefore != effectiveFullScreenIDs()
+        let flagsChanged = refreshPublishedPauseFlags()
+        guard exclusionChanged || fullScreenChanged || flagsChanged else { return }
+        if exclusionChanged || fullScreenChanged {
+            await reapply()
+        }
+        publish()
     }
 
     /// Recompute whether (and where) the current frontmost app suspends warmth. Returns true if the
@@ -469,6 +520,56 @@ public actor WarmthEngine {
         guard box.isExcludedAppFrontmost else { return false }
         guard let suspended = box.suspendedDisplayIDs else { return true }   // nil = all displays
         return suspended.contains(id.currentDisplayID)
+    }
+
+    /// Displays whose frontmost window currently covers them, or empty when the preference is off.
+    private func effectiveFullScreenIDs() -> Set<CGDirectDisplayID> {
+        box.pausesForFullScreen ? box.fullScreenDisplayIDs : []
+    }
+
+    private func isDisplaySuspendedByFullScreen(_ id: DisplayIdentity) -> Bool {
+        effectiveFullScreenIDs().contains(id.currentDisplayID)
+    }
+
+    @discardableResult
+    private func refreshPublishedPauseFlags() -> Bool {
+        let active = box.pausesForFullScreen && !box.fullScreenDisplayIDs.isEmpty
+        let changed = box.value.timedPause != box.timedPause
+            || box.value.pausesForFullScreen != box.pausesForFullScreen
+            || box.value.isFullScreenPauseActive != active
+        box.value.timedPause = box.timedPause
+        box.value.pausesForFullScreen = box.pausesForFullScreen
+        box.value.isFullScreenPauseActive = active
+        return changed
+    }
+
+    private func clearTimedPause() {
+        box.timedPause = nil
+        pauseTask?.cancel()
+        pauseTask = nil
+        refreshPublishedPauseFlags()
+    }
+
+    private func schedulePauseExpiry() {
+        pauseTask?.cancel()
+        pauseTask = nil
+        guard let until = box.timedPause?.until else { return }
+        let delay = until.timeIntervalSinceNow
+        guard delay.isFinite, delay > 0 else { return }
+        let nanos = UInt64((min(delay, PausePolicy.maximumLead) * 1_000_000_000).rounded(.up))
+        pauseTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: nanos)
+            guard !Task.isCancelled else { return }
+            await self?.expireTimedPause()
+        }
+    }
+
+    private func expireTimedPause() async {
+        guard !isShuttingDown else { return }
+        guard box.timedPause != nil, PausePolicy.active(box.timedPause, at: Date()) == nil else { return }
+        clearTimedPause()
+        await reapply()
+        publish()
     }
 
     // MARK: ── Safety ────────────────────────────────────────────────────────────
@@ -606,7 +707,9 @@ public actor WarmthEngine {
 
     /// Resend current warmth after display/session changes without an intervening neutral reset.
     private func reassertDisplayWarmth() async {
+        let before = box.value
         await reapply()
+        if box.value != before { publish() }
     }
 
     /// Fire a short re-assert burst at ~1/3/6/12s after launch / wake / reconfiguration. Live mode only
@@ -745,12 +848,17 @@ public actor WarmthEngine {
     /// (so a mid-ramp tick is a silent backend update); activation edges flip `isScheduleActiveNow`
     /// and do publish. Static Always-on/Off schedules do not need time-based re-evaluation.
     private func tickRamp() async {
-        guard box.value.isEnabled else { return }
-        switch box.value.scheduleMode {
-        case .followSystemNightShift, .solar, .custom:
-            break
-        case .alwaysOn, .off:
-            return
+        let pausePending = box.timedPause != nil
+        guard box.value.isEnabled || pausePending else { return }
+        // Manual mode has no sunset tick, so an active pause still needs this backstop if the
+        // dedicated expiry task is lost across sleep.
+        if !pausePending {
+            switch box.value.scheduleMode {
+            case .followSystemNightShift, .solar, .custom:
+                break
+            case .alwaysOn, .off:
+                return
+            }
         }
         let before = box.value
         await reapply()
@@ -804,10 +912,13 @@ public actor WarmthEngine {
         // live, locked Sunset readout: `.off` (neutral) by day, ramping to `globalWarmth` by night.
         box.value.resolvedWarmth = decision.target
 
-        // Global gates (master enable, schedule, hold-to-reveal). The excluded-app suspend is applied
-        // PER DISPLAY below, so on a multi-monitor setup only the display(s) the excluded app occupies
-        // go true-colour while the rest stay warm.
-        let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing
+        // Global gates. Timed pause is global, like reveal. Exclusion and fullscreen are per display,
+        // so a covered or excluded window leaves the other monitors warm.
+        if box.timedPause != nil, PausePolicy.active(box.timedPause, at: Date()) == nil {
+            clearTimedPause()
+        }
+        refreshPublishedPauseFlags()
+        let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing && box.timedPause == nil
         let warmestPoint = box.value.warmestPoint
 
         // Snapshot the work set by VALUE before any await. The engine is an actor, so each await is
@@ -827,9 +938,9 @@ public actor WarmthEngine {
                 override: display.preferredMethod,
                 privateAPIsEnabled: privateOn
             )
-            // This display is on only when the global gates pass AND it is not currently suspended by
-            // an excluded frontmost app sitting on it (per-display, so other monitors stay warm).
-            let displayOn = engineOn && !isDisplaySuspendedByExclusion(id)
+            let displayOn = engineOn
+                && !isDisplaySuspendedByExclusion(id)
+                && !isDisplaySuspendedByFullScreen(id)
             // A display uses its OWN warmth only when overridden ("Custom warmth"); otherwise it
             // follows the global/schedule target. (Replaces the old max-boost model.)
             let effective = displayOn ? (display.warmthOverridden ? display.warmth : decision.target) : .off
@@ -1064,6 +1175,11 @@ private struct WarmthStateBox {
     /// displays (whole-app suspend / single-display fallback, == legacy behaviour); a set = only those
     /// monitors. Empty set suspends nothing. Engine-private.
     var suspendedDisplayIDs: Set<CGDirectDisplayID>? = nil
+    /// Displays the frontmost window covers. Empty means "not fullscreen" — never "suspend everything".
+    /// A missing window list must not drop warmth.
+    var fullScreenDisplayIDs: Set<CGDirectDisplayID> = []
+    var timedPause: TimedPause?
+    var pausesForFullScreen: Bool = false
 }
 
 // MARK: - NoopBackend (test-support neutral layer)

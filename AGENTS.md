@@ -168,14 +168,29 @@ abendrot set location --auto
 
 ### `abendrot exclude add|remove <bundle-id> [--json]` / `abendrot exclude list [--json]`
 
-Manage the per-app warmth-exclusion list (apps whose windows are not warmed). The CLI
-computes the add/remove against the current set and writes the full sorted replacement.
+Manage the per-app warmth-exclusion list. While an excluded app is in front, warmth pauses on the display that app is using. Other displays stay warm. The CLI computes the add/remove against the current set and writes the full sorted replacement.
 
 ```sh
 abendrot exclude add com.apple.dt.Xcode
 abendrot exclude remove com.apple.dt.Xcode
 abendrot exclude list            # one bundle id per line, or "(none)"
 abendrot exclude list --json     # {"excludedApps":["com.apple.dt.Xcode"]}
+```
+
+### `abendrot pause hour|sunrise|resume` / `abendrot pause fullscreen on|off`
+
+Temporary warmth holds. These do not change the master toggle, the schedule, or the warmth
+curve. `hour` and `sunrise` require warmth to be on, and persist an absolute end time; an
+expired hold is discarded on launch so displays cannot stay neutral. `resume` clears that
+hold. Turning warmth off also clears it. `fullscreen on` pauses a display when the topmost
+window there belongs to an app that also covers that display.
+Exclusions and fullscreen pause the whole display the window is on, not one window.
+
+```sh
+abendrot pause hour
+abendrot pause sunrise
+abendrot pause resume
+abendrot pause fullscreen on
 ```
 
 ### `abendrot reveal [--hold <hold>] [--json]`
@@ -212,6 +227,10 @@ prints usage.
 | Location longitude | `set location <lat> <lon>` | Double | `-180.0`–`180.0` | Pair with latitude. |
 | Location auto | `set location --auto` | flag | — | Clears the manual coordinate. |
 | Enabled | `on` / `off` | Bool | — | Master toggle. |
+| Pause for one hour | `pause hour` | Date + String | one hour from now | Exit 2 if warmth is off. Does not change the toggle or the schedule. |
+| Pause until sunrise | `pause sunrise` | Date + String | next local sunrise | Exit 2 if warmth is off, or if sunrise is unavailable for this location today. |
+| End a timed pause | `pause resume` | flag | — | Clears `pauseUntil` and `pauseKind`. Does not require warmth to be on. |
+| Full-screen pause | `pause fullscreen on/off` | Bool | `on` or `off` | Exit 2 for any other word. A standing preference, not a timed pause. |
 | Excluded apps | `exclude add\|remove <bundle-id>` | String | a macOS bundle id | e.g. `com.apple.dt.Xcode`. |
 | Reveal (transient) | `reveal [--hold <s>]` | Double | `0`–`300` seconds, default `3` | Live-only; not persisted. |
 
@@ -226,7 +245,8 @@ loudly (exit 2) rather than silently clamped.
 full live snapshot plus the CLI-only fields. When the app is **not** running, `running` is
 `false` and a reduced set of last-saved fields is surfaced (the persisted values:
 `isEnabled`, `scheduleMode`, `globalWarmthStrength` if set, `warmestPointKelvin`,
-`revealMode` if set, `excludedApps`). Always check `running` first.
+`revealMode` if set, `excludedApps`, `pauseUntil` and `pauseKind` while a timed pause is
+still active, and `pausesForFullScreen` if set). Always check `running` first.
 
 Example (app running):
 
@@ -251,6 +271,9 @@ Example (app running):
   "warmestPointKelvin": 500,
   "revealMode": "hold",
   "excludedApps": [],
+  "pauseUntil": "2026-11-09T06:12:00Z",
+  "pauseKind": "untilSunrise",
+  "pausesForFullScreen": true,
   "displays": [
     {
       "id": "37D8832A-2D66-02CA-B9F7-8F30A301B230",
@@ -285,6 +308,9 @@ Example (app running):
 | `warmestPointKelvin` | Int | The warmest-point ceiling. |
 | `revealMode` | String | `hold` \| `toggle`. |
 | `excludedApps` | [String] | Sorted bundle ids excluded from warming. |
+| `pauseUntil` | String (ISO-8601) or absent | Timed-pause end. Present only while that end is still in the future. Turning warmth off clears it. |
+| `pauseKind` | String or absent | `oneHour` \| `untilSunrise`. Present only with `pauseUntil`. |
+| `pausesForFullScreen` | Bool or absent | Standing preference: pause a display while its frontmost window covers it. Independent of the timed pause. |
 | `displays` | [object] | Per-display status (see below). |
 
 Each `displays[]` object:
@@ -310,7 +336,7 @@ gracefully; new fields may appear under the same `schemaVersion` minor evolution
 | Code | Name | Meaning |
 |---|---|---|
 | `0` | OK | Command succeeded. For a `set` while the app is **closed**, this still means the value was **persisted** (it applies on next launch); the CLI prints `saved; app not running` on stderr and reports `"appliedLive": false` under `--json`. |
-| `2` | Bad input | Invalid value or unknown key (e.g. `warmth 50`, an unknown `get` key, a malformed mode), **and** any malformed invocation — a missing/extra argument, an unknown option or subcommand, a non-numeric value, or both a strength and `--kelvin`. The CLI prints a clear message to stderr. (There is no separate `64`/`EX_USAGE` exit; usage errors are normalized to `2`.) |
+| `2` | Bad input | Invalid value or unknown key (e.g. `warmth 50`, an unknown `get` key, a malformed mode), **and** any malformed invocation — a missing/extra argument, an unknown option or subcommand, a non-numeric value, or both a strength and `--kelvin`. The CLI prints a clear message to stderr. (There is no separate `64`/`EX_USAGE` exit; usage errors are normalized to `2`.) `pause hour` and `pause sunrise` also exit 2 when warmth is off. `pause sunrise` exits 2 when no sunrise exists for the location today. `pause fullscreen` exits 2 unless the argument is `on` or `off`. |
 | `3` | App not running | A command that **requires** the running app could not reach it. Today this is `reveal` (live-only): no running app, or the app did not confirm the reveal in time. |
 | `4` | Live-apply timeout | A `set` persisted successfully and the app **was** running, but it did not confirm the live apply within the timeout. The value is saved; it just was not confirmed live. |
 
@@ -371,6 +397,9 @@ Domain: `app.abendrot.Abendrot`
 | `warmestPointKelvin` | Number (Int) | `500`–`6500` | `defaults write app.abendrot.Abendrot warmestPointKelvin -int 1900` |
 | `revealMode` | String | `hold` \| `toggle` | `defaults write app.abendrot.Abendrot revealMode -string hold` |
 | `excludedApps` | Array of String | bundle ids (keep sorted) | `defaults write app.abendrot.Abendrot excludedApps -array com.apple.dt.Xcode` |
+| `pauseUntil` | Number (Double) | Unix time of the pause end | `defaults write app.abendrot.Abendrot pauseUntil -float 1762661520` |
+| `pauseKind` | String | `oneHour` \| `untilSunrise` | `defaults write app.abendrot.Abendrot pauseKind -string oneHour` |
+| `pausesForFullScreen` | Bool | standing full-screen preference | `defaults write app.abendrot.Abendrot pausesForFullScreen -bool true` |
 | `displaySettings` | **Data** (JSON of validated per-display settings) | app-managed; use the CLI/UI | not a plain scalar — do not hand-edit |
 | `userLatitude` | Number (Double) | `-90.0`–`90.0` | `defaults write app.abendrot.Abendrot userLatitude -float 37.77` |
 | `userLongitude` | Number (Double) | `-180.0`–`180.0` | `defaults write app.abendrot.Abendrot userLongitude -float -122.42` |
