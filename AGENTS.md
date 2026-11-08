@@ -183,7 +183,8 @@ Temporary warmth holds. These do not change the master toggle, the schedule, or 
 curve. `hour` and `sunrise` require warmth to be on, and persist an absolute end time; an
 expired hold is discarded on launch so displays cannot stay neutral. `resume` clears that
 hold. Turning warmth off also clears it. `fullscreen on` pauses a display when the topmost
-window there belongs to an app that also covers that display.
+window there belongs to an app that also covers that display, or when that display is showing
+a native full-screen Space, including on a notched built-in. A zoomed window counts only when it fills the whole display.
 Exclusions and fullscreen pause the whole display the window is on, not one window.
 
 ```sh
@@ -310,7 +311,7 @@ Example (app running):
 | `excludedApps` | [String] | Sorted bundle ids excluded from warming. |
 | `pauseUntil` | String (ISO-8601) or absent | Timed-pause end. Present only while that end is still in the future. Turning warmth off clears it. |
 | `pauseKind` | String or absent | `oneHour` \| `untilSunrise`. Present only with `pauseUntil`. |
-| `pausesForFullScreen` | Bool or absent | Standing preference: pause a display while its frontmost window covers it. Independent of the timed pause. |
+| `pausesForFullScreen` | Bool or absent | Standing preference: pause a display while a window covers it or while it shows a native full-screen Space. Independent of the timed pause. |
 | `displays` | [object] | Per-display status (see below). |
 
 Each `displays[]` object:

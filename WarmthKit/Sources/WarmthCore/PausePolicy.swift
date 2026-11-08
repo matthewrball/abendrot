@@ -38,11 +38,10 @@ public enum PausePolicy {
     /// A window is full screen only when it covers the display to within this inset of every edge,
     /// including the top. A zoomed window that starts under the menu bar does not.
     ///
-    /// Probed here: external native full screen equals `CGDisplayBounds` and its menu-bar entry
-    /// disappears. On the notched built-in, native full screen content is `{0, 33, 1512, 949}` —
-    /// the same frame as a zoomed window — and the menu-bar entry stays listed. A layer-26 strip
-    /// at the top showed up only while the toolbar was revealed, so it is not a signal. Notched
-    /// built-in full screen is not detected.
+    /// Geometry alone misses native full screen on a notched built-in: the content settles at
+    /// `{0, 33, 1512, 949}`, the same frame as a zoomed window, after briefly covering the whole
+    /// display during the animation. `fullScreenSpaceDisplayIDs` catches that case from the
+    /// desktop-level windows instead.
     public static let fullScreenEdgeInset: CGFloat = 8
 
     /// The pause to honor at `date`, or nil when it is missing, expired, non-finite, or absurdly far.
@@ -91,16 +90,55 @@ public enum PausePolicy {
         }
     }
 
+    /// A desktop-level window. `desktop` is Finder's desktop, which every normal Space keeps on
+    /// each display. `fullScreenBackdrop` is the Dock's backdrop one level above the desktop, which
+    /// macOS puts behind a native full-screen Space.
+    public struct BackdropWindow: Equatable, Sendable {
+        public enum Kind: Equatable, Sendable {
+            case desktop
+            case fullScreenBackdrop
+        }
+
+        public var bounds: CGRect
+        public var kind: Kind
+        public init(bounds: CGRect, kind: Kind) {
+            self.bounds = bounds
+            self.kind = kind
+        }
+    }
+
+    /// Displays showing a native full-screen Space. Probed on a notched built-in and on an
+    /// external display: once settled, the Dock backdrop covers that display and Finder's desktop
+    /// is gone from it. A zoomed window keeps the desktop. During the slide animation the backdrop
+    /// is offset and can reach the neighbouring display while its desktop is still listed, so both
+    /// conditions are required.
+    public static func fullScreenSpaceDisplayIDs(
+        backdrops: [BackdropWindow],
+        displays: [ListedDisplay]
+    ) -> Set<CGDirectDisplayID> {
+        var spaces: Set<CGDirectDisplayID> = []
+        for display in displays {
+            let center = CGPoint(x: display.bounds.midX, y: display.bounds.midY)
+            let hasBackdrop = backdrops.contains {
+                $0.kind == .fullScreenBackdrop && coversDisplay(window: $0.bounds, display: display.bounds)
+            }
+            let hasDesktop = backdrops.contains { $0.kind == .desktop && $0.bounds.contains(center) }
+            if hasBackdrop && !hasDesktop { spaces.insert(display.id) }
+        }
+        return spaces
+    }
+
     /// A display is full screen when the owner of its topmost layer-0 window also has a window that
-    /// covers it. A toolbar strip listed first still counts if that same owner covers the display.
-    /// A small window of another app sitting on top does not. `mirroring` maps a hardware mirror to
-    /// the display it copies.
+    /// covers it, or when it is showing a native full-screen Space. A toolbar strip listed first
+    /// still counts if that same owner covers the display. A small window of another app sitting on
+    /// top does not. `mirroring` maps a hardware mirror to the display it copies.
     public static func fullScreenDisplayIDs(
         ownedWindows: [ListedWindow],
         displays: [ListedDisplay],
-        mirroring: [CGDirectDisplayID: CGDirectDisplayID] = [:]
+        mirroring: [CGDirectDisplayID: CGDirectDisplayID] = [:],
+        fullScreenSpaces: Set<CGDirectDisplayID> = []
     ) -> Set<CGDirectDisplayID> {
-        var covered: Set<CGDirectDisplayID> = []
+        var covered = fullScreenSpaces
         for display in displays {
             guard let top = ownedWindows.first(where: { window in
                 window.layer == 0 && !window.bounds.isEmpty

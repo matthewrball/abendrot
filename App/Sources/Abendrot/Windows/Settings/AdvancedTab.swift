@@ -254,7 +254,7 @@ private struct FullScreenPauseSetting: View {
                     Text("Pause while a window covers its display")
                         .font(Theme.Typography.ui(13, weight: .semibold))
                         .foregroundStyle(Theme.Color.textPrimary)
-                    Text("Other displays stay warm. A game that hides its window may stay warm — Abendrot does not ask for Screen Recording to look for it. Native full screen on a notched built-in display isn't detected; macOS places that window under the camera housing, the same as a zoomed window.")
+                    Text("Other displays stay warm. Native full screen counts on every display, including a notched built-in. A zoomed window counts only when it fills the whole display. A game that hides its window may stay warm — Abendrot does not ask for Screen Recording to look for it.")
                         .font(Theme.Typography.ui(12))
                         .foregroundStyle(Theme.Color.textMuted)
                         .fixedSize(horizontal: false, vertical: true)

@@ -173,24 +173,38 @@ public final class FrontmostAppMonitor {
     }
 
     /// Focused-window geometry for `pid`. `displayIDs` is the first layer-0 window of that app, so
-    /// exclusion still follows the focused window. `fullScreenDisplayIDs` is any layer-0 window that
-    /// covers a display, including one left up on another display after focus moves away.
+    /// exclusion still follows the focused window. `fullScreenDisplayIDs` is any display covered by
+    /// a layer-0 window, including one left up on another display after focus moves away, plus any
+    /// display showing a native full-screen Space.
     nonisolated static func windowReport(forPID pid: pid_t) -> FrontmostWindowReport {
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-        guard let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+        // Desktop elements stay in the list: Finder's desktop and the Dock's full-screen backdrop
+        // are how a native full-screen Space is told apart from a zoomed window.
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID)
+            as? [[String: Any]] else {
             return FrontmostWindowReport(displayIDs: nil, fullScreenDisplayIDs: [])
         }
 
+        let desktopLevel = Int(CGWindowLevelForKey(.desktopIconWindow))
+        let backdropLevel = Int(CGWindowLevelForKey(.desktopWindow)) + 1
         var firstContent: CGRect?
         var layerZero: [PausePolicy.ListedWindow] = []
+        var backdrops: [PausePolicy.BackdropWindow] = []
         for window in windows {
-            guard (window[kCGWindowLayer as String] as? Int ?? 0) == 0 else { continue }
+            let layer = window[kCGWindowLayer as String] as? Int ?? 0
+            guard layer == 0 || layer == desktopLevel || layer == backdropLevel else { continue }
             guard let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
                   let rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
                   !rect.isEmpty else {
                 continue
             }
             let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t ?? -1
+            if layer != 0 {
+                if let kind = backdropKind(layer: layer, ownerPID: ownerPID,
+                                           desktopLevel: desktopLevel, backdropLevel: backdropLevel) {
+                    backdrops.append(PausePolicy.BackdropWindow(bounds: rect, kind: kind))
+                }
+                continue
+            }
             // Exclusion still follows the focused window. Full screen only counts a normal
             // dock app. An accessory overlay such as Cua Driver can cover the built-in display
             // without being full screen, and must not turn warmth off.
@@ -205,7 +219,11 @@ public final class FrontmostAppMonitor {
         let covered = PausePolicy.fullScreenDisplayIDs(
             ownedWindows: layerZero,
             displays: listed.displays,
-            mirroring: listed.mirroring
+            mirroring: listed.mirroring,
+            fullScreenSpaces: PausePolicy.fullScreenSpaceDisplayIDs(
+                backdrops: backdrops,
+                displays: listed.displays
+            )
         )
         guard let firstContent else {
             return FrontmostWindowReport(displayIDs: nil, fullScreenDisplayIDs: covered)
@@ -215,6 +233,22 @@ public final class FrontmostAppMonitor {
             displayIDs: ids.isEmpty ? nil : ids,
             fullScreenDisplayIDs: covered
         )
+    }
+
+    /// Finder's desktop at the desktop-icon level, or the Dock's backdrop just above the desktop.
+    /// Matched by bundle id, so a renamed or localized owner name does not matter.
+    nonisolated private static func backdropKind(
+        layer: Int,
+        ownerPID: pid_t,
+        desktopLevel: Int,
+        backdropLevel: Int
+    ) -> PausePolicy.BackdropWindow.Kind? {
+        #if canImport(AppKit)
+        let bundleID = NSRunningApplication(processIdentifier: ownerPID)?.bundleIdentifier
+        if layer == desktopLevel, bundleID == "com.apple.finder" { return .desktop }
+        if layer == backdropLevel, bundleID == "com.apple.dock" { return .fullScreenBackdrop }
+        #endif
+        return nil
     }
 
     /// A covering window counts only when a person could be using that app full screen.

@@ -24,7 +24,7 @@ struct PausePolicyTests {
         #expect(PausePolicy.active(nil, at: now) == nil)
     }
 
-    @Test("Full screen means the window covers the display, not a zoomed or notched-fullscreen frame")
+    @Test("Geometry alone does not count a zoomed or notched-fullscreen frame")
     func coverage() {
         let builtIn = CGRect(x: 0, y: 0, width: 1512, height: 982)
         let external = CGRect(x: 1512, y: 0, width: 1920, height: 1080)
@@ -60,6 +60,63 @@ struct PausePolicyTests {
             ownedWindows: [strip, content], displays: [external, builtIn]) == [5])
         #expect(PausePolicy.fullScreenDisplayIDs(
             ownedWindows: [strip, notched], displays: [external, builtIn]).isEmpty)
+    }
+
+    @Test("A notched native full-screen Space pauses that display, but a zoomed window does not")
+    func notchedFullScreenSpace() {
+        let builtIn = PausePolicy.ListedDisplay(
+            id: 1, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        let external = PausePolicy.ListedDisplay(
+            id: 5, bounds: CGRect(x: 1512, y: 0, width: 1920, height: 1080))
+        let underNotch = PausePolicy.ListedWindow(
+            bounds: CGRect(x: 0, y: 33, width: 1512, height: 949), layer: 0, owner: 7)
+        let builtInDesktop = PausePolicy.BackdropWindow(bounds: builtIn.bounds, kind: .desktop)
+        let externalDesktop = PausePolicy.BackdropWindow(bounds: external.bounds, kind: .desktop)
+        let builtInBackdrop = PausePolicy.BackdropWindow(bounds: builtIn.bounds, kind: .fullScreenBackdrop)
+
+        // Probed: settled full screen on the notched built-in drops Finder's desktop there and
+        // adds the Dock backdrop. The external keeps its desktop and stays warm.
+        let fullScreen = PausePolicy.fullScreenSpaceDisplayIDs(
+            backdrops: [builtInBackdrop, externalDesktop], displays: [builtIn, external])
+        #expect(fullScreen == [1])
+        #expect(PausePolicy.fullScreenDisplayIDs(
+            ownedWindows: [underNotch], displays: [builtIn, external], fullScreenSpaces: fullScreen) == [1])
+
+        // A zoomed window has the same frame, but the desktop is still listed.
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(
+            backdrops: [builtInDesktop, externalDesktop], displays: [builtIn, external]).isEmpty)
+    }
+
+    @Test("The sliding full-screen animation does not pause either display")
+    func fullScreenAnimation() {
+        let builtIn = PausePolicy.ListedDisplay(
+            id: 1, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        let external = PausePolicy.ListedDisplay(
+            id: 5, bounds: CGRect(x: 1512, y: 0, width: 1920, height: 1080))
+        // Probed 0.2s into the animation: the backdrop and old desktop slide sideways together.
+        let sliding = [
+            PausePolicy.BackdropWindow(bounds: CGRect(x: 1019, y: 0, width: 1512, height: 982), kind: .fullScreenBackdrop),
+            PausePolicy.BackdropWindow(bounds: CGRect(x: -557, y: 0, width: 1512, height: 982), kind: .desktop),
+            PausePolicy.BackdropWindow(bounds: external.bounds, kind: .desktop),
+        ]
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(backdrops: sliding, displays: [builtIn, external]).isEmpty)
+    }
+
+    @Test("Without the Dock backdrop, a missing desktop is not full screen")
+    func missingDesktopAlone() {
+        let builtIn = PausePolicy.ListedDisplay(
+            id: 1, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        // Finder's desktop can be turned off. That alone must not pause every display.
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(backdrops: [], displays: [builtIn]).isEmpty)
+    }
+
+    @Test("A mirror pauses with a source that is on a full-screen Space")
+    func mirrorFollowsFullScreenSpace() {
+        let source = PausePolicy.ListedDisplay(
+            id: 1, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        let mirror = PausePolicy.ListedDisplay(id: 9, bounds: source.bounds)
+        #expect(PausePolicy.fullScreenDisplayIDs(
+            ownedWindows: [], displays: [mirror, source], mirroring: [9: 1], fullScreenSpaces: [1]) == [1, 9])
     }
 
     @Test("A hardware mirror pauses when the display it copies is covered")
