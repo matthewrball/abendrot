@@ -194,6 +194,17 @@ abendrot pause resume
 abendrot pause fullscreen on
 ```
 
+### `abendrot debug fullscreen [--delay <seconds>]`
+
+Print what Abendrot sees when it decides whether each screen is full screen: the verdict per
+display, whether Finder's desktop and the Dock's full-screen backdrop are present, the top app
+window, and the desktop-level and app-level window list. Window owners, layers, and sizes only,
+never titles. `--delay` (0-60) waits first so you can switch to the full-screen app.
+
+```sh
+abendrot debug fullscreen --delay 5
+```
+
 ### `abendrot reveal [--hold <hold>] [--json]`
 
 Momentary true-color peek — temporarily drop warmth to reveal real colors. This is

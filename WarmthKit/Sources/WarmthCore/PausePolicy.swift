@@ -107,25 +107,136 @@ public enum PausePolicy {
         }
     }
 
-    /// Displays showing a native full-screen Space. Probed on a notched built-in and on an
-    /// external display: once settled, the Dock backdrop covers that display and Finder's desktop
-    /// is gone from it. A zoomed window keeps the desktop. During the slide animation the backdrop
-    /// is offset and can reach the neighbouring display while its desktop is still listed, so both
-    /// conditions are required.
+    /// Normal app windows (front to back) and the desktop-level markers, from one sample of
+    /// `CGWindowListCopyWindowInfo` metadata. No titles, no capture.
+    public struct WindowSample: Equatable, Sendable {
+        public var regularWindows: [ListedWindow]
+        public var backdrops: [BackdropWindow]
+    }
+
+    /// Shared by the app and `abendrot debug fullscreen`, so both judge the same windows.
+    /// `app` maps an owner pid to its bundle id and whether it is a normal dock app. Invisible
+    /// windows and accessory overlays (Cua Driver covers a whole display) never count.
+    public static func classify(
+        windowInfo: [[String: Any]],
+        app: (Int32) -> (bundleID: String?, isRegular: Bool)
+    ) -> WindowSample {
+        let desktopLevel = Int(CGWindowLevelForKey(.desktopIconWindow))
+        let backdropLevel = Int(CGWindowLevelForKey(.desktopWindow)) + 1
+        var sample = WindowSample(regularWindows: [], backdrops: [])
+        for window in windowInfo {
+            let layer = window[kCGWindowLayer as String] as? Int ?? 0
+            guard layer == 0 || layer == desktopLevel || layer == backdropLevel,
+                  let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
+                  let rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
+                  !rect.isEmpty else { continue }
+            let owner = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
+            let info = app(owner)
+            if layer == 0 {
+                let alpha = window[kCGWindowAlpha as String] as? Double ?? 1
+                if alpha > 0.01, info.isRegular {
+                    sample.regularWindows.append(ListedWindow(bounds: rect, layer: 0, owner: owner))
+                }
+            } else if layer == desktopLevel, info.bundleID == "com.apple.finder" {
+                sample.backdrops.append(BackdropWindow(bounds: rect, kind: .desktop))
+            } else if layer == backdropLevel, info.bundleID == "com.apple.dock" {
+                sample.backdrops.append(BackdropWindow(bounds: rect, kind: .fullScreenBackdrop))
+            }
+        }
+        return sample
+    }
+
+    /// The tallest strip a native full-screen window leaves at the top of a notched display.
+    /// Probed: content starts at 33 pt under a 32 pt camera housing.
+    public static let notchStripLimit: CGFloat = 44
+
+    /// Displays showing a native full-screen Space. Finder's desktop is gone from that display
+    /// (a zoomed window keeps it), and either the Dock's full-screen backdrop covers the display
+    /// or the front app's window fills it below a notch-sized strip. Probed on macOS 26.6: both
+    /// hold once settled. The window fallback covers systems where the Dock backdrop is missing or
+    /// changed, and only runs when `finderDesktopExists`: with Finder's desktop turned off or
+    /// Finder relaunching, a missing desktop proves nothing. During the slide animation the old
+    /// desktop is still listed, so nothing pauses early. Pass displays without hardware mirrors;
+    /// mirrors copy their source afterwards.
     public static func fullScreenSpaceDisplayIDs(
         backdrops: [BackdropWindow],
-        displays: [ListedDisplay]
+        displays: [ListedDisplay],
+        ownedWindows: [ListedWindow] = [],
+        finderDesktopExists: Bool = false
     ) -> Set<CGDirectDisplayID> {
         var spaces: Set<CGDirectDisplayID> = []
         for display in displays {
             let center = CGPoint(x: display.bounds.midX, y: display.bounds.midY)
+            let hasDesktop = backdrops.contains { $0.kind == .desktop && $0.bounds.contains(center) }
+            guard !hasDesktop else { continue }
             let hasBackdrop = backdrops.contains {
                 $0.kind == .fullScreenBackdrop && coversDisplay(window: $0.bounds, display: display.bounds)
             }
-            let hasDesktop = backdrops.contains { $0.kind == .desktop && $0.bounds.contains(center) }
-            if hasBackdrop && !hasDesktop { spaces.insert(display.id) }
+            if hasBackdrop
+                || (finderDesktopExists && topOwnerFillsBelowStrip(ownedWindows, display: display, among: displays)) {
+                spaces.insert(display.id)
+            }
         }
         return spaces
+    }
+
+    /// Whether Finder has a desktop window on any Space. Pass `.optionAll` window info: a
+    /// full-screen Space drops it from the on-screen list but it is still listed there.
+    public static func finderDesktopExists(
+        allWindowInfo: [[String: Any]],
+        app: (Int32) -> (bundleID: String?, isRegular: Bool)
+    ) -> Bool {
+        let desktopLevel = Int(CGWindowLevelForKey(.desktopIconWindow))
+        return allWindowInfo.contains { window in
+            (window[kCGWindowLayer as String] as? Int) == desktopLevel
+                && app(window[kCGWindowOwnerPID as String] as? Int32 ?? -1).bundleID == "com.apple.finder"
+        }
+    }
+
+    /// The display's topmost normal window: the first one listed whose larger part is on it.
+    public static func topWindow(
+        _ windows: [ListedWindow],
+        on display: ListedDisplay,
+        among displays: [ListedDisplay]
+    ) -> ListedWindow? {
+        windows.first {
+            $0.layer == 0 && !$0.bounds.isEmpty && primaryDisplay(of: $0.bounds, among: displays) == display.id
+        }
+    }
+
+    /// Online, not merely active: a hardware mirror is not drawable, so `CGGetActiveDisplayList`
+    /// omits it, but gamma and DDC still warm it. `mirroring` maps that display to the one it copies.
+    public static func onlineDisplays() -> (
+        displays: [ListedDisplay],
+        mirroring: [CGDirectDisplayID: CGDirectDisplayID]
+    ) {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return ([], [:]) }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetOnlineDisplayList(count, &ids, &count) == .success else { return ([], [:]) }
+        var mirroring: [CGDirectDisplayID: CGDirectDisplayID] = [:]
+        let displays = ids.prefix(Int(count)).map { id -> ListedDisplay in
+            let source = CGDisplayMirrorsDisplay(id)
+            if source != 0, source != id { mirroring[id] = source }
+            return ListedDisplay(id: id, bounds: CGDisplayBounds(id))
+        }
+        return (displays, mirroring)
+    }
+
+    /// The owner of the display's topmost window also has a window covering everything except a
+    /// top strip no taller than `notchStripLimit`.
+    private static func topOwnerFillsBelowStrip(
+        _ windows: [ListedWindow],
+        display: ListedDisplay,
+        among displays: [ListedDisplay]
+    ) -> Bool {
+        guard let top = topWindow(windows, on: display, among: displays) else { return false }
+        let inset = fullScreenEdgeInset
+        let bounds = display.bounds
+        let body = CGRect(x: bounds.minX + inset, y: bounds.minY + notchStripLimit,
+                          width: bounds.width - inset * 2, height: bounds.height - notchStripLimit - inset)
+        guard body.width > 0, body.height > 0 else { return false }
+        return windows.contains { $0.layer == 0 && $0.owner == top.owner && $0.bounds.contains(body) }
     }
 
     /// A display is full screen when the owner of its topmost layer-0 window also has a window that

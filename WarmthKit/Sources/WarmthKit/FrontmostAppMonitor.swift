@@ -184,45 +184,40 @@ public final class FrontmostAppMonitor {
             return FrontmostWindowReport(displayIDs: nil, fullScreenDisplayIDs: [])
         }
 
-        let desktopLevel = Int(CGWindowLevelForKey(.desktopIconWindow))
-        let backdropLevel = Int(CGWindowLevelForKey(.desktopWindow)) + 1
-        var firstContent: CGRect?
-        var layerZero: [PausePolicy.ListedWindow] = []
-        var backdrops: [PausePolicy.BackdropWindow] = []
-        for window in windows {
-            let layer = window[kCGWindowLayer as String] as? Int ?? 0
-            guard layer == 0 || layer == desktopLevel || layer == backdropLevel else { continue }
-            guard let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
-                  let rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
-                  !rect.isEmpty else {
-                continue
-            }
-            let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t ?? -1
-            if layer != 0 {
-                if let kind = backdropKind(layer: layer, ownerPID: ownerPID,
-                                           desktopLevel: desktopLevel, backdropLevel: backdropLevel) {
-                    backdrops.append(PausePolicy.BackdropWindow(bounds: rect, kind: kind))
-                }
-                continue
-            }
-            // Exclusion still follows the focused window. Full screen only counts a normal
-            // dock app. An accessory overlay such as Cua Driver can cover the built-in display
-            // without being full screen, and must not turn warmth off.
-            if countsAsFullScreenWindow(window, ownerPID: ownerPID) {
-                layerZero.append(PausePolicy.ListedWindow(bounds: rect, layer: 0, owner: ownerPID))
-            }
-            if firstContent == nil, ownerPID == pid {
-                firstContent = rect
-            }
+        var policies: [pid_t: (bundleID: String?, isRegular: Bool)] = [:]
+        let lookup: (Int32) -> (bundleID: String?, isRegular: Bool) = { pid in
+            if let cached = policies[pid] { return cached }
+            let info = appInfo(pid)
+            policies[pid] = info
+            return info
         }
-        let listed = onlineDisplays()
+        let sample = PausePolicy.classify(windowInfo: windows, app: lookup)
+        // Exclusion follows the focused window: the first layer-0 window of that app, of any kind.
+        let firstContent = windows.lazy.compactMap { window -> CGRect? in
+            guard (window[kCGWindowLayer as String] as? Int ?? 0) == 0,
+                  (window[kCGWindowOwnerPID as String] as? pid_t) == pid,
+                  let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
+                  let rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
+                  !rect.isEmpty else { return nil }
+            return rect
+        }.first
+        let listed = PausePolicy.onlineDisplays()
+        let unmirrored = listed.displays.filter { listed.mirroring[$0.id] == nil }
+        // The all-Spaces list is only needed when some display is missing its desktop.
+        let desktopsShown = sample.backdrops.filter { $0.kind == .desktop }.count
+        let finderDesktopExists = desktopsShown >= unmirrored.count
+            || PausePolicy.finderDesktopExists(
+                allWindowInfo: CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? [],
+                app: lookup)
         let covered = PausePolicy.fullScreenDisplayIDs(
-            ownedWindows: layerZero,
+            ownedWindows: sample.regularWindows,
             displays: listed.displays,
             mirroring: listed.mirroring,
             fullScreenSpaces: PausePolicy.fullScreenSpaceDisplayIDs(
-                backdrops: backdrops,
-                displays: listed.displays
+                backdrops: sample.backdrops,
+                displays: unmirrored,
+                ownedWindows: sample.regularWindows,
+                finderDesktopExists: finderDesktopExists
             )
         )
         guard let firstContent else {
@@ -235,56 +230,13 @@ public final class FrontmostAppMonitor {
         )
     }
 
-    /// Finder's desktop at the desktop-icon level, or the Dock's backdrop just above the desktop.
-    /// Matched by bundle id, so a renamed or localized owner name does not matter.
-    nonisolated private static func backdropKind(
-        layer: Int,
-        ownerPID: pid_t,
-        desktopLevel: Int,
-        backdropLevel: Int
-    ) -> PausePolicy.BackdropWindow.Kind? {
+    nonisolated private static func appInfo(_ pid: pid_t) -> (bundleID: String?, isRegular: Bool) {
         #if canImport(AppKit)
-        let bundleID = NSRunningApplication(processIdentifier: ownerPID)?.bundleIdentifier
-        if layer == desktopLevel, bundleID == "com.apple.finder" { return .desktop }
-        if layer == backdropLevel, bundleID == "com.apple.dock" { return .fullScreenBackdrop }
-        #endif
-        return nil
-    }
-
-    /// A covering window counts only when a person could be using that app full screen.
-    /// Invisible windows and accessory overlays (Cua Driver covers this Mac's built-in display)
-    /// are not full screen.
-    nonisolated private static func countsAsFullScreenWindow(
-        _ window: [String: Any],
-        ownerPID: pid_t
-    ) -> Bool {
-        let alpha = window[kCGWindowAlpha as String] as? Double ?? 1
-        guard alpha > 0.01 else { return false }
-        #if canImport(AppKit)
-        guard let app = NSRunningApplication(processIdentifier: ownerPID) else { return false }
-        return app.activationPolicy == .regular
+        guard let app = NSRunningApplication(processIdentifier: pid) else { return (nil, false) }
+        return (app.bundleIdentifier, app.activationPolicy == .regular)
         #else
-        return true
+        return (nil, true)
         #endif
-    }
-
-    /// Online, not merely active: a hardware mirror is not drawable, so `CGGetActiveDisplayList`
-    /// omits it, but gamma and DDC still warm it. `mirroring` maps that display to the one it copies.
-    nonisolated private static func onlineDisplays() -> (
-        displays: [PausePolicy.ListedDisplay],
-        mirroring: [CGDirectDisplayID: CGDirectDisplayID]
-    ) {
-        var count: UInt32 = 0
-        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return ([], [:]) }
-        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetOnlineDisplayList(count, &ids, &count) == .success else { return ([], [:]) }
-        var mirroring: [CGDirectDisplayID: CGDirectDisplayID] = [:]
-        let displays = ids.prefix(Int(count)).map { id -> PausePolicy.ListedDisplay in
-            let source = CGDisplayMirrorsDisplay(id)
-            if source != 0, source != id { mirroring[id] = source }
-            return PausePolicy.ListedDisplay(id: id, bounds: CGDisplayBounds(id))
-        }
-        return (displays, mirroring)
     }
 
     /// The online displays whose `CGDisplayBounds` intersect `rect` (both in the same global,

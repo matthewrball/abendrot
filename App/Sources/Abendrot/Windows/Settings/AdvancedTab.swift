@@ -102,7 +102,7 @@ private struct ExcludedAppsControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             SectionLabel("Excluded apps")
-            Text("While one of these apps is in front, warmth pauses on the display that app is using. Other displays stay warm. macOS warms a whole display, so one window cannot stay neutral on its own.")
+            Text("While one of these apps is in front, warmth turns off on its screen. Other screens stay warm. Abendrot can't keep just one window neutral.")
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
 
@@ -251,10 +251,10 @@ private struct FullScreenPauseSetting: View {
             SectionLabel("Full screen")
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Pause while a window covers its display")
+                    Text("Pause in full screen")
                         .font(Theme.Typography.ui(13, weight: .semibold))
                         .foregroundStyle(Theme.Color.textPrimary)
-                    Text("Other displays stay warm. Native full screen counts on every display, including a notched built-in. A zoomed window counts only when it fills the whole display. A game that hides its window may stay warm — Abendrot does not ask for Screen Recording to look for it.")
+                    Text("Turns warmth off on a screen while an app fills it. Other screens stay warm.")
                         .font(Theme.Typography.ui(12))
                         .foregroundStyle(Theme.Color.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -267,7 +267,7 @@ private struct FullScreenPauseSetting: View {
                 .toggleStyle(.switch)
                 .tint(Theme.Color.accent)
                 .labelsHidden()
-                .accessibilityLabel("Pause while a window covers its display")
+                .accessibilityLabel("Pause in full screen")
             }
         }
     }

@@ -71,7 +71,7 @@ struct SessionPauseControl: View {
                 isOn: model.state.pausesForFullScreen,
                 enabled: true,
                 action: { model.setPausesForFullScreen(!model.state.pausesForFullScreen) },
-                accessibilityLabel: "Pause while a window covers its display"
+                accessibilityLabel: "Pause in full screen"
             )
             if let footnote {
                 Text(footnote)

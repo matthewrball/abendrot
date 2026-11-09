@@ -102,12 +102,96 @@ struct PausePolicyTests {
         #expect(PausePolicy.fullScreenSpaceDisplayIDs(backdrops: sliding, displays: [builtIn, external]).isEmpty)
     }
 
-    @Test("Without the Dock backdrop, a missing desktop is not full screen")
+    @Test("Without the Dock backdrop or a filling window, a missing desktop is not full screen")
     func missingDesktopAlone() {
         let builtIn = PausePolicy.ListedDisplay(
             id: 1, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
         // Finder's desktop can be turned off. That alone must not pause every display.
         #expect(PausePolicy.fullScreenSpaceDisplayIDs(backdrops: [], displays: [builtIn]).isEmpty)
+    }
+
+    @Test("With no Dock backdrop, a window filling the screen below the notch on a desktop-less Space counts")
+    func fullScreenWithoutDockBackdrop() {
+        let builtIn = PausePolicy.ListedDisplay(
+            id: 1, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        let external = PausePolicy.ListedDisplay(
+            id: 5, bounds: CGRect(x: 1512, y: 0, width: 1920, height: 1080))
+        let underNotch = PausePolicy.ListedWindow(
+            bounds: CGRect(x: 0, y: 33, width: 1512, height: 949), layer: 0, owner: 7)
+        let externalDesktop = PausePolicy.BackdropWindow(bounds: external.bounds, kind: .desktop)
+
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(
+            backdrops: [externalDesktop], displays: [builtIn, external], ownedWindows: [underNotch],
+            finderDesktopExists: true) == [1])
+
+        // With Finder's desktop turned off or Finder relaunching, a missing desktop proves nothing:
+        // the same frame may be a zoomed window.
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(
+            backdrops: [], displays: [builtIn, external], ownedWindows: [underNotch],
+            finderDesktopExists: false).isEmpty)
+
+        // The same frame with the desktop still listed is a zoomed window.
+        let builtInDesktop = PausePolicy.BackdropWindow(bounds: builtIn.bounds, kind: .desktop)
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(
+            backdrops: [builtInDesktop, externalDesktop], displays: [builtIn, external],
+            ownedWindows: [underNotch], finderDesktopExists: true).isEmpty)
+
+        // A smaller window in front of a desktop-less Space does not count.
+        let small = PausePolicy.ListedWindow(
+            bounds: CGRect(x: 200, y: 200, width: 600, height: 400), layer: 0, owner: 9)
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(
+            backdrops: [externalDesktop], displays: [builtIn, external], ownedWindows: [small, underNotch],
+            finderDesktopExists: true).isEmpty)
+
+        // A strip taller than a notch is a window under a tall toolbar, not full screen.
+        let lowered = PausePolicy.ListedWindow(
+            bounds: CGRect(x: 0, y: 60, width: 1512, height: 922), layer: 0, owner: 7)
+        #expect(PausePolicy.fullScreenSpaceDisplayIDs(
+            backdrops: [externalDesktop], displays: [builtIn, external], ownedWindows: [lowered],
+            finderDesktopExists: true).isEmpty)
+    }
+
+    @Test("Finder's desktop counts as existing when it is listed on any Space")
+    func finderDesktopOnAnySpace() {
+        let desktop = Int(CGWindowLevelForKey(.desktopIconWindow))
+        let apps: [Int32: (bundleID: String?, isRegular: Bool)] = [
+            3: ("com.apple.finder", true), 4: ("com.apple.dock", false),
+        ]
+        let lookup: (Int32) -> (bundleID: String?, isRegular: Bool) = { apps[$0] ?? (nil, false) }
+        let finder: [String: Any] = [kCGWindowOwnerPID as String: Int32(3), kCGWindowLayer as String: desktop]
+        let finderWindow: [String: Any] = [kCGWindowOwnerPID as String: Int32(3), kCGWindowLayer as String: 0]
+        let dock: [String: Any] = [kCGWindowOwnerPID as String: Int32(4), kCGWindowLayer as String: desktop]
+        #expect(PausePolicy.finderDesktopExists(allWindowInfo: [dock, finder], app: lookup))
+        #expect(!PausePolicy.finderDesktopExists(allWindowInfo: [dock, finderWindow], app: lookup))
+    }
+
+    @Test("The classifier keeps visible normal windows and the Finder and Dock markers only")
+    func classifierKeepsMarkers() {
+        func window(_ pid: Int32, layer: Int, x: Double, alpha: Double = 1) -> [String: Any] {
+            [kCGWindowOwnerPID as String: pid, kCGWindowLayer as String: layer, kCGWindowAlpha as String: alpha,
+             kCGWindowBounds as String: CGRect(x: x, y: 0, width: 100, height: 100).dictionaryRepresentation]
+        }
+        let desktop = Int(CGWindowLevelForKey(.desktopIconWindow))
+        let backdrop = Int(CGWindowLevelForKey(.desktopWindow)) + 1
+        let apps: [Int32: (bundleID: String?, isRegular: Bool)] = [
+            1: ("com.example.app", true), 2: ("com.example.overlay", false),
+            3: ("com.apple.finder", true), 4: ("com.apple.dock", false),
+        ]
+        let sample = PausePolicy.classify(windowInfo: [
+            window(1, layer: 0, x: 0),
+            window(1, layer: 0, x: 10, alpha: 0),
+            window(2, layer: 0, x: 20),
+            window(3, layer: desktop, x: 30),
+            window(4, layer: backdrop, x: 40),
+            window(4, layer: desktop, x: 50),
+            window(1, layer: 25, x: 60),
+        ]) { apps[$0] ?? (nil, false) }
+
+        #expect(sample.regularWindows.map(\.bounds.minX) == [0])
+        #expect(sample.backdrops == [
+            .init(bounds: CGRect(x: 30, y: 0, width: 100, height: 100), kind: .desktop),
+            .init(bounds: CGRect(x: 40, y: 0, width: 100, height: 100), kind: .fullScreenBackdrop),
+        ])
     }
 
     @Test("A mirror pauses with a source that is on a full-screen Space")
