@@ -47,11 +47,11 @@ exactly like the shipped one.
 
 The CLI is a thin same-user client. A `set`/`on`/`off`/`exclude` command does two things:
 (1) it writes the new value to the app's CFPreferences domain `app.abendrot.Abendrot`, which
-persists across launches, and (2) it posts a local `DistributedNotification` that wakes the
+persists across launches, and (2) it sends a length-prefixed control message on a same-user Unix-domain socket (`control.sock` beside `state.json`) that wakes the
 running app so the change applies live. The app then writes a snapshot file
 (`~/Library/Application Support/Abendrot/state.json`) stamped with the request id, and the
 CLI polls that file to confirm the change was applied. `status` reads that same snapshot.
-There is **no** daemon, socket, XPC service, network listener, or privileged helper.
+There is **no** daemon, XPC service, network listener, or privileged helper.
 
 ---
 
@@ -372,10 +372,10 @@ only.**
   can change warmth, toggle warming, or trigger reveal. This is not a macOS privilege
   escalation, but it is sharper than cosmetic: it can affect color-critical work or briefly
   defeat the user's chosen eye-comfort state.
-- There is **no** network listener, **no** socket, **no** LaunchDaemon, **no** privileged
-  helper, and **no** cross-user delivery. The live wakeup is a local same-session
-  `DistributedNotification`.
-- The app validates every command exactly like UI input; a notification payload is a hint, not
+- There is **no** network listener, **no** LaunchDaemon, **no** privileged
+  helper, and **no** cross-user delivery. The live wakeup is a user-only Unix-domain
+  socket; a peer is accepted only when its uid equals the app's uid.
+- The app validates every command exactly like UI input; a socket payload is a hint, not
   trusted authority.
 
 Operate accordingly: this is a tool for the user's own machine and session.
@@ -393,12 +393,10 @@ Operate accordingly: this is a tool for the user's own machine and session.
 
 ## Appendix: raw `defaults` keys (fallback when the CLI is not installed)
 
-If the `abendrot` CLI is unavailable, an agent can still drive the app by writing the same
-CFPreferences domain directly with `defaults write app.abendrot.Abendrot …`. **Caveat:** raw
-writes do **not** post the live wakeup notification, so they are **not guaranteed live**. They
-apply on the app's next launch, or whenever the app next reloads its persisted state via its
-nil-payload reload path. Prefer the CLI when it is installed; it both persists and applies
-live with confirmation.
+If the `abendrot` CLI is unavailable, an agent can still write the same CFPreferences domain
+directly with `defaults write app.abendrot.Abendrot …`. **Caveat:** those writes are **not live**.
+Nothing in the running app reloads them. They apply on the next launch only. Prefer the CLI
+when it is installed; it persists and applies live over the same-user socket, then confirms.
 
 Domain: `app.abendrot.Abendrot`
 

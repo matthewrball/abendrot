@@ -4,8 +4,8 @@ import WarmthCore
 // MARK: - AbendrotControl
 //
 // The shared control-surface schema — the single source of truth for the app bundle id,
-// the CFPreferences domain, the distributed-notification name, the Application Support
-// paths, and the wire schema version. BOTH the running app and the `abendrot` CLI depend
+// the CFPreferences domain, the Application Support paths, and the wire schema
+// version. BOTH the running app and the `abendrot` CLI depend
 // on this pure-Swift target so the two can never drift on a preference-key string, an enum
 // encoding, or the snapshot/message shape. This is exactly where AI-facing CLIs rot — so we
 // share the schema itself, not just the underlying `WarmthCore` engine types.
@@ -24,10 +24,6 @@ public enum AbendrotControl {
     /// ~/Library/Preferences/app.abendrot.Abendrot.plist).
     public static let preferenceDomain = "app.abendrot.Abendrot"
 
-    /// DistributedNotification name: the app observes it, the CLI posts it. Same login session
-    /// only — never `postToAllSessions`, which keeps the control surface inside the user's own
-    /// session as a security boundary.
-    public static let settingsChangedNotification = "app.abendrot.settingsChanged"
 
     /// Sub-directory under ~/Library/Application Support that holds the live `state.json`.
     public static let appSupportDirectoryName = "Abendrot"

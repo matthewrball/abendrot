@@ -172,9 +172,11 @@ final class AppModel: ObservableObject {
     /// `state.json.lastAppliedRequestID` to confirm its own command landed (the live ack).
     private(set) var lastAppliedRequestID: String?
 
-    /// Distributed-notification observer token for `settingsChanged` (CLI/AI control). Registered in
-    /// `start()`, removed in `shutdown()`.
-    private var controlObserver: NSObjectProtocol?
+    /// Same-user control socket. Started in `start()`, stopped in `shutdown()`.
+    /// App Store builds do not listen.
+    #if !APP_STORE
+    private var controlServer: ControlServer?
+    #endif
 
     /// Pending reveal auto-end task from a `reveal` control action (cancelled if superseded).
     private var controlRevealTask: Task<Void, Never>?
@@ -234,24 +236,15 @@ final class AppModel: ObservableObject {
             }
         }
         #if !APP_STORE
-        // Observe CLI/AI control messages. The CLI posts with `deliverImmediately: true`,
-        // so a command applies even when the app is idle. Same login session only — never
-        // postToAllSessions. Torn down in `shutdown()`. The block runs on `.main`; under Swift 6 the
-        // block isn't statically MainActor-isolated, so hop with `assumeIsolated` (it really is main).
-        controlObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name(AbendrotControl.settingsChangedNotification),
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            // Decode HERE, off-actor: `ControlMessage.from(userInfo:)` is pure value work and the
-            // non-Sendable `Notification`/`userInfo` never crosses the actor hop — only the decoded
-            // `ControlMessage` (a Sendable value, or nil for the raw-`defaults` fallback) does. This
-            // satisfies Swift 6 strict concurrency without an `@unchecked` escape hatch.
-            let decoded = ControlMessage.from(userInfo: note.userInfo)
-            MainActor.assumeIsolated {
-                self?.handleControlMessage(decoded)
+        // Same-uid Unix socket. A rejected peer is closed and never applied.
+        // The accept thread is not the main actor; hop before touching UI state.
+        let server = ControlServer { [weak self] message in
+            Task { @MainActor in
+                self?.handleControlMessage(message)
             }
         }
+        server.start()
+        controlServer = server
         #endif
         // Start the engine, THEN replay persisted user state in the same task so the
         // restore is ordered strictly after start() — avoiding a reentrancy race where it could
@@ -791,10 +784,8 @@ final class AppModel: ObservableObject {
         snapshotTrailingWrite?.cancel()
         snapshotTrailingWrite = nil
         writeControlSnapshot()
-        if let controlObserver {
-            DistributedNotificationCenter.default().removeObserver(controlObserver)
-            self.controlObserver = nil
-        }
+        controlServer?.stop()
+        controlServer = nil
         #endif
         frontmostMonitor?.stop()
         await engine?.shutdown()

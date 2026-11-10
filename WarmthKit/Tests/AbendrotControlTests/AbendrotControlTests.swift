@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 import WarmthCore
 @testable import AbendrotControl
 
@@ -38,7 +39,7 @@ final class AbendrotControlTests: XCTestCase {
     func testIdentityConstants() {
         XCTAssertEqual(AbendrotControl.appBundleID, "app.abendrot.Abendrot")
         XCTAssertEqual(AbendrotControl.preferenceDomain, "app.abendrot.Abendrot")
-        XCTAssertEqual(AbendrotControl.settingsChangedNotification, "app.abendrot.settingsChanged")
+        XCTAssertEqual(ControlSocket.fileName, "control.sock")
         XCTAssertEqual(AbendrotControl.appSupportDirectoryName, "Abendrot")
         XCTAssertEqual(AbendrotControl.stateFileName, "state.json")
     }
@@ -573,5 +574,144 @@ final class AbendrotControlTests: XCTestCase {
             ["com.apple.dt.Xcode", "org.example.App-2"]
         )
         XCTAssertEqual(ControlValidation.normalizedPersistedBundleIDs(["../../evil", "com..bad"]), [])
+    }
+
+    // MARK: Control socket
+
+    func testControlSocketRoundTripDeliversOneMessage() throws {
+        let directory = try makeSocketDirectory()
+        defer { cleanupSocketDirectory(directory) }
+        let expected = ControlMessage(requestID: UUID().uuidString, writtenAt: Date(), patch: SettingsPatch(isEnabled: true))
+        let delivered = expectation(description: "delivered")
+        let server = ControlServer(directory: directory) { message in
+            XCTAssertEqual(message, expected)
+            delivered.fulfill()
+        }
+        XCTAssertTrue(server.start())
+        defer { server.stop() }
+        XCTAssertTrue(ControlClient.send(expected, directory: directory))
+        wait(for: [delivered], timeout: 2)
+    }
+
+    func testControlSocketPeerRejectionDeliversNothing() throws {
+        let directory = try makeSocketDirectory()
+        defer { cleanupSocketDirectory(directory) }
+        let delivered = expectation(description: "delivered")
+        delivered.isInverted = true
+        let server = ControlServer(directory: directory, onMessage: { _ in
+            delivered.fulfill()
+        }, peerAllowed: { _ in false })
+        XCTAssertTrue(server.start())
+        defer { server.stop() }
+        let message = ControlMessage(requestID: UUID().uuidString, writtenAt: Date())
+        _ = ControlClient.send(message, directory: directory)
+        wait(for: [delivered], timeout: 0.4)
+    }
+
+    func testControlSocketRejectsOversizedAndTruncatedFrames() throws {
+        let directory = try makeSocketDirectory()
+        defer { cleanupSocketDirectory(directory) }
+        let delivered = expectation(description: "delivered")
+        delivered.isInverted = true
+        let server = ControlServer(directory: directory) { _ in
+            delivered.fulfill()
+        }
+        XCTAssertTrue(server.start())
+        defer { server.stop() }
+
+        var oversized = Data()
+        var tooBig = UInt32(ControlMessage.maximumUserInfoPayloadBytes + 1).bigEndian
+        oversized.append(Data(bytes: &tooBig, count: 4))
+        _ = writeRaw(oversized, directory: directory)
+
+        var truncated = Data()
+        var claimed = UInt32(32).bigEndian
+        truncated.append(Data(bytes: &claimed, count: 4))
+        truncated.append(Data(repeating: 0x7B, count: 4))
+        _ = writeRaw(truncated, directory: directory)
+
+        wait(for: [delivered], timeout: 0.4)
+    }
+
+    func testControlSocketRefusesSymlinkPath() throws {
+        let directory = try makeSocketDirectory()
+        defer { cleanupSocketDirectory(directory) }
+        let link = ControlSocket.url(directory: directory)
+        XCTAssertEqual(symlink("/tmp/abendrot-control-not-a-socket", link.path), 0)
+        let delivered = expectation(description: "delivered")
+        delivered.isInverted = true
+        let server = ControlServer(directory: directory) { _ in
+            delivered.fulfill()
+        }
+        XCTAssertFalse(server.start())
+        var info = stat()
+        XCTAssertEqual(lstat(link.path, &info), 0)
+        XCTAssertEqual(info.st_mode & S_IFMT, S_IFLNK)
+        wait(for: [delivered], timeout: 0.2)
+    }
+
+    func testControlSocketRefusesSymlinkDirectory() throws {
+        let real = try makeSocketDirectory()
+        defer { cleanupSocketDirectory(real) }
+        let linkParent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("abendrot-sock-link-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: linkParent, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: linkParent) }
+        let linked = linkParent.appendingPathComponent("linked", isDirectory: true)
+        XCTAssertEqual(symlink(real.path, linked.path), 0)
+        let server = ControlServer(directory: linked) { _ in }
+        XCTAssertFalse(server.start())
+        var info = stat()
+        XCTAssertEqual(lstat(linked.path, &info), 0)
+        XCTAssertEqual(info.st_mode & S_IFMT, S_IFLNK)
+    }
+
+    func testControlSocketRefusesOverlongPath() throws {
+        let directory = URL(fileURLWithPath: "/tmp/\(String(repeating: "a", count: 100))", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        XCTAssertFalse(ControlSocket.pathFits(ControlSocket.url(directory: directory).path))
+        let server = ControlServer(directory: directory) { _ in }
+        XCTAssertFalse(server.start())
+    }
+
+    func testControlPeerAllowsOnlyCurrentUID() {
+        if getuid() != 0 {
+            XCTAssertFalse(ControlPeer.allows(0))
+        }
+        XCTAssertTrue(ControlPeer.allows(getuid()))
+    }
+    private func makeSocketDirectory() throws -> URL {
+        let directory = URL(fileURLWithPath: "/tmp/ar-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func cleanupSocketDirectory(_ directory: URL) {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func writeRaw(_ bytes: Data, directory: URL) -> Bool {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let path = ControlSocket.url(directory: directory).path
+        let pathBytes = Array(path.utf8) + [0]
+        guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else { return false }
+        withUnsafeMutableBytes(of: &addr.sun_path) { dest in
+            pathBytes.withUnsafeBytes { src in dest.copyMemory(from: src) }
+        }
+        let connected = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) == 0
+            }
+        }
+        guard connected else { return false }
+        return bytes.withUnsafeBytes { buf in
+            guard let base = buf.baseAddress else { return false }
+            return Darwin.write(fd, base, bytes.count) == bytes.count
+        }
     }
 }

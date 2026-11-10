@@ -5,8 +5,8 @@ import AbendrotControl
 
 // MARK: - Control
 //
-// The shared CLI core: persist settings to the app's CFPreferences domain, post the live
-// `settingsChanged` notification, and read the app's `state.json` snapshot for `status` + acks.
+// The shared CLI core: persist settings to the app's CFPreferences domain, send the live
+// control message on the same-user socket, and read `state.json` for `status` + acks.
 // A thin client — never drives displays itself. All four pieces (persist / post / snapshot /
 // liveness) live here so every subcommand routes through one tested path.
 enum Control {
@@ -208,20 +208,14 @@ enum Control {
 
     // MARK: Post (live apply)
 
-    /// Post the `settingsChanged` notification carrying a `ControlMessage`. `deliverImmediately`
-    /// wakes the app even when idle. Returns the requestID so the caller can poll for the ack.
+    /// Send a `ControlMessage` on the control socket. Returns the requestID even when the app
+    /// is not listening, so the caller can still poll for an ack and time out as before.
     @discardableResult
     static func post(patch: SettingsPatch? = nil, action: ControlAction? = nil) -> String {
         let requestID = UUID().uuidString
         let message = ControlMessage(
             requestID: requestID, writtenAt: Date(), patch: patch, action: action)
-        let userInfo = try? message.toUserInfo()
-        DistributedNotificationCenter.default().postNotificationName(
-            Notification.Name(AbendrotControl.settingsChangedNotification),
-            object: nil,
-            userInfo: userInfo,
-            deliverImmediately: true
-        )
+        _ = ControlClient.send(message)
         return requestID
     }
 
