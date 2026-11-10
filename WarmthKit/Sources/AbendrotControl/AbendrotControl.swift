@@ -70,6 +70,8 @@ public enum PreferenceKey {
     public static let pauseKind = "pauseKind"
     /// Pause a display while its frontmost window covers it.
     public static let pausesForFullScreen = "pausesForFullScreen"
+    /// Experimental, direct download: keep only an excluded app's windows neutral.
+    public static let keepsOtherWindowsWarm = "keepsOtherWindowsWarm"
 }
 
 // MARK: - DisplaySettingsPreference

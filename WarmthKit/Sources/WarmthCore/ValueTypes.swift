@@ -65,6 +65,9 @@ public enum DisplayMethod: String, Sendable, Codable, CaseIterable {
     case hardware   // DDC RGB-gain — real hardware warmth (badge: "Hardware")
     case gamma      // CGSetDisplayTransferByTable — best-effort, classified (badge: "Gamma")
     case colorFilter // per-channel color matrix; preserves black levels
+    /// Compositor color matrix on everything except an excluded app's windows. Engine-chosen
+    /// while that app is in front; never a user override.
+    case windowFilter
     case overlay    // Metal multiply veil — universal default (badge: "Overlay")
     case off        // no warmth applied
 
@@ -73,6 +76,7 @@ public enum DisplayMethod: String, Sendable, Codable, CaseIterable {
         case .hardware: "Hardware"
         case .gamma:    "Gamma"
         case .colorFilter: "Color filter"
+        case .windowFilter: "Window filter"
         case .overlay:  "Overlay"
         case .off:      "Off"
         }

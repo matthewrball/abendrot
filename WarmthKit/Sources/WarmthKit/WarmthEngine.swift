@@ -25,6 +25,8 @@ public actor WarmthEngine {
     private let overlay: any WarmthBackend
     private let gamma: any WarmthBackend
     private let colorFilter: any WarmthBackend
+    /// Direct-download only: warms a display around an excluded app's windows. No-op elsewhere.
+    private let windowFilter: any WarmthBackend
     private let ddc: any WarmthBackend
     private let registry: DisplayRegistry
     private let nightShiftFollower: any NightShiftStateFollowing
@@ -119,6 +121,7 @@ public actor WarmthEngine {
         gamma: any WarmthBackend,
         colorFilter: any WarmthBackend,
         ddc: any WarmthBackend,
+        windowFilter: any WarmthBackend = NoopBackend(method: .windowFilter),
         snapshotStore: any WarmthSnapshotStore,
         nightShiftFollower: any NightShiftStateFollowing,
         injectedDisplays: [DisplayIdentity]?
@@ -127,6 +130,7 @@ public actor WarmthEngine {
         self.overlay = overlay
         self.gamma = gamma
         self.colorFilter = colorFilter
+        self.windowFilter = windowFilter
         self.ddc = ddc
         self.snapshotStore = snapshotStore
         self.registry = DisplayRegistry()
@@ -169,6 +173,7 @@ public actor WarmthEngine {
             gamma: backend(.gamma),
             colorFilter: backend(.colorFilter),
             ddc: backend(.hardware),
+            windowFilter: backend(.windowFilter),
             snapshotStore: store,
             nightShiftFollower: NoopNightShiftFollower(),
             injectedDisplays: displays
@@ -262,6 +267,7 @@ public actor WarmthEngine {
 
         for display in box.value.displays {
             try? await overlay.reset(display.id)
+            try? await windowFilter.reset(display.id)
             await resetColorFilter(display.id)
             try? await gamma.reset(display.id)
             // Restore native DDC gain and, on a verified restore, clear the write-ahead dirty flag
@@ -316,6 +322,15 @@ public actor WarmthEngine {
         guard enabled != box.pausesForFullScreen else { return }
         box.pausesForFullScreen = enabled
         refreshPublishedPauseFlags()
+        await reapply()
+        publish()
+    }
+
+    /// Experimental preference. While an excluded app is in front, keep only its windows neutral
+    /// and the rest of that display warm, where the window filter is available.
+    public func setKeepsOtherWindowsWarm(_ enabled: Bool) async {
+        guard enabled != box.value.keepsOtherWindowsWarm else { return }
+        box.value.keepsOtherWindowsWarm = enabled
         await reapply()
         publish()
     }
@@ -734,6 +749,7 @@ public actor WarmthEngine {
     private func rebuildDisplayRows(for identities: [DisplayIdentity]) async {
         for removed in box.value.displays where !identities.contains(removed.id) {
             await resetColorFilter(removed.id)
+            try? await windowFilter.reset(removed.id)
         }
         var rows: [DisplayState] = []
         rows.reserveCapacity(identities.count)
@@ -921,33 +937,72 @@ public actor WarmthEngine {
         let engineOn = box.value.isEnabled && decision.isActiveNow && !box.value.isRevealing && box.timedPause == nil
         let warmestPoint = box.value.warmestPoint
 
-        // Snapshot the work set by VALUE before any await. The engine is an actor, so each await is
-        // a reentrancy point where a reconfiguration / Night Shift / UI message can replace
-        // `box.value.displays` (different count/order). Never hold a live index across an await:
-        // compute against the captured `DisplayState`, then write the result back by RE-LOCATING the
-        // row via stable identity (skipping it if the display vanished mid-pass).
-        for display in box.value.displays {
-            let id = display.id
-            let key = id.persistentKey
-            // Resolve the LAYER fresh from capability + opt-in + override + kill switch (never read
-            // back `appliedMethod`, which is only the badge). LayerResolver never returns `.off`, so
-            // a display can always resume warming after it has gone neutral.
-            let layer = LayerResolver.resolveLayer(
+        // Resolve the LAYER fresh from capability + opt-in + override + kill switch (never read
+        // back `appliedMethod`, which is only the badge). LayerResolver never returns `.off`, so
+        // a display can always resume warming after it has gone neutral.
+        func resolvedLayer(_ display: DisplayState) -> DisplayMethod {
+            LayerResolver.resolveLayer(
                 capabilities: display.capabilities,
                 isHardwareDDCEnabled: display.isHardwareDDCEnabled,
                 override: display.preferredMethod,
                 privateAPIsEnabled: privateOn
             )
+        }
+        // Snapshot the work set by VALUE before any await. The engine is an actor, so each await is
+        // a reentrancy point where a reconfiguration / Night Shift / UI message can replace
+        // `box.value.displays` (different count/order). Never hold a live index across an await:
+        // compute against the captured `DisplayState`, then write the result back by RE-LOCATING the
+        // row via stable identity (skipping it if the display vanished mid-pass).
+        let snapshot = box.value.displays
+        // A display uses its OWN warmth only when overridden ("Custom warmth"); otherwise it
+        // follows the global/schedule target. (Replaces the old max-boost model.)
+        func displayWarmth(_ display: DisplayState) -> WarmthLevel {
+            display.warmthOverridden ? display.warmth : decision.target
+        }
+        // Experimental: an excluded app in front keeps only its own windows neutral. Hardware
+        // control changes too slowly to hand over on every switch, so it keeps the old pause.
+        // With no warmth to apply, take the normal layer so teardown removes any panel.
+        // Decided before ordering: handing gamma over to the window filter resets every display's
+        // table, so that display must run before any warm gamma write.
+        var collectedWindowOnly: Set<DisplayIdentity> = []
+        if box.value.keepsOtherWindowsWarm {
+            for display in snapshot {
+                let layer = resolvedLayer(display)
+                let excludedHere = isDisplaySuspendedByExclusion(display.id)
+                let fullScreenHere = isDisplaySuspendedByFullScreen(display.id)
+                if engineOn, excludedHere, !fullScreenHere, layer != .hardware, displayWarmth(display) != .off,
+                   case .supported = await windowFilter.classify(display.id) {
+                    collectedWindowOnly.insert(display.id)
+                }
+            }
+        }
+        let windowOnlyIDs = collectedWindowOnly
+        func effectiveWarmth(_ display: DisplayState) -> WarmthLevel {
             let displayOn = engineOn
-                && !isDisplaySuspendedByExclusion(id)
-                && !isDisplaySuspendedByFullScreen(id)
-            // A display uses its OWN warmth only when overridden ("Custom warmth"); otherwise it
-            // follows the global/schedule target. (Replaces the old max-boost model.)
-            let effective = displayOn ? (display.warmthOverridden ? display.warmth : decision.target) : .off
+                && !isDisplaySuspendedByExclusion(display.id)
+                && !isDisplaySuspendedByFullScreen(display.id)
+            return (displayOn || windowOnlyIDs.contains(display.id)) ? displayWarmth(display) : .off
+        }
+        // The gamma reset restores EVERY display's table, not one. Displays that will reset gamma
+        // go first, so each warm display's ramp is written after the last reset of the pass and an
+        // excluded or full-screen display cannot turn its neighbours neutral.
+        func resetsGamma(_ display: DisplayState) -> Bool {
+            let layer = resolvedLayer(display)
+            let target: DisplayMethod = windowOnlyIDs.contains(display.id) ? .windowFilter : layer
+            if display.appliedMethod == .gamma && target != .gamma { return true }
+            return layer == .gamma && effectiveWarmth(display) == .off
+        }
+
+        for display in snapshot.filter(resetsGamma) + snapshot.filter({ !resetsGamma($0) }) {
+            let id = display.id
+            let key = id.persistentKey
+            let layer = resolvedLayer(display)
+            let targetLayer: DisplayMethod = windowOnlyIDs.contains(id) ? .windowFilter : layer
+            let effective = effectiveWarmth(display)
 
             // Clean up a layer we are LEAVING this pass (user disabled DDC, capability changed) so a
             // display can't stay warm on two layers at once.
-            guard await tearDownPreviousLayer(display.appliedMethod, leavingFor: layer, id: id) else {
+            guard await tearDownPreviousLayer(display.appliedMethod, leavingFor: targetLayer, id: id) else {
                 if let index = box.value.displays.firstIndex(where: { $0.id == id }) {
                     box.value.displays[index].appliedMethod = .off
                     box.value.displays[index].lastError = pendingColorFilterError(for: id)
@@ -967,6 +1022,22 @@ public actor WarmthEngine {
                 }
                 appliedMethod = .off
                 lastError = pendingColorFilterError(for: id)
+            } else if targetLayer == .windowFilter {
+                let kelvin = effective.kelvin(warmestPoint: warmestPoint)
+                do {
+                    try await windowFilter.apply(kelvin, to: id)
+                    appliedMethod = .windowFilter
+                    lastError = nil
+                } catch {
+                    // Fall back to the established whole-display pause, never a warm excluded window.
+                    try? await windowFilter.reset(id)
+                    appliedMethod = .off
+                    lastError = EngineErrorSummary(
+                        method: .windowFilter,
+                        reason: .privateSymbolUnavailable,
+                        message: "Couldn't keep other windows warm; this display is paused instead."
+                    )
+                }
             } else {
                 let kelvin = effective.kelvin(warmestPoint: warmestPoint)
                 if layer == .hardware {
@@ -1062,6 +1133,8 @@ public actor WarmthEngine {
             try? await gamma.reset(id)
         case .colorFilter:
             break // Already verified above; never stack another layer after a failed restore.
+        case .windowFilter:
+            try? await windowFilter.reset(id)
         case .overlay:
             try? await overlay.reset(id)
         case .off:
@@ -1101,6 +1174,7 @@ public actor WarmthEngine {
         case .overlay:  overlay
         case .gamma:    gamma
         case .colorFilter: colorFilter
+        case .windowFilter: windowFilter
         case .hardware: ddc
         case .off:      nil
         }

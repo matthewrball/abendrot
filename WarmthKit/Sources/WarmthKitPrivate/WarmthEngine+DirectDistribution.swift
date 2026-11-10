@@ -13,6 +13,7 @@ extension WarmthEngine {
             gamma: GammaBackend(),
             colorFilter: ColorFilterBackend(),
             ddc: IOAVServiceDDCTransport(store: store),
+            windowFilter: WindowFilterBackend(),
             snapshotStore: store,
             nightShiftFollower: SystemNightShiftStateFollower(),
             injectedDisplays: nil

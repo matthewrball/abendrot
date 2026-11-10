@@ -198,7 +198,7 @@ public enum ControlValidation {
         case .overlay:
             method = .overlay
             ddcEnabled = false
-        case .gamma, .colorFilter, .off, nil:
+        case .gamma, .colorFilter, .windowFilter, .off, nil:
             method = nil
         }
         return DisplaySettingsPreference(

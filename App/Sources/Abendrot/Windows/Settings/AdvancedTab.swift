@@ -102,7 +102,7 @@ private struct ExcludedAppsControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             SectionLabel("Excluded apps")
-            Text("While one of these apps is in front, warmth turns off on its screen. Other screens stay warm. Abendrot can't keep just one window neutral.")
+            Text(explanation)
                 .font(Theme.Typography.ui(12))
                 .foregroundStyle(Theme.Color.textMuted)
 
@@ -127,6 +127,30 @@ private struct ExcludedAppsControl: View {
             }
             .buttonStyle(.liquidGlass)
             .padding(.top, 2)
+
+            #if !APP_STORE
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Keep other windows warm")
+                        .font(Theme.Typography.ui(13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.textPrimary)
+                    Text("Experimental. Only the excluded app loses its warmth. Everything else on that screen stays warm, except screens using hardware control.")
+                        .font(Theme.Typography.ui(12))
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                Toggle("", isOn: Binding(
+                    get: { model.state.keepsOtherWindowsWarm },
+                    set: { model.setKeepsOtherWindowsWarm($0) }
+                ))
+                .toggleStyle(.switch)
+                .tint(Theme.Color.accent)
+                .labelsHidden()
+                .accessibilityLabel("Keep other windows warm")
+            }
+            .padding(.top, 6)
+            #endif
         }
         .background(focusCueFill)
         .overlay(focusCueStroke)
@@ -134,6 +158,16 @@ private struct ExcludedAppsControl: View {
             guard let request = model.excludedAppsFocusRequest else { return }
             await runFocusCue(request)
         }
+    }
+
+    private var explanation: String {
+        #if APP_STORE
+        "While one of these apps is in front, warmth turns off on its screen. Other screens stay warm. Abendrot can't keep just one window neutral."
+        #else
+        model.state.keepsOtherWindowsWarm
+            ? "While one of these apps is in front, only its windows lose their warmth."
+            : "While one of these apps is in front, warmth turns off on its screen. Other screens stay warm."
+        #endif
     }
 
     private var focusCueFill: some View {

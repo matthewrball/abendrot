@@ -69,6 +69,7 @@ final class AppModel: ObservableObject {
     /// Optimistic pause held until the engine snapshot echoes it, including a cleared pause.
     private var pauseHold: (active: Bool, pause: TimedPause?)?
     private var pendingFullScreenPreference: Bool?
+    private var pendingOtherWindowsPreference: Bool?
 
     /// Manual Sunset location override. nil = Auto from system time zone; no permission or network.
     @Published var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
@@ -324,6 +325,10 @@ final class AppModel: ObservableObject {
             next.pausesForFullScreen = pending
             if snapshot.pausesForFullScreen == pending { pendingFullScreenPreference = nil }
         }
+        if let pending = pendingOtherWindowsPreference {
+            next.keepsOtherWindowsWarm = pending
+            if snapshot.keepsOtherWindowsWarm == pending { pendingOtherWindowsPreference = nil }
+        }
         // A warmth the user set moments ago outranks the engine's echo of the frame before it —
         // otherwise the echo rewinds the thumb mid-drag. Only the slider actually being dragged is
         // held: `resolvedWarmth` (the Sunset ramp, shown by the locked popover slider) and every
@@ -507,6 +512,11 @@ final class AppModel: ObservableObject {
         if let fullscreen = cfPrefBool(PreferenceKey.pausesForFullScreen) {
             setPausesForFullScreen(fullscreen, userInitiated: false)
         }
+        #if !APP_STORE
+        if let otherWindows = cfPrefBool(PreferenceKey.keepsOtherWindowsWarm) {
+            setKeepsOtherWindowsWarm(otherWindows, userInitiated: false)
+        }
+        #endif
 
         if let data = cfPrefData(PreferenceKey.displaySettings) {
             if let decoded = ControlValidation.decodedPersistedDisplaySettings(from: data) {
@@ -834,6 +844,16 @@ final class AppModel: ObservableObject {
         state.pausesForFullScreen = enabled
         UserDefaults.standard.set(enabled, forKey: PreferenceKey.pausesForFullScreen)
         Task { await engine?.setPausesForFullScreen(enabled) }
+        if userInitiated { playSoftToggleTone(on: enabled) }
+    }
+
+    func setKeepsOtherWindowsWarm(_ enabled: Bool, userInitiated: Bool = true) {
+        let current = pendingOtherWindowsPreference ?? state.keepsOtherWindowsWarm
+        guard enabled != current else { return }
+        pendingOtherWindowsPreference = enabled
+        state.keepsOtherWindowsWarm = enabled
+        UserDefaults.standard.set(enabled, forKey: PreferenceKey.keepsOtherWindowsWarm)
+        Task { await engine?.setKeepsOtherWindowsWarm(enabled) }
         if userInitiated { playSoftToggleTone(on: enabled) }
     }
 

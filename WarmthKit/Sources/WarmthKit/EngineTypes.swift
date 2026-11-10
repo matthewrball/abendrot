@@ -67,6 +67,9 @@ public struct WarmthState: Sendable, Equatable {
     public var pausesForFullScreen: Bool
     /// True when that preference is on and at least one frontmost window currently covers a display.
     public var isFullScreenPauseActive: Bool
+    /// Experimental: while an excluded app is in front, keep only its windows neutral and the rest
+    /// of that display warm. Needs the direct-download window filter; hardware control is skipped.
+    public var keepsOtherWindowsWarm: Bool
 
     public init(
         isEnabled: Bool = false,
@@ -80,7 +83,8 @@ public struct WarmthState: Sendable, Equatable {
         displays: [DisplayState] = [],
         timedPause: TimedPause? = nil,
         pausesForFullScreen: Bool = false,
-        isFullScreenPauseActive: Bool = false
+        isFullScreenPauseActive: Bool = false,
+        keepsOtherWindowsWarm: Bool = false
     ) {
         self.isEnabled = isEnabled
         self.scheduleMode = scheduleMode
@@ -94,6 +98,7 @@ public struct WarmthState: Sendable, Equatable {
         self.timedPause = timedPause
         self.pausesForFullScreen = pausesForFullScreen
         self.isFullScreenPauseActive = isFullScreenPauseActive
+        self.keepsOtherWindowsWarm = keepsOtherWindowsWarm
     }
 }
 

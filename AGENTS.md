@@ -331,7 +331,7 @@ Each `displays[]` object:
 |---|---|---|
 | `id` | String (UUID) | Stable display identifier. |
 | `name` | String | Display name. |
-| `appliedMethod` | String | The layer producing warmth now: `hardware` \| `gamma` \| `overlay` \| `off`. |
+| `appliedMethod` | String | The layer producing warmth now: `hardware` \| `gamma` \| `colorFilter` \| `windowFilter` \| `overlay` \| `off`. `windowFilter` means an excluded app is in front and only its windows are neutral. |
 | `preferredMethod` | String or absent | A user-pinned method, when set (otherwise omitted = automatic). |
 | `warmthStrength` | Double | Per-display warmth strength. |
 | `warmthOverridden` | Bool | True when this display has a custom (non-global) warmth. |
@@ -412,6 +412,7 @@ Domain: `app.abendrot.Abendrot`
 | `pauseUntil` | Number (Double) | Unix time of the pause end | `defaults write app.abendrot.Abendrot pauseUntil -float 1762661520` |
 | `pauseKind` | String | `oneHour` \| `untilSunrise` | `defaults write app.abendrot.Abendrot pauseKind -string oneHour` |
 | `pausesForFullScreen` | Bool | standing full-screen preference | `defaults write app.abendrot.Abendrot pausesForFullScreen -bool true` |
+| `keepsOtherWindowsWarm` | Bool | experimental, direct download: keep only an excluded app's windows neutral | `defaults write app.abendrot.Abendrot keepsOtherWindowsWarm -bool true` |
 | `displaySettings` | **Data** (JSON of validated per-display settings) | app-managed; use the CLI/UI | not a plain scalar — do not hand-edit |
 | `userLatitude` | Number (Double) | `-90.0`–`90.0` | `defaults write app.abendrot.Abendrot userLatitude -float 37.77` |
 | `userLongitude` | Number (Double) | `-180.0`–`180.0` | `defaults write app.abendrot.Abendrot userLongitude -float -122.42` |

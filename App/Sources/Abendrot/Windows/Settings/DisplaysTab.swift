@@ -86,6 +86,8 @@ private struct DisplayConfigRow: View {
             return "Using standard color adjustment"
         case .colorFilter:
             return "Color filter"
+        case .windowFilter:
+            return "Warm around the excluded app's windows"
         case .overlay:
             return "Using a warm screen tint"
         case .off:

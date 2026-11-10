@@ -81,6 +81,8 @@ public enum LayerResolver {
             return privateAPIsEnabled && isSupported(capabilities.gamma)
         case .colorFilter:
             return privateAPIsEnabled && isSupported(capabilities.colorFilter)
+        case .windowFilter:
+            return false                // engine-chosen during exclusion, never an override
         case .overlay:
             return true                 // the always-available safe floor
         case .off:

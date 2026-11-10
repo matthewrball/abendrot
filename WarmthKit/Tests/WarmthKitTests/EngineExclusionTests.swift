@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreGraphics
 @testable import WarmthKit
 @testable import HardwareDDC
 @testable import WarmthCore
@@ -206,5 +207,52 @@ struct EngineExclusionTests {
         await engine.setFrontmostApp("com.y", onDisplays: [1])             // a non-excluded app takes focus
         #expect(await appliedMethod(engine, for: displayA) == .hardware)   // A warms back
         #expect(await appliedMethod(engine, for: displayB) == .hardware)
+    }
+}
+
+/// Gamma as the system does it: a ramp per display, but one reset that restores every display.
+private actor GlobalResetGammaBackend: WarmthBackend {
+    nonisolated let method: DisplayMethod = .gamma
+    private(set) var warm: Set<DisplayIdentity> = []
+
+    func classify(_ id: DisplayIdentity) async -> Capability<Void> { .supported(()) }
+    func apply(_ kelvin: Kelvin, to id: DisplayIdentity) async throws { warm.insert(id) }
+    func reset(_ id: DisplayIdentity) async throws { warm.removeAll() }
+}
+
+@Suite("Engine per-display suspend on the gamma layer")
+struct EngineGammaSuspendTests {
+
+    @Test("Suspending one gamma display leaves every other display's ramp in place",
+          arguments: [CGDirectDisplayID(1), 2, 3])
+    func suspendedGammaDisplayKeepsNeighboursWarm(suspended: CGDirectDisplayID) async {
+        let gamma = GlobalResetGammaBackend()
+        let displays = (1...3).map { DisplayIdentity.fixture(cgUUID: UUID(), displayID: CGDirectDisplayID($0)) }
+        let engine = WarmthEngine.test(backends: [gamma], store: InMemoryDDCSnapshotStore(), displays: displays)
+        await engine.start()
+        await engine.setEnabled(true)
+        await engine.setScheduleMode(.alwaysOn)
+        await engine.setWarmth(WarmthLevel(strength: 0.8))
+        #expect(await gamma.warm == Set(displays))
+
+        await engine.setExcludedApps(["com.x"])
+        await engine.setFrontmostApp("com.x", onDisplays: [suspended])
+
+        #expect(await gamma.warm == Set(displays.filter { $0.currentDisplayID != suspended }))
+    }
+
+    @Test("Moving the last display off gamma leaves the earlier displays' ramps in place")
+    func leavingGammaKeepsNeighboursWarm() async {
+        let gamma = GlobalResetGammaBackend()
+        let displays = (1...3).map { DisplayIdentity.fixture(cgUUID: UUID(), displayID: CGDirectDisplayID($0)) }
+        let engine = WarmthEngine.test(backends: [gamma], store: InMemoryDDCSnapshotStore(), displays: displays)
+        await engine.start()
+        await engine.setEnabled(true)
+        await engine.setScheduleMode(.alwaysOn)
+        await engine.setWarmth(WarmthLevel(strength: 0.8))
+
+        await engine.setPreferredMethod(.overlay, for: displays[2])
+
+        #expect(await gamma.warm == Set(displays.prefix(2)))
     }
 }

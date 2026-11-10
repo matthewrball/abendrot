@@ -33,6 +33,17 @@ bool WKApplyNativeColorMatrix(uint32_t displayID, CFStringRef expectedUUID,
 bool WKComposeNativeColorMatrix(const float baseline[9], float red, float green,
                                 float blue, float outMatrix[9]);
 
+/* Direct-distribution compositor backdrop for the window filter. Private objects are built
+ * defensively in Objective-C so exceptions never cross into Swift. Gains are in [0, 1]. */
+bool WKWindowFilterAvailable(void);
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+@class CALayer, NSWindow;
+CALayer *WKCreateWindowFilterLayer(void) NS_RETURNS_RETAINED;
+bool WKSetWindowFilterGain(CALayer *layer, float red, float green, float blue);
+bool WKConfigureWindowFilterWindow(NSWindow *window);
+#endif
+
 /* ── IOAVService (private, IOKit) ─────────────────────────────────────────────
  * The DDC/CI write path. `IOAVServiceCreate` / `IOAVServiceCreateWithService` return an
  * opaque ref; `IOAVServiceWriteI2C` / `IOAVServiceReadI2C` carry VCP gain transactions.
