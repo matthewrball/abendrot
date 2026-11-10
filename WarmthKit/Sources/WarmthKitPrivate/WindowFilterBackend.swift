@@ -1,4 +1,5 @@
 import AppKit
+import ColorSync
 import QuartzCore
 import WarmthCore
 import CInterop
@@ -11,8 +12,10 @@ import CInterop
 @MainActor
 public final class WindowFilterBackend: WarmthBackend {
     nonisolated public let method: DisplayMethod = .windowFilter
-    private var panels: [CGDirectDisplayID: WindowFilterPanel] = [:]
-    private var gains: [CGDirectDisplayID: RGBGain] = [:]
+    /// Keyed by display identity, not `currentDisplayID`. That ID changes across sleep and
+    /// hotplug; keying on it opened a second panel and left the first one up.
+    private var panels: [DisplayIdentity: WindowFilterPanel] = [:]
+    private var gains: [DisplayIdentity: RGBGain] = [:]
     private var tracker: Timer?
     private var observers: [NSObjectProtocol] = []
     /// Follows moves and resizes. 60 Hz keeps a dragged window's fringe to about one frame and
@@ -31,14 +34,15 @@ public final class WindowFilterBackend: WarmthBackend {
         guard let screen = Self.screen(for: displayID) else { throw WindowFilterError.displayMissing }
         let gain = rgbGain(for: kelvin)
         let panel: WindowFilterPanel
-        if let existing = panels[displayID] {
+        if let existing = panels[identity], existing.displayID == displayID {
             panel = existing
         } else {
+            panels.removeValue(forKey: identity)?.close()
             panel = try WindowFilterPanel(screen: screen, displayID: displayID)
-            panels[displayID] = panel
+            panels[identity] = panel
         }
         try panel.setGain(gain)
-        gains[displayID] = gain
+        gains[identity] = gain
         startTracking()
         // Cut the hole before showing the panel so the excluded window never flashes warm.
         refreshHoles()
@@ -46,9 +50,8 @@ public final class WindowFilterBackend: WarmthBackend {
     }
 
     public func reset(_ identity: DisplayIdentity) async throws {
-        let displayID = identity.currentDisplayID
-        panels.removeValue(forKey: displayID)?.close()
-        gains.removeValue(forKey: displayID)
+        panels.removeValue(forKey: identity)?.close()
+        gains.removeValue(forKey: identity)
         if panels.isEmpty { stopTracking() }
     }
 
@@ -90,17 +93,19 @@ public final class WindowFilterBackend: WarmthBackend {
     }
 
     private func rebuildPanels() {
-        for (displayID, old) in panels {
+        let kept = panels
+        panels = [:]
+        for (identity, old) in kept {
             old.close()
-            guard let screen = Self.screen(for: displayID), let gain = gains[displayID],
+            let displayID = Self.onlineDisplayID(matching: identity.cgUUID) ?? old.displayID
+            guard let screen = Self.screen(for: displayID), let gain = gains[identity],
                   let panel = try? WindowFilterPanel(screen: screen, displayID: displayID),
                   (try? panel.setGain(gain)) != nil else {
                 // The engine's next pass reports the failure and falls back to the display pause.
-                panels.removeValue(forKey: displayID)
-                gains.removeValue(forKey: displayID)
+                gains.removeValue(forKey: identity)
                 continue
             }
-            panels[displayID] = panel
+            panels[identity] = panel
         }
         gains = gains.filter { panels[$0.key] != nil }
         guard !panels.isEmpty else {
@@ -108,8 +113,8 @@ public final class WindowFilterBackend: WarmthBackend {
             return
         }
         refreshHoles()
-        for (displayID, panel) in panels {
-            if let screen = Self.screen(for: displayID) { panel.show(on: screen) }
+        for (_, panel) in panels {
+            if let screen = Self.screen(for: panel.displayID) { panel.show(on: screen) }
         }
     }
 
@@ -117,8 +122,8 @@ public final class WindowFilterBackend: WarmthBackend {
         guard !panels.isEmpty else { return }
         let owner = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
         let windows = listedWindows()
-        for (displayID, panel) in panels {
-            let display = CGDisplayBounds(displayID)
+        for (_, panel) in panels {
+            let display = CGDisplayBounds(panel.displayID)
             let region = WindowHolePolicy.neutralRegion(windows: windows, owner: owner, display: display)
             panel.setTiles(WindowHolePolicy.warmTiles(around: region, in: display), display: display)
         }
@@ -152,6 +157,21 @@ public final class WindowFilterBackend: WarmthBackend {
         }
     }
 
+    /// The online display whose UUID matches, so a wake or hotplug can move a panel onto the
+    /// new `currentDisplayID` instead of leaving the old one up.
+    private static func onlineDisplayID(matching uuid: UUID) -> CGDirectDisplayID? {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return nil }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetOnlineDisplayList(count, &ids, &count) == .success else { return nil }
+        for id in ids.prefix(Int(count)) {
+            guard let cfUUID = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue(),
+                  let parsed = UUID(uuidString: CFUUIDCreateString(nil, cfUUID) as String) else { continue }
+            if parsed == uuid { return id }
+        }
+        return nil
+    }
+
     private static func screen(for displayID: CGDirectDisplayID) -> NSScreen? {
         NSScreen.screens.first {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
@@ -167,6 +187,7 @@ private enum WindowFilterError: Error {
 /// together they cover the display except the hole.
 @MainActor
 private final class WindowFilterPanel {
+    let displayID: CGDirectDisplayID
     private let panel: NSPanel
     private let content: NSView
     private var tiles: [CALayer] = []
@@ -174,6 +195,7 @@ private final class WindowFilterPanel {
     private var gain: RGBGain?
 
     init(screen: NSScreen, displayID: CGDirectDisplayID) throws {
+        self.displayID = displayID
         guard WKWindowFilterAvailable() else { throw WindowFilterError.unavailable }
         panel = NSPanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
