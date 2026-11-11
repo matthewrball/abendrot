@@ -96,4 +96,31 @@ struct WindowHolePolicyTests {
         expectTilesMatch(tiles, hole: holes, in: display)
         #expect(tiles.allSatisfy { display.contains($0) })
     }
+
+    @Test("A rounded window leaves its square corners warm")
+    func roundedCornersStayWarm() {
+        let window = CGRect(x: 300, y: 250, width: 400, height: 300)
+        let region = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: window, layer: 0, owner: 7)],
+            owner: 7, display: display, cornerRadius: 16)
+        let corner = CGPoint(x: window.minX + 0.5, y: window.minY + 0.5)
+        let alongEdge = CGPoint(x: window.minX + 16, y: window.minY + 1)
+        let center = CGPoint(x: window.midX, y: window.midY)
+        #expect(!region.contains { $0.contains(corner) })
+        #expect(region.contains { $0.contains(alongEdge) })
+        #expect(region.contains { $0.contains(center) })
+        #expect(area(region) < window.width * window.height)
+
+        let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
+        #expect(tiles.contains { $0.contains(corner) })
+        expectTilesMatch(tiles, hole: region, in: display)
+    }
+
+    @Test("A window that fills the display keeps a square hole")
+    func fullDisplayStaysSquare() {
+        let region = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: display, layer: 0, owner: 7)],
+            owner: 7, display: display, cornerRadius: 16)
+        #expect(region.contains { $0.contains(CGPoint(x: 0.5, y: 0.5)) })
+    }
 }

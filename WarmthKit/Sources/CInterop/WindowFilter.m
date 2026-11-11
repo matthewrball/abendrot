@@ -68,3 +68,18 @@ bool WKConfigureWindowFilterWindow(NSWindow *window) {
         return false;
     }
 }
+
+CGFloat WKStandardWindowCornerRadius(void) {
+    @try {
+        NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 200, 120)
+                                                       styleMask:NSWindowStyleMaskTitled
+                                                         backing:NSBackingStoreBuffered
+                                                           defer:YES];
+        NSNumber *radius = [window valueForKey:@"cornerRadius"];
+        if (![radius isKindOfClass:[NSNumber class]]) return 0;
+        CGFloat value = radius.doubleValue;
+        return isfinite(value) && value > 0 && value < 80 ? value : 0;
+    } @catch (NSException *exception) {
+        return 0;
+    }
+}

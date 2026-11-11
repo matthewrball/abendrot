@@ -42,6 +42,8 @@ bool WKWindowFilterAvailable(void);
 CALayer *WKCreateWindowFilterLayer(void) NS_RETURNS_RETAINED;
 bool WKSetWindowFilterGain(CALayer *layer, float red, float green, float blue);
 bool WKConfigureWindowFilterWindow(NSWindow *window);
+/* Standard titled-window corner radius on this OS. 0 if it cannot be read. */
+CGFloat WKStandardWindowCornerRadius(void);
 #endif
 
 /* ── IOAVService (private, IOKit) ─────────────────────────────────────────────

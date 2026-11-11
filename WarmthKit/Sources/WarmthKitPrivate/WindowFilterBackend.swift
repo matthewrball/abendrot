@@ -118,13 +118,17 @@ public final class WindowFilterBackend: WarmthBackend {
         }
     }
 
+    private var cornerRadius: CGFloat?
+
     private func refreshHoles() {
         guard !panels.isEmpty else { return }
+        if cornerRadius == nil { cornerRadius = WKStandardWindowCornerRadius() }
         let owner = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
         let windows = listedWindows()
         for (_, panel) in panels {
             let display = CGDisplayBounds(panel.displayID)
-            let region = WindowHolePolicy.neutralRegion(windows: windows, owner: owner, display: display)
+            let region = WindowHolePolicy.neutralRegion(
+                windows: windows, owner: owner, display: display, cornerRadius: cornerRadius ?? 0)
             panel.setTiles(WindowHolePolicy.warmTiles(around: region, in: display), display: display)
         }
     }

@@ -31,10 +31,14 @@ public enum WindowHolePolicy {
     /// The parts of `owner`'s normal windows on `display` that are actually visible: each window
     /// minus every window listed in front of it. Menus, popovers, the Dock and other apps' windows
     /// in front stay warm. Overlays that are invisible or span the whole display are ignored.
+    /// `cornerRadius` follows a normal window's rounded corners, so the square outside the curve
+    /// stays warm. A window that fills the display keeps a square hole: its corners are the
+    /// screen's corners.
     public static func neutralRegion(
         windows: [Window],
         owner: Int32,
-        display: CGRect
+        display: CGRect,
+        cornerRadius: CGFloat = 0
     ) -> [CGRect] {
         var region: [CGRect] = []
         var occluders: [CGRect] = []
@@ -43,9 +47,13 @@ public enum WindowHolePolicy {
             // Desktop-level windows sit behind everything.
             guard window.layer >= 0 else { continue }
             if window.owner == owner, window.layer == 0 {
-                let clipped = window.bounds.intersection(display)
-                if !clipped.isNull, !clipped.isEmpty {
-                    region += subtract(occluders, from: clipped)
+                let radius = PausePolicy.coversDisplay(window: window.bounds, display: display)
+                    ? 0 : cornerRadius
+                for piece in roundedInterior(window.bounds, radius: radius) {
+                    let clipped = piece.intersection(display)
+                    if !clipped.isNull, !clipped.isEmpty {
+                        region += subtract(occluders, from: clipped)
+                    }
                 }
                 continue
             }
@@ -54,6 +62,35 @@ public enum WindowHolePolicy {
             }
         }
         return region
+    }
+
+    /// The rounded-rect interior of `rect`, as 1 pt rows in the corners plus the straight middle.
+    /// A circular arc matches the system corner closely enough that the square outside it stays warm.
+    static func roundedInterior(_ rect: CGRect, radius: CGFloat) -> [CGRect] {
+        let limit = min(rect.width, rect.height) / 2
+        let r = min(max(0, radius), limit)
+        guard r >= 1 else { return [rect] }
+        var pieces = [
+            CGRect(x: rect.minX + r, y: rect.minY, width: rect.width - 2 * r, height: rect.height),
+            CGRect(x: rect.minX, y: rect.minY + r, width: r, height: rect.height - 2 * r),
+            CGRect(x: rect.maxX - r, y: rect.minY + r, width: r, height: rect.height - 2 * r),
+        ]
+        let steps = Int(r.rounded(.down))
+        for step in 0..<steps {
+            let y0 = CGFloat(step)
+            let y1 = min(CGFloat(step + 1), r)
+            let dy = r - (y0 + y1) / 2
+            let inside = (r * r - dy * dy).squareRoot()
+            let inset = r - inside
+            let width = r - inset
+            guard width > 0.2, y1 > y0 else { continue }
+            let height = y1 - y0
+            pieces.append(CGRect(x: rect.minX + inset, y: rect.minY + y0, width: width, height: height))
+            pieces.append(CGRect(x: rect.maxX - r, y: rect.minY + y0, width: width, height: height))
+            pieces.append(CGRect(x: rect.minX + inset, y: rect.maxY - y1, width: width, height: height))
+            pieces.append(CGRect(x: rect.maxX - r, y: rect.maxY - y1, width: width, height: height))
+        }
+        return pieces
     }
 
     /// `display` minus `region`, as non-overlapping tiles. Horizontal bands are cut at every
