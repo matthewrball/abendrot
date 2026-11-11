@@ -123,4 +123,16 @@ struct WindowHolePolicyTests {
             owner: 7, display: display, cornerRadius: 16)
         #expect(region.contains { $0.contains(CGPoint(x: 0.5, y: 0.5)) })
     }
+
+    @Test("A fractional radius still covers the window up to the side strips")
+    func fractionalRadiusHasNoGap() {
+        let window = CGRect(x: 40, y: 40, width: 100, height: 31)
+        let region = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: window, layer: 0, owner: 7)],
+            owner: 7, display: display, cornerRadius: 16)
+        // Height 31 clamps the radius to 15.5. The point just above the side strips is still window.
+        let seam = CGPoint(x: window.minX + 8, y: window.minY + 15.25)
+        #expect(region.contains { $0.contains(seam) })
+        #expect(region.contains { $0.contains(CGPoint(x: window.midX, y: window.midY)) })
+    }
 }

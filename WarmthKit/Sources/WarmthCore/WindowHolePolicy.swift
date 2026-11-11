@@ -75,7 +75,7 @@ public enum WindowHolePolicy {
             CGRect(x: rect.minX, y: rect.minY + r, width: r, height: rect.height - 2 * r),
             CGRect(x: rect.maxX - r, y: rect.minY + r, width: r, height: rect.height - 2 * r),
         ]
-        let steps = Int(r.rounded(.down))
+        let steps = Int(r.rounded(.up))
         for step in 0..<steps {
             let y0 = CGFloat(step)
             let y1 = min(CGFloat(step + 1), r)
