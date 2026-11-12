@@ -61,7 +61,8 @@ struct GeneralTab: View {
                             selection: Binding(
                                 get: { ScheduleModeOption(model.state.scheduleMode) },
                                 set: { model.setScheduleMode($0.toScheduleMode()) }
-                            )
+                            ),
+                            horizontal: true
                         )
                         // Shared `ScheduleModeOption.subtitle` — the same one-liner as the popover.
                         Text(ScheduleModeOption(model.state.scheduleMode).subtitle)

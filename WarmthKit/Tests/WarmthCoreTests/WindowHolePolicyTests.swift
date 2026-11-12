@@ -67,6 +67,18 @@ struct WindowHolePolicyTests {
         #expect(region == [excluded])
     }
 
+    @Test("A non-regular overlay overlapping an excluded window does not shrink the hole")
+    func nonRegularOverlayDoesNotShrinkHole() {
+        let excluded = CGRect(x: 300, y: 250, width: 400, height: 300)
+        let hud = CGRect(x: 360, y: 300, width: 160, height: 90)
+        let region = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: hud, layer: 25, owner: 4, isRegularApp: false),
+            .init(bounds: excluded, layer: 0, owner: 7),
+        ], owner: 7, display: display)
+        #expect(region == [excluded])
+        #expect(region.contains { $0.contains(CGPoint(x: hud.midX, y: hud.midY)) })
+    }
+
     @Test("A floating window of the excluded app, such as picture in picture, is neutral")
     func floatingWindowOfExcludedAppIsNeutral() {
         let pip = CGRect(x: 1100, y: 40, width: 320, height: 180)
@@ -75,6 +87,26 @@ struct WindowHolePolicyTests {
             .init(bounds: CGRect(x: 200, y: 200, width: 800, height: 500), layer: 0, owner: 7),
         ], owner: 7, display: display)
         #expect(region.contains { $0.contains(CGPoint(x: pip.midX, y: pip.midY)) })
+    }
+
+    @Test("An unfocused floating window of an excluded app stays neutral")
+    func unfocusedFloatingWindowStaysNeutral() {
+        let pip = CGRect(x: 1100, y: 40, width: 320, height: 180)
+        let background = CGRect(x: 200, y: 200, width: 800, height: 500)
+        let front = CGRect(x: 40, y: 80, width: 140, height: 100)
+        let windows: [WindowHolePolicy.Window] = [
+            .init(bounds: pip, layer: 3, owner: 7),
+            .init(bounds: front, layer: 0, owner: 9),
+            .init(bounds: background, layer: 0, owner: 7),
+        ]
+        let region = WindowHolePolicy.neutralRegion(
+            windows: windows, owner: 9, display: display, floatingOwners: [7])
+        #expect(region.contains(pip))
+        #expect(region.contains(front))
+        #expect(!region.contains { $0.contains(CGPoint(x: background.midX, y: background.midY)) })
+
+        let focusedOnly = WindowHolePolicy.neutralRegion(windows: windows, owner: 9, display: display)
+        #expect(!focusedOnly.contains { $0.contains(CGPoint(x: pip.midX, y: pip.midY)) })
     }
 
 

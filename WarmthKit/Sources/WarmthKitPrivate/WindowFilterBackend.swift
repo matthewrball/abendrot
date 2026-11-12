@@ -4,13 +4,14 @@ import QuartzCore
 import WarmthCore
 import CInterop
 
-/// Experimental: warms a display around the frontmost app's windows, so an excluded app shows true
-/// color while the rest of that display stays warm. A click-through panel above everything filters
-/// what is behind it through a private compositor color matrix; tiles leave a hole over the app's
-/// visible windows. Window positions come from `CGWindowListCopyWindowInfo` metadata, with no
-/// Screen Recording and no Accessibility. Direct distribution only.
+/// Experimental: warms a display around an excluded app's windows, so that app shows true
+/// color while the rest of that display stays warm. Picture in picture stays neutral after
+/// focus leaves. A click-through panel above everything filters what is behind it through a
+/// private compositor color matrix; tiles leave a hole over the visible windows. Window
+/// positions come from `CGWindowListCopyWindowInfo` metadata, with no Screen Recording and
+/// no Accessibility. Direct distribution only.
 @MainActor
-public final class WindowFilterBackend: WarmthBackend {
+public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
     nonisolated public let method: DisplayMethod = .windowFilter
     /// Keyed by display identity, not `currentDisplayID`. That ID changes across sleep and
     /// hotplug; keying on it opened a second panel and left the first one up.
@@ -90,6 +91,8 @@ public final class WindowFilterBackend: WarmthBackend {
         }
         observers = []
         activationPolicies = [:]
+        bundleIDs = [:]
+        trackedFloatingDisplays = nil
     }
 
     private func rebuildPanels() {
@@ -120,17 +123,126 @@ public final class WindowFilterBackend: WarmthBackend {
 
     private var cornerRadius: CGFloat?
 
+    private var bundleIDs: [pid_t: String] = [:]
+    private var excludedBundleIDs: Set<String> = []
+    /// The excluded app that was frontmost before the screenshot tool took focus.
+    /// Window capture must not close the hole, or the screen flashes warm.
+    private var lastExcludedFrontPID: pid_t?
+    /// Displays whose excluded floating windows are keeping the filter up after focus left.
+    /// Nil until the first sample of that state, so the focus-change pass is not repeated.
+    private var trackedFloatingDisplays: Set<CGDirectDisplayID>?
+    private var onFloatingWindowsChanged: (@Sendable () -> Void)?
+
+    package func setExcludedApps(_ bundleIDs: Set<String>) async {
+        excludedBundleIDs = bundleIDs
+    }
+
+    package func setOnFloatingWindowsChanged(_ handler: (@Sendable () -> Void)?) async {
+        onFloatingWindowsChanged = handler
+    }
+
+    package func displaysWithExcludedFloatingWindows() async -> Set<CGDirectDisplayID> {
+        floatingDisplayIDs(in: listedWindows())
+    }
+
     private func refreshHoles() {
         guard !panels.isEmpty else { return }
         if cornerRadius == nil { cornerRadius = WKStandardWindowCornerRadius() }
-        let owner = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
+        let front = NSWorkspace.shared.frontmostApplication
+        let capturing = front?.bundleIdentifier == Self.screenCaptureBundleID
+        let reportedExcluded = front?.bundleIdentifier.map { excludedBundleIDs.contains($0) } ?? false
+        if reportedExcluded, let pid = front?.processIdentifier {
+            lastExcludedFrontPID = pid
+        }
+        // The screenshot tool is not a real focus change. Keep punching the app the user
+        // was in, and hide this panel from the window picker.
+        let frontExcluded = reportedExcluded || (capturing && lastExcludedFrontPID != nil)
+        let owner: pid_t = reportedExcluded
+            ? (front?.processIdentifier ?? -1)
+            : (capturing ? (lastExcludedFrontPID ?? -1) : -1)
         let windows = listedWindows()
+        let floating = floatingOwners(in: windows, besides: owner)
+        noteFloatingWindows(in: windows, frontExcluded: frontExcluded)
         for (_, panel) in panels {
+            panel.setSharingType(capturing ? .none : .readOnly)
             let display = CGDisplayBounds(panel.displayID)
             let region = WindowHolePolicy.neutralRegion(
-                windows: windows, owner: owner, display: display, cornerRadius: cornerRadius ?? 0)
+                windows: windows,
+                owner: owner,
+                display: display,
+                cornerRadius: cornerRadius ?? 0,
+                floatingOwners: floating)
             panel.setTiles(WindowHolePolicy.warmTiles(around: region, in: display), display: display)
         }
+    }
+
+    private static let screenCaptureBundleID = "com.apple.screencaptureui"
+
+    /// After focus leaves, the tracking timer is the only thing still running. When the last
+    /// floating window closes, or moves to another display, the engine has to choose the layer again.
+    private func noteFloatingWindows(in windows: [WindowHolePolicy.Window], frontExcluded: Bool) {
+        guard !frontExcluded else {
+            trackedFloatingDisplays = nil
+            return
+        }
+        let displays = floatingDisplayIDs(in: windows)
+        if trackedFloatingDisplays == nil {
+            trackedFloatingDisplays = displays
+            if displays.isEmpty { onFloatingWindowsChanged?() }
+            return
+        }
+        guard displays != trackedFloatingDisplays else { return }
+        trackedFloatingDisplays = displays
+        onFloatingWindowsChanged?()
+    }
+
+    private func floatingDisplayIDs(in windows: [WindowHolePolicy.Window]) -> Set<CGDirectDisplayID> {
+        let excluded = excludedBundleIDs
+        guard !excluded.isEmpty else { return [] }
+        let displays = Self.onlineDisplayBounds()
+        guard !displays.isEmpty else { return [] }
+        var hits: Set<CGDirectDisplayID> = []
+        for window in windows {
+            // Above the normal window. Desktop windows (layer below 0) are not picture in picture.
+            guard window.layer > 0, window.alpha > 0.01, !window.bounds.isEmpty else { continue }
+            guard let id = bundleID(for: window.owner), excluded.contains(id) else { continue }
+            for display in displays {
+                guard window.bounds.intersects(display.bounds),
+                      !PausePolicy.coversDisplay(window: window.bounds, display: display.bounds) else { continue }
+                hits.insert(display.id)
+            }
+        }
+        return hits
+    }
+
+    private static func onlineDisplayBounds() -> [(id: CGDirectDisplayID, bounds: CGRect)] {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return [] }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetOnlineDisplayList(count, &ids, &count) == .success else { return [] }
+        return ids.prefix(Int(count)).map { ($0, CGDisplayBounds($0)) }
+    }
+
+    private func floatingOwners(in windows: [WindowHolePolicy.Window], besides frontmost: pid_t) -> Set<Int32> {
+        let excluded = excludedBundleIDs
+        guard !excluded.isEmpty else { return [] }
+        var owners: Set<Int32> = []
+        var seen: Set<pid_t> = []
+        for window in windows {
+            let pid = window.owner
+            guard pid != frontmost, seen.insert(pid).inserted else { continue }
+            if let id = bundleID(for: pid), excluded.contains(id) {
+                owners.insert(pid)
+            }
+        }
+        return owners
+    }
+
+    private func bundleID(for pid: pid_t) -> String? {
+        if let id = bundleIDs[pid] { return id }
+        let id = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
+        if let id { bundleIDs[pid] = id }
+        return id
     }
 
     /// Activation policy by process, kept while tracking. Cleared when tracking stops.
@@ -148,8 +260,12 @@ public final class WindowFilterBackend: WarmthBackend {
             if let cached = activationPolicies[owner] {
                 regular = cached
             } else {
-                regular = NSRunningApplication(processIdentifier: owner)?.activationPolicy == .regular
+                let app = NSRunningApplication(processIdentifier: owner)
+                regular = app?.activationPolicy == .regular
                 activationPolicies[owner] = regular
+                if let id = app?.bundleIdentifier {
+                    bundleIDs[owner] = id
+                }
             }
             return WindowHolePolicy.Window(
                 bounds: rect,
@@ -223,6 +339,11 @@ private final class WindowFilterPanel {
             panel.close()
             throw WindowFilterError.unavailable
         }
+    }
+
+    func setSharingType(_ sharing: NSWindow.SharingType) {
+        guard panel.sharingType != sharing else { return }
+        panel.sharingType = sharing
     }
 
     func setGain(_ value: RGBGain) throws {

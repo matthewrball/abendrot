@@ -58,30 +58,35 @@ enum ScheduleModeOption: String, CaseIterable, Identifiable {
 
 // MARK: - ModeControl
 //
-// The Schedule either-or (Sunset · Manual) as a larger Liquid-Glass segmented control whose
+// The Schedule either-or (Sunset · Manual) as a Liquid-Glass segmented control whose
 // selected native glyph responds once: Sunset settles downward; Manual's rays rotate. There is no
-// perpetual motion, and Reduce Motion keeps the state change instant. `compact` gives the popover a
-// tighter version while Settings and onboarding use the full size.
+// perpetual motion, and Reduce Motion keeps the state change instant. `compact` keeps the popover
+// stacked and glanceable. Onboarding uses the full stacked size. Settings opts into `horizontal`:
+// icon and label on one line, inside one short rounded track.
 struct ModeControl: View {
     @Binding var selection: ScheduleModeOption
     var compact: Bool = false
+    /// Settings only. Icon beside the label in one short pill. Popover and onboarding stay stacked.
+    var horizontal: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovered: ScheduleModeOption?
     @State private var sunsetGlyphTrigger = 0
     @State private var manualGlyphTrigger = 0
 
-    // Sizing: full (Settings/Onboarding) vs compact (popover, stays glanceable).
-    private var glyphSize: CGFloat { compact ? 30 : 42 }
-    private var labelSize: CGFloat { compact ? 12.5 : 14.5 }
-    private var stackGap: CGFloat { compact ? 7 : 11 }
-    private var vPad: CGFloat { compact ? 12 : 18 }
-    private var pillRadius: CGFloat { compact ? 13 : 16 }
-    private var trackPad: CGFloat { compact ? 5 : 7 }
+    // Sizing: full stacked (onboarding), compact stacked (popover), or the short Settings pill.
+    private var glyphSize: CGFloat { horizontal ? 16 : (compact ? 30 : 42) }
+    private var glyphFont: CGFloat { horizontal ? 13 : (compact ? 23 : 31) }
+    private var labelSize: CGFloat { horizontal ? 13 : (compact ? 12.5 : 14.5) }
+    private var stackGap: CGFloat { horizontal ? 6 : (compact ? 7 : 11) }
+    private var vPad: CGFloat { horizontal ? 6 : (compact ? 12 : 18) }
+    private var hPad: CGFloat { horizontal ? 10 : 14 }
+    private var pillRadius: CGFloat { horizontal ? 8 : (compact ? 13 : 16) }
+    private var trackPad: CGFloat { horizontal ? 3 : (compact ? 5 : 7) }
     private var trackRadius: CGFloat { pillRadius + trackPad }
 
     var body: some View {
-        HStack(spacing: compact ? 6 : 8) {
+        HStack(spacing: horizontal ? 4 : (compact ? 6 : 8)) {
             segment(.followSunset)
             segment(.alwaysOn)
         }
@@ -112,22 +117,21 @@ struct ModeControl: View {
         return Button {
             select(option)
         } label: {
-            VStack(spacing: stackGap) {
-                Image(systemName: option.symbolName + (isSelected ? ".fill" : ""))
-                    .font(.system(size: compact ? 23 : 31, weight: .semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(ink)
-                    .frame(width: glyphSize, height: glyphSize)
-                    .accessibilityHidden(true)
-                Text(option.label)
-                    // Keep label metrics stable; the moving pill and ink color carry selection.
-                    .font(Theme.Typography.ui(labelSize, weight: .semibold))
-                    .foregroundStyle(ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            Group {
+                if horizontal {
+                    HStack(spacing: stackGap) {
+                        segmentGlyph(option, ink: ink)
+                        segmentLabel(option, ink: ink)
+                    }
+                } else {
+                    VStack(spacing: stackGap) {
+                        segmentGlyph(option, ink: ink)
+                        segmentLabel(option, ink: ink)
+                    }
+                }
             }
             .padding(.vertical, vPad)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, hPad)
             .frame(maxWidth: .infinity)
             .background {
                 if isSelected {
@@ -149,6 +153,24 @@ struct ModeControl: View {
         .accessibilityLabel(option.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+    private func segmentGlyph(_ option: ScheduleModeOption, ink: Color) -> some View {
+        Image(systemName: option.symbolName + (option == selection ? ".fill" : ""))
+            .font(.system(size: glyphFont, weight: .semibold))
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(ink)
+            .frame(width: glyphSize, height: glyphSize)
+            .accessibilityHidden(true)
+    }
+
+    private func segmentLabel(_ option: ScheduleModeOption, ink: Color) -> some View {
+        Text(option.label)
+            // Keep label metrics stable; the moving pill and ink color carry selection.
+            .font(Theme.Typography.ui(labelSize, weight: .semibold))
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
 
     private func select(_ option: ScheduleModeOption) {
         // Fires only on a real change → the glyph flourish never re-fires on no-op taps (audit fix).

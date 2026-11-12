@@ -119,8 +119,13 @@ private struct ExcludedAppsControl: View {
                             }
                         }
                     }
+                    .padding(4)
                 }
-                .frame(maxHeight: 220)
+                .frame(maxHeight: 132)
+                .background(
+                    Theme.Color.line.opacity(0.28),
+                    in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                )
             }
 
             Button {

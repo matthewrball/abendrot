@@ -477,8 +477,24 @@ public actor WarmthEngine {
     /// immediately so excluding the app you're currently in (or un-excluding it) takes effect now.
     public func setExcludedApps(_ bundleIDs: Set<String>) async {
         box.excludedApps = bundleIDs
-        if recomputeExcludedSuspend() { await reapply() }
+        await wireFloatingWindowFilterIfNeeded()
+        await (windowFilter as? any ExcludedWindowFilter)?.setExcludedApps(bundleIDs)
+        let suspendChanged = recomputeExcludedSuspend()
+        if suspendChanged || box.value.keepsOtherWindowsWarm {
+            await reapply()
+        }
         publish()
+    }
+
+    private var didWireFloatingWindowFilter = false
+
+    /// The filter's tracking timer calls this when the last picture-in-picture window closes.
+    private func wireFloatingWindowFilterIfNeeded() async {
+        guard !didWireFloatingWindowFilter else { return }
+        didWireFloatingWindowFilter = true
+        await (windowFilter as? any ExcludedWindowFilter)?.setOnFloatingWindowsChanged { [weak self] in
+            Task { await self?.reapply() }
+        }
     }
 
     /// The app-side NSWorkspace bridge reports the frontmost app's bundle id here (nil if none /
@@ -497,6 +513,9 @@ public actor WarmthEngine {
         onDisplays displayIDs: Set<CGDirectDisplayID>? = nil,
         fullScreenDisplays: Set<CGDirectDisplayID> = []
     ) async {
+        // The screenshot tool takes focus for a moment. Dropping the filter then would
+        // warm the window the user is about to capture, and the panel would be the capture.
+        guard bundleID != "com.apple.screencaptureui" else { return }
         let fullScreenBefore = effectiveFullScreenIDs()
         box.frontmostBundleID = bundleID
         box.frontmostDisplayIDs = displayIDs
@@ -966,11 +985,18 @@ public actor WarmthEngine {
         // table, so that display must run before any warm gamma write.
         var collectedWindowOnly: Set<DisplayIdentity> = []
         if box.value.keepsOtherWindowsWarm {
+            await wireFloatingWindowFilterIfNeeded()
+            let floatingDisplays = await (windowFilter as? any ExcludedWindowFilter)?
+                .displaysWithExcludedFloatingWindows() ?? []
             for display in snapshot {
                 let layer = resolvedLayer(display)
                 let excludedHere = isDisplaySuspendedByExclusion(display.id)
+                let floatingHere = floatingDisplays.contains(display.id.currentDisplayID)
                 let fullScreenHere = isDisplaySuspendedByFullScreen(display.id)
-                if engineOn, excludedHere, !fullScreenHere, layer != .hardware, displayWarmth(display) != .off,
+                // A floating window keeps only that display on the window filter. It does not
+                // suspend the display. Full-screen pause and hardware still take the whole display.
+                if engineOn, (excludedHere || floatingHere), !fullScreenHere, layer != .hardware,
+                   displayWarmth(display) != .off,
                    case .supported = await windowFilter.classify(display.id) {
                     collectedWindowOnly.insert(display.id)
                 }

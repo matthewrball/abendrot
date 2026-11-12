@@ -29,8 +29,9 @@ public enum WindowHolePolicy {
     }
 
     /// The parts of `owner`'s windows on `display` that are actually visible: each window
-    /// minus every window listed in front of it. Other apps' menus and popovers stay warm.
-    /// A floating window of the excluded app, such as picture in picture, is neutral too.
+    /// minus every window listed in front of it. `floatingOwners` add only their floating
+    /// windows, so picture in picture stays neutral after that app loses focus. A normal
+    /// window of those owners stays warm. Other apps' menus and popovers stay warm.
     /// Overlays that are invisible or span the whole display are ignored.
     /// `cornerRadius` follows a normal window's rounded corners, so the square outside the curve
     /// stays warm. A window that fills the display keeps a square hole: its corners are the
@@ -39,7 +40,8 @@ public enum WindowHolePolicy {
         windows: [Window],
         owner: Int32,
         display: CGRect,
-        cornerRadius: CGFloat = 0
+        cornerRadius: CGFloat = 0,
+        floatingOwners: Set<Int32> = []
     ) -> [CGRect] {
         var region: [CGRect] = []
         var occluders: [CGRect] = []
@@ -47,11 +49,13 @@ public enum WindowHolePolicy {
             guard window.alpha > 0.01, !window.bounds.isEmpty else { continue }
             // Desktop-level windows sit behind everything.
             guard window.layer >= 0 else { continue }
-            let owned = window.owner == owner
             let covers = PausePolicy.coversDisplay(window: window.bounds, display: display)
             // Layer 0 is a normal window. A smaller window on another layer is picture in picture
-            // or another floating window of the same app, not a full-screen overlay.
-            if owned && (window.layer == 0 || !covers) {
+            // or another floating window, not a full-screen overlay.
+            let floating = window.layer > 0 && !covers
+            let neutral = (window.owner == owner && (window.layer == 0 || floating))
+                || (floating && floatingOwners.contains(window.owner))
+            if neutral {
                 let radius = covers ? 0 : cornerRadius
                 for piece in roundedInterior(window.bounds, radius: radius) {
                     let clipped = piece.intersection(display)
@@ -152,7 +156,10 @@ public enum WindowHolePolicy {
 
     /// A window in front of the excluded app that should stay warm.
     private static func countsAsOccluder(_ window: Window, display: CGRect) -> Bool {
-        if window.layer == 0 { return window.isRegularApp }
+        // Volume HUD, the cursor, and this app's popover are not regular apps. Their shadow
+        // bounds must not cut a warm rectangle out of the excluded window.
+        guard window.isRegularApp else { return false }
+        if window.layer == 0 { return true }
         // A non-normal window that spans the whole display is a transparent overlay (dimmers,
         // notch tools, this app's own panels), not something a person reads.
         return !PausePolicy.coversDisplay(window: window.bounds, display: display)
@@ -183,4 +190,14 @@ public enum WindowHolePolicy {
         }
         return pieces
     }
+}
+
+// MARK: - Excluded window filter
+
+/// The engine keeps picture in picture neutral after focus leaves without listing windows
+/// itself. Only the window-filter backend conforms; other layers ignore this.
+package protocol ExcludedWindowFilter: AnyObject, Sendable {
+    func setExcludedApps(_ bundleIDs: Set<String>) async
+    func displaysWithExcludedFloatingWindows() async -> Set<CGDirectDisplayID>
+    func setOnFloatingWindowsChanged(_ handler: (@Sendable () -> Void)?) async
 }
