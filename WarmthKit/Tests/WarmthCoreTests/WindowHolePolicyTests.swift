@@ -67,6 +67,17 @@ struct WindowHolePolicyTests {
         #expect(region == [excluded])
     }
 
+    @Test("A floating window of the excluded app, such as picture in picture, is neutral")
+    func floatingWindowOfExcludedAppIsNeutral() {
+        let pip = CGRect(x: 1100, y: 40, width: 320, height: 180)
+        let region = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: pip, layer: 3, owner: 7),
+            .init(bounds: CGRect(x: 200, y: 200, width: 800, height: 500), layer: 0, owner: 7),
+        ], owner: 7, display: display)
+        #expect(region.contains { $0.contains(CGPoint(x: pip.midX, y: pip.midY)) })
+    }
+
+
     @Test("Windows behind another app are not a hole, and other displays are clipped away")
     func hiddenAndOffDisplay() {
         let cover = CGRect(x: 0, y: 0, width: 1512, height: 982)

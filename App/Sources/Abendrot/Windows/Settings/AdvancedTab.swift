@@ -111,13 +111,16 @@ private struct ExcludedAppsControl: View {
                     .font(Theme.Typography.ui(11.5))
                     .foregroundStyle(Theme.Color.textFaint)
             } else {
-                VStack(spacing: 6) {
-                    ForEach(model.excludedApps.sorted(), id: \.self) { bundleID in
-                        ExcludedAppRow(bundleID: bundleID) {
-                            model.removeExcludedApp(bundleID)
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(model.excludedApps.sorted(), id: \.self) { bundleID in
+                            ExcludedAppRow(bundleID: bundleID) {
+                                model.removeExcludedApp(bundleID)
+                            }
                         }
                     }
                 }
+                .frame(maxHeight: 220)
             }
 
             Button {

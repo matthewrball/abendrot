@@ -28,9 +28,10 @@ public enum WindowHolePolicy {
         }
     }
 
-    /// The parts of `owner`'s normal windows on `display` that are actually visible: each window
-    /// minus every window listed in front of it. Menus, popovers, the Dock and other apps' windows
-    /// in front stay warm. Overlays that are invisible or span the whole display are ignored.
+    /// The parts of `owner`'s windows on `display` that are actually visible: each window
+    /// minus every window listed in front of it. Other apps' menus and popovers stay warm.
+    /// A floating window of the excluded app, such as picture in picture, is neutral too.
+    /// Overlays that are invisible or span the whole display are ignored.
     /// `cornerRadius` follows a normal window's rounded corners, so the square outside the curve
     /// stays warm. A window that fills the display keeps a square hole: its corners are the
     /// screen's corners.
@@ -46,9 +47,12 @@ public enum WindowHolePolicy {
             guard window.alpha > 0.01, !window.bounds.isEmpty else { continue }
             // Desktop-level windows sit behind everything.
             guard window.layer >= 0 else { continue }
-            if window.owner == owner, window.layer == 0 {
-                let radius = PausePolicy.coversDisplay(window: window.bounds, display: display)
-                    ? 0 : cornerRadius
+            let owned = window.owner == owner
+            let covers = PausePolicy.coversDisplay(window: window.bounds, display: display)
+            // Layer 0 is a normal window. A smaller window on another layer is picture in picture
+            // or another floating window of the same app, not a full-screen overlay.
+            if owned && (window.layer == 0 || !covers) {
+                let radius = covers ? 0 : cornerRadius
                 for piece in roundedInterior(window.bounds, radius: radius) {
                     let clipped = piece.intersection(display)
                     if !clipped.isNull, !clipped.isEmpty {

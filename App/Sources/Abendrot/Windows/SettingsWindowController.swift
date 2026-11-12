@@ -55,26 +55,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    /// Resize the Settings window so the detail pane exactly hugs `contentHeight` — the current tab's
-    /// natural content height, measured by SettingsView. Keeps the width and the TOP edge fixed (grows /
-    /// shrinks downward). The first fit (on open) is instant; later fits — switching tab, or toggling
-    /// Sunset ⇄ Always-on which shows/hides Location — animate, so the window follows the content like
-    /// macOS System Settings does between panes.
+    /// Size the window once so it fits the screen, then leave it there. Later tab changes scroll
+    /// the detail pane instead of moving the window.
     static func fitDetailContentHeight(_ contentHeight: CGFloat) {
-        guard contentHeight > 1, let ctrl = shared, let win = ctrl.window else { return }
-        let titlebar = max(0, win.frame.height - win.contentLayoutRect.height)
-        let target = max(contentHeight + titlebar, win.minSize.height)
-        let current = win.frame
-        guard abs(current.height - target) > 1 else { return }
-        var f = current
-        f.size.height = target
-        if ctrl.hasFitContent {
-            f.origin.y = current.maxY - target              // later fits: keep the TOP edge fixed (grows/shrinks downward)
-            win.setFrame(f, display: true, animate: true)
-        } else {
-            win.setFrame(f, display: true, animate: false)  // first fit (on open): size to content…
-            win.center()                                    // …then center on the main display
-        }
+        guard contentHeight > 1, let ctrl = shared, let win = ctrl.window, !ctrl.hasFitContent else { return }
+        let visible = (win.screen ?? NSScreen.main)?.visibleFrame
+        let margin: CGFloat = 32
+        let maxHeight = max(win.minSize.height, (visible?.height ?? 720) - margin)
+        var frame = win.frame
+        frame.size.height = min(720, maxHeight)
+        frame.size.width = min(max(frame.width, win.minSize.width), (visible?.width ?? 720) - margin)
+        win.setFrame(frame, display: true, animate: false)
+        win.center()
         ctrl.hasFitContent = true
     }
 
@@ -99,9 +91,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         let hosting = NSHostingController(rootView: SettingsView(model: model))
         window.contentViewController = hosting
-        // The window then resizes to HUG each tab's content height (see `fitDetailContentHeight`, driven by
-        // a height preference in SettingsView): General is taller in Sunset, with Location, than in
-        // Always-on, so the window follows — no bottom gap, no clipping, in either mode or any tab.
+        // The first height preference sizes the window to the screen once. Later tabs scroll
+        // instead of moving the window. See `fitDetailContentHeight`.
 
         super.init(window: window)
         window.delegate = self
