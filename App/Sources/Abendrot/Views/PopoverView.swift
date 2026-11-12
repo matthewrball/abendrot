@@ -108,6 +108,7 @@ struct PopoverView: View {
                 Color.clear.frame(width: 96, height: 52).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .modifier(PopoverClickFocusRingSuppressed())
             .accessibilityLabel("Settings")
         }
         .overlay(alignment: .bottomTrailing) {
@@ -326,6 +327,17 @@ private struct SoftRevealModifier: ViewModifier {
         content
             .opacity(visible ? 1 : 0)
             .scaleEffect(visible ? 1 : 0.98, anchor: .top)
+    }
+}
+
+/// NSPopover does not tab-traverse; a click focus ring on this hit target is stray chrome.
+private struct PopoverClickFocusRingSuppressed: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
+        }
     }
 }
 

@@ -280,6 +280,8 @@ private struct WarmedTimeStat: View {
                 Text("We've warmed your Mac for")
                     .font(Theme.Typography.ui(11))
                     .foregroundStyle(Theme.Color.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
                 Spacer(minLength: 8)
 
@@ -287,7 +289,8 @@ private struct WarmedTimeStat: View {
                     .font(Theme.Typography.serif(25))
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
                     .foregroundStyle(Theme.Gradient.sunsetHorizontal)
                     .shadow(color: Theme.Color.accent.opacity(0.18), radius: 8)
             }

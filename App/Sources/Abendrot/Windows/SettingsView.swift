@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - SettingsTab
@@ -46,6 +47,10 @@ struct SettingsView: View {
     /// tab's natural height (the live window does this via `fitDetailContentHeight`; ImageRenderer can't).
     var scrolls: Bool = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var focusedTab: SettingsTab?
+    /// True after a click moves focus. Cleared on a key-driven focus change so the
+    /// quiet stroke is keyboard-only and a click cannot leave a ring behind.
+    @State private var suppressFocusChrome = false
 
     private var visibleTabs: [SettingsTab] {
         SettingsTab.allCases.filter { tab in
@@ -69,8 +74,14 @@ struct SettingsView: View {
                             tab: tab,
                             titleText: tab == .displays && model.state.displays.count == 1 ? "Display" : tab.title,
                             isSelected: model.settingsTab == tab,
-                            reduceMotion: reduceMotion
+                            reduceMotion: reduceMotion,
+                            showsKeyboardFocus: focusedTab == tab && !suppressFocusChrome,
+                            focusedTab: $focusedTab
                         ) {
+                            if NSApp.currentEvent?.type != .keyDown {
+                                suppressFocusChrome = true
+                            }
+                            focusedTab = tab
                             withAnimation(Theme.Motion.controlReveal(reduceMotion: reduceMotion)) {
                                 model.settingsTab = tab
                             }
@@ -113,6 +124,11 @@ struct SettingsView: View {
         }
         .frame(minWidth: 680, minHeight: 480)
         .background(FrostBackground())
+        .onChange(of: focusedTab) { _ in
+            if NSApp.currentEvent?.type == .keyDown {
+                suppressFocusChrome = false
+            }
+        }
     }
 
     private var detailColumn: some View {
@@ -153,6 +169,8 @@ private struct SettingsSidebarButton: View {
     let titleText: String
     let isSelected: Bool
     let reduceMotion: Bool
+    let showsKeyboardFocus: Bool
+    var focusedTab: FocusState<SettingsTab?>.Binding
     let action: () -> Void
     @State private var isHovered = false
 
@@ -177,6 +195,8 @@ private struct SettingsSidebarButton: View {
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
+        .focused(focusedTab, equals: tab)
+        .modifier(SidebarFocusEffectDisabled())
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(backgroundFill)
@@ -184,6 +204,13 @@ private struct SettingsSidebarButton: View {
         .onHover { isHovered = $0 }
         .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isSelected)
         .animation(Theme.Motion.controlReveal(reduceMotion: reduceMotion), value: isHovered)
+        .overlay {
+            if showsKeyboardFocus {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Theme.Color.lineStrong, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+        }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -191,6 +218,18 @@ private struct SettingsSidebarButton: View {
         if isSelected { return Theme.Color.accent }
         if isHovered { return Theme.Color.textPrimary.opacity(0.08) }
         return .clear
+    }
+}
+
+/// System focus ring is the purple rectangle. Hide it on macOS 14+ without dropping the row
+/// from the key view loop; the lineStrong stroke is the keyboard indicator.
+private struct SidebarFocusEffectDisabled: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
+        }
     }
 }
 

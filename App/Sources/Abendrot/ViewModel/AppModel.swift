@@ -1295,16 +1295,15 @@ final class AppModel: ObservableObject {
         warmedSecondsBase + (warmingStartedAt.map { max(0, Date().timeIntervalSince($0)) } ?? 0)
     }
 
-    /// `totalWarmedSeconds` rendered as "2d 17h 41m 46s", dropping leading-zero top units but always
-    /// keeping at least m + s. Shared by the Statistics tab and the About window so the two read the same.
+    /// `totalWarmedSeconds` rendered as "2d 17h 41m", dropping leading-zero top units and seconds.
+    /// Shared by the Statistics tab and the About window so the two read the same.
     var warmedDurationString: String {
         let s = max(0, Int(totalWarmedSeconds))
-        let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60, sec = s % 60
+        let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60
         var parts: [String] = []
         if d > 0 { parts.append("\(d)d") }
         if h > 0 || d > 0 { parts.append("\(h)h") }
         parts.append("\(m)m")
-        parts.append("\(sec)s")
         return parts.joined(separator: " ")
     }
 

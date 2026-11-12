@@ -11,6 +11,10 @@ struct AboutTab: View {
                         .font(Theme.Typography.serif(24))
                         .foregroundStyle(Theme.Color.textPrimary)
                     BylineLink()
+                    Text(versionLine)
+                        .font(Theme.Typography.ui(11))
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .monospacedDigit()
                 }
             }
 
@@ -46,6 +50,25 @@ struct AboutTab: View {
                     .foregroundStyle(Theme.Color.textFaint)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// Running bundle version. Never invents a number when Info.plist keys are missing.
+    private var versionLine: String {
+        func present(_ key: String) -> String? {
+            guard let value = Bundle.main.infoDictionary?[key] as? String else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        switch (present("CFBundleShortVersionString"), present("CFBundleVersion")) {
+        case let (short?, build?):
+            return "Version \(short) (\(build))"
+        case let (short?, nil):
+            return "Version \(short)"
+        case let (nil, build?):
+            return "Build \(build)"
+        case (nil, nil):
+            return "Version unknown"
         }
     }
 
