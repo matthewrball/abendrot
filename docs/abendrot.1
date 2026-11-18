@@ -1,6 +1,6 @@
 .\" Man page for the abendrot CLI.
 .\" Render locally with: man ./docs/abendrot.1 (or: groff -man -Tascii docs/abendrot.1)
-.TH ABENDROT 1 "July 28, 2026" "abendrot 1.0.2" "User Commands"
+.TH ABENDROT 1 "November 12, 2026" "abendrot 1.0.2" "User Commands"
 .SH NAME
 abendrot \- control the Abendrot screen-warmth app from the terminal or an AI assistant
 .SH SYNOPSIS
@@ -18,6 +18,10 @@ abendrot \- control the Abendrot screen-warmth app from the terminal or an AI as
 .B abendrot on
 |
 .B off
+.RB [ \-\-json ]
+.br
+.B abendrot cozy
+.BR on | off
 .RB [ \-\-json ]
 .br
 .B abendrot set warmth
@@ -53,6 +57,19 @@ abendrot \- control the Abendrot screen-warmth app from the terminal or an AI as
 .B abendrot exclude list
 .RB [ \-\-json ]
 .br
+.B abendrot pause
+.BR hour | sunrise | resume
+.RB [ \-\-json ]
+.br
+.B abendrot pause fullscreen
+.BR on | off
+.RB [ \-\-json ]
+.br
+.B abendrot debug fullscreen
+.RB [ \-\-delay
+.IR seconds ]
+.RB [ \-\-json ]
+.br
 .B abendrot reveal
 .RB [ \-\-hold
 .IR seconds ]
@@ -69,14 +86,18 @@ shell or by an AI assistant (Claude Code, Codex, Cursor).
 A setting command does two things: it writes the new value to the app's CFPreferences
 domain
 .B app.abendrot.Abendrot
-(so the value survives an app restart), and it posts a local distributed notification that
-wakes the running app so the change applies immediately. The app writes a snapshot file that
+(so the value survives an app restart), and it sends a length-prefixed control message on a
+same-user Unix-domain socket
+.RI ( control.sock
+beside
+.IR state.json )
+that wakes the running app so the change applies immediately. The app writes a snapshot file that
 records the request id of the command it applied; the CLI polls that snapshot to confirm the
 change landed.
 .B status
 reads that same snapshot.
 .PP
-There is no daemon, socket, XPC service, network listener, or privileged helper. The control
+There is no daemon, XPC service, network listener, or privileged helper. The control
 surface is scoped to the same macOS user, the local login session, and the app's visual state
 only.
 .PP
@@ -94,7 +115,7 @@ not running, the last-saved (persisted) values are shown instead.
 Print one configured setting.
 .I key
 is one of
-.BR warmth ", " mode ", " max-warmth ", " reveal-mode ", " location ", " enabled .
+.BR warmth ", " mode ", " max-warmth ", " cozy ", " reveal-mode ", " location ", " enabled .
 Reads the preference domain directly, so it works whether or not the app is running.
 .TP
 .B on \fR[\fB\-\-json\fR]
@@ -102,6 +123,11 @@ Enable warming (the master toggle, \fBisEnabled\fR = true).
 .TP
 .B off \fR[\fB\-\-json\fR]
 Disable warming (\fBisEnabled\fR = false).
+.TP
+.B cozy \fBon\fR|\fBoff\fR \fR[\fB\-\-json\fR]
+Turn Cozy mode (expanded warmth ceiling down to ~500K) on or off. Passing
+.B off
+restores the active mode's saved warmth at the everyday 1900K ceiling.
 .TP
 .B set warmth \fR[\fIstrength\fR] [\fB\-\-kelvin\fR \fIkelvin\fR] [\fB\-\-json\fR]
 Set global warmth. Provide a
@@ -150,6 +176,19 @@ Remove a bundle id from the exclusion set.
 List excluded bundle ids (one per line, or
 .B (none)
 when empty).
+.TP
+.B pause \fBhour\fR|\fBsunrise\fR|\fBresume\fR \fR[\fB\-\-json\fR]
+Temporarily hold warmth for one hour or until the next local sunrise (requires warmth to be
+enabled), or clear an active timed pause with
+.BR resume .
+.TP
+.B pause fullscreen \fBon\fR|\fBoff\fR \fR[\fB\-\-json\fR]
+Enable or disable automatic per-display warmth pause while an app covers the display or uses a
+native full-screen Space.
+.TP
+.B debug fullscreen \fR[\fB\-\-delay\fR \fIseconds\fR] [\fB\-\-json\fR]
+Inspect full-screen detection state per display (window owners, layers, and sizes only, never
+window titles). Optional delay 0\(en60 seconds.
 .TP
 .B reveal \fR[\fB\-\-hold\fR \fIseconds\fR] [\fB\-\-json\fR]
 Momentary true-color peek: temporarily drop warmth to reveal real colors. This is live-only
@@ -274,7 +313,8 @@ The control surface is scoped to the same macOS user, the local login session, a
 visual state only. Any process running as the same user that can run
 .B abendrot
 (or write the preference plist) can change warmth, toggle warming, or trigger reveal. There is
-no network listener, socket, LaunchDaemon, privileged helper, or cross-user delivery. The app
+no network listener, LaunchDaemon, privileged helper, or cross-user delivery; the live wakeup
+uses a same-user Unix-domain socket verified by peer UID. The app
 validates every command exactly as it validates user-interface input.
 .SH SEE ALSO
 The

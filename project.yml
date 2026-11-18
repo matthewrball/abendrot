@@ -83,6 +83,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         AbendrotSourceCommit: "$(ABENDROT_SOURCE_COMMIT)"
         LSMinimumSystemVersion: "12.0"
+        LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: "Abendrot. Warm into the evening."
         # No camera/mic/location/accessibility usage strings — core function needs no
         # permissions. A notification usage prompt is requested at

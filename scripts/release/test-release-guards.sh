@@ -1642,3 +1642,44 @@ XML
 else
   echo "SKIP: build-only publish.sh guard (not present in curated public source)"
 fi
+
+python3 - "$ROOT" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+root = Path(sys.argv[1])
+project_yml = (root / "project.yml").read_text(encoding="utf-8")
+m = re.search(r'^\s*MARKETING_VERSION:\s*"([^"]+)"', project_yml, re.M)
+assert m, "MARKETING_VERSION missing in project.yml"
+marketing_version = m.group(1)
+assert project_yml.count("LSApplicationCategoryType: public.app-category.utilities") >= 2, (
+    "both Abendrot and AbendrotAppStore targets must declare LSApplicationCategoryType"
+)
+
+pad_path = root / "pad" / "abendrot.xml"
+assert pad_path.is_file(), "pad/abendrot.xml missing"
+pad = ET.parse(pad_path).getroot()
+assert pad.findtext("./Program_Info/Program_Version") == marketing_version, (
+    f"pad Program_Version != {marketing_version}"
+)
+limits = {"Char_Desc_45": 45, "Char_Desc_80": 80, "Char_Desc_250": 250, "Char_Desc_450": 450, "Char_Desc_2000": 2000}
+for tag, limit in limits.items():
+    val = (pad.findtext(f"./Program_Descriptions/English/{tag}") or "").strip()
+    assert 0 < len(val) <= limit, f"{tag} length {len(val)} exceeds {limit}"
+    assert not re.search(r"warms every display|root cause of sleep disruption", val, re.I), (
+        f"forbidden claim in {tag}"
+    )
+primary_dl = pad.findtext("./Web_Info/Download_URLs/Primary_Download_URL") or ""
+assert f"/v{marketing_version}/Abendrot-{marketing_version}.dmg" in primary_dl, (
+    f"Primary_Download_URL does not match {marketing_version}: {primary_dl}"
+)
+
+agents_md = (root / "AGENTS.md").read_text(encoding="utf-8")
+man_page = (root / "docs" / "abendrot.1").read_text(encoding="utf-8")
+assert "### `abendrot cozy on|off [--json]`" in agents_md, "AGENTS.md missing cozy subcommand"
+assert ".B cozy" in man_page and "control.sock" in man_page, "abendrot.1 missing cozy or control.sock"
+assert "distributed notification" not in man_page, "abendrot.1 still mentions obsolete distributed notification"
+PY
+echo "PASS: PAD metadata, LSApplicationCategoryType, AGENTS.md, and man-page guards match $ROOT"

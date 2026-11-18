@@ -3,7 +3,7 @@
   <MASTER_PAD_VERSION_INFO>
     <MASTER_PAD_VERSION>3.11</MASTER_PAD_VERSION>
     <MASTER_PAD_EDITOR>Abendrot</MASTER_PAD_EDITOR>
-    <MASTER_PAD_EDITOR_VERSION>1.0.9</MASTER_PAD_EDITOR_VERSION>
+    <MASTER_PAD_EDITOR_VERSION>1.1.14</MASTER_PAD_EDITOR_VERSION>
     <INFO_CODE_PAGE>UTF-8</INFO_CODE_PAGE>
   </MASTER_PAD_VERSION_INFO>
   <Company_Info>
@@ -35,9 +35,9 @@
   </Company_Info>
   <Program_Info>
     <Program_Name>Abendrot</Program_Name>
-    <Program_Version>1.1.5</Program_Version>
-    <Program_Release_Month>10</Program_Release_Month>
-    <Program_Release_Day>19</Program_Release_Day>
+    <Program_Version>1.1.14</Program_Version>
+    <Program_Release_Month>11</Program_Release_Month>
+    <Program_Release_Day>12</Program_Release_Day>
     <Program_Release_Year>2026</Program_Release_Year>
     <Program_Cost_Dollars>0</Program_Cost_Dollars>
     <Program_Type>Freeware</Program_Type>
@@ -45,15 +45,15 @@
     <Program_Install_Support>Install and Uninstall</Program_Install_Support>
     <Program_OS_Support>Mac OS X</Program_OS_Support>
     <Program_Language>English</Program_Language>
-    <Program_Change_Info>Fixed native built-in M5 Pro warming for the cursor and system pop-ups, preserved warmth through Dock transitions, and added crash-safe color restoration.</Program_Change_Info>
+    <Program_Change_Info>Kept picture-in-picture of excluded apps neutral after focus leaves, kept the warmth hole open during window capture, fixed system UI cutouts around excluded windows, and tightened Settings controls.</Program_Change_Info>
     <Program_Specific_Category>Desktop</Program_Specific_Category>
     <Program_Categories>Desktop::Other</Program_Categories>
     <Program_Category_Class>Desktop::Other</Program_Category_Class>
-    <Program_System_Requirements>macOS 12 or later, Apple Silicon or Intel</Program_System_Requirements>
+    <Program_System_Requirements>macOS 12 Monterey or later, Apple silicon or Intel</Program_System_Requirements>
     <File_Info>
-      <File_Size_Bytes>9350650</File_Size_Bytes>
-      <File_Size_K>9132</File_Size_K>
-      <File_Size_MB>8.92</File_Size_MB>
+      <File_Size_Bytes>9846242</File_Size_Bytes>
+      <File_Size_K>9615</File_Size_K>
+      <File_Size_MB>9.39</File_Size_MB>
     </File_Info>
     <Expire_Info>
       <Has_Expire_Info>N</Has_Expire_Info>
@@ -69,46 +69,49 @@
   </Program_Info>
   <Program_Descriptions>
     <English>
-    <Char_Desc_45>Mac screen warmer that cuts blue light</Char_Desc_45>
-    <Char_Desc_80>Free open-source Mac screen warmer that cuts nighttime blue light</Char_Desc_80>
-    <Char_Desc_250>Abendrot is a free, open-source Mac screen warmer that cuts nighttime blue light. It warms every display around your local sunset so your evenings aren't lit up like daytime.</Char_Desc_250>
-    <Char_Desc_450>Abendrot is a free, open-source Mac screen warmer that cuts nighttime blue light. It warms every display around your local sunset so your evenings aren't lit up like daytime. This is a science backed application that takes a different and more optimal approach than f.lux or Night Shift. At night, you need to reduce your blue light exposure.</Char_Desc_450>
-    <Char_Desc_2000>Abendrot is a free, open-source Mac screen warmer that cuts nighttime blue light. It warms every display around your local sunset so your evenings aren't lit up like daytime. This is a science backed application that takes a different and more optimal approach than f.lux or Night Shift.
+    <Char_Desc_45>Open-source f.lux alternative for Mac</Char_Desc_45>
+    <Char_Desc_80>Free, MIT-licensed macOS screen warmer with external-display and CLI support</Char_Desc_80>
+    <Char_Desc_250>Open-source f.lux alternative for Mac. The macOS app for your circadian rhythm. Warms built-in and external displays around local sunset with a screen-tint fallback, Reveal True Color, a JSON CLI, MIT license, and no app telemetry.</Char_Desc_250>
+    <Char_Desc_450>Open-source f.lux alternative for Mac. The macOS app for your circadian rhythm. Abendrot warms built-in and external displays around local sunset using the methods available on that Mac, with a screen-tint fallback when direct warming is unavailable. Includes Reveal True Color, per-app exclusions, and a scriptable JSON CLI. Free under the MIT license, with no account and no Mac-app telemetry.</Char_Desc_450>
+    <Char_Desc_2000>Open-source f.lux alternative for Mac. The macOS app for your circadian rhythm.
 
-At night, you need to reduce your blue light exposure. Abendrot targets the root cause of sleep disruption by minimizing the specific short-wavelength, melanopic light (blue/cyan) that tricks your body clock into thinking it's still daytime.
+Abendrot is a native macOS menu-bar app that warms built-in and external displays using the methods available on that Mac, with a screen-tint fallback when direct warming is unavailable. Sunset mode uses the Mac's system time zone or a chosen city without requesting Location permission.
 
 Features:
-- Per-display warmth, including external monitors and buttonless Apple displays
-- Everyday warmth down to 1900 K, with an optional near-red Cozy mode
-- Automatic, screen tint, and hardware (DDC) methods with a visible badge per display
-- Reveal True Color hotkey when you need accurate color for a moment
-- Menu bar app with a scriptable CLI
-- No account, no telemetry
-- MIT license, free
+- Per-display warmth across built-in and external displays, with visible method status and a screen-tint fallback
+- Everyday warmth down to 1900 K, plus an optional deeper Cozy mode
+- Reveal True Color global shortcut (Option-Command-T by default, hold or toggle) when accurate color is needed
+- Per-app and full-screen warmth exclusions
+- Bundled abendrot CLI for scripts and AI coding assistants, with machine-readable JSON output
+- Signed with Developer ID and notarized by Apple; universal for Apple silicon and Intel on macOS 12+
+- MIT license, free, no account, no ads, and no Mac-app usage telemetry (settings and statistics stay local; Sparkle update checks contact GitHub)
 
-Website: https://abendrot.app
-GitHub: https://github.com/matthewrball/abendrot
-Download: https://github.com/matthewrball/abendrot/releases/download/v1.1.5/Abendrot-1.1.5.dmg</Char_Desc_2000>
-    <Keywords>abendrot, blue light, screen warmer, circadian, night shift, f.lux, macos, mac, sleep, melanopic, display</Keywords>
+General wellness utility, not a medical device. Abendrot changes display color appearance and makes no claim to diagnose, treat, or improve sleep or any condition.
+
+Website: https://abendrot.app/
+Download: https://abendrot.app/download/
+Homebrew: brew install --cask matthewrball/tap/abendrot
+Source: https://github.com/matthewrball/abendrot</Char_Desc_2000>
+    <Keywords>abendrot, screen warmer, f.lux alternative, night shift, blue light, circadian rhythm, macos, menu bar, external display, open source, cli</Keywords>
     </English>
   </Program_Descriptions>
   <Web_Info>
     <Application_URLs>
-      <Application_Info_URL>https://abendrot.app</Application_Info_URL>
-      <Application_Order_URL>https://abendrot.app</Application_Order_URL>
-      <Application_Screenshot_URL>https://raw.githubusercontent.com/matthewrball/abendrot/main/assets/abendrot-icon.png</Application_Screenshot_URL>
+      <Application_Info_URL>https://abendrot.app/</Application_Info_URL>
+      <Application_Order_URL>https://abendrot.app/download/</Application_Order_URL>
+      <Application_Screenshot_URL>https://abendrot.app/og-image.png</Application_Screenshot_URL>
       <Application_Icon_URL>https://raw.githubusercontent.com/matthewrball/abendrot/main/assets/abendrot-icon.png</Application_Icon_URL>
       <Application_XML_File_URL>https://raw.githubusercontent.com/matthewrball/abendrot/main/pad/abendrot.xml</Application_XML_File_URL>
     </Application_URLs>
     <Download_URLs>
-      <Primary_Download_URL>https://github.com/matthewrball/abendrot/releases/download/v1.1.5/Abendrot-1.1.5.dmg</Primary_Download_URL>
-      <Secondary_Download_URL>https://github.com/matthewrball/abendrot/releases/latest</Secondary_Download_URL>
-      <Additional_Download_URL_1></Additional_Download_URL_1>
+      <Primary_Download_URL>https://github.com/matthewrball/abendrot/releases/download/v1.1.14/Abendrot-1.1.14.dmg</Primary_Download_URL>
+      <Secondary_Download_URL>https://abendrot.app/download/</Secondary_Download_URL>
+      <Additional_Download_URL_1>https://github.com/matthewrball/abendrot/releases/latest</Additional_Download_URL_1>
       <Additional_Download_URL_2></Additional_Download_URL_2>
     </Download_URLs>
   </Web_Info>
   <Permissions>
-    <Distribution_Permissions>The program can be freely distributed over the internet in an unchanged form.</Distribution_Permissions>
+    <Distribution_Permissions>The program can be freely distributed over the internet under the terms of the MIT License.</Distribution_Permissions>
     <EULA>https://github.com/matthewrball/abendrot/blob/main/LICENSE</EULA>
   </Permissions>
 </XML_DIZ_INFO>

@@ -104,6 +104,16 @@ abendrot on
 abendrot off
 ```
 
+### `abendrot cozy on|off [--json]`
+
+Turn Cozy mode (expanded warmth ceiling down to `~500K` at full strength) on or off. `off`
+restores the active mode's saved warmth at the everyday `1900K` ceiling.
+
+```sh
+abendrot cozy on
+abendrot cozy off
+```
+
 ### `abendrot set warmth [<strength>] [--kelvin <kelvin>] [--json]`
 
 Set global warmth either as a strength `0.0`–`1.0`, **or** by targeting an effective Kelvin
@@ -239,6 +249,7 @@ prints usage.
 | Location longitude | `set location <lat> <lon>` | Double | `-180.0`–`180.0` | Pair with latitude. |
 | Location auto | `set location --auto` | flag | — | Clears the manual coordinate. |
 | Enabled | `on` / `off` | Bool | — | Master toggle. |
+| Cozy mode | `cozy on/off` | Bool | `on` or `off` | Expands warmth to `~500K`; `off` restores everyday `1900K` ceiling. |
 | Pause for one hour | `pause hour` | Date + String | one hour from now | Exit 2 if warmth is off. Does not change the toggle or the schedule. |
 | Pause until sunrise | `pause sunrise` | Date + String | next local sunrise | Exit 2 if warmth is off, or if sunrise is unavailable for this location today. |
 | End a timed pause | `pause resume` | flag | — | Clears `pauseUntil` and `pauseKind`. Does not require warmth to be on. |
