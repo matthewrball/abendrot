@@ -1644,6 +1644,7 @@ else
 fi
 
 python3 - "$ROOT" <<'PY'
+import plistlib
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -1657,12 +1658,23 @@ marketing_version = m.group(1)
 assert project_yml.count("LSApplicationCategoryType: public.app-category.utilities") >= 2, (
     "both Abendrot and AbendrotAppStore targets must declare LSApplicationCategoryType"
 )
+for plist_rel in ("App/Resources/Info.plist", "App/Resources/Info-AppStore.plist"):
+    plist_data = plistlib.loads((root / plist_rel).read_bytes())
+    assert plist_data.get("LSApplicationCategoryType") == "public.app-category.utilities", (
+        f"{plist_rel} missing LSApplicationCategoryType"
+    )
 
 pad_path = root / "pad" / "abendrot.xml"
 assert pad_path.is_file(), "pad/abendrot.xml missing"
 pad = ET.parse(pad_path).getroot()
 assert pad.findtext("./Program_Info/Program_Version") == marketing_version, (
     f"pad Program_Version != {marketing_version}"
+)
+appcast = ET.parse(root / "appcast.xml").getroot()
+top_enclosure = appcast.find("./channel/item/enclosure")
+assert top_enclosure is not None, "appcast.xml missing top enclosure"
+assert pad.findtext("./Program_Info/File_Info/File_Size_Bytes") == top_enclosure.attrib.get("length"), (
+    "pad File_Size_Bytes does not match appcast.xml top enclosure length"
 )
 limits = {"Char_Desc_45": 45, "Char_Desc_80": 80, "Char_Desc_250": 250, "Char_Desc_450": 450, "Char_Desc_2000": 2000}
 for tag, limit in limits.items():
@@ -1681,5 +1693,8 @@ man_page = (root / "docs" / "abendrot.1").read_text(encoding="utf-8")
 assert "### `abendrot cozy on|off [--json]`" in agents_md, "AGENTS.md missing cozy subcommand"
 assert ".B cozy" in man_page and "control.sock" in man_page, "abendrot.1 missing cozy or control.sock"
 assert "distributed notification" not in man_page, "abendrot.1 still mentions obsolete distributed notification"
+assert "debug fullscreen \\fR[\\fB\\-\\-delay\\fR \\fIseconds\\fR] [\\fB\\-\\-json\\fR]" not in man_page, (
+    "abendrot.1 must not advertise --json on debug fullscreen"
+)
 PY
 echo "PASS: PAD metadata, LSApplicationCategoryType, AGENTS.md, and man-page guards match $ROOT"

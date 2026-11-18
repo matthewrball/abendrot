@@ -68,7 +68,6 @@ abendrot \- control the Abendrot screen-warmth app from the terminal or an AI as
 .B abendrot debug fullscreen
 .RB [ \-\-delay
 .IR seconds ]
-.RB [ \-\-json ]
 .br
 .B abendrot reveal
 .RB [ \-\-hold
@@ -186,7 +185,7 @@ enabled), or clear an active timed pause with
 Enable or disable automatic per-display warmth pause while an app covers the display or uses a
 native full-screen Space.
 .TP
-.B debug fullscreen \fR[\fB\-\-delay\fR \fIseconds\fR] [\fB\-\-json\fR]
+.B debug fullscreen \fR[\fB\-\-delay\fR \fIseconds\fR]
 Inspect full-screen detection state per display (window owners, layers, and sizes only, never
 window titles). Optional delay 0\(en60 seconds.
 .TP
@@ -226,6 +225,11 @@ For
 .BR reveal :
 hold the reveal for 0 through 300 seconds (default 3). Non-finite and out-of-range values
 are rejected with exit status 2.
+.TP
+.B \-\-delay \fIseconds\fR
+For
+.BR "debug fullscreen" :
+wait 0 through 60 seconds before inspecting displays (default 0).
 .SH EXIT STATUS
 .TP
 .B 0

@@ -106,8 +106,8 @@ abendrot off
 
 ### `abendrot cozy on|off [--json]`
 
-Turn Cozy mode (expanded warmth ceiling down to `~500K` at full strength) on or off. `off`
-restores the active mode's saved warmth at the everyday `1900K` ceiling.
+Turn Cozy mode (expanded warmth ceiling down to `~500K` at full strength) on or off in the
+running app. `off` restores the active mode's saved warmth at the everyday `1900K` ceiling.
 
 ```sh
 abendrot cozy on
@@ -187,7 +187,7 @@ abendrot exclude list            # one bundle id per line, or "(none)"
 abendrot exclude list --json     # {"excludedApps":["com.apple.dt.Xcode"]}
 ```
 
-### `abendrot pause hour|sunrise|resume` / `abendrot pause fullscreen on|off`
+### `abendrot pause hour|sunrise|resume [--json]` / `abendrot pause fullscreen on|off [--json]`
 
 Temporary warmth holds. These do not change the master toggle, the schedule, or the warmth
 curve. `hour` and `sunrise` require warmth to be on, and persist an absolute end time; an
@@ -329,6 +329,7 @@ Example (app running):
 | `globalWarmthStrength` | Double | Current global warmth strength, `0.0`–`1.0`. |
 | `globalKelvin` | Int | Approximate effective Kelvin at the current strength. |
 | `warmestPointKelvin` | Int | The warmest-point ceiling. |
+| `cozy` | Bool | True when Cozy mode (`~500K` ceiling) is enabled. |
 | `revealMode` | String | `hold` \| `toggle`. |
 | `excludedApps` | [String] | Sorted bundle ids excluded from warming. |
 | `pauseUntil` | String (ISO-8601) or absent | Timed-pause end. Present only while that end is still in the future. Turning warmth off clears it. |
