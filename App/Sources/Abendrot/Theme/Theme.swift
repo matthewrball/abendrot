@@ -146,8 +146,10 @@ struct LiquidGlassButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let destructive = configuration.role == .destructive
+        return configuration.label
             .font(Theme.Typography.ui(12, weight: .medium))
+            .foregroundStyle(destructive ? AnyShapeStyle(SwiftUI.Color(red: 1, green: 0.55, blue: 0.47)) : AnyShapeStyle(.primary))
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
             .background {
@@ -157,7 +159,8 @@ struct LiquidGlassButtonStyle: ButtonStyle {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+                    .strokeBorder(destructive ? SwiftUI.Color(red: 1, green: 0.47, blue: 0.37).opacity(0.5) : .white.opacity(0.12),
+                                  lineWidth: 0.5)
             )
             .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1.0) : 0.4)
             // Scale effect for the liquid feel

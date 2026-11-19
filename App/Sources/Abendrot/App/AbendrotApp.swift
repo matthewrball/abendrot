@@ -216,6 +216,19 @@ enum ScreenshotHarness {
         shot("popover-pause", width: 330, colorScheme: colorScheme, into: out) {
             PopoverView(model: pauseModel)
         }
+        let appPauseModel = AppModel(previewState: MockWarmthState.warming)
+        appPauseModel.frontAppBundleID = "com.apple.Preview"
+        appPauseModel.frontAppIsLive = true
+        appPauseModel.excludedApps = ["com.apple.Preview"]
+        shot("popover-app-paused", width: 330, colorScheme: colorScheme, into: out) {
+            PopoverView(model: appPauseModel)
+        }
+        let advancedModel = AppModel(previewState: MockWarmthState.warming)
+        advancedModel.settingsTab = .advanced
+        advancedModel.excludedApps = ["com.apple.Preview", "com.apple.finder", "com.apple.Safari", "com.apple.Notes"]
+        shot("settings-advanced-apps", width: 720, colorScheme: colorScheme, into: out) {
+            SettingsView(model: advancedModel, scrolls: false)
+        }
         var paused = MockWarmthState.warming
         paused.timedPause = TimedPause(until: Date(timeIntervalSinceNow: 3600), kind: .oneHour)
         let pausedModel = AppModel(previewState: paused)

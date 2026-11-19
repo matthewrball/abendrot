@@ -42,6 +42,10 @@ bool WKWindowFilterAvailable(void);
 CALayer *WKCreateWindowFilterLayer(void) NS_RETURNS_RETAINED;
 bool WKSetWindowFilterGain(CALayer *layer, float red, float green, float blue);
 bool WKConfigureWindowFilterWindow(NSWindow *window);
+/* Hide a window from the screenshot tool's window picker (Cmd-Shift-4 then Space). Area and
+ * full-screen captures still include it. Needs a window number; false if unavailable. */
+bool WKExcludeWindowFromCaptureSelection(NSWindow *window);
+bool WKWindowExcludedFromCaptureSelection(NSWindow *window);
 /* Standard titled-window corner radius on this OS. 0 if it cannot be read. */
 CGFloat WKStandardWindowCornerRadius(void);
 #endif

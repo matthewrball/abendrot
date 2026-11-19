@@ -18,20 +18,41 @@ public enum WindowHolePolicy {
         /// A normal dock app. Accessory overlays at layer 0 (Cua Driver covers a whole display)
         /// are invisible and must not hide the excluded window.
         public var isRegularApp: Bool
+        /// `bounds` is the visible surface, measured by the caller, not the window's shadow frame.
+        /// This app's own popover and windows are measured this way and always stay warm.
+        public var isMeasured: Bool
 
-        public init(bounds: CGRect, layer: Int, owner: Int32, alpha: Double = 1, isRegularApp: Bool = true) {
+        public init(
+            bounds: CGRect,
+            layer: Int,
+            owner: Int32,
+            alpha: Double = 1,
+            isRegularApp: Bool = true,
+            isMeasured: Bool = false
+        ) {
             self.bounds = bounds
             self.layer = layer
             self.owner = owner
             self.alpha = alpha
             self.isRegularApp = isRegularApp
+            self.isMeasured = isMeasured
         }
     }
+
+    /// `kCGPopUpMenuWindowLevel`: menus, context menus, and menu-bar extra windows. AppKit sizes
+    /// these windows to the menu itself, so their bounds are what a person sees.
+    public static let popUpMenuLayer = Int(CGWindowLevelForKey(.popUpMenuWindow))
+
+    /// The widest shadow margin a window may add around another window of the same app.
+    static let maxShadowMargin: CGFloat = 128
 
     /// The parts of `owner`'s windows on `display` that are actually visible: each window
     /// minus every window listed in front of it. `floatingOwners` add only their floating
     /// windows, so picture in picture stays neutral after that app loses focus. A normal
-    /// window of those owners stays warm. Other apps' menus and popovers stay warm.
+    /// window of those owners stays warm. Other apps' menus and popovers stay warm, at their
+    /// own bounds. The excluded app's menus are neutral, at their own bounds. A window that only
+    /// frames another window of the same app with a shadow margin is ignored, so a menu's shadow
+    /// is never a hole or a warm box. Desktop windows, including Finder's, are never a hole.
     /// Overlays that are invisible or span the whole display are ignored.
     /// `cornerRadius` follows a normal window's rounded corners, so the square outside the curve
     /// stays warm. A window that fills the display keeps a square hole: its corners are the
@@ -45,10 +66,13 @@ public enum WindowHolePolicy {
     ) -> [CGRect] {
         var region: [CGRect] = []
         var occluders: [CGRect] = []
-        for window in windows {
+        let shadows = shadowFrames(in: windows, display: display)
+        for (index, window) in windows.enumerated() {
             guard window.alpha > 0.01, !window.bounds.isEmpty else { continue }
-            // Desktop-level windows sit behind everything.
+            // Desktop-level windows sit behind everything. Finder's desktop is one of them, so an
+            // excluded Finder never turns the whole desktop neutral.
             guard window.layer >= 0 else { continue }
+            guard !shadows.contains(index) else { continue }
             let covers = PausePolicy.coversDisplay(window: window.bounds, display: display)
             // Layer 0 is a normal window. A smaller window on another layer is picture in picture
             // or another floating window, not a full-screen overlay.
@@ -156,13 +180,49 @@ public enum WindowHolePolicy {
 
     /// A window in front of the excluded app that should stay warm.
     private static func countsAsOccluder(_ window: Window, display: CGRect) -> Bool {
-        // Volume HUD, the cursor, and this app's popover are not regular apps. Their shadow
-        // bounds must not cut a warm rectangle out of the excluded window.
-        guard window.isRegularApp else { return false }
-        if window.layer == 0 { return true }
+        if window.layer == 0, window.isRegularApp { return true }
         // A non-normal window that spans the whole display is a transparent overlay (dimmers,
         // notch tools, this app's own panels), not something a person reads.
-        return !PausePolicy.coversDisplay(window: window.bounds, display: display)
+        if window.layer != 0, PausePolicy.coversDisplay(window: window.bounds, display: display) { return false }
+        // This app's own popover and windows, measured without their shadow.
+        if window.isMeasured || window.isRegularApp { return true }
+        // A menu of a menu-bar app or of the system. Its bounds are the menu.
+        // The cursor, the volume HUD, and accessory overlays are not regular apps and are not
+        // menus. Their shadow bounds must not cut a warm rectangle out of the excluded window.
+        return window.layer == popUpMenuLayer
+    }
+
+    /// Indices of windows that only frame another window of the same app on the same layer, with a
+    /// shadow margin on every side and the same margin left and right. Such a window draws the
+    /// shadow of the one inside it; the window inside is what a person sees.
+    // Accepted risk: a real floating window that encloses a smaller window of the same app on the
+    // same layer with even margins is also skipped. Window-list metadata alone can't tell the two
+    // apart without Screen Recording, which this mode avoids.
+    static func shadowFrames(in windows: [Window], display: CGRect) -> Set<Int> {
+        var frames: Set<Int> = []
+        for (index, outer) in windows.enumerated() {
+            guard outer.layer > 0, outer.alpha > 0.01, !outer.isMeasured,
+                  !PausePolicy.coversDisplay(window: outer.bounds, display: display) else { continue }
+            let framesAnother = windows.indices.contains { other in
+                guard other != index else { return false }
+                let inner = windows[other]
+                guard inner.owner == outer.owner, inner.layer == outer.layer,
+                      inner.alpha > 0.01, !inner.bounds.isEmpty else { return false }
+                return isShadowMargin(around: inner.bounds, in: outer.bounds)
+            }
+            if framesAnother { frames.insert(index) }
+        }
+        return frames
+    }
+
+    private static func isShadowMargin(around inner: CGRect, in outer: CGRect) -> Bool {
+        let left = inner.minX - outer.minX
+        let right = outer.maxX - inner.maxX
+        let top = inner.minY - outer.minY
+        let bottom = outer.maxY - inner.maxY
+        let margins = [left, right, top, bottom]
+        // A shadow can sit lower than the window, never off to one side.
+        return margins.allSatisfy { $0 >= 1 && $0 <= maxShadowMargin } && abs(left - right) <= 4
     }
 
     /// `rect` minus every rectangle in `cuts`, as non-overlapping pieces.

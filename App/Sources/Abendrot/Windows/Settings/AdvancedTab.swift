@@ -4,168 +4,320 @@ import WarmthKit
 
 // MARK: - Advanced
 
+/// Settings → Advanced as grouped cards, in the System Settings style: Maximum warmth, Reveal True
+/// Color, Pause automatically (full screen and excluded apps), and a Troubleshooting footer.
+/// Rarely used options sit behind a disclosure so the tab stays short.
 struct AdvancedTab: View {
     @ObservedObject var model: AppModel
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            TabHeader(title: "Advanced", subtitle: "Maximum warmth, the reveal shortcut, and per-app exclusions.")
+        VStack(alignment: .leading, spacing: 20) {
+            TabHeader(title: "Advanced", subtitle: "Maximum warmth, the reveal shortcut, and when Abendrot pauses.")
+                .padding(.bottom, -20) // TabHeader's own bottom padding duplicates this stack's spacing.
 
-            CozyModeControl(model: model)
-            DividerLine()
+            AdvancedGroup("Maximum warmth") {
+                CozyRow(model: model)
+            }
 
-            // Reveal True Color hotkey — moved here from the former Shortcuts tab, tucked under
-            // Maximum warmth . Click the field to rebind; default ⌥⌘T.
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Reveal True Color")
-                Text("Instantly see your screen's true colors — bound to a keyboard shortcut.")
-                    .font(Theme.Typography.ui(12))
-                    .foregroundStyle(Theme.Color.textMuted)
-
-                // The shortcut as a clear, labelled liquid-glass input — mirrors the Schedule "Location"
-                // field so it's obvious you're setting a keyboard shortcut, not a bare pill
-                // tucked in the corner. The recorder sits on the right; the whole row reads as a field.
-                HStack(spacing: 10) {
-                    Image(systemName: "keyboard")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Theme.Color.accentText)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Keyboard shortcut")
-                            .font(Theme.Typography.ui(12.5, weight: .medium))
-                            .foregroundStyle(Theme.Color.textPrimary)
-                        Text("Click to record — default ⌥⌘T")
-                            .font(Theme.Typography.ui(11))
-                            .foregroundStyle(Theme.Color.textFaint)
+            AdvancedGroup("Reveal True Color", footnote: revealFootnote) {
+                SettingsCard {
+                    SettingsRow(systemImage: "keyboard", title: "Keyboard shortcut", subtitle: "Click to record — default ⌥⌘T") {
+                        RevealShortcutRecorder()
                     }
-                    Spacer()
-                    RevealShortcutRecorder()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .glassSurface(.frost, cornerRadius: Theme.Radius.control)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-                )
-
-                // Hold vs Toggle — on-brand glass switcher.
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
+                    CardDivider()
+                    SettingsRow(systemImage: nil, title: "Behavior") {
                         BrandSegmentedControl(
                             options: RevealMode.allCases,
                             selection: Binding(get: { model.revealMode }, set: { model.setRevealMode($0) }),
                             label: { $0 == .hold ? "Hold" : "Toggle" }
                         )
-                        .frame(width: 200)
-                        Spacer()
+                        .frame(width: 170)
                     }
-                    Text(model.revealMode == .hold
-                         ? "Hold the shortcut to reveal true color; release to ease warmth back."
-                         : "Press the shortcut to toggle warming off/on.")
-                        .font(Theme.Typography.ui(12))
-                        .foregroundStyle(Theme.Color.textMuted)
                 }
-                .padding(.top, 2)
             }
-            DividerLine()
-            FullScreenPauseSetting(model: model)
-            DividerLine()
-            ExcludedAppsControl(model: model)
 
-            if model.state.isEnabled {
-                DividerLine()
-                // Emergency reset, relocated from the Displays page: the forceful gamma/DDC
-                // restore kept as a quiet safety net without cluttering the main Displays view.
-                Button(role: .destructive) {
-                    model.setEnabled(false)
-                    model.restoreAllDisplays()
-                } label: {
-                    let multiple = model.state.displays.count > 1
-                    Label(multiple ? "Restore all displays to True Color" : "Restore display to True Color", systemImage: "arrow.counterclockwise")
+            AdvancedGroup("Pause automatically") {
+                VStack(alignment: .leading, spacing: 10) {
+                    SettingsCard {
+                        SettingsRow(
+                            systemImage: "arrow.up.left.and.arrow.down.right",
+                            title: "In full screen",
+                            subtitle: "Turns warmth off on a screen while an app fills it."
+                        ) {
+                            SettingsSwitch(
+                                isOn: Binding(get: { model.state.pausesForFullScreen },
+                                              set: { model.setPausesForFullScreen($0) }),
+                                label: "Pause in full screen"
+                            )
+                        }
+                    }
+                    ExcludedAppsCard(model: model)
+                    #if !APP_STORE
+                    ExperimentalCard(model: model)
+                    #endif
                 }
-                .buttonStyle(.liquidGlass)
+            }
+
+            AdvancedGroup("Troubleshooting") {
+                RestoreCard(model: model)
+            }
+        }
+    }
+
+    private var revealFootnote: String {
+        model.revealMode == .hold
+            ? "Hold the shortcut to reveal true color; release to ease warmth back."
+            : "Press the shortcut to turn warming off, and again to bring it back."
+    }
+}
+
+// MARK: - Building blocks
+
+/// A titled group: a section label above one or more cards, with an optional footnote below.
+private struct AdvancedGroup<Content: View>: View {
+    let title: String
+    let footnote: String?
+    let content: Content
+
+    init(_ title: String, footnote: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.footnote = footnote
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title)
+            content
+            if let footnote {
+                Text(footnote)
+                    .font(Theme.Typography.ui(11.5))
+                    .foregroundStyle(Theme.Color.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 2)
             }
         }
     }
 }
 
-// MARK: - Excluded apps (suspend-while-frontmost picker)
+/// An inset card that holds rows separated by hairlines.
+private struct SettingsCard<Content: View>: View {
+    let content: Content
 
-/// Settings → Advanced → Excluded apps. While one of these apps is frontmost, Abendrot pauses
-/// warmth on the display that app is using. Other displays stay warm. The list is the observed
-/// `model.excludedApps`; rows resolve a friendly name + icon from the bundle id, and "Add app…"
-/// picks an `.app` via `NSOpenPanel`.
-private struct ExcludedAppsControl: View {
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) { content }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.045), in: shape)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Theme.Color.lineStrong, lineWidth: 0.5))
+    }
+}
+
+private struct CardDivider: View {
+    var body: some View {
+        Rectangle().fill(Theme.Color.line).frame(height: 0.5)
+    }
+}
+
+/// A leading icon tile, a title and optional subtitle, and a trailing control.
+private struct SettingsRow<Trailing: View>: View {
+    let systemImage: String?
+    let lit: Bool
+    let title: String
+    let subtitle: String?
+    let trailing: Trailing
+
+    init(systemImage: String?, lit: Bool = false, title: String, subtitle: String? = nil,
+         @ViewBuilder trailing: () -> Trailing) {
+        self.systemImage = systemImage
+        self.lit = lit
+        self.title = title
+        self.subtitle = subtitle
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(systemImage: systemImage, lit: lit)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Theme.Typography.ui(13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.textPrimary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(Theme.Typography.ui(12))
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 12)
+            trailing
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(minHeight: 46)
+    }
+}
+
+/// The 26-point icon tile at the start of a row. An empty tile keeps titles aligned.
+private struct IconTile: View {
+    let systemImage: String?
+    var lit = false
+
+    var body: some View {
+        ZStack {
+            if let systemImage {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(lit ? AnyShapeStyle(Theme.Gradient.sunset) : AnyShapeStyle(Color.white.opacity(0.08)))
+                Image(systemName: systemImage)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(lit ? Theme.Color.inkOnAccent : Theme.Color.textMuted)
+            }
+        }
+        .frame(width: 26, height: 26)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct SettingsSwitch: View {
+    @Binding var isOn: Bool
+    let label: String
+
+    var body: some View {
+        Toggle("", isOn: $isOn)
+            .toggleStyle(.switch)
+            .tint(Theme.Color.accent)
+            .labelsHidden()
+            .accessibilityLabel(label)
+    }
+}
+
+// MARK: - Maximum warmth
+
+/// Cozy mode as a card row. The popover and onboarding use the compact `CozyModeControl` card.
+private struct CozyRow: View {
+    @ObservedObject var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Derived from the actual warmest point so the switch can never disagree with the engine.
+    private var isCozy: Bool { model.state.warmestPoint.value < Kelvin.everydayWarmest.value }
+
+    var body: some View {
+        SettingsCard {
+            SettingsRow(
+                systemImage: isCozy ? "flame.fill" : "flame",
+                lit: isCozy,
+                title: "Cozy mode",
+                subtitle: "The warmest setting — past 1900 K toward candlelight."
+            ) {
+                SettingsSwitch(isOn: Binding(get: { isCozy }, set: { model.setCozy($0) }), label: "Cozy mode")
+            }
+            if isCozy {
+                CardDivider()
+                Text(CozyModeControl.scienceNote)
+                    .font(Theme.Typography.ui(11))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: isCozy)
+    }
+}
+
+// MARK: - Excluded apps
+
+/// While one of these apps is in front, Abendrot pauses warmth on the display that app is using.
+/// The popover's per-app pause deep-links here through `excludedAppsFocusRequest`.
+private struct ExcludedAppsCard: View {
     @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsFocusCue = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            SectionLabel("Excluded apps")
-            Text(explanation)
-                .font(Theme.Typography.ui(12))
-                .foregroundStyle(Theme.Color.textMuted)
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsCard {
+                HStack(spacing: 12) {
+                    IconTile(systemImage: "pause.rectangle")
+                    Text("Excluded apps")
+                        .font(Theme.Typography.ui(13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.textPrimary)
+                    Spacer()
+                    Text("\(model.excludedApps.count)")
+                        .font(Theme.Typography.ui(11, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.Color.textMuted)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 1)
+                        .background(Color.white.opacity(0.08), in: Capsule())
+                        .accessibilityLabel(model.excludedApps.count == 1 ? "1 app" : "\(model.excludedApps.count) apps")
+                }
+                .padding(.horizontal, 12)
+                .frame(minHeight: 40)
+                CardDivider()
 
-            if model.excludedApps.isEmpty {
-                Text("None — add an app below.")
-                    .font(Theme.Typography.ui(11.5))
-                    .foregroundStyle(Theme.Color.textFaint)
-            } else {
-                ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(model.excludedApps.sorted(), id: \.self) { bundleID in
-                            ExcludedAppRow(bundleID: bundleID) {
-                                model.removeExcludedApp(bundleID)
+                if model.excludedApps.isEmpty {
+                    Text("None yet. Abendrot stays warm in every app.")
+                        .font(Theme.Typography.ui(12))
+                        .foregroundStyle(Theme.Color.textFaint)
+                        .padding(12)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(Array(sortedIDs.enumerated()), id: \.element) { index, bundleID in
+                                if index > 0 { CardDivider() }
+                                ExcludedAppRow(bundleID: bundleID) {
+                                    model.removeExcludedApp(bundleID)
+                                }
                             }
                         }
                     }
-                    .padding(4)
+                    // Three rows and their two dividers, so Add app stays on screen.
+                    .frame(maxHeight: 3 * 36 + 2 * 0.5)
                 }
-                .frame(maxHeight: 132)
-                .background(
-                    Theme.Color.line.opacity(0.28),
-                    in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
-                )
-            }
+                CardDivider()
 
-            Button {
-                addApp()
-            } label: {
-                Label("Add app…", systemImage: "plus")
-            }
-            .buttonStyle(.liquidGlass)
-            .padding(.top, 2)
-
-            #if !APP_STORE
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Keep other windows warm")
-                        .font(Theme.Typography.ui(13, weight: .semibold))
-                        .foregroundStyle(Theme.Color.textPrimary)
-                    Text("Experimental. Only the excluded app loses its warmth. Everything else on that screen stays warm, except screens using hardware control.")
-                        .font(Theme.Typography.ui(12))
-                        .foregroundStyle(Theme.Color.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
+                Button(action: addApp) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Add app…")
+                            .font(Theme.Typography.ui(12.5, weight: .semibold))
+                        Spacer()
+                    }
+                    .foregroundStyle(Theme.Color.accentText)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 38)
+                    .contentShape(Rectangle())
                 }
-                Spacer(minLength: 12)
-                Toggle("", isOn: Binding(
-                    get: { model.state.keepsOtherWindowsWarm },
-                    set: { model.setKeepsOtherWindowsWarm($0) }
-                ))
-                .toggleStyle(.switch)
-                .tint(Theme.Color.accent)
-                .labelsHidden()
-                .accessibilityLabel("Keep other windows warm")
+                .buttonStyle(.plain)
             }
-            .padding(.top, 6)
-            #endif
+            .background(focusCueFill)
+            .overlay(focusCueStroke)
+
+            Text(explanation)
+                .font(Theme.Typography.ui(11.5))
+                .foregroundStyle(Theme.Color.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 2)
         }
-        .background(focusCueFill)
-        .overlay(focusCueStroke)
         .task(id: model.excludedAppsFocusRequest) {
             guard let request = model.excludedAppsFocusRequest else { return }
             await runFocusCue(request)
         }
+    }
+
+    /// Sorted by the name people see, not the bundle id.
+    private var sortedIDs: [String] {
+        model.excludedApps
+            .map { (id: $0, name: AppIdentity.name(for: $0)) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            .map(\.id)
     }
 
     private var explanation: String {
@@ -182,7 +334,7 @@ private struct ExcludedAppsControl: View {
         RoundedRectangle(cornerRadius: Theme.Radius.control + 4, style: .continuous)
             .fill(Theme.Color.accent.opacity(0.12))
             .opacity(showsFocusCue ? 1 : 0)
-            .padding(-10)
+            .padding(-6)
     }
 
     private var focusCueStroke: some View {
@@ -190,7 +342,7 @@ private struct ExcludedAppsControl: View {
             .stroke(Theme.Color.accent.opacity(0.7), lineWidth: 1)
             .shadow(color: Theme.Color.accent.opacity(0.45), radius: 12)
             .opacity(showsFocusCue ? 1 : 0)
-            .padding(-10)
+            .padding(-6)
     }
 
     @MainActor
@@ -230,87 +382,174 @@ private struct ExcludedAppsControl: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
+        panel.prompt = "Add"
         guard panel.runModal() == .OK, let url = panel.url,
               let id = Bundle(url: url)?.bundleIdentifier else { return }
         model.addExcludedApp(id)
     }
 }
 
-/// One excluded-app row: the app's icon + friendly name (resolved from the bundle id, falling back to
-/// the raw id when the app can't be located), and a ✕ to remove it.
+/// One excluded app: its icon and name (the bundle id when the app can't be found), and a remove button.
 private struct ExcludedAppRow: View {
     let bundleID: String
     let onRemove: () -> Void
+    @State private var hovered = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            if let icon = resolved.icon {
+        let name = AppIdentity.name(for: bundleID)
+        HStack(spacing: 10) {
+            if let icon = AppIdentity.icon(for: bundleID) {
                 Image(nsImage: icon)
                     .resizable()
-                    .frame(width: 16, height: 16)
+                    .frame(width: 18, height: 18)
             } else {
                 Image(systemName: "app.dashed")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.textFaint)
-                    .frame(width: 16, height: 16)
+                    .frame(width: 18, height: 18)
             }
-            Text(resolved.name)
+            Text(name)
                 .font(Theme.Typography.ui(12.5))
                 .foregroundStyle(Theme.Color.textPrimary)
+                .lineLimit(1)
             Spacer()
             Button(action: onRemove) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Theme.Color.textMuted)
+                    .foregroundStyle(hovered ? Theme.Color.textPrimary : Theme.Color.textMuted)
+                    .frame(width: 22, height: 22)
+                    .background(Color.white.opacity(hovered ? 0.1 : 0), in: Circle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Remove \(resolved.name) from excluded apps")
+            .onHover { hovered = $0 }
+            .accessibilityLabel("Remove \(name) from excluded apps")
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 10)
-        .background(Theme.Color.line.opacity(0.4),
-                    in: RoundedRectangle(cornerRadius: Theme.Radius.control - 1, style: .continuous))
-    }
-
-    /// Resolve a display name + icon from the bundle id via LaunchServices. Falls back to the raw
-    /// bundle id and no icon when the app isn't installed / can't be located.
-    private var resolved: (name: String, icon: NSImage?) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
-            return (bundleID, nil)
-        }
-        let name = FileManager.default.displayName(atPath: url.path)
-        // Drop a trailing ".app" the display name can carry when the Finder localization is absent.
-        let trimmed = name.hasSuffix(".app") ? String(name.dropLast(4)) : name
-        return (trimmed, NSWorkspace.shared.icon(forFile: url.path))
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .frame(height: 36)
     }
 }
 
-private struct FullScreenPauseSetting: View {
+// MARK: - Experimental
+
+#if !APP_STORE
+/// Direct-download-only options behind a disclosure. It starts open while one of them is on, so a
+/// setting that changes behavior is never hidden.
+private struct ExperimentalCard: View {
     @ObservedObject var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Set once when the card appears, so turning the switch off never collapses it under the cursor.
+    @State private var expanded: Bool?
+
+    private var isExpanded: Bool { expanded ?? model.state.keepsOtherWindowsWarm }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("Full screen")
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Pause in full screen")
-                        .font(Theme.Typography.ui(13, weight: .semibold))
+        SettingsCard {
+            Button {
+                withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) { expanded = !isExpanded }
+            } label: {
+                HStack(spacing: 10) {
+                    Text("Experimental")
+                        .font(Theme.Typography.ui(12.5, weight: .medium))
                         .foregroundStyle(Theme.Color.textPrimary)
-                    Text("Turns warmth off on a screen while an app fills it. Other screens stay warm.")
-                        .font(Theme.Typography.ui(12))
-                        .foregroundStyle(Theme.Color.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.Color.textFaint)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-                Spacer(minLength: 12)
-                Toggle("", isOn: Binding(
-                    get: { model.state.pausesForFullScreen },
-                    set: { model.setPausesForFullScreen($0) }
-                ))
-                .toggleStyle(.switch)
-                .tint(Theme.Color.accent)
-                .labelsHidden()
-                .accessibilityLabel("Pause in full screen")
+                .padding(.horizontal, 12)
+                .frame(minHeight: 40)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Experimental options")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+
+            if isExpanded {
+                CardDivider()
+                SettingsRow(
+                    systemImage: nil,
+                    title: "Keep other windows warm",
+                    subtitle: "Only the excluded app loses its warmth. Everything else on that screen stays warm, except screens using hardware control."
+                ) {
+                    SettingsSwitch(
+                        isOn: Binding(get: { model.state.keepsOtherWindowsWarm },
+                                      set: { model.setKeepsOtherWindowsWarm($0) }),
+                        label: "Keep other windows warm"
+                    )
+                }
+                .transition(.opacity)
             }
         }
+        .onAppear { if expanded == nil { expanded = model.state.keepsOtherWindowsWarm } }
+    }
+}
+#endif
+
+// MARK: - Troubleshooting
+
+/// The emergency reset. It turns warmth off and forcefully restores every display layer (gamma,
+/// overlay, color filter and hardware), which turning warmth off alone does not. It stays available
+/// while warmth is off, because that is when stuck colors are noticed.
+private struct RestoreCard: View {
+    @ObservedObject var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var confirming = false
+
+    private var multiple: Bool { model.state.displays.count > 1 }
+
+    var body: some View {
+        SettingsCard {
+            if confirming {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(confirmTitle)
+                            .font(Theme.Typography.ui(13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.textPrimary)
+                        Text("Use this if colors stay tinted after a crash or display change.")
+                            .font(Theme.Typography.ui(12))
+                            .foregroundStyle(Theme.Color.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Cancel") { setConfirming(false) }
+                        .buttonStyle(.liquidGlass)
+                        .keyboardShortcut(.cancelAction)
+                    Button("Restore", role: .destructive) {
+                        model.setEnabled(false)
+                        model.restoreAllDisplays()
+                        setConfirming(false)
+                    }
+                    .buttonStyle(.liquidGlass)
+                    .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .transition(.opacity)
+            } else {
+                SettingsRow(
+                    systemImage: "arrow.counterclockwise",
+                    title: multiple ? "Restore displays to True Color" : "Restore display to True Color",
+                    subtitle: model.state.isEnabled
+                        ? "Emergency reset if your screen stays tinted. Turns warmth off."
+                        : "Emergency reset if your screen stays tinted."
+                ) {
+                    Button("Restore…") { setConfirming(true) }
+                        .buttonStyle(.liquidGlass)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private var confirmTitle: String {
+        let target = multiple ? "your displays" : "your display"
+        return model.state.isEnabled ? "Turn warmth off and reset \(target)?" : "Reset \(target)?"
+    }
+
+    private func setConfirming(_ value: Bool) {
+        withAnimation(Theme.Motion.warm(reduceMotion: reduceMotion)) { confirming = value }
     }
 }

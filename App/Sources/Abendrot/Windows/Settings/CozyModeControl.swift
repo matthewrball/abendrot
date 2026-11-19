@@ -21,7 +21,7 @@ struct CozyModeControl: View {
     /// The note with both citations as tappable links. Built as an AttributedString so the body
     /// stays faint while the links read as links — accent-coloured + underlined + clickable. (A blanket
     /// `.foregroundStyle` on a markdown Text flattens the link colour, so they didn't look tappable.)
-    private var scienceNote: AttributedString {
+    static var scienceNote: AttributedString {
         let md = "Below ~1900 K blue light is already gone, so going warmer mainly removes green — a deeper, candle-like glow that's lovely at night but harder to read, with little extra circadian benefit. ([Brown et al. 2022](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3001571); [CIE S 026](https://cie.co.at/publications/cie-system-metrology-optical-radiation-iprgc-influenced-responses-light-0).)"
         var note = (try? AttributedString(markdown: md)) ?? AttributedString(md)
         note.foregroundColor = Theme.Color.textFaint
@@ -47,7 +47,7 @@ struct CozyModeControl: View {
                 .accessibilityAddTraits(.isButton)
 
             if isCozy && showsExplanation {
-                Text(scienceNote)
+                Text(Self.scienceNote)
                     .font(Theme.Typography.ui(11))
                     .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity)

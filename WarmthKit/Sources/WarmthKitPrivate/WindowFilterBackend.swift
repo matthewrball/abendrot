@@ -248,14 +248,29 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
     /// Activation policy by process, kept while tracking. Cleared when tracking stops.
     private var activationPolicies: [pid_t: Bool] = [:]
 
+    private static let ownPID = ProcessInfo.processInfo.processIdentifier
+
     private func listedWindows() -> [WindowHolePolicy.Window] {
         guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
             as? [[String: Any]] else { return [] }
+        let panelNumbers = Set(panels.values.map(\.windowNumber))
         return raw.compactMap { window in
             guard let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
-                  let rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) else { return nil }
+                  var rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) else { return nil }
             let owner = window[kCGWindowOwnerPID as String] as? pid_t ?? -1
             let layer = window[kCGWindowLayer as String] as? Int ?? 0
+            var measured = false
+            if owner == Self.ownPID {
+                let number = window[kCGWindowNumber as String] as? Int ?? 0
+                // The warmth panels are not windows a person reads.
+                if panelNumbers.contains(number) { return nil }
+                // The popover's window includes its arrow and shadow margin. This process can
+                // see its own content, so the popover stays warm exactly where it is drawn.
+                if let own = NSApp.window(withWindowNumber: number), let visible = Self.visibleBounds(of: own) {
+                    rect = visible
+                    measured = true
+                }
+            }
             let regular: Bool
             if let cached = activationPolicies[owner] {
                 regular = cached
@@ -272,9 +287,22 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
                 layer: layer,
                 owner: owner,
                 alpha: window[kCGWindowAlpha as String] as? Double ?? 1,
-                isRegularApp: regular
+                isRegularApp: regular,
+                isMeasured: measured
             )
         }
+    }
+
+    /// One of this app's windows, in CoreGraphics global space. A normal window is its frame. A
+    /// popover or menu-bar window is its content view, without the arrow and shadow margin.
+    private static func visibleBounds(of window: NSWindow) -> CGRect? {
+        guard window.isVisible, let primary = NSScreen.screens.first else { return nil }
+        var frame = window.frame
+        if window.level != .normal, let content = window.contentView {
+            let inner = window.convertToScreen(content.convert(content.bounds, to: nil))
+            if !inner.isEmpty { frame = inner }
+        }
+        return CGRect(x: frame.minX, y: primary.frame.maxY - frame.maxY, width: frame.width, height: frame.height)
     }
 
     /// The online display whose UUID matches, so a wake or hotplug can move a panel onto the
@@ -299,16 +327,17 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
     }
 }
 
-private enum WindowFilterError: Error {
+enum WindowFilterError: Error {
     case unavailable, displayMissing
 }
 
 /// One click-through panel per display. Each tile is a backdrop layer with the same color matrix;
 /// together they cover the display except the hole.
 @MainActor
-private final class WindowFilterPanel {
+final class WindowFilterPanel {
     let displayID: CGDirectDisplayID
     private let panel: NSPanel
+    var windowNumber: Int { panel.windowNumber }
     private let content: NSView
     private var tiles: [CALayer] = []
     private var lastTiles: [CGRect] = []
@@ -339,6 +368,21 @@ private final class WindowFilterPanel {
             panel.close()
             throw WindowFilterError.unavailable
         }
+        excludeFromWindowPicker()
+    }
+
+    /// The screenshot tool's window picker otherwise selects this full-screen panel, and a
+    /// window capture of an excluded app comes out as a display-sized white rectangle. The
+    /// picker runs in `screencapture`, so a frontmost check on the screenshot UI misses
+    /// Cmd-Shift-4 then Space and the clipboard (Control) capture. Area captures keep warmth.
+    var isExcludedFromWindowPicker: Bool { WKWindowExcludedFromCaptureSelection(panel) }
+
+    private var pickerExcludedWindowNumber: Int?
+
+    private func excludeFromWindowPicker() {
+        let number = panel.windowNumber
+        guard number > 0, pickerExcludedWindowNumber != number else { return }
+        if WKExcludeWindowFromCaptureSelection(panel) { pickerExcludedWindowNumber = number }
     }
 
     func setSharingType(_ sharing: NSWindow.SharingType) {
@@ -390,6 +434,7 @@ private final class WindowFilterPanel {
         }
         panel.orderFrontRegardless()
         panel.displayIfNeeded()
+        excludeFromWindowPicker()
     }
 
     func close() {

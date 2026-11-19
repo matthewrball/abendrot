@@ -42,37 +42,43 @@ enum AppIdentity {
 
 // MARK: - Session pause
 
+/// A quick press-down scale for the popover's pause rows. Reduce Motion drops the scale.
+private struct PressScaleButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
+            .animation(.easeOut(duration: 0.11), value: configuration.isPressed)
+    }
+}
+
 /// Timed pause, the current app, and full-screen pause. One quiet group in the glass popover —
-/// not a nested system menu. Timed actions are pills; standing choices are switches.
+/// not a nested system menu. Timed actions are pills; the app in front shows its pause in place;
+/// full screen shows On or Off as a standing rule.
 struct SessionPauseControl: View {
     @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovered: PausePill?
     @State private var resumeHovered = false
+    @State private var hoveredRow: SessionRow?
 
     private enum PausePill: Hashable {
         case hour, sunrise
     }
 
+    private enum SessionRow: Hashable {
+        case app, fullScreen
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             pauseHeader
-            sessionRow(
-                icon: appIcon,
-                title: appTitle,
-                isOn: appExcluded,
-                enabled: model.frontAppBundleID != nil,
-                action: { model.toggleFrontAppExclusion() },
-                accessibilityLabel: appAccessibility
-            )
-            sessionRow(
-                systemImage: "arrow.up.left.and.arrow.down.right",
-                title: "Full screen",
-                isOn: model.state.pausesForFullScreen,
-                enabled: true,
-                action: { model.setPausesForFullScreen(!model.state.pausesForFullScreen) },
-                accessibilityLabel: "Pause in full screen"
-            )
+            VStack(spacing: 2) {
+                appRow
+                fullScreenRow
+            }
+            .padding(.horizontal, -10)
             if let footnote {
                 Text(footnote)
                     .font(Theme.Typography.ui(11))
@@ -182,50 +188,138 @@ struct SessionPauseControl: View {
 
     // MARK: Rows
 
-    private func sessionRow(
-        icon: NSImage? = nil,
-        systemImage: String? = nil,
-        title: String,
-        isOn: Bool,
-        enabled: Bool,
-        action: @escaping () -> Void,
-        accessibilityLabel: String
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                rowIcon(icon: icon, systemImage: systemImage)
-                Text(title)
-                    .font(Theme.Typography.ui(12.5, weight: .medium))
-                    .foregroundStyle(enabled ? Theme.Color.textPrimary : Theme.Color.textFaint)
-                    .lineLimit(1)
+    /// The app in front, with its pause state shown in place: a pause badge on its icon, "Paused while
+    /// in front", an ember tint, and a Resume action. Pausing adds the app to Excluded apps, so the
+    /// pause is remembered until it is resumed here or removed in Settings.
+    private var appRow: some View {
+        let paused = appExcluded
+        let enabled = model.frontAppBundleID != nil
+        return Button { model.toggleFrontAppExclusion() } label: {
+            HStack(spacing: 11) {
+                ZStack(alignment: .bottomTrailing) {
+                    if let appIcon {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .frame(width: 22, height: 22)
+                            .opacity(paused ? 0.6 : 1)
+                    } else {
+                        Image(systemName: "app.dashed")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.Color.textFaint)
+                            .frame(width: 22, height: 22)
+                    }
+                    if paused {
+                        Image(systemName: "pause.fill")
+                            .font(.system(size: 5.5, weight: .heavy))
+                            .foregroundStyle(Theme.Color.inkOnAccent)
+                            .frame(width: 11, height: 11)
+                            .background(Theme.Gradient.sunset, in: Circle())
+                            .overlay(Circle().strokeBorder(Theme.Color.groundPlum, lineWidth: 1))
+                            .offset(x: 3, y: 3)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    }
+                }
+                .frame(width: 22, height: 22)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(appTitle)
+                        .font(Theme.Typography.ui(12.5, weight: .semibold))
+                        .foregroundStyle(enabled ? Theme.Color.textPrimary : Theme.Color.textFaint)
+                        .lineLimit(1)
+                    if enabled {
+                        Text(appSubtitle(paused: paused))
+                            .font(Theme.Typography.ui(11))
+                            .foregroundStyle(paused ? Theme.Color.accentText : Theme.Color.textFaint)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 8)
-                Toggle("", isOn: .constant(isOn))
-                    .toggleStyle(.switch)
-                    .tint(Theme.Color.accent)
-                    .labelsHidden()
-                    .allowsHitTesting(false)
-                    .opacity(enabled ? 1 : 0.4)
+                if enabled {
+                    actionPill(paused ? "Resume" : "Pause",
+                               symbol: paused ? "play.fill" : "pause.fill",
+                               highlighted: paused)
+                }
             }
-            .contentShape(Rectangle())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background { rowBackground(highlighted: paused, hovered: hoveredRow == .app && enabled) }
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleButtonStyle())
         .disabled(!enabled)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(isOn ? "On" : "Off")
+        .onHover { hoveredRow = $0 ? .app : (hoveredRow == .app ? nil : hoveredRow) }
+        .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: paused)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(appAccessibility)
+        .accessibilityValue(enabled ? (paused ? "Paused while in front" : "Warm") : "")
+        .accessibilityAddTraits(.isButton)
+        .help(appHelp)
+    }
+
+    /// Full screen is a standing rule, not a pause in progress, so it shows On or Off rather than
+    /// the pause badge.
+    private var fullScreenRow: some View {
+        let on = model.state.pausesForFullScreen
+        return Button { model.setPausesForFullScreen(!on) } label: {
+            HStack(spacing: 11) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.Color.textMuted)
+                    .frame(width: 22, height: 22)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Full screen")
+                        .font(Theme.Typography.ui(12.5, weight: .semibold))
+                        .foregroundStyle(Theme.Color.textPrimary)
+                    Text(on ? "Pauses whenever an app fills the screen" : "Stays warm in full screen")
+                        .font(Theme.Typography.ui(11))
+                        .foregroundStyle(Theme.Color.textFaint)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text(on ? "On" : "Off")
+                    .font(Theme.Typography.ui(11.5, weight: .semibold))
+                    .foregroundStyle(on ? Theme.Color.textPrimary : Theme.Color.textMuted)
+                    .padding(.horizontal, 9)
+                    .frame(height: 24)
+                    .background(Color.white.opacity(on ? 0.1 : 0.07), in: Capsule())
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background { rowBackground(highlighted: false, hovered: hoveredRow == .fullScreen) }
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        .onHover { hoveredRow = $0 ? .fullScreen : (hoveredRow == .fullScreen ? nil : hoveredRow) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pause in full screen")
+        .accessibilityValue(on ? "On" : "Off")
         .accessibilityAddTraits(.isButton)
     }
 
+    private func actionPill(_ title: String, symbol: String, highlighted: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.system(size: 8, weight: .bold))
+            Text(title)
+                .font(Theme.Typography.ui(11.5, weight: .semibold))
+        }
+        .foregroundStyle(highlighted ? Theme.Color.accentText : Theme.Color.textMuted)
+        .padding(.horizontal, 9)
+        .frame(height: 24)
+        .background(highlighted ? Theme.Color.accent.opacity(0.14) : Color.white.opacity(0.07), in: Capsule())
+    }
+
     @ViewBuilder
-    private func rowIcon(icon: NSImage?, systemImage: String?) -> some View {
-        if let icon {
-            Image(nsImage: icon)
-                .resizable()
-                .frame(width: 16, height: 16)
-        } else {
-            Image(systemName: systemImage ?? "app.dashed")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.Color.textMuted)
-                .frame(width: 16, height: 16)
+    private func rowBackground(highlighted: Bool, hovered: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        ZStack {
+            shape.fill(Color.white.opacity(hovered && !highlighted ? 0.05 : 0))
+            shape
+                .fill(LinearGradient(colors: [Theme.Color.accent.opacity(0.18), Theme.Color.accent.opacity(0.06)],
+                                     startPoint: .leading, endPoint: .trailing))
+                .overlay(shape.strokeBorder(Theme.Color.accent.opacity(0.42), lineWidth: 0.5))
+                .opacity(highlighted ? 1 : 0)
         }
     }
 
@@ -257,8 +351,30 @@ struct SessionPauseControl: View {
     }
 
     private var appAccessibility: String {
-        guard let appName else { return "No app in front to exclude" }
-        return appExcluded ? "Stop excluding \(appName)" : "Exclude \(appName)"
+        guard let appName else { return "No app in front to pause" }
+        return appExcluded ? "Resume warmth in \(appName)" : "Pause warmth while \(appName) is in front"
+    }
+
+    /// Pausing an app is remembered, so the subtitle says what it does even while warmth is off
+    /// or a timed pause is running.
+    private func appSubtitle(paused: Bool) -> String {
+        #if APP_STORE
+        let keepsOthersWarm = false
+        #else
+        let keepsOthersWarm = model.state.keepsOtherWindowsWarm
+        #endif
+        if paused {
+            return keepsOthersWarm ? "Its windows stay neutral" : "Paused while in front"
+        }
+        let warmingNow = model.state.isEnabled && model.state.timedPause == nil
+        return warmingNow ? "Warm here" : "Warms here when warmth is on"
+    }
+
+    private var appHelp: String {
+        guard let appName else { return "" }
+        return appExcluded
+            ? "Warmth is paused whenever \(appName) is in front. Click to resume."
+            : "Pause warmth whenever \(appName) is in front. It's added to Excluded apps in Settings."
     }
 
     private var footnote: String? {

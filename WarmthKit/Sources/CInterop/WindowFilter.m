@@ -1,6 +1,8 @@
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
+#import <dlfcn.h>
 #import <math.h>
+#import <pthread.h>
 #import "CInterop.h"
 
 // WebKit's CAColorMatrix ABI: four rows of five floats, including a zero bias column.
@@ -67,6 +69,46 @@ bool WKConfigureWindowFilterWindow(NSWindow *window) {
     } @catch (NSException *exception) {
         return false;
     }
+}
+
+// The interactive screenshot tool (`screencapture -i`, used by Cmd-Shift-4 and the Screenshot
+// toolbar) picks a window with CGSFindWindowByGeometry and skips a window whose
+// "IgnoreForScreencaptureWindowSelection" property is true. AccessibilityUIServer marks its
+// overlays this way. It only affects the window picker; area and full-screen captures still
+// include the window.
+static NSString *const WKCaptureSelectionKey = @"IgnoreForScreencaptureWindowSelection";
+typedef int32_t (*WKMainConnectionID)(void);
+typedef int32_t (*WKSetWindowProperty)(int32_t cid, uint32_t wid, CFStringRef key, CFTypeRef value);
+typedef int32_t (*WKCopyWindowProperty)(int32_t cid, uint32_t wid, CFStringRef key, CFTypeRef *value);
+static pthread_once_t windowPropertyOnce = PTHREAD_ONCE_INIT;
+static WKMainConnectionID mainConnectionID;
+static WKSetWindowProperty setWindowProperty;
+static WKCopyWindowProperty copyWindowProperty;
+
+static void loadWindowProperty(void) {
+    void *skyLight = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY | RTLD_LOCAL);
+    if (!skyLight) return;
+    mainConnectionID = (WKMainConnectionID)dlsym(skyLight, "SLSMainConnectionID");
+    setWindowProperty = (WKSetWindowProperty)dlsym(skyLight, "SLSSetWindowProperty");
+    copyWindowProperty = (WKCopyWindowProperty)dlsym(skyLight, "SLSCopyWindowProperty");
+}
+
+bool WKExcludeWindowFromCaptureSelection(NSWindow *window) {
+    pthread_once(&windowPropertyOnce, loadWindowProperty);
+    if (!mainConnectionID || !setWindowProperty || !window || window.windowNumber <= 0) return false;
+    return setWindowProperty(mainConnectionID(), (uint32_t)window.windowNumber,
+                             (__bridge CFStringRef)WKCaptureSelectionKey, kCFBooleanTrue) == 0;
+}
+
+bool WKWindowExcludedFromCaptureSelection(NSWindow *window) {
+    pthread_once(&windowPropertyOnce, loadWindowProperty);
+    if (!mainConnectionID || !copyWindowProperty || !window || window.windowNumber <= 0) return false;
+    CFTypeRef value = NULL;
+    if (copyWindowProperty(mainConnectionID(), (uint32_t)window.windowNumber,
+                           (__bridge CFStringRef)WKCaptureSelectionKey, &value) != 0 || !value) return false;
+    bool excluded = CFEqual(value, kCFBooleanTrue);
+    CFRelease(value);
+    return excluded;
 }
 
 CGFloat WKStandardWindowCornerRadius(void) {
