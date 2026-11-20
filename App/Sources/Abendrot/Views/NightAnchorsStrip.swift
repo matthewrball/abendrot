@@ -177,8 +177,9 @@ struct NightAnchorsStrip: View {
         return handleSize / 2 + CGFloat(fraction) * usable
     }
 
-    /// A label slot's leading edge: centred on its anchor, kept inside the strip.
-    private func labelX(_ anchorX: CGFloat, _ labelWidth: CGFloat, in width: CGFloat) -> CGFloat {
+    /// A label slot's leading edge: centred on its anchor, kept inside the strip. Pure math, so
+    /// nonisolated: SwiftUI calls alignment guides outside the main actor.
+    nonisolated private func labelX(_ anchorX: CGFloat, _ labelWidth: CGFloat, in width: CGFloat) -> CGFloat {
         min(max(anchorX - labelWidth / 2, 0), max(width - labelWidth, 0))
     }
 

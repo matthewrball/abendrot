@@ -33,6 +33,12 @@ bool WKApplyNativeColorMatrix(uint32_t displayID, CFStringRef expectedUUID,
 bool WKComposeNativeColorMatrix(const float baseline[9], float red, float green,
                                 float blue, float outMatrix[9]);
 
+/* WindowServer's corner radius for each window in `windowIDs`, written to `radii` in the same
+ * order: 0 where WindowServer reports none or the window is gone. Window metadata only, no
+ * Screen Recording. False, with `radii` untouched, before macOS 26 or when this macOS has no such
+ * query. */
+bool WKCopyWindowCornerRadii(const uint32_t *windowIDs, size_t count, double *radii);
+
 /* Direct-distribution compositor backdrop for the window filter. Private objects are built
  * defensively in Objective-C so exceptions never cross into Swift. Gains are in [0, 1]. */
 bool WKWindowFilterAvailable(void);

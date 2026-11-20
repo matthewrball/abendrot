@@ -79,9 +79,9 @@ codesign -d --entitlements :- "$APP" >"$ENTITLEMENTS_ACTUAL" 2>/dev/null \
     || fail "built app has the wrong bundle identifier"
 [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw -o - "$APP_INFO")" == "false" ]] \
     || fail "built app does not declare its export-compliance status"
-[[ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP_INFO")" == "1.1.16" ]] \
+[[ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP_INFO")" == "1.1.17" ]] \
     || fail "built app has the wrong marketing version"
-[[ "$(plutil -extract CFBundleVersion raw -o - "$APP_INFO")" == "29" ]] \
+[[ "$(plutil -extract CFBundleVersion raw -o - "$APP_INFO")" == "30" ]] \
     || fail "built app has the wrong build number"
 [[ "$(plutil -extract LSMinimumSystemVersion raw -o - "$APP_INFO")" == "12.0" ]] \
     || fail "built app has the wrong minimum macOS version"
@@ -112,7 +112,7 @@ while IFS= read -r -d '' binary; do
     if otool -L "$binary" | grep -Eq 'Sparkle|CoreBrightness|CoreDisplay|SkyLight'; then
         fail "packaged binary links a forbidden framework: $binary"
     fi
-    if grep -aEq 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|SLSSetAccessibilityAdjustments|kSLSAccessibilityAdjustmentMatrix|kSLSAccessibilityTargetDisplay|MADisplayFilter|IgnoreForScreencaptureWindowSelection|SLSSetWindowProperty|CABackdropLayer|CAFilter|inputColorMatrix|SUPublicEDKey|SUFeedURL' "$binary"; then
+    if grep -aEq 'IOAVService|CoreDisplay_DisplayCreateInfoDictionary|CBBlueLightClient|SLSSetAccessibilityAdjustments|kSLSAccessibilityAdjustmentMatrix|kSLSAccessibilityTargetDisplay|MADisplayFilter|IgnoreForScreencaptureWindowSelection|SLSSetWindowProperty|SLSWindowQueryWindows|SLSWindowIterator|CABackdropLayer|CAFilter|inputColorMatrix|SUPublicEDKey|SUFeedURL' "$binary"; then
         fail "packaged binary contains private API or Sparkle strings: $binary"
     fi
 done < <(find "$APP/Contents" -type f -print0)

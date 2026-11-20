@@ -26,7 +26,7 @@ reject_tracked_symlinks() {
   links="$(git -C "$repo" ls-files -s | awk '$1 == "120000" { print $4 }')"
   [ -z "$links" ] || {
     echo "snapshot: refusing $label commit with tracked symlink(s):" >&2
-    printf '  %s\n' $links >&2
+    printf '%s\n' "$links" | sed 's/^/  /' >&2
     exit 1
   }
 }

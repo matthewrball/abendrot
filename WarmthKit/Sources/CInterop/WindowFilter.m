@@ -111,6 +111,100 @@ bool WKWindowExcludedFromCaptureSelection(NSWindow *window) {
     return excluded;
 }
 
+// A window query hands back an iterator over the listed windows. The radii call returns a new
+// array of four numbers that the caller owns; macOS 26 reports one radius for all four corners.
+typedef CFTypeRef (*WKWindowQueryWindows)(int32_t cid, CFArrayRef windows, uint32_t options);
+typedef CFTypeRef (*WKWindowQueryResultCopyWindows)(CFTypeRef query);
+typedef bool (*WKWindowIteratorAdvance)(CFTypeRef iterator);
+typedef uint32_t (*WKWindowIteratorGetWindowID)(CFTypeRef iterator);
+typedef CFArrayRef (*WKWindowIteratorCopyCornerRadii)(CFTypeRef iterator);
+static pthread_once_t cornerRadiiOnce = PTHREAD_ONCE_INIT;
+static WKMainConnectionID cornerConnectionID;
+static WKWindowQueryWindows queryWindows;
+static WKWindowQueryResultCopyWindows queryResultCopyWindows;
+static WKWindowIteratorAdvance iteratorAdvance;
+static WKWindowIteratorGetWindowID iteratorGetWindowID;
+static WKWindowIteratorCopyCornerRadii iteratorCopyCornerRadii;
+
+static void loadCornerRadii(void) {
+    void *skyLight = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY | RTLD_LOCAL);
+    if (!skyLight) return;
+    cornerConnectionID = (WKMainConnectionID)dlsym(skyLight, "SLSMainConnectionID");
+    queryWindows = (WKWindowQueryWindows)dlsym(skyLight, "SLSWindowQueryWindows");
+    queryResultCopyWindows = (WKWindowQueryResultCopyWindows)dlsym(skyLight, "SLSWindowQueryResultCopyWindows");
+    iteratorAdvance = (WKWindowIteratorAdvance)dlsym(skyLight, "SLSWindowIteratorAdvance");
+    iteratorGetWindowID = (WKWindowIteratorGetWindowID)dlsym(skyLight, "SLSWindowIteratorGetWindowID");
+    iteratorCopyCornerRadii = (WKWindowIteratorCopyCornerRadii)dlsym(skyLight, "SLSWindowIteratorGetResolvedCornerRadii");
+    if (!iteratorCopyCornerRadii) {
+        iteratorCopyCornerRadii = (WKWindowIteratorCopyCornerRadii)dlsym(skyLight, "SLSWindowIteratorGetCornerRadii");
+    }
+}
+
+/// The largest finite radius in a radii array, or 0.
+static double largestRadius(CFArrayRef values) {
+    if (!values || CFGetTypeID(values) != CFArrayGetTypeID()) return 0;
+    double largest = 0;
+    CFIndex count = CFArrayGetCount(values);
+    for (CFIndex index = 0; index < count; index++) {
+        CFTypeRef value = CFArrayGetValueAtIndex(values, index);
+        double radius = 0;
+        if (value && CFGetTypeID(value) == CFNumberGetTypeID() &&
+            CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &radius) &&
+            isfinite(radius) && radius > largest) {
+            largest = radius;
+        }
+    }
+    return largest;
+}
+
+bool WKCopyWindowCornerRadii(const uint32_t *windowIDs, size_t count, double *radii) {
+    // The radii calls return a new array the caller owns on macOS 26, where that was checked.
+    // Elsewhere their ownership is unknown, so the query is not made.
+    if (@available(macOS 26, *)) {} else { return false; }
+    pthread_once(&cornerRadiiOnce, loadCornerRadii);
+    if (!cornerConnectionID || !queryWindows || !queryResultCopyWindows || !iteratorAdvance ||
+        !iteratorGetWindowID || !iteratorCopyCornerRadii) return false;
+    if (count == 0) return true;
+    if (!windowIDs || !radii || count > INT32_MAX) return false;
+    CFMutableArrayRef ids = CFArrayCreateMutable(kCFAllocatorDefault, (CFIndex)count, &kCFTypeArrayCallBacks);
+    if (!ids) return false;
+    for (size_t index = 0; index < count; index++) {
+        int64_t windowID = windowIDs[index];
+        CFNumberRef number = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt64Type, &windowID);
+        if (!number) {
+            CFRelease(ids);
+            return false;
+        }
+        CFArrayAppendValue(ids, number);
+        CFRelease(number);
+    }
+    CFTypeRef query = queryWindows(cornerConnectionID(), ids, 0);
+    CFRelease(ids);
+    if (!query) return false;
+    CFTypeRef iterator = queryResultCopyWindows(query);
+    CFRelease(query);
+    if (!iterator) return false;
+    for (size_t index = 0; index < count; index++) radii[index] = 0;
+    // The iterator need not follow the order asked for, so match by window ID. Usually it does,
+    // and the next slot is checked first.
+    size_t next = 0;
+    while (iteratorAdvance(iterator)) {
+        uint32_t windowID = iteratorGetWindowID(iterator);
+        CFArrayRef values = iteratorCopyCornerRadii(iterator);
+        double radius = largestRadius(values);
+        if (values) CFRelease(values);
+        if (next < count && windowIDs[next] == windowID) {
+            radii[next++] = radius;
+            continue;
+        }
+        for (size_t index = 0; index < count; index++) {
+            if (windowIDs[index] == windowID) radii[index] = radius;
+        }
+    }
+    CFRelease(iterator);
+    return true;
+}
+
 CGFloat WKStandardWindowCornerRadius(void) {
     @try {
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 200, 120)

@@ -532,4 +532,230 @@ struct WindowHolePolicyTests {
         ], owner: terminal, display: display, menuMargin: 75)
         #expect(region.isEmpty)
     }
+
+    // MARK: Each window's own corner radius (#30)
+
+    /// Same pieces in the same order, to within float rounding from clipping to the display.
+    private func sameRegion(_ a: [CGRect], _ b: [CGRect]) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy { lhs, rhs in
+            abs(lhs.minX - rhs.minX) < 1e-9 && abs(lhs.minY - rhs.minY) < 1e-9
+                && abs(lhs.width - rhs.width) < 1e-9 && abs(lhs.height - rhs.height) < 1e-9
+        }
+    }
+
+    /// 4 pt in from a corner, in the 1 pt row 4 pt down. Inside a 12 pt curve, outside a 16 pt one.
+    private func between12And16(_ rect: CGRect) -> CGPoint {
+        CGPoint(x: rect.minX + 4, y: rect.minY + 4.5)
+    }
+
+    @Test("Inside and outside a rounded corner never overlap, and miss only slivers too thin to see")
+    func interiorAndExteriorTile() {
+        let rect = CGRect(x: 100.5, y: 40, width: 61, height: 47)
+        let sliver = WindowHolePolicy.minExteriorWidth
+        for radius: CGFloat in [0, 0.5, 1, 7.3, 12, 16, 20, 23.5, 40] {
+            let inside = WindowHolePolicy.roundedInterior(rect, radius: radius)
+            let outside = WindowHolePolicy.roundedExterior(rect, radius: radius)
+            #expect(area(inside) + area(outside) <= rect.width * rect.height + 1e-6, "radius \(radius)")
+            #expect(outside.allSatisfy { $0.width >= sliver }, "radius \(radius)")
+            for x in stride(from: rect.minX + 0.13, to: rect.maxX, by: 0.71) {
+                for y in stride(from: rect.minY + 0.17, to: rect.maxY, by: 0.53) {
+                    let point = CGPoint(x: x, y: y)
+                    let count = (inside + outside).filter { $0.contains(point) }.count
+                    let nearSide = min(x - rect.minX, rect.maxX - x) < sliver
+                    #expect(count == 1 || (count == 0 && nearSide), "radius \(radius) point \(point)")
+                }
+            }
+        }
+        #expect(WindowHolePolicy.roundedExterior(rect, radius: 0).isEmpty)
+    }
+
+    @Test("A neutral window with no reported radius gets exactly the 1.1.16 hole")
+    func unknownRadiusIsPinned() {
+        // The 1.1.16 shape: the straight middle and sides, then 1 pt corner rows.
+        let window = CGRect(x: 300, y: 250, width: 400, height: 300)
+        let region = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: window, layer: 0, owner: 7)], owner: 7, display: display, cornerRadius: 2)
+        let inset = 2 - (4 - 1.5 * 1.5).squareRoot()
+        let rows: [CGRect] = [
+            CGRect(x: 300 + inset, y: 250, width: 2 - inset, height: 1),
+            CGRect(x: 698, y: 250, width: 2 - inset, height: 1),
+            CGRect(x: 300 + inset, y: 549, width: 2 - inset, height: 1),
+            CGRect(x: 698, y: 549, width: 2 - inset, height: 1),
+            CGRect(x: 300 + (2 - (4 - 0.25).squareRoot()), y: 251, width: (4 - 0.25).squareRoot(), height: 1),
+            CGRect(x: 698, y: 251, width: (4 - 0.25).squareRoot(), height: 1),
+            CGRect(x: 300 + (2 - (4 - 0.25).squareRoot()), y: 548, width: (4 - 0.25).squareRoot(), height: 1),
+            CGRect(x: 698, y: 548, width: (4 - 0.25).squareRoot(), height: 1),
+        ]
+        #expect(sameRegion(region, [
+            CGRect(x: 302, y: 250, width: 396, height: 300),
+            CGRect(x: 300, y: 252, width: 2, height: 296),
+            CGRect(x: 698, y: 252, width: 2, height: 296),
+        ] + rows))
+
+        // A warm menu in front with no radius cuts exactly its rectangle, as before.
+        let menu = CGRect(x: 350, y: 300, width: 100, height: 80)
+        let cut = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: menu, layer: 101, owner: 3),
+            .init(bounds: window, layer: 0, owner: 7),
+        ], owner: 7, display: display)
+        #expect(sameRegion(cut, [
+            CGRect(x: 300, y: 250, width: 400, height: 50),
+            CGRect(x: 300, y: 380, width: 400, height: 170),
+            CGRect(x: 300, y: 300, width: 50, height: 80),
+            CGRect(x: 450, y: 300, width: 250, height: 80),
+        ]))
+    }
+
+    @Test("A rounded window in front of another warm window gives no corner back to the hole")
+    func stackedOccluders() {
+        let excluded = CGRect(x: 100, y: 100, width: 1200, height: 800)
+        let front = CGRect(x: 400, y: 300, width: 200, height: 150)
+        // The second warm window sits under the front one's top-left corner.
+        let behind = CGRect(x: 350, y: 250, width: 100, height: 100)
+        let region = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: front, layer: 0, owner: 9, cornerRadius: 16),
+            .init(bounds: behind, layer: 0, owner: 8, cornerRadius: 16),
+            .init(bounds: excluded, layer: 0, owner: 7),
+        ], owner: 7, display: display)
+        // Outside the front window's corner, over the window behind: warm.
+        #expect(!isNeutral(region, CGPoint(x: front.minX + 0.5, y: front.minY + 0.5)))
+        // Outside its far corners, over the excluded window: neutral.
+        #expect(isNeutral(region, CGPoint(x: front.maxX - 0.5, y: front.maxY - 0.5)))
+        #expect(isNeutral(region, CGPoint(x: behind.minX + 0.5, y: behind.minY + 0.5)))
+        let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
+        expectTilesMatch(tiles, hole: region, in: display)
+    }
+
+    @Test("Warm tiles cover every band's gaps exactly, for holes in any order")
+    func tilesMatchForManyRoundedHoles() {
+        let windows: [WindowHolePolicy.Window] = (0..<6).map { index in
+            .init(bounds: CGRect(x: 60 + index * 170, y: 700 - index * 110, width: 380, height: 260),
+                  layer: 0, owner: index.isMultiple(of: 2) ? 7 : Int32(20 + index), cornerRadius: 12 + CGFloat(index))
+        }
+        let region = WindowHolePolicy.neutralRegion(windows: windows, owner: 7, display: display, cornerRadius: 16)
+        let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
+        expectTilesMatch(tiles, hole: region, in: display)
+        #expect(abs(area(tiles) + area(region) - display.width * display.height) < 1e-3)
+        #expect(WindowHolePolicy.warmTiles(around: region.reversed(), in: display).count == tiles.count)
+    }
+
+    @Test("A neutral window follows its own corner radius, not the titled-window default")
+    func neutralWindowUsesItsOwnRadius() {
+        // The reporter's menus have a smaller radius than a titled window, so a 16 pt hole left a
+        // warm sliver inside each menu corner.
+        let menu = CGRect(x: 600, y: 300, width: 184, height: 120)
+        let windowed = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: menu, layer: 101, owner: 7, cornerRadius: 12)],
+            owner: 7, display: display, cornerRadius: 16)
+        #expect(isNeutral(windowed, between12And16(menu)))
+        #expect(!isNeutral(windowed, CGPoint(x: menu.minX + 0.5, y: menu.minY + 0.5)))
+        #expect(sameRegion(windowed, WindowHolePolicy.roundedInterior(menu, radius: 12)))
+
+        // A larger reported radius is followed too (a browser window at 20 pt).
+        let browser = CGRect(x: 100, y: 100, width: 400, height: 300)
+        let wide = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: browser, layer: 0, owner: 7, cornerRadius: 20)],
+            owner: 7, display: display, cornerRadius: 16)
+        #expect(sameRegion(wide, WindowHolePolicy.roundedInterior(browser, radius: 20)))
+    }
+
+    @Test("An unknown or zero radius falls back to the titled-window default, as before")
+    func unknownRadiusFallsBack() {
+        let window = CGRect(x: 300, y: 250, width: 400, height: 300)
+        let expected = WindowHolePolicy.roundedInterior(window, radius: 16)
+        for reported: CGFloat? in [nil, 0, -3, .nan, .infinity] {
+            let region = WindowHolePolicy.neutralRegion(
+                windows: [.init(bounds: window, layer: 0, owner: 7, cornerRadius: reported)],
+                owner: 7, display: display, cornerRadius: 16)
+            #expect(sameRegion(region, expected), "reported \(String(describing: reported))")
+        }
+    }
+
+    @Test("A window that fills the display stays square whatever radius it reports")
+    func fullDisplayIgnoresReportedRadius() {
+        let region = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: display, layer: 0, owner: 7, cornerRadius: 16)],
+            owner: 7, display: display, cornerRadius: 16)
+        #expect(region == [display])
+    }
+
+    @Test("This app's rounded popover leaves the excluded window neutral outside its corners")
+    func roundedPopoverKeepsCornersNeutral() {
+        // The reporter's screenshot: a warm square around the popover's rounded bottom corners.
+        let finderWindow = CGRect(x: 0, y: 80, width: 1300, height: 900)
+        let popover = CGRect(x: 1000, y: 24, width: 330, height: 520)
+        let region = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: popover, layer: 25, owner: 2, isRegularApp: false, isMeasured: true, cornerRadius: 20),
+            .init(bounds: finderWindow, layer: 0, owner: 7),
+        ], owner: 7, display: display)
+        // Outside the curve, inside the popover's square: the excluded window shows, neutral.
+        #expect(isNeutral(region, CGPoint(x: popover.minX + 1, y: popover.maxY - 1)))
+        #expect(isNeutral(region, CGPoint(x: popover.minX + 3, y: popover.maxY - 3)))
+        // The popover itself stays warm, right up to its curve.
+        #expect(!isNeutral(region, CGPoint(x: popover.midX, y: popover.midY)))
+        #expect(!isNeutral(region, CGPoint(x: popover.minX + 1, y: popover.midY)))
+        #expect(!isNeutral(region, CGPoint(x: popover.minX + 8, y: popover.maxY - 8)))
+        #expect(!isNeutral(region, CGPoint(x: popover.midX, y: popover.maxY - 0.5)))
+        // The top corners are above Finder's window and stay warm.
+        #expect(!isNeutral(region, CGPoint(x: popover.minX + 1, y: popover.minY + 1)))
+        let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
+        expectTilesMatch(tiles, hole: region, in: display)
+        #expect(tiles.contains { $0.contains(CGPoint(x: popover.midX, y: popover.midY)) })
+        #expect(!tiles.contains { $0.contains(CGPoint(x: popover.minX + 1, y: popover.maxY - 1)) })
+    }
+
+    @Test("A warm menu or window in front keeps its own rounded corners")
+    func roundedOccludersKeepTheirCorners() {
+        let excluded = CGRect(x: 100, y: 100, width: 1200, height: 800)
+        let menu = CGRect(x: 300, y: 300, width: 160, height: 120)
+        let other = CGRect(x: 700, y: 400, width: 300, height: 200)
+        let region = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: menu, layer: 101, owner: 3, cornerRadius: 12),
+            .init(bounds: other, layer: 0, owner: 9, cornerRadius: 16),
+            .init(bounds: excluded, layer: 0, owner: 7, cornerRadius: 16),
+        ], owner: 7, display: display)
+        for rect in [menu, other] {
+            #expect(isNeutral(region, CGPoint(x: rect.minX + 0.5, y: rect.minY + 0.5)), "corner of \(rect)")
+            #expect(isNeutral(region, CGPoint(x: rect.maxX - 0.5, y: rect.maxY - 0.5)), "corner of \(rect)")
+            #expect(!isNeutral(region, CGPoint(x: rect.midX, y: rect.midY)))
+            #expect(!isNeutral(region, CGPoint(x: rect.minX + 0.5, y: rect.midY)))
+        }
+        // The other window's curve is 16 pt, so a point inside a 12 pt curve is still neutral there.
+        #expect(isNeutral(region, between12And16(other)))
+        #expect(!isNeutral(region, between12And16(menu)))
+        let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
+        expectTilesMatch(tiles, hole: region, in: display)
+    }
+
+    @Test("A warm window with no reported radius still cuts a square, as in 1.1.16")
+    func unknownOccluderRadiusStaysSquare() {
+        let excluded = CGRect(x: 100, y: 100, width: 1200, height: 800)
+        let menu = CGRect(x: 300, y: 300, width: 160, height: 120)
+        for reported: CGFloat? in [nil, 0] {
+            let region = WindowHolePolicy.neutralRegion(windows: [
+                .init(bounds: menu, layer: 101, owner: 3, cornerRadius: reported),
+                .init(bounds: excluded, layer: 0, owner: 7),
+            ], owner: 7, display: display)
+            #expect(area(region) == excluded.width * excluded.height - menu.width * menu.height)
+            #expect(!isNeutral(region, CGPoint(x: menu.minX + 0.5, y: menu.minY + 0.5)))
+        }
+    }
+
+    @Test("A padded menu's body takes the radius its window reports")
+    func paddedMenuBodyUsesReportedRadius() {
+        let excluded = CGRect(x: 60, y: 40, width: 1100, height: 800)
+        let window = CGRect(x: 400, y: 300, width: 310, height: 270)
+        let menu = window.insetBy(dx: 75, dy: 75)
+        let warm = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: window, layer: 101, owner: 3, cornerRadius: 12),
+            .init(bounds: excluded, layer: 0, owner: terminal),
+        ], owner: terminal, display: display, menuMargin: 75)
+        #expect(isNeutral(warm, CGPoint(x: menu.minX + 0.5, y: menu.minY + 0.5)))
+        #expect(!isNeutral(warm, CGPoint(x: menu.midX, y: menu.midY)))
+
+        let neutral = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: window, layer: 101, owner: terminal, cornerRadius: 12),
+        ], owner: terminal, display: display, cornerRadius: 16, menuMargin: 75)
+        #expect(sameRegion(neutral, WindowHolePolicy.roundedInterior(menu, radius: 12)))
+    }
 }

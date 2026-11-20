@@ -255,8 +255,9 @@ abendrot late-night --json
 
 Print what Abendrot sees when it decides whether each screen is full screen: the verdict per
 display, whether Finder's desktop and the Dock's full-screen backdrop are present, the top app
-window, and the desktop-level and app-level window list. Window owners, layers, and sizes only,
-never titles. `--delay` (0-60) waits first so you can switch to the full-screen app.
+window, and the desktop-level, app-level and menu-level window list with each window's corner
+radius as WindowServer reports it. Window owners, layers, sizes and radii only, never titles.
+`--delay` (0-60) waits first so you can switch to the full-screen app or open a menu.
 
 ```sh
 abendrot debug fullscreen --delay 5

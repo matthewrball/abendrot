@@ -268,7 +268,9 @@ final class AppModel: ObservableObject {
         // Start the engine, THEN replay persisted user state in the same task so the
         // restore is ordered strictly after start() — avoiding a reentrancy race where it could
         // land before the engine finishes booting.
-        Task { [weak self] in
+        // The task holds the engine for its own run (it calls it below); the failure handler is
+        // stored by the controller for the app's lifetime, so it keeps only a weak reference.
+        Task { [weak self, engine] in
             #if !APP_STORE
             await NativeColorFilterController.shared.setFailureHandler { [weak engine] recovery in
                 guard let engine else { return }

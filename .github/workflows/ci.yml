@@ -22,6 +22,15 @@
 # macOS 26 Apple Silicon with a macOS 26 SDK. The deployment floor remains macOS
 # 12; hosted checks do not prove runtime behavior on 12–14 or physical warming.
 #
+# Runner placement: in the private source repository the macOS 26 jobs and the
+# two status aggregators run on the self-hosted `abendrot-air` runner (hosted
+# macOS minutes there are billed), and the macOS 15 / Intel rows run hosted only
+# for main-bound work (pull requests into main, pushes to main or public-dev). In
+# the public repository every job stays on GitHub-hosted runners, which are free
+# there and never run fork code on owned hardware. The self-hosted runner has no
+# GUI session, so the launch smoke test and the WindowServer-backed window tests
+# run on hosted rows only.
+#
 # Repository signing/ASC secrets are read only inside `sign-notarize`, which
 # can run only for manual dispatch on exact
 # `refs/heads/main` after the `release-signing` environment gate. Push and PR
@@ -67,7 +76,7 @@ jobs:
   # 1. Lint (always; hosted; no secrets). Advisory toolchain swift-format only.
   # ---------------------------------------------------------------------------
   lint:
-    runs-on: macos-26
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macOS","ARM64","abendrot-air"]') || 'macos-26' }}
     # Advisory, NON-BLOCKING: runs the formatters and surfaces findings, but never gates CI.
     # There is no committed style config yet, so a style nit must not turn the whole board red.
     # The real required gates are test-warmthcore + build-app-unsigned. Make this strict + remove
@@ -85,9 +94,9 @@ jobs:
           # Config: .swift-format at repo root when present; otherwise use the
           # toolchain defaults.
           if [ -f .swift-format ]; then
-            CFG="--configuration .swift-format"
+            CFG=(--configuration .swift-format)
           else
-            CFG=""
+            CFG=()
             echo "::notice::No .swift-format config found; using toolchain defaults."
           fi
           # Lint each Swift source root that exists.
@@ -95,7 +104,7 @@ jobs:
           for dir in "${WARMTHKIT_PACKAGE_PATH}/Sources" "${WARMTHKIT_PACKAGE_PATH}/Tests" App Abendrot; do
             if [ -d "$dir" ]; then
               echo "swift format lint: $dir"
-              swift format lint --recursive $CFG "$dir" || true   # advisory: report, never fail
+              swift format lint --recursive ${CFG[@]+"${CFG[@]}"} "$dir" || true   # advisory: report, never fail
             fi
           done
 
@@ -115,14 +124,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15
-            developer-dir: /Applications/Xcode_26.3.app/Contents/Developer
-          - runner: macos-15-intel
-            developer-dir: /Applications/Xcode_26.3.app/Contents/Developer
-          - runner: macos-26
-            developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
-    runs-on: ${{ matrix.runner }}
+        # Placement rules: see the header. Private: Air for macOS 26, hosted macOS 15 /
+        # Intel only when main-bound. Public: all hosted.
+        include: >-
+          ${{ fromJSON(
+          !github.event.repository.private && '[{"runner":"macos-15","labels":"macos-15","developer-dir":"/Applications/Xcode_26.3.app/Contents/Developer"},{"runner":"macos-15-intel","labels":"macos-15-intel","developer-dir":"/Applications/Xcode_26.3.app/Contents/Developer"},{"runner":"macos-26","labels":"macos-26","developer-dir":"/Applications/Xcode_26.6.app/Contents/Developer"}]'
+          || (github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/public-dev') && '[{"runner":"macos-15","labels":"macos-15","developer-dir":"/Applications/Xcode_26.3.app/Contents/Developer"},{"runner":"macos-15-intel","labels":"macos-15-intel","developer-dir":"/Applications/Xcode_26.3.app/Contents/Developer"},{"runner":"macos-26","labels":["self-hosted","macOS","ARM64","abendrot-air"],"developer-dir":"/Applications/Xcode.app/Contents/Developer"}]'
+          || '[{"runner":"macos-26","labels":["self-hosted","macOS","ARM64","abendrot-air"],"developer-dir":"/Applications/Xcode.app/Contents/Developer"}]'
+          ) }}
+    runs-on: ${{ matrix.labels }}
     env:
       DEVELOPER_DIR: ${{ matrix.developer-dir }}
     steps:
@@ -165,14 +175,14 @@ jobs:
     name: test-warmthcore
     if: always()
     needs: [test-warmthcore]
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macOS","ARM64","abendrot-air"]') || 'ubuntu-latest' }}
     steps:
       - name: Require headless test matrix
         if: needs.test-warmthcore.result != 'success'
         run: exit 1
 
   shell-release-guards:
-    runs-on: macos-26
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macOS","ARM64","abendrot-air"]') || 'macos-26' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -196,15 +206,19 @@ jobs:
   # "no project file" can no longer silently pass (the previous bug).
   # ---------------------------------------------------------------------------
   build-app-unsigned:
+    name: build-app-unsigned (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15-intel
-            developer-dir: /Applications/Xcode_26.3.app/Contents/Developer
-          - runner: macos-26
-            developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
-    runs-on: ${{ matrix.runner }}
+        # Placement rules: see the header. Private: Air for macOS 26, hosted macOS 15 /
+        # Intel only when main-bound. Public: all hosted.
+        include: >-
+          ${{ fromJSON(
+          !github.event.repository.private && '[{"runner":"macos-15-intel","labels":"macos-15-intel","developer-dir":"/Applications/Xcode_26.3.app/Contents/Developer"},{"runner":"macos-26","labels":"macos-26","developer-dir":"/Applications/Xcode_26.6.app/Contents/Developer"}]'
+          || (github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/public-dev') && '[{"runner":"macos-15-intel","labels":"macos-15-intel","developer-dir":"/Applications/Xcode_26.3.app/Contents/Developer"},{"runner":"macos-26","labels":["self-hosted","macOS","ARM64","abendrot-air"],"developer-dir":"/Applications/Xcode.app/Contents/Developer"}]'
+          || '[{"runner":"macos-26","labels":["self-hosted","macOS","ARM64","abendrot-air"],"developer-dir":"/Applications/Xcode.app/Contents/Developer"}]'
+          ) }}
+    runs-on: ${{ matrix.labels }}
     env:
       DEVELOPER_DIR: ${{ matrix.developer-dir }}
     # lint is advisory (continue-on-error) and intentionally NOT a dependency here, so a style
@@ -306,20 +320,70 @@ jobs:
             "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
 
       - name: Launch unsigned app bundle smoke test
+        # Needs a logged-in GUI session; the self-hosted runner is a headless
+        # service account and must not drive the host's display.
+        if: runner.environment == 'github-hosted'
         run: |
           scripts/qa/smoke-launch.sh \
             "build/DerivedData/Build/Products/Release/${ABENDROT_APP_SCHEME}.app"
+
+      - name: Note skipped launch test
+        if: runner.environment != 'github-hosted'
+        run: echo "::notice::Launch smoke test skipped on the self-hosted runner (no GUI session). It runs on hosted rows."
 
   # Preserve the protected-main status context while requiring every app-build row.
   build-app-unsigned-required:
     name: build-app-unsigned
     if: always()
     needs: [build-app-unsigned]
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted","macOS","ARM64","abendrot-air"]') || 'ubuntu-latest' }}
     steps:
       - name: Require app build matrix
         if: needs.build-app-unsigned.result != 'success'
         run: exit 1
+
+  # Extra QA on the self-hosted runner only (private repo): static analysis,
+  # warnings, sanitizer test passes, coverage and strict lint. Report-only: it
+  # fails only for checks listed in QA_BLOCKING. Not a required context.
+  deep-qa:
+    name: deep-qa (report only)
+    if: github.event.repository.private
+    needs: [build-app-unsigned]
+    runs-on: [self-hosted, macOS, ARM64, abendrot-air]
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      # After the report-only week, list the checks that stayed clean, e.g.
+      # "asan tsan actionlint". Empty means nothing blocks.
+      QA_BLOCKING: ""
+      SHELLCHECK_URL: https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.gz
+      SHELLCHECK_SHA256: 339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f
+      ACTIONLINT_URL: https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz
+      ACTIONLINT_SHA256: aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install verified QA tools
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/qa-bin"
+          mkdir -p "$bin"
+          curl -fsSL "$XCODEGEN_URL" -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP"
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" --version | grep -qx "Version: $XCODEGEN_VERSION"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+          curl -fsSL "$SHELLCHECK_URL" -o "$RUNNER_TEMP/shellcheck.tar.gz"
+          echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/shellcheck.tar.gz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/shellcheck.tar.gz" -C "$RUNNER_TEMP"
+          cp "$RUNNER_TEMP"/shellcheck-v*/shellcheck "$bin/"
+          curl -fsSL "$ACTIONLINT_URL" -o "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/actionlint.tar.gz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$bin" actionlint
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: Deep QA report
+        run: scripts/qa/deep-qa.sh
 
   public-release-gate:
     name: public-dev/release-gate
@@ -492,6 +556,9 @@ jobs:
             -T /usr/bin/codesign -T /usr/bin/security
           # Allow codesign to use the key without an interactive prompt.
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
+          # Keychain paths have no spaces; the split is intended. Left as-is: this job runs
+          # only on a manual release from main, so a rewrite here could not be tested in CI.
+          # shellcheck disable=SC2046
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           rm -f "$RUNNER_TEMP/cert.p12"
           echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"

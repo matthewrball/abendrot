@@ -17,9 +17,9 @@ struct Debug: ParsableCommand {
 struct DebugFullScreen: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "fullscreen",
-        abstract: "Show what Abendrot sees when it decides a screen is full screen. Prints window owners, layers, and sizes, never window titles."
+        abstract: "Show what Abendrot sees when it decides a screen is full screen. Prints window owners, layers, sizes, and corner radii, never window titles."
     )
-    @Option(help: "Seconds to wait first, so you can switch to the full-screen app (0-60).")
+    @Option(help: "Seconds to wait first, so you can switch to the full-screen app or open a menu (0-60).")
     var delay: Double = 0
 
     func run() throws {
@@ -48,6 +48,7 @@ enum FullScreenReport {
         lines.append("Front app: \(front?.localizedName ?? "none") (\(front?.bundleIdentifier ?? "-"))")
 
         let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        let radii = CornerRadii.read(windows.compactMap { $0[kCGWindowNumber as String] as? Int })
         var apps: [Int32: (bundleID: String?, isRegular: Bool)] = [:]
         func app(_ pid: Int32) -> (bundleID: String?, isRegular: Bool) {
             if let cached = apps[pid] { return cached }
@@ -95,11 +96,18 @@ enum FullScreenReport {
         lines.append("")
         lines.append("Desktop-level windows:")
         for window in windows where (window[kCGWindowLayer as String] as? Int ?? 0) < 0 {
-            lines.append("  " + row(window, app))
+            lines.append("  " + row(window, app, radii))
         }
         lines.append("Front app-level windows (up to 12):")
         for window in windows.filter({ (($0[kCGWindowLayer as String] as? Int) ?? -1) == 0 }).prefix(12) {
-            lines.append("  " + row(window, app))
+            lines.append("  " + row(window, app, radii))
+        }
+        // Menus, context menus and menu-bar extras, of any app: their corners decide the cut-outs
+        // over an excluded app's window.
+        let menus = windows.filter { ($0[kCGWindowLayer as String] as? Int) == WindowHolePolicy.popUpMenuLayer }
+        lines.append("Menu-level windows (up to 12):\(menus.isEmpty ? " none" : "")")
+        for window in menus.prefix(12) {
+            lines.append("  " + row(window, app, radii))
         }
         // Floating windows of the front app, e.g. a player's own full-screen mode above normal windows.
         if let pid = front?.processIdentifier {
@@ -108,13 +116,15 @@ enum FullScreenReport {
             }
             lines.append("Front app's raised windows:\(raised.isEmpty ? " none" : "")")
             for window in raised.prefix(12) {
-                lines.append("  " + row(window, app))
+                lines.append("  " + row(window, app, radii))
             }
         }
         return lines.joined(separator: "\n")
     }
 
-    private static func row(_ window: [String: Any], _ app: (Int32) -> (bundleID: String?, isRegular: Bool)) -> String {
+    private static func row(
+        _ window: [String: Any], _ app: (Int32) -> (bundleID: String?, isRegular: Bool), _ radii: [Int: Double]?
+    ) -> String {
         let pid = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
         let layer = window[kCGWindowLayer as String] as? Int ?? 0
         let alpha = window[kCGWindowAlpha as String] as? Double ?? 1
@@ -125,7 +135,13 @@ enum FullScreenReport {
         }
         let regular = app(pid).isRegular ? "app" : "background"
         let name = window[kCGWindowOwnerName as String] as? String
-        return "\(owner(pid, app, fallback: name)) [\(regular)] layer \(layer) alpha \(String(format: "%.2f", alpha)) \(describe(bounds))"
+        var text = "\(owner(pid, app, fallback: name)) [\(regular)] layer \(layer) alpha \(String(format: "%.2f", alpha)) \(describe(bounds))"
+        if let radii {
+            if let radius = (window[kCGWindowNumber as String] as? Int).flatMap({ radii[$0] }) {
+                text += " radius \(String(format: "%g", radius))"
+            }
+        }
+        return text
     }
 
     private static func owner(
@@ -137,5 +153,39 @@ enum FullScreenReport {
 
     private static func describe(_ rect: CGRect) -> String {
         "x \(Int(rect.minX)) y \(Int(rect.minY)) \(Int(rect.width))x\(Int(rect.height))"
+    }
+}
+
+/// WindowServer's corner radius per window number, read the same way the app reads it. Nil before
+/// macOS 26 or when this macOS has no such query, so the report leaves the radius out. A window
+/// missing from the answer is left out too, not printed as 0.
+enum CornerRadii {
+    private typealias MainConnection = @convention(c) () -> Int32
+    private typealias Query = @convention(c) (Int32, CFArray, UInt32) -> Unmanaged<CFTypeRef>?
+    private typealias CopyWindows = @convention(c) (CFTypeRef) -> Unmanaged<CFTypeRef>?
+    private typealias Advance = @convention(c) (CFTypeRef) -> Bool
+    private typealias WindowID = @convention(c) (CFTypeRef) -> UInt32
+    private typealias Radii = @convention(c) (CFTypeRef) -> Unmanaged<CFArray>?
+
+    static func read(_ numbers: [Int]) -> [Int: Double]? {
+        // The radii calls return a new array the caller owns on macOS 26, where that was checked.
+        guard #available(macOS 26, *) else { return nil }
+        guard let sky = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY | RTLD_LOCAL),
+              let main = dlsym(sky, "SLSMainConnectionID"), let query = dlsym(sky, "SLSWindowQueryWindows"),
+              let copy = dlsym(sky, "SLSWindowQueryResultCopyWindows"), let advance = dlsym(sky, "SLSWindowIteratorAdvance"),
+              let windowID = dlsym(sky, "SLSWindowIteratorGetWindowID"),
+              let radii = dlsym(sky, "SLSWindowIteratorGetResolvedCornerRadii") ?? dlsym(sky, "SLSWindowIteratorGetCornerRadii")
+        else { return nil }
+        let ids = numbers.filter { $0 > 0 && $0 <= Int(UInt32.max) }.map { NSNumber(value: UInt32($0)) }
+        let connection = unsafeBitCast(main, to: MainConnection.self)()
+        guard let result = unsafeBitCast(query, to: Query.self)(connection, ids as CFArray, 0)?.takeRetainedValue(),
+              let iterator = unsafeBitCast(copy, to: CopyWindows.self)(result)?.takeRetainedValue() else { return nil }
+        var found: [Int: Double] = [:]
+        while unsafeBitCast(advance, to: Advance.self)(iterator) {
+            let id = Int(unsafeBitCast(windowID, to: WindowID.self)(iterator))
+            let values = unsafeBitCast(radii, to: Radii.self)(iterator)?.takeRetainedValue() as? [NSNumber] ?? []
+            found[id] = values.map(\.doubleValue).filter(\.isFinite).max() ?? 0
+        }
+        return found
     }
 }

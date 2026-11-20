@@ -5,8 +5,11 @@ import CInterop
 
 /// The screenshot tool's window picker must skip the warmth panel, or a window capture of an
 /// excluded app is a display-sized white rectangle (issue #30, clipboard and Cmd-Shift-4 paths).
+/// These windows need a WindowServer session, which a headless service account (the self-hosted
+/// CI runner) does not have; hosted runners and a logged-in Mac run them.
 @MainActor
-@Suite("Window filter panel and the screenshot window picker")
+@Suite("Window filter panel and the screenshot window picker",
+       .enabled(if: CGSessionCopyCurrentDictionary() != nil, "needs a logged-in GUI session"))
 struct WindowCaptureSelectionTests {
 
     init() { _ = NSApplication.shared }

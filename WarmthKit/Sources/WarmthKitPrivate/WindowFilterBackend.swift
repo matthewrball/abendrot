@@ -264,20 +264,23 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
         guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
             as? [[String: Any]] else { return [] }
         let panelNumbers = Set(panels.values.map(\.windowNumber))
+        let radii = Self.cornerRadii(of: raw.compactMap { $0[kCGWindowNumber as String] as? Int })
         return raw.compactMap { window in
             guard let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
                   var rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) else { return nil }
             let owner = window[kCGWindowOwnerPID as String] as? pid_t ?? -1
             let layer = window[kCGWindowLayer as String] as? Int ?? 0
+            let number = window[kCGWindowNumber as String] as? Int ?? 0
+            var radius = radii[number]
             var measured = false
             if owner == Self.ownPID {
-                let number = window[kCGWindowNumber as String] as? Int ?? 0
                 // The warmth panels are not windows a person reads.
                 if panelNumbers.contains(number) { return nil }
                 // The popover's window includes its arrow and shadow margin. This process can
                 // see its own content, so the popover stays warm exactly where it is drawn.
                 if let own = NSApp.window(withWindowNumber: number), let visible = Self.visibleBounds(of: own) {
-                    rect = visible
+                    rect = visible.bounds
+                    radius = visible.cornerRadius ?? radius
                     measured = true
                 }
             }
@@ -298,21 +301,58 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
                 owner: owner,
                 alpha: window[kCGWindowAlpha as String] as? Double ?? 1,
                 isRegularApp: regular,
-                isMeasured: measured
+                isMeasured: measured,
+                cornerRadius: radius
             )
         }
     }
 
+    /// WindowServer's corner radius for each listed window that reports one. Asked on every
+    /// sample, not cached: a window has no radius until it is ordered in, and one query for every
+    /// on-screen window costs well under a tenth of a millisecond. Older macOS has no such query,
+    /// so every radius stays unknown and the hole keeps the titled-window radius as before.
+    private static func cornerRadii(of numbers: [Int]) -> [Int: CGFloat] {
+        let listed = numbers.filter { $0 > 0 && $0 <= Int(UInt32.max) }
+        guard !listed.isEmpty else { return [:] }
+        let ids = listed.map { UInt32($0) }
+        var values = [Double](repeating: 0, count: ids.count)
+        guard WKCopyWindowCornerRadii(ids, ids.count, &values) else { return [:] }
+        var radii: [Int: CGFloat] = [:]
+        for (number, value) in zip(listed, values) where value.isFinite && value > 0 && value < 80 {
+            radii[number] = CGFloat(value)
+        }
+        return radii
+    }
+
     /// One of this app's windows, in CoreGraphics global space. A normal window is its frame. A
-    /// popover or menu-bar window is its content view, without the arrow and shadow margin.
-    private static func visibleBounds(of window: NSWindow) -> CGRect? {
+    /// popover or menu-bar window is its content view, without the arrow and shadow margin, and
+    /// takes the radius of the glass it is drawn on, when there is one.
+    private static func visibleBounds(of window: NSWindow) -> (bounds: CGRect, cornerRadius: CGFloat?)? {
         guard window.isVisible, let primary = NSScreen.screens.first else { return nil }
         var frame = window.frame
+        var radius: CGFloat?
         if window.level != .normal, let content = window.contentView {
             let inner = window.convertToScreen(content.convert(content.bounds, to: nil))
-            if !inner.isEmpty { frame = inner }
+            if !inner.isEmpty {
+                frame = inner
+                radius = surfaceCornerRadius(behind: content)
+            }
         }
-        return CGRect(x: frame.minX, y: primary.frame.maxY - frame.maxY, width: frame.width, height: frame.height)
+        return (CGRect(x: frame.minX, y: primary.frame.maxY - frame.maxY, width: frame.width, height: frame.height),
+                radius)
+    }
+
+    /// The radius of the glass behind a popover's content. On macOS 26 the popover's frame view
+    /// holds, beside the content, a glass effect view as large as the frame whose `cornerRadius` is
+    /// the popover's visible corner; the window reports none to WindowServer. Nil when there is no
+    /// such view, which keeps the popover's square cut.
+    private static func surfaceCornerRadius(behind content: NSView) -> CGFloat? {
+        guard #available(macOS 26, *), let frameView = content.superview else { return nil }
+        for case let glass as NSGlassEffectView in frameView.subviews where glass.frame == frameView.bounds {
+            let radius = glass.cornerRadius
+            if radius.isFinite, radius > 0, radius < 80 { return radius }
+        }
+        return nil
     }
 
     /// The online display whose UUID matches, so a wake or hotplug can move a panel onto the

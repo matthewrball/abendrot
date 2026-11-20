@@ -21,6 +21,9 @@ public enum WindowHolePolicy {
         /// `bounds` is the visible surface, measured by the caller, not the window's shadow frame.
         /// This app's own popover and windows are measured this way and always stay warm.
         public var isMeasured: Bool
+        /// The corner radius of the visible surface, as WindowServer or this app reports it. Nil,
+        /// zero, or a value that is not finite means unknown.
+        public var cornerRadius: CGFloat?
 
         public init(
             bounds: CGRect,
@@ -28,7 +31,8 @@ public enum WindowHolePolicy {
             owner: Int32,
             alpha: Double = 1,
             isRegularApp: Bool = true,
-            isMeasured: Bool = false
+            isMeasured: Bool = false,
+            cornerRadius: CGFloat? = nil
         ) {
             self.bounds = bounds
             self.layer = layer
@@ -36,6 +40,13 @@ public enum WindowHolePolicy {
             self.alpha = alpha
             self.isRegularApp = isRegularApp
             self.isMeasured = isMeasured
+            self.cornerRadius = cornerRadius
+        }
+
+        /// `cornerRadius` when it is a usable radius.
+        var knownCornerRadius: CGFloat? {
+            guard let cornerRadius, cornerRadius.isFinite, cornerRadius > 0 else { return nil }
+            return cornerRadius
         }
     }
 
@@ -68,9 +79,11 @@ public enum WindowHolePolicy {
     /// `menuMargin` is the transparent margin of this Mac's menu windows, proven by
     /// `observedMenuMargin`. Menu-level windows count at their bounds inset by it. Zero, the
     /// default, means no margin has been proven: their bounds are then taken as the menu.
-    /// `cornerRadius` follows a normal window's rounded corners, so the square outside the curve
-    /// stays warm. A window that fills the display keeps a square hole: its corners are the
-    /// screen's corners.
+    /// Each window is cut at its own `cornerRadius` when one is known, so the square outside the
+    /// curve keeps the colour of what is behind it: warm around a neutral window, neutral around a
+    /// warm menu or popover in front of one. `cornerRadius` is the fallback for a neutral window
+    /// whose radius is unknown (a titled window's). A warm window with no known radius is cut
+    /// square. A window that fills the display is square: its corners are the screen's corners.
     public static func neutralRegion(
         windows: [Window],
         owner: Int32,
@@ -80,7 +93,7 @@ public enum WindowHolePolicy {
         menuMargin: CGFloat = 0
     ) -> [CGRect] {
         var region: [CGRect] = []
-        var occluders: [CGRect] = []
+        var occluders: [Occluder] = []
         let shadows = shadowFrames(in: windows, display: display)
         let menuBar = menuBar(in: windows, display: display)
         let menuOwners = ownersWithMenuBarMenu(in: windows, menuBar: menuBar, menuMargin: menuMargin)
@@ -105,7 +118,7 @@ public enum WindowHolePolicy {
                 bounds = body
             }
             if neutral {
-                let radius = covers ? 0 : cornerRadius
+                let radius = covers ? 0 : (window.knownCornerRadius ?? cornerRadius)
                 for piece in roundedInterior(bounds, radius: radius) {
                     let clipped = piece.intersection(display)
                     if !clipped.isNull, !clipped.isEmpty {
@@ -115,7 +128,8 @@ public enum WindowHolePolicy {
                 continue
             }
             if countsAsOccluder(window, display: display) {
-                occluders.append(bounds)
+                let radius = covers ? 0 : (window.knownCornerRadius ?? 0)
+                occluders.append(Occluder(bounds: bounds, radius: radius))
             }
         }
         return region
@@ -185,30 +199,60 @@ public enum WindowHolePolicy {
     /// The rounded-rect interior of `rect`, as 1 pt rows in the corners plus the straight middle.
     /// A circular arc matches the system corner closely enough that the square outside it stays warm.
     static func roundedInterior(_ rect: CGRect, radius: CGFloat) -> [CGRect] {
-        let limit = min(rect.width, rect.height) / 2
-        let r = min(max(0, radius), limit)
+        let r = clampedRadius(radius, in: rect)
         guard r >= 1 else { return [rect] }
         var pieces = [
             CGRect(x: rect.minX + r, y: rect.minY, width: rect.width - 2 * r, height: rect.height),
             CGRect(x: rect.minX, y: rect.minY + r, width: r, height: rect.height - 2 * r),
             CGRect(x: rect.maxX - r, y: rect.minY + r, width: r, height: rect.height - 2 * r),
         ]
-        let steps = Int(r.rounded(.up))
-        for step in 0..<steps {
+        for row in cornerRows(r) where r - row.inset > 0 {
+            let width = r - row.inset
+            let height = row.y1 - row.y0
+            pieces.append(CGRect(x: rect.minX + row.inset, y: rect.minY + row.y0, width: width, height: height))
+            pieces.append(CGRect(x: rect.maxX - r, y: rect.minY + row.y0, width: width, height: height))
+            pieces.append(CGRect(x: rect.minX + row.inset, y: rect.maxY - row.y1, width: width, height: height))
+            pieces.append(CGRect(x: rect.maxX - r, y: rect.maxY - row.y1, width: width, height: height))
+        }
+        return pieces
+    }
+
+    /// The parts of `rect` outside its rounded corners: what `roundedInterior` leaves out, row for
+    /// row, less the rows narrower than `minExteriorWidth`. Those slivers cannot be seen and would
+    /// each cost a warm tile; they count as inside. Empty for a square rect.
+    static func roundedExterior(_ rect: CGRect, radius: CGFloat) -> [CGRect] {
+        let r = clampedRadius(radius, in: rect)
+        guard r >= 1 else { return [] }
+        var pieces: [CGRect] = []
+        for row in cornerRows(r) where row.inset >= minExteriorWidth {
+            let height = row.y1 - row.y0
+            pieces.append(CGRect(x: rect.minX, y: rect.minY + row.y0, width: row.inset, height: height))
+            pieces.append(CGRect(x: rect.maxX - row.inset, y: rect.minY + row.y0, width: row.inset, height: height))
+            pieces.append(CGRect(x: rect.minX, y: rect.maxY - row.y1, width: row.inset, height: height))
+            pieces.append(CGRect(x: rect.maxX - row.inset, y: rect.maxY - row.y1, width: row.inset, height: height))
+        }
+        return pieces
+    }
+
+    /// The narrowest part outside a corner that a warm window in front gives back to the hole.
+    static let minExteriorWidth: CGFloat = 0.25
+
+    private static func clampedRadius(_ radius: CGFloat, in rect: CGRect) -> CGFloat {
+        guard radius.isFinite else { return 0 }
+        return min(max(0, radius), min(rect.width, rect.height) / 2)
+    }
+
+    /// The 1 pt rows of a corner square, from the outer edge in, with how far the curve sits in
+    /// from the side at each row's middle. A row whose inside part would be under 0.2 pt is left
+    /// wholly outside. The interior and the exterior both read these rows, so they tile exactly.
+    private static func cornerRows(_ r: CGFloat) -> [(y0: CGFloat, y1: CGFloat, inset: CGFloat)] {
+        (0..<Int(r.rounded(.up))).map { step in
             let y0 = CGFloat(step)
             let y1 = min(CGFloat(step + 1), r)
             let dy = r - (y0 + y1) / 2
-            let inside = (r * r - dy * dy).squareRoot()
-            let inset = r - inside
-            let width = r - inset
-            guard width > 0.2, y1 > y0 else { continue }
-            let height = y1 - y0
-            pieces.append(CGRect(x: rect.minX + inset, y: rect.minY + y0, width: width, height: height))
-            pieces.append(CGRect(x: rect.maxX - r, y: rect.minY + y0, width: width, height: height))
-            pieces.append(CGRect(x: rect.minX + inset, y: rect.maxY - y1, width: width, height: height))
-            pieces.append(CGRect(x: rect.maxX - r, y: rect.maxY - y1, width: width, height: height))
+            let inset = r - (r * r - dy * dy).squareRoot()
+            return (y0, y1, r - inset > 0.2 ? inset : r)
         }
-        return pieces
     }
 
     /// `display` minus `region`, as non-overlapping tiles. Horizontal bands are cut at every
@@ -229,10 +273,19 @@ public enum WindowHolePolicy {
         var tiles: [CGRect] = []
         var open: [CGFloat: (minX: CGFloat, maxX: CGFloat, minY: CGFloat)] = [:]
 
+        // Sweep down the bands, keeping only the holes that span the current one.
+        let byTop = holes.sorted { $0.minY < $1.minY }
+        var nextHole = 0
+        var active: [CGRect] = []
+
         for (top, bottom) in zip(ys, ys.dropFirst()) where bottom > top {
             let mid = (top + bottom) / 2
-            let spans = holes
-                .filter { $0.minY <= mid && $0.maxY > mid }
+            while nextHole < byTop.count, byTop[nextHole].minY <= mid {
+                active.append(byTop[nextHole])
+                nextHole += 1
+            }
+            active.removeAll { $0.maxY <= mid }
+            let spans = active
                 .map { ($0.minX, $0.maxX) }
                 .sorted { $0.0 < $1.0 }
             var gaps: [(CGFloat, CGFloat)] = []
@@ -311,9 +364,49 @@ public enum WindowHolePolicy {
         return margins.allSatisfy { $0 >= 1 && $0 <= maxShadowMargin } && abs(left - right) <= 4
     }
 
-    /// `rect` minus every rectangle in `cuts`, as non-overlapping pieces.
-    private static func subtract(_ cuts: [CGRect], from rect: CGRect) -> [CGRect] {
+    /// A warm window in front of the excluded one: its bounds, minus the parts outside its
+    /// rounded corners, which keep showing what is behind it. Those parts are built the first time
+    /// the occluder touches a piece of the hole.
+    private final class Occluder {
+        let bounds: CGRect
+        private let radius: CGFloat
+        private var corners: [CGRect]?
+
+        init(bounds: CGRect, radius: CGFloat) {
+            self.bounds = bounds
+            self.radius = radius
+        }
+
+        var outsideCorners: [CGRect] {
+            if let corners { return corners }
+            let built = WindowHolePolicy.roundedExterior(bounds, radius: radius)
+            corners = built
+            return built
+        }
+    }
+
+    /// `rect` minus every occluder, as non-overlapping pieces. Each piece loses the occluder's
+    /// bounds and gets back what lies outside its corners, so a rounded occluder costs a few
+    /// intersections rather than one cut per corner row.
+    private static func subtract(_ occluders: [Occluder], from rect: CGRect) -> [CGRect] {
         var pieces = [rect]
+        for occluder in occluders where occluder.bounds.intersects(rect) {
+            pieces = pieces.flatMap { piece -> [CGRect] in
+                guard piece.intersects(occluder.bounds) else { return [piece] }
+                var kept = subtract([occluder.bounds], from: [piece])
+                for corner in occluder.outsideCorners {
+                    let overlap = piece.intersection(corner)
+                    if !overlap.isNull, !overlap.isEmpty { kept.append(overlap) }
+                }
+                return kept
+            }
+        }
+        return pieces
+    }
+
+    /// `pieces` minus every rectangle in `cuts`, as non-overlapping pieces.
+    private static func subtract(_ cuts: [CGRect], from rects: [CGRect]) -> [CGRect] {
+        var pieces = rects
         for cut in cuts {
             pieces = pieces.flatMap { piece -> [CGRect] in
                 let overlap = piece.intersection(cut)

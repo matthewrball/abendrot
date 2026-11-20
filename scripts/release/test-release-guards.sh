@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# The guards grep for literal "$NAME" text in scripts, so single quotes are intended.
+# shellcheck disable=SC2016
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -821,7 +823,7 @@ echo "PASS: signed releases reject a noncanonical update feed"
   "$APP/Contents/Info.plist"
 cp "$APPCAST" "$TMP/appcast-before.xml"
 set +e
-ASC_API_KEY_P8= ASC_API_KEY_ID= ASC_API_ISSUER_ID= \
+ASC_API_KEY_P8='' ASC_API_KEY_ID='' ASC_API_ISSUER_ID='' \
 APPCAST_PATH="$APPCAST" RELEASE_SCRATCH="$TMP/release" \
   "$ROOT/scripts/release/release.sh" \
   --app "$APP" --unsigned --dmg-mode plain >"$TMP/unsigned-out" 2>"$TMP/unsigned-stderr"
@@ -987,6 +989,19 @@ printf 'int main(void) { return 0; }\n' > "$src"
 /usr/bin/xcrun clang -arch "$arch" -mmacosx-version-min=12.0 "$src" -o "$dir/abendrot"
 SH
 chmod 755 "$MOCK_SIGNED_BIN/"*
+
+# release.sh prints its dry-run `gh release create` line only when gh exists.
+# Hosts without gh (the self-hosted runner's service account) get this stand-in,
+# appended LAST on PATH so a real gh or a test's own gh mock always wins.
+FALLBACK_GH_BIN="$TMP/fallback-gh-bin"
+mkdir -p "$FALLBACK_GH_BIN"
+cat > "$FALLBACK_GH_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+echo "fallback gh: no gh on this host" >&2
+exit 1
+SH
+chmod 755 "$FALLBACK_GH_BIN/gh"
+export PATH="$PATH:$FALLBACK_GH_BIN"
 
 MOCK_NOTARY_DMG="$TMP/mock-notary.dmg"
 printf 'mock dmg\n' > "$MOCK_NOTARY_DMG"

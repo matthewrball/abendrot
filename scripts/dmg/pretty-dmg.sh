@@ -145,6 +145,7 @@ rm -f "$OUT"
 TITLEBAR_H=32         # Finder title bar (macOS 26)
 CONTENT_W=660         # == background art width
 CONTENT_H=400         # == background art height
+# shellcheck disable=SC2034 # documents the constraint above; the layout values are chosen by hand
 EDGE_MARGIN=35        # Finder's minimum; icon boxes must clear it
 WINDOW_X=200          # window top-left on screen
 WINDOW_Y=120
