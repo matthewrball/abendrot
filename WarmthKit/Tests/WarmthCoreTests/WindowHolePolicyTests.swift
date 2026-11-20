@@ -575,16 +575,17 @@ struct WindowHolePolicyTests {
         let window = CGRect(x: 300, y: 250, width: 400, height: 300)
         let region = WindowHolePolicy.neutralRegion(
             windows: [.init(bounds: window, layer: 0, owner: 7)], owner: 7, display: display, cornerRadius: 2)
-        let inset = 2 - (4 - 1.5 * 1.5).squareRoot()
+        let outer: CGFloat = CGFloat(1.75).squareRoot()   // the first row's width inside the curve
+        let inner: CGFloat = CGFloat(3.75).squareRoot()   // the second row's
         let rows: [CGRect] = [
-            CGRect(x: 300 + inset, y: 250, width: 2 - inset, height: 1),
-            CGRect(x: 698, y: 250, width: 2 - inset, height: 1),
-            CGRect(x: 300 + inset, y: 549, width: 2 - inset, height: 1),
-            CGRect(x: 698, y: 549, width: 2 - inset, height: 1),
-            CGRect(x: 300 + (2 - (4 - 0.25).squareRoot()), y: 251, width: (4 - 0.25).squareRoot(), height: 1),
-            CGRect(x: 698, y: 251, width: (4 - 0.25).squareRoot(), height: 1),
-            CGRect(x: 300 + (2 - (4 - 0.25).squareRoot()), y: 548, width: (4 - 0.25).squareRoot(), height: 1),
-            CGRect(x: 698, y: 548, width: (4 - 0.25).squareRoot(), height: 1),
+            CGRect(x: 302 - outer, y: 250, width: outer, height: 1),
+            CGRect(x: 698, y: 250, width: outer, height: 1),
+            CGRect(x: 302 - outer, y: 549, width: outer, height: 1),
+            CGRect(x: 698, y: 549, width: outer, height: 1),
+            CGRect(x: 302 - inner, y: 251, width: inner, height: 1),
+            CGRect(x: 698, y: 251, width: inner, height: 1),
+            CGRect(x: 302 - inner, y: 548, width: inner, height: 1),
+            CGRect(x: 698, y: 548, width: inner, height: 1),
         ]
         #expect(sameRegion(region, [
             CGRect(x: 302, y: 250, width: 396, height: 300),
@@ -628,9 +629,14 @@ struct WindowHolePolicyTests {
 
     @Test("Warm tiles cover every band's gaps exactly, for holes in any order")
     func tilesMatchForManyRoundedHoles() {
-        let windows: [WindowHolePolicy.Window] = (0..<6).map { index in
-            .init(bounds: CGRect(x: 60 + index * 170, y: 700 - index * 110, width: 380, height: 260),
-                  layer: 0, owner: index.isMultiple(of: 2) ? 7 : Int32(20 + index), cornerRadius: 12 + CGFloat(index))
+        // Spelled out step by step: one mixed Int/CGFloat expression here times out the macOS 15
+        // runners' type checker.
+        var windows: [WindowHolePolicy.Window] = []
+        for index in 0..<6 {
+            let step = CGFloat(index)
+            let bounds = CGRect(x: 60 + step * 170, y: 700 - step * 110, width: 380, height: 260)
+            let owner: Int32 = index.isMultiple(of: 2) ? 7 : Int32(20 + index)
+            windows.append(WindowHolePolicy.Window(bounds: bounds, layer: 0, owner: owner, cornerRadius: 12 + step))
         }
         let region = WindowHolePolicy.neutralRegion(windows: windows, owner: 7, display: display, cornerRadius: 16)
         let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
