@@ -72,12 +72,13 @@ Abendrot ships a command-line tool, `abendrot`, that drives the **running app** 
 ```sh
 abendrot set warmth 0.8        # warm the screen to 80%
 abendrot status --json         # read live state as JSON — pipe it anywhere
+abendrot late-night bedtime 23:30   # Sunset mode: ease warmer before bed, hold until sunrise
 abendrot reveal --hold 10      # momentary true-color peek, then ease back
 ```
 
 **Trust boundary, stated honestly:** `abendrot` talks to the app as the **same macOS user, in your local session**, and changes **visual state only** — no network listener, no privileged helper. An AI assistant "controlling Abendrot" is just running the same `abendrot` command you could type yourself, and it can't reach any further than you can. The binary ships inside the app bundle; the Homebrew cask symlinks it onto your `PATH`.
 
-Every command supports `--json`, with scriptable exit codes. See [`AGENTS.md`](AGENTS.md) for the complete CLI and agent-control reference.
+Every command supports `--json`, with scriptable exit codes. `abendrot late-night --json` reports a `phase` while the app runs: `inactive`, `easing`, `held` or `releasing` (cooling back to day at sunrise); treat any other value as unknown. See [`AGENTS.md`](AGENTS.md) for the complete CLI and agent-control reference.
 
 ## Research and comparisons
 

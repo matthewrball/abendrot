@@ -64,6 +64,9 @@ final class AppModel: ObservableObject {
     @Published var frontAppIsLive = false
     /// Screenshot/preview override for the sunrise pill. Nil in the live app.
     var previewSunrise: Date?
+    /// The night the timeline is laid out around, and the clock it is read on. Set only by
+    /// previews and screenshots, which must not depend on where or when they run.
+    var previewNight: (now: Date, zone: TimeZone)?
     /// `nextSunriseDate` scans the day. The popover reads it several times per frame while the slider drags.
     private var sunriseCache: (latitude: Double, longitude: Double, minute: Double, value: Date?)?
     /// Optimistic pause held until the engine snapshot echoes it, including a cleared pause.
@@ -73,6 +76,22 @@ final class AppModel: ObservableObject {
 
     /// Manual Sunset location override. nil = Auto from system time zone; no permission or network.
     @Published var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
+
+    // MARK: Late-night stage (Sunset mode, opt-in)
+
+    /// Deepen the warmth by `bedtimeMinutes` and hold it until sunrise. Off by default.
+    @Published private(set) var lateNightEnabled = false
+    /// Bedtime on the Mac's clock, minutes after midnight (0..<1440).
+    @Published private(set) var bedtimeMinutes = LateNightStage.defaultBedtimeMinutes
+    /// Late-night warmth on the everyday curve.
+    @Published private(set) var lateNightWarmth = WarmthLevel(strength: 1)
+    /// Go all the way to Cozy at bedtime instead of `lateNightWarmth`.
+    @Published private(set) var lateNightCozy = false
+    /// Length of the ease that ends at bedtime: one of `LateNightStage.allowedEaseMinutes`.
+    @Published private(set) var lateNightEaseMinutes = LateNightStage.defaultEaseMinutes
+    private var pendingLateNightStage: LateNightStage??
+    private var lateNightStageDrain: Task<Void, Never>?
+    private var nightTimelineCache: (key: NightTimelineKey, value: NightTimeline)?
 
     private var sunsetMaximumWarmth = WarmthLevel(strength: 0.7)
     private var manualWarmth = WarmthLevel(strength: 1.0)
@@ -358,6 +377,24 @@ final class AppModel: ObservableObject {
         return pendingGlobalWarmth
     }
 
+    /// Queue the late-night stage for the engine, latest-wins: its slider and the bedtime drag
+    /// both write at frame rate. `.some(nil)` is a queued "off".
+    private func pushLateNightStageToEngine() {
+        pendingLateNightStage = .some(lateNightStage)
+        guard lateNightStageDrain == nil, let engine else { return }
+        lateNightStageDrain = Task { [weak self] in
+            while let next = self?.takePendingLateNightStage() {
+                await engine.setLateNightStage(next)
+            }
+            self?.lateNightStageDrain = nil
+        }
+    }
+
+    private func takePendingLateNightStage() -> LateNightStage?? {
+        defer { pendingLateNightStage = nil }
+        return pendingLateNightStage
+    }
+
     /// Queue a per-display warmth for the engine, latest-wins per display.
     private func pushWarmthToEngine(_ level: WarmthLevel, for id: DisplayIdentity) {
         pendingDisplayWarmth[id] = level
@@ -475,6 +512,25 @@ final class AppModel: ObservableObject {
         } else {
             applyActiveWarmth()
         }
+
+        // Late-night stage. Five plain keys, deliberately outside the schedule-mode blob: a bad
+        // value here can only fall back to its own default, never drop the user's mode.
+        // The defaults and repairs live in `LateNightSnapshot.configured`, which the CLI's
+        // app-closed `status`/`get` also read through. An unset ease keeps the hour the stage
+        // shipped with; a stored value outside the set snaps to the nearest length.
+        let savedNight = LateNightSnapshot.configured(
+            enabled: cfPrefBool(PreferenceKey.lateNightEnabled),
+            bedtimeMinutes: cfPrefInt(PreferenceKey.bedtimeMinutes),
+            warmthStrength: cfPrefDouble(PreferenceKey.lateNightWarmthStrength),
+            cozy: cfPrefBool(PreferenceKey.lateNightCozy),
+            easeMinutes: cfPrefInt(PreferenceKey.lateNightEaseMinutes)
+        )
+        lateNightEnabled = savedNight.enabled
+        bedtimeMinutes = savedNight.bedtimeMinutes
+        lateNightWarmth = WarmthLevel(strength: savedNight.warmthStrength)
+        lateNightCozy = savedNight.cozy
+        lateNightEaseMinutes = savedNight.easeMinutes ?? LateNightStage.defaultEaseMinutes
+        pushLateNightStageToEngine()
 
         // Master toggle last. The final converged engine state is order-independent — each setter
         // sets one box field and the engine recomputes from the whole box — so this is a mild nicety,
@@ -670,6 +726,32 @@ final class AppModel: ObservableObject {
             setPausesForFullScreen(fullscreen, userInitiated: false)
             accepted = true
         }
+        // Late-night stage: the same setters Settings calls, after the same validators the CLI
+        // ran. A bedtime off the offered grid is dropped here, not clamped into something the
+        // sender did not ask for.
+        if let bedtime = patch.bedtimeMinutes,
+           let valid = try? ControlValidation.validatedBedtimeMinutes(bedtime) {
+            setBedtime(minutes: valid)
+            accepted = true
+        }
+        if let strength = patch.lateNightWarmthStrength,
+           let valid = try? ControlValidation.validatedStrength(strength) {
+            setLateNightWarmth(valid)
+            accepted = true
+        }
+        if let ease = patch.lateNightEaseMinutes,
+           let valid = try? ControlValidation.validatedEaseMinutes(ease) {
+            setLateNightEase(minutes: valid)
+            accepted = true
+        }
+        if let cozy = patch.lateNightCozy {
+            setLateNightCozy(cozy, userInitiated: false)
+            accepted = true
+        }
+        if let enabled = patch.lateNightEnabled {
+            setLateNightEnabled(enabled, userInitiated: false)
+            accepted = true
+        }
         // Enabled last so turning warmth off clears a pause set earlier in this same patch.
         if let enabled = patch.isEnabled {
             setEnabled(enabled, userInitiated: false)
@@ -744,6 +826,7 @@ final class AppModel: ObservableObject {
             pauseUntil: state.timedPause?.until,
             pauseKind: state.timedPause?.kind.rawValue,
             pausesForFullScreen: state.pausesForFullScreen,
+            lateNight: lateNightSnapshot,
             displays: state.displays.map { display in
                 DisplaySnapshot(
                     id: display.id.cgUUID.uuidString,
@@ -1013,6 +1096,166 @@ final class AppModel: ObservableObject {
         pushWarmthToEngine(level)
     }
 
+    // MARK: ── Late-night stage ──────────────────────────────────────────────
+
+    /// The earliest and latest bedtime the controls offer, as minutes after the evening's
+    /// midnight: 8 PM through 4 AM the next morning.
+    /// Defined once in the core, so the CLI's validator and these controls cannot drift.
+    static let bedtimeRange = LateNightStage.bedtimeRange
+    static let bedtimeStep = LateNightStage.bedtimeStep
+
+    /// `bedtimeMinutes` counted from the evening's midnight, so 1 AM is 1500 and the range is
+    /// one unbroken span.
+    var eveningBedtimeMinutes: Int {
+        bedtimeMinutes < 12 * 60 ? bedtimeMinutes + 1440 : bedtimeMinutes
+    }
+
+    /// Any minute count → a clock bedtime inside `bedtimeRange`, 0..<1440.
+    private static func clampedBedtime(_ minutes: Int) -> Int {
+        LateNightStage.clampedBedtime(minutesOfDay: minutes)
+    }
+
+    /// The colour the screen reaches at bedtime.
+    var lateNightKelvin: Kelvin {
+        LateNightSnapshot.targetKelvin(strength: lateNightWarmth.strength, cozy: lateNightCozy)
+    }
+
+    /// The colour Sunset mode reaches once the sun is down, before any late-night stage.
+    var eveningKelvin: Kelvin {
+        activeWarmth(for: ScheduleModeOption.followSunset.toScheduleMode()).kelvin(warmestPoint: state.warmestPoint)
+    }
+
+    private var lateNightStage: LateNightStage? {
+        lateNightEnabled
+            ? LateNightStage(bedtimeMinutes: bedtimeMinutes, target: lateNightKelvin, easeMinutes: lateNightEaseMinutes)
+            : nil
+    }
+
+    /// The stage as `abendrot status --json` reports it. `phase` is read off the schedule's own
+    /// maths for this instant (`ScheduleResolver.lateNightPhase`), never off a Kelvin comparison:
+    /// a screen cooling at sunrise is between the same two colours as one easing in.
+    var lateNightSnapshot: LateNightSnapshot {
+        LateNightSnapshot(
+            enabled: lateNightEnabled, bedtimeMinutes: bedtimeMinutes,
+            warmthStrength: lateNightWarmth.strength, cozy: lateNightCozy,
+            easeMinutes: lateNightEaseMinutes, phase: lateNightPhase(at: Date()).rawValue
+        )
+    }
+
+    /// What the stage is doing to the screen at `date`. The engine's published state says whether
+    /// the stage is running at all (a resolved Kelvin exists only in Sunset mode with the stage
+    /// contributing) and whether the screen is held neutral over it; the schedule says the rest.
+    func lateNightPhase(at date: Date, calendar: Calendar = .current) -> LateNightPhase {
+        guard let stage = lateNightStage else { return .inactive }
+        let coordinate = userCoordinate ?? TimeZoneCoordinates.current()
+        let schedule = ScheduleResolver.lateNightPhase(
+            at: date, latitude: coordinate.latitude, longitude: coordinate.longitude,
+            configuredWarmth: activeWarmth(for: ScheduleModeOption.followSunset.toScheduleMode()),
+            warmestPoint: state.warmestPoint, lateNight: stage, calendar: calendar
+        )
+        return schedule.reported(
+            stageRunning: state.isEnabled && state.resolvedKelvin != nil,
+            screenHeldNeutral: state.timedPause != nil || state.isFullScreenPauseActive || state.isRevealing
+        )
+    }
+
+    func setLateNightEnabled(_ enabled: Bool, userInitiated: Bool = true) {
+        guard enabled != lateNightEnabled else { return }
+        lateNightEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: PreferenceKey.lateNightEnabled)
+        pushLateNightStageToEngine()
+        if userInitiated { playSoftToggleTone(on: enabled) }
+    }
+
+    /// Takes minutes on either scale: a clock time, or counted past the evening's midnight.
+    func setBedtime(minutes: Int) {
+        let clamped = Self.clampedBedtime(minutes)
+        guard clamped != bedtimeMinutes else { return }
+        bedtimeMinutes = clamped
+        UserDefaults.standard.set(clamped, forKey: PreferenceKey.bedtimeMinutes)
+        pushLateNightStageToEngine()
+    }
+
+    func setLateNightWarmth(_ strength: Double) {
+        let level = WarmthLevel(strength: strength)
+        guard level != lateNightWarmth else { return }
+        lateNightWarmth = level
+        UserDefaults.standard.set(level.strength, forKey: PreferenceKey.lateNightWarmthStrength)
+        pushLateNightStageToEngine()
+    }
+
+    func setLateNightCozy(_ on: Bool, userInitiated: Bool = true) {
+        guard on != lateNightCozy else { return }
+        lateNightCozy = on
+        UserDefaults.standard.set(on, forKey: PreferenceKey.lateNightCozy)
+        pushLateNightStageToEngine()
+        if userInitiated { playSoftToggleTone(on: on) }
+    }
+
+    /// Takes any minute count and keeps the nearest length the controls offer.
+    func setLateNightEase(minutes: Int) {
+        let allowed = LateNightStage.nearestEaseMinutes(to: minutes)
+        guard allowed != lateNightEaseMinutes else { return }
+        lateNightEaseMinutes = allowed
+        UserDefaults.standard.set(allowed, forKey: PreferenceKey.lateNightEaseMinutes)
+        pushLateNightStageToEngine()
+    }
+
+    #if DEBUG
+    /// Seed the stage on a preview model. Nothing is persisted and no engine is told.
+    func previewLateNight(
+        bedtimeMinutes: Int, strength: Double = 1, cozy: Bool = false,
+        easeMinutes: Int = LateNightStage.defaultEaseMinutes
+    ) {
+        lateNightEnabled = true
+        self.bedtimeMinutes = Self.clampedBedtime(bedtimeMinutes)
+        lateNightWarmth = WarmthLevel(strength: strength)
+        lateNightCozy = cozy
+        lateNightEaseMinutes = LateNightStage.nearestEaseMinutes(to: easeMinutes)
+    }
+    #endif
+
+    /// The Mac's own clock, which bedtime follows and the night is drawn on.
+    var nightClock: Calendar {
+        var calendar = Calendar.current
+        if let zone = previewNight?.zone { calendar.timeZone = zone }
+        return calendar
+    }
+
+    /// True when the Sunset location keeps a different clock from this Mac (a far-away city is
+    /// pinned): its sunset then reads differently here than in the Location readout.
+    var sunsetLocationKeepsAnotherClock: Bool {
+        let now = previewNight?.now ?? Date()
+        return sunsetLocationTimeZone.secondsFromGMT(for: now) != nightClock.timeZone.secondsFromGMT(for: now)
+    }
+
+    /// One sample every five minutes, noon to noon: fine enough that a 15-minute ease is drawn
+    /// as the 15 minutes it is.
+    static let nightTimelineSampleCount = 289
+
+    /// Tonight laid out for the Settings anchors strip, from the same resolver the engine runs.
+    /// Cached: the strip redraws on every publish, and a timeline is a few thousand solar evaluations.
+    var nightTimeline: NightTimeline {
+        let coordinate = userCoordinate ?? TimeZoneCoordinates.current()
+        let evening = activeWarmth(for: ScheduleModeOption.followSunset.toScheduleMode())
+        let now = previewNight?.now ?? Date()
+        let clock = nightClock
+        let key = NightTimelineKey(
+            latitude: coordinate.latitude, longitude: coordinate.longitude,
+            evening: evening, warmestPoint: state.warmestPoint, stage: lateNightStage,
+            tenMinutes: Int(now.timeIntervalSince1970 / 600),
+            clockOffset: clock.timeZone.secondsFromGMT(for: now)
+        )
+        if let cached = nightTimelineCache, cached.key == key { return cached.value }
+        let value = ScheduleResolver.nightTimeline(
+            containing: now, latitude: coordinate.latitude, longitude: coordinate.longitude,
+            configuredWarmth: evening, warmestPoint: state.warmestPoint, lateNight: lateNightStage,
+            calendar: clock, sampleCount: Self.nightTimelineSampleCount
+        )
+        nightTimelineCache = (key, value)
+        return value
+    }
+
     func setScheduleMode(_ mode: ScheduleMode, userInitiated: Bool = true) {
         // Compare at the UI grain (Sunset · Manual): the dormant cases (.solar/.custom/...) all read
         // as Sunset, so re-selecting one is not a user-visible change and must not tick.
@@ -1247,24 +1490,25 @@ final class AppModel: ObservableObject {
 
     /// Live "Today's sunset ≈ h:mm a" for the chosen (or auto) location — zero permission, zero network
     /// (time-zone coordinates). Shared by Settings → Schedule and onboarding so the picked city feels real.
+    /// The Sunset location's clock: Auto = the system zone; a picked city = its real IANA zone
+    /// (looked up from the city). Longitude zone is only a last-ditch fallback.
+    private var sunsetLocationTimeZone: TimeZone {
+        guard let coordinate = userCoordinate else { return previewNight?.zone ?? .current }
+        if let city = MajorCities.all.first(where: { $0.coordinate == coordinate }),
+           let cityZone = TimeZone(identifier: city.timeZone) {
+            return cityZone
+        }
+        return TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) ?? .current
+    }
+
     var todaysSunsetReadout: String {
         let coordinate = userCoordinate ?? TimeZoneCoordinates.current()
         guard let sunset = ScheduleResolver.sunsetTime(forCoordinate: coordinate, on: Date()) else {
             return "Today's sunset: —"
         }
-        // Display zone: Auto = the system zone; a picked city = its real IANA zone (looked up from the
-        // city) so the sunset prints in that city's local clock with a proper DST-aware abbreviation
-        // (PST/PDT, EST/EDT). Longitude zone is only a last-ditch fallback. Mutating the shared formatter
-        // is safe: AppModel is @MainActor.
-        let zone: TimeZone
-        if userCoordinate == nil {
-            zone = .current
-        } else if let city = MajorCities.all.first(where: { $0.coordinate == coordinate }),
-                  let cityZone = TimeZone(identifier: city.timeZone) {
-            zone = cityZone
-        } else {
-            zone = TimeZoneCoordinates.approximateTimeZone(forLongitude: coordinate.longitude) ?? .current
-        }
+        // The sunset prints in the location's own clock with a proper DST-aware abbreviation
+        // (PST/PDT, EST/EDT). Mutating the shared formatter is safe: AppModel is @MainActor.
+        let zone = sunsetLocationTimeZone
         let formatter = Self.sunsetReadoutFormatter
         formatter.timeZone = zone
         // Show a real, named abbreviation ("EDT", "PDT") but NOT a bare "GMT-5" offset — a picked city's
@@ -1396,7 +1640,8 @@ final class AppModel: ObservableObject {
     /// which is the configured peak. Equal in Always-on; in Sunset it tracks the time-of-day ramp
     /// (neutral by day → peak by night). Drives the live, locked popover readout.
     var liveKelvin: Kelvin {
-        state.resolvedWarmth.kelvin(warmestPoint: state.warmestPoint)
+        // The late-night stage resolves a Kelvin the strength curve cannot express.
+        state.appliedKelvin
     }
 
     /// In Sunset mode the popover warmth slider is LOCKED: warmth is set automatically by time of
@@ -1425,6 +1670,19 @@ final class AppModel: ObservableObject {
         let ddcPossible = priv && display.capabilities.hardware.isSupported
         return !(gammaPossible || colorFilterPossible || ddcPossible)
     }
+}
+
+// MARK: - NightTimelineKey
+
+/// Everything the night timeline depends on. The time bucket only has to notice solar noon passing.
+private struct NightTimelineKey: Equatable {
+    let latitude: Double
+    let longitude: Double
+    let evening: WarmthLevel
+    let warmestPoint: Kelvin
+    let stage: LateNightStage?
+    let tenMinutes: Int
+    let clockOffset: Int
 }
 
 // MARK: - Capability

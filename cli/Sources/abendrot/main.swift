@@ -9,6 +9,8 @@ import AbendrotControl
 // abendrot status [--json] | get <key> | on | off | cozy on|off
 // abendrot set warmth <0..1 | --kelvin K> | mode <…> | max-warmth <K> | reveal-mode <…> | location …
 // abendrot exclude add|remove <bundle-id> | list
+// abendrot pause hour | sunrise | resume | fullscreen on|off
+// abendrot late-night [status] | on | off | bedtime <HH:MM> | warmth <0..1 | --kelvin K> | cozy on|off | ease <min>
 // abendrot reveal [--hold <seconds>]
 //
 // Every data-emitting command takes `--json`. Settings are persisted to CFPreferences (survive a
@@ -21,13 +23,10 @@ struct Abendrot: ParsableCommand {
         version: cliVersion,
         subcommands: [
             Status.self, Get.self, On.self, Off.self, Cozy.self,
-            SetCommand.self, Exclude.self, Pause.self, Reveal.self, Debug.self,
+            SetCommand.self, Exclude.self, Pause.self, LateNight.self, Reveal.self, Debug.self,
         ]
     )
 }
-
-/// The CLI's own semver (independent of the app's MARKETING_VERSION; surfaced in `status --json`).
-let cliVersion = "1.0.2"
 
 // Custom top-level entry (instead of `Abendrot.main()`) so ArgumentParser's parse and validation
 // failures honor the documented 0/2/3/4 exit contract. ArgumentParser exits parse/ValidationError

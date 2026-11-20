@@ -214,10 +214,14 @@ struct EngineExclusionTests {
 private actor GlobalResetGammaBackend: WarmthBackend {
     nonisolated let method: DisplayMethod = .gamma
     private(set) var warm: Set<DisplayIdentity> = []
+    private(set) var resetCount = 0
 
     func classify(_ id: DisplayIdentity) async -> Capability<Void> { .supported(()) }
     func apply(_ kelvin: Kelvin, to id: DisplayIdentity) async throws { warm.insert(id) }
-    func reset(_ id: DisplayIdentity) async throws { warm.removeAll() }
+    func reset(_ id: DisplayIdentity) async throws {
+        resetCount += 1
+        warm.removeAll()
+    }
 }
 
 @Suite("Engine per-display suspend on the gamma layer")
@@ -254,5 +258,76 @@ struct EngineGammaSuspendTests {
         await engine.setPreferredMethod(.overlay, for: displays[2])
 
         #expect(await gamma.warm == Set(displays.prefix(2)))
+    }
+
+    @Test("A display that stays suspended is reset once, and again after it has been warm")
+    func suspendedGammaDisplayResetsOnlyOnTransition() async {
+        let gamma = GlobalResetGammaBackend()
+        let displays = (1...3).map { DisplayIdentity.fixture(cgUUID: UUID(), displayID: CGDirectDisplayID($0)) }
+        let neighbours = Set(displays.filter { $0.currentDisplayID != 2 })
+        let engine = WarmthEngine.test(backends: [gamma], store: InMemoryDDCSnapshotStore(), displays: displays)
+        await engine.start()
+        await engine.setEnabled(true)
+        await engine.setScheduleMode(.alwaysOn)
+        await engine.setWarmth(WarmthLevel(strength: 0.8))
+        await engine.setExcludedApps(["com.x"])
+
+        await engine.setFrontmostApp("com.x", onDisplays: [2])
+        let afterSuspend = await gamma.resetCount
+        await engine.setWarmth(WarmthLevel(strength: 0.5))       // further passes while still suspended
+        await engine.setWarmth(WarmthLevel(strength: 0.6))
+        #expect(await gamma.resetCount == afterSuspend)
+        #expect(await gamma.warm == neighbours)
+
+        await engine.setFrontmostApp("com.y", onDisplays: [2])   // display 2 warms again
+        #expect(await gamma.warm == Set(displays))
+        await engine.setFrontmostApp("com.x", onDisplays: [2])   // and must be reset again
+        #expect(await gamma.resetCount == afterSuspend + 1)
+        #expect(await gamma.warm == neighbours)
+    }
+
+    @Test("A wake or hotplug resets a suspended display again and leaves its neighbours warm")
+    func reconfigurationResetsSuspendedGammaDisplayAgain() async {
+        let gamma = GlobalResetGammaBackend()
+        let displays = (1...3).map { DisplayIdentity.fixture(cgUUID: UUID(), displayID: CGDirectDisplayID($0)) }
+        let engine = WarmthEngine.test(backends: [gamma], store: InMemoryDDCSnapshotStore(), displays: displays)
+        await engine.start()
+        await engine.setEnabled(true)
+        await engine.setScheduleMode(.alwaysOn)
+        await engine.setWarmth(WarmthLevel(strength: 0.8))
+        await engine.setExcludedApps(["com.x"])
+        await engine.setFrontmostApp("com.x", onDisplays: [2])
+        let afterSuspend = await gamma.resetCount
+
+        await engine.simulateReconfiguration(present: displays)
+
+        #expect(await gamma.resetCount == afterSuspend + 1)
+        #expect(await gamma.warm == Set(displays.filter { $0.currentDisplayID != 2 }))
+    }
+
+    @Test("A suspended display handed to the window filter and back is not reset again")
+    func suspendedGammaDisplaySkipsResetAcrossWindowFilter() async {
+        let gamma = GlobalResetGammaBackend()
+        let windowFilter = FaultInjectingBackend(method: .windowFilter)
+        let displays = (1...3).map { DisplayIdentity.fixture(cgUUID: UUID(), displayID: CGDirectDisplayID($0)) }
+        let neighbours = Set(displays.filter { $0.currentDisplayID != 2 })
+        let engine = WarmthEngine.test(backends: [gamma, windowFilter], store: InMemoryDDCSnapshotStore(),
+                                       displays: displays)
+        await engine.start()
+        await engine.setEnabled(true)
+        await engine.setScheduleMode(.alwaysOn)
+        await engine.setWarmth(WarmthLevel(strength: 0.8))
+        await engine.setExcludedApps(["com.x"])
+        await engine.setFrontmostApp("com.x", onDisplays: [2])
+        let afterSuspend = await gamma.resetCount
+
+        await engine.setKeepsOtherWindowsWarm(true)              // display 2 moves to the window filter
+        #expect(await engine.state.displays.first { $0.id == displays[1] }?.appliedMethod == .windowFilter)
+        await engine.setKeepsOtherWindowsWarm(false)             // and back to the whole-display pause
+        #expect(await gamma.resetCount == afterSuspend)
+        #expect(await gamma.warm == neighbours)
+
+        await engine.setFrontmostApp("com.y", onDisplays: [2])
+        #expect(await gamma.warm == Set(displays))
     }
 }

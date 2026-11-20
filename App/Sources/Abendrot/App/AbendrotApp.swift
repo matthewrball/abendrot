@@ -244,6 +244,61 @@ enum ScreenshotHarness {
                 SettingsView(model: model, scrolls: false)
             }
         }
+        // The late-night stage on General: an ordinary night, then the nights that bend the strip.
+        // Places, dates and clocks are fixed so the shots do not depend on where or when they are taken.
+        func evening(_ month: Int, _ day: Int) -> Date {
+            var utc = Calendar(identifier: .gregorian)
+            utc.timeZone = TimeZone(identifier: "UTC")!
+            return utc.date(from: DateComponents(year: 2026, month: month, day: day, hour: 20))!
+        }
+        let berlin = (latitude: 52.52, longitude: 13.40, zone: "Europe/Berlin")
+        let oslo = (latitude: 59.91, longitude: 10.75, zone: "Europe/Oslo")
+        let tromso = (latitude: 69.65, longitude: 18.96, zone: "Europe/Oslo")
+        let dhaka = (latitude: 23.81, longitude: 90.41, zone: "Asia/Dhaka")
+        let nights: [(name: String, place: (latitude: Double, longitude: Double, zone: String), clock: String,
+                      at: Date, bedtime: Int, strength: Double, cozy: Bool)] = [
+            ("berlin-winter", berlin, berlin.zone, evening(11, 19), 23 * 60, 1, false),
+            ("berlin-cozy-1am", berlin, berlin.zone, evening(11, 19), 60, 1, true),
+            ("berlin-no-deeper", berlin, berlin.zone, evening(11, 19), 23 * 60, 0.4, false),
+            ("berlin-from-san-francisco", berlin, "America/Los_Angeles", evening(11, 19), 23 * 60, 1, false),
+            // Half a world from the Mac's clock: bedtime lands at the strip's left edge.
+            ("dhaka-from-san-francisco", dhaka, "America/Los_Angeles", evening(11, 19), 22 * 60, 1, false),
+            ("oslo-midsummer", oslo, oslo.zone, evening(6, 21), 22 * 60, 1, false),
+            ("tromso-polar-night", tromso, tromso.zone, evening(12, 21), 23 * 60, 1, false),
+            ("tromso-midnight-sun", tromso, tromso.zone, evening(6, 21), 23 * 60, 1, false),
+        ]
+        for night in nights {
+            let model = AppModel(previewState: MockWarmthState.warming)
+            model.userCoordinate = .init(latitude: night.place.latitude, longitude: night.place.longitude)
+            model.previewNight = (night.at, TimeZone(identifier: night.clock)!)
+            model.previewLateNight(bedtimeMinutes: night.bedtime, strength: night.strength, cozy: night.cozy)
+            shot("settings-general-latenight-\(night.name)", width: 720, colorScheme: colorScheme, into: out) {
+                SettingsView(model: model, scrolls: false)
+            }
+        }
+        // The ease length at both ends of its range: the ordinary night, then a midsummer night
+        // whose sunset falls inside the two-hour ease, so the ease starts at sunset instead.
+        // Then the nights whose ease ends after bedtime: a bedtime before sunset, and one seen
+        // from a clock half a world away. The handle carries no Kelvin there; "Eased" does.
+        for (name, place, clock, month, day, bedtime, ease) in [
+            ("berlin-ease-15", berlin, berlin.zone, 11, 19, 23 * 60, 15),
+            ("berlin-ease-120", berlin, berlin.zone, 11, 19, 23 * 60, 120),
+            ("berlin-midsummer-ease-15", berlin, berlin.zone, 6, 21, 23 * 60, 15),
+            ("berlin-midsummer-ease-120", berlin, berlin.zone, 6, 21, 23 * 60, 120),
+            ("oslo-bedtime-before-sunset-ease-15", oslo, oslo.zone, 6, 21, 22 * 60, 15),
+            ("oslo-bedtime-before-sunset-ease-120", oslo, oslo.zone, 6, 21, 22 * 60, 120),
+            ("oslo-late-sunset-ease-120", oslo, oslo.zone, 6, 21, 23 * 60, 120),
+            ("dhaka-from-san-francisco-3am-ease-15", dhaka, "America/Los_Angeles", 11, 19, 3 * 60, 15),
+            ("dhaka-from-san-francisco-3am-ease-120", dhaka, "America/Los_Angeles", 11, 19, 3 * 60, 120),
+        ] {
+            let model = AppModel(previewState: MockWarmthState.warming)
+            model.userCoordinate = .init(latitude: place.latitude, longitude: place.longitude)
+            model.previewNight = (evening(month, day), TimeZone(identifier: clock)!)
+            model.previewLateNight(bedtimeMinutes: bedtime, easeMinutes: ease)
+            shot("settings-general-latenight-\(name)", width: 720, colorScheme: colorScheme, into: out) {
+                SettingsView(model: model, scrolls: false)
+            }
+        }
         for (name, step, scheduleOption) in [("welcome", OnboardingStep.welcome, ScheduleModeOption.followSunset),
                                              ("schedule", .schedule, .followSunset),
                                              ("schedule-alwayson", .schedule, .alwaysOn),

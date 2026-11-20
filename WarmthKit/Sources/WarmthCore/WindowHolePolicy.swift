@@ -39,9 +39,20 @@ public enum WindowHolePolicy {
         }
     }
 
-    /// `kCGPopUpMenuWindowLevel`: menus, context menus, and menu-bar extra windows. AppKit sizes
-    /// these windows to the menu itself, so their bounds are what a person sees.
+    /// `kCGPopUpMenuWindowLevel`: menus, context menus, and menu-bar extra windows. On some Macs
+    /// the window is the menu. On others it carries a wide transparent margin on every side, and
+    /// the window list reports nothing that tells the two apart. See `observedMenuMargin`.
     public static let popUpMenuLayer = Int(CGWindowLevelForKey(.popUpMenuWindow))
+
+    /// `kCGMainMenuWindowLevel`: the menu bar, one window per display that shows it.
+    public static let mainMenuLayer = Int(CGWindowLevelForKey(.mainMenuWindow))
+
+    /// A menu opens this far below the menu bar.
+    static let menuGapBelowMenuBar: CGFloat = 1
+    /// How far a menu's top may sit from that line and still count as hanging from the menu bar.
+    static let menuAttachSlack: CGFloat = 2
+    /// The smallest menu a padded menu window can hold.
+    static let minMenuBody: CGFloat = 16
 
     /// The widest shadow margin a window may add around another window of the same app.
     static let maxShadowMargin: CGFloat = 128
@@ -54,6 +65,9 @@ public enum WindowHolePolicy {
     /// frames another window of the same app with a shadow margin is ignored, so a menu's shadow
     /// is never a hole or a warm box. Desktop windows, including Finder's, are never a hole.
     /// Overlays that are invisible or span the whole display are ignored.
+    /// `menuMargin` is the transparent margin of this Mac's menu windows, proven by
+    /// `observedMenuMargin`. Menu-level windows count at their bounds inset by it. Zero, the
+    /// default, means no margin has been proven: their bounds are then taken as the menu.
     /// `cornerRadius` follows a normal window's rounded corners, so the square outside the curve
     /// stays warm. A window that fills the display keeps a square hole: its corners are the
     /// screen's corners.
@@ -62,11 +76,14 @@ public enum WindowHolePolicy {
         owner: Int32,
         display: CGRect,
         cornerRadius: CGFloat = 0,
-        floatingOwners: Set<Int32> = []
+        floatingOwners: Set<Int32> = [],
+        menuMargin: CGFloat = 0
     ) -> [CGRect] {
         var region: [CGRect] = []
         var occluders: [CGRect] = []
         let shadows = shadowFrames(in: windows, display: display)
+        let menuBar = menuBar(in: windows, display: display)
+        let menuOwners = ownersWithMenuBarMenu(in: windows, menuBar: menuBar, menuMargin: menuMargin)
         for (index, window) in windows.enumerated() {
             guard window.alpha > 0.01, !window.bounds.isEmpty else { continue }
             // Desktop-level windows sit behind everything. Finder's desktop is one of them, so an
@@ -79,9 +96,17 @@ public enum WindowHolePolicy {
             let floating = window.layer > 0 && !covers
             let neutral = (window.owner == owner && (window.layer == 0 || floating))
                 || (floating && floatingOwners.contains(window.owner))
+            var bounds = window.bounds
+            if window.layer == popUpMenuLayer, !window.isMeasured {
+                // Another accessory app's window is trusted as a menu only while that app has a
+                // menu hanging from the menu bar. The volume control has other margins.
+                let isMenu = neutral || window.isRegularApp || menuOwners.contains(window.owner)
+                guard isMenu, let body = menuBody(of: window.bounds, menuMargin: menuMargin) else { continue }
+                bounds = body
+            }
             if neutral {
                 let radius = covers ? 0 : cornerRadius
-                for piece in roundedInterior(window.bounds, radius: radius) {
+                for piece in roundedInterior(bounds, radius: radius) {
                     let clipped = piece.intersection(display)
                     if !clipped.isNull, !clipped.isEmpty {
                         region += subtract(occluders, from: clipped)
@@ -90,10 +115,71 @@ public enum WindowHolePolicy {
                 continue
             }
             if countsAsOccluder(window, display: display) {
-                occluders.append(window.bounds)
+                occluders.append(bounds)
             }
         }
         return region
+    }
+
+    // MARK: Menu windows
+
+    /// The transparent margin around this Mac's menus, when a listed window proves one. A menu
+    /// opens right under the menu bar, so a menu-level window that starts above the display's top
+    /// edge is padded by the distance to that line. Nil without such a window: a context menu, a
+    /// menu that starts under the menu bar, or a display with no menu bar listed proves nothing.
+    /// Only a regular app's window counts. Notch tools and system overlays are accessory apps and
+    /// may sit above the top edge for other reasons.
+    public static func observedMenuMargin(in windows: [Window], displays: [CGRect]) -> CGFloat? {
+        var seen: CGFloat?
+        for display in displays {
+            guard let menuBar = menuBar(in: windows, display: display) else { continue }
+            let menuTop = menuBar.maxY + menuGapBelowMenuBar
+            for window in windows
+            where window.layer == popUpMenuLayer && window.isRegularApp && !window.isMeasured {
+                let bounds = window.bounds
+                guard window.alpha > 0.01, bounds.midX >= display.minX, bounds.midX < display.maxX else { continue }
+                let margin = menuTop - bounds.minY
+                guard bounds.minY < display.minY, margin <= maxShadowMargin,
+                      bounds.width >= 2 * margin + minMenuBody,
+                      bounds.height >= 2 * margin + minMenuBody else { continue }
+                seen = max(seen ?? 0, margin)
+            }
+        }
+        return seen
+    }
+
+    /// The menu inside a menu-level window. Nil when the window is too small to hold a padded menu.
+    private static func menuBody(of bounds: CGRect, menuMargin: CGFloat) -> CGRect? {
+        guard menuMargin > 0 else { return bounds }
+        guard bounds.width > 2 * menuMargin, bounds.height > 2 * menuMargin else { return nil }
+        return bounds.insetBy(dx: menuMargin, dy: menuMargin)
+    }
+
+    /// Accessory apps whose menu-level windows are menus. Without a proven margin every owner
+    /// counts, at its bounds. With one, only an owner with a menu hanging from the menu bar
+    /// counts; its other menu-level windows are submenus. With no menu bar listed none counts, so
+    /// such a window cuts no warm box.
+    private static func ownersWithMenuBarMenu(
+        in windows: [Window],
+        menuBar: CGRect?,
+        menuMargin: CGFloat
+    ) -> Set<Int32> {
+        let menus = windows.filter { $0.layer == popUpMenuLayer && !$0.isMeasured && $0.alpha > 0.01 }
+        guard menuMargin > 0 else { return Set(menus.map(\.owner)) }
+        guard let menuBar else { return [] }
+        let windowTop = menuBar.maxY + menuGapBelowMenuBar - menuMargin
+        return Set(menus.filter { abs($0.bounds.minY - windowTop) <= menuAttachSlack }.map(\.owner))
+    }
+
+    /// The menu bar on `display`: a menu-bar-level strip across its top edge.
+    private static func menuBar(in windows: [Window], display: CGRect) -> CGRect? {
+        windows.first { window in
+            let bounds = window.bounds
+            return window.layer == mainMenuLayer && window.alpha > 0.01
+                && abs(bounds.minX - display.minX) <= 1 && abs(bounds.minY - display.minY) <= 1
+                && abs(bounds.width - display.width) <= 1
+                && bounds.height >= 1 && bounds.height <= maxShadowMargin
+        }?.bounds
     }
 
     /// The rounded-rect interior of `rect`, as 1 pt rows in the corners plus the straight middle.

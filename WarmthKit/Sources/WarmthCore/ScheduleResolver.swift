@@ -7,10 +7,15 @@ import Foundation
 public struct ScheduleDecision: Hashable, Sendable {
     public let isActiveNow: Bool
     public let target: WarmthLevel
+    /// The exact colour temperature to show, when the schedule resolves one that the global
+    /// `target × warmest point` curve cannot express (the late-night stage). Nil everywhere else:
+    /// the Kelvin is then derived from `target` exactly as before.
+    public let kelvin: Kelvin?
 
-    public init(isActiveNow: Bool, target: WarmthLevel) {
+    public init(isActiveNow: Bool, target: WarmthLevel, kelvin: Kelvin? = nil) {
         self.isActiveNow = isActiveNow
         self.target = target
+        self.kelvin = kelvin
     }
 
     public static let inactive = ScheduleDecision(isActiveNow: false, target: .off)

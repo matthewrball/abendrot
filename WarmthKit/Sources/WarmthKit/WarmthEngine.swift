@@ -46,6 +46,16 @@ public actor WarmthEngine {
     /// to native BEFORE this run applies anything, then drained so it can't re-fire mid-session.
     private var staleKeys: Set<String> = []
 
+    /// Displays (by `persistentKey`) whose gamma table the neutral branch of `applyCurrentState`
+    /// has reset and not written since. Resets made elsewhere are not recorded, which only costs
+    /// one extra reset.
+    /// The gamma reset restores every display, so a display that stays neutral must not repeat it
+    /// on each pass: every repeat blanks its neighbours' ramps until they are rewritten.
+    private var gammaNeutralKeys: Set<String> = []
+    /// Set by the wake / hotplug reasserts: the system may rewrite gamma tables around those, so
+    /// the next pass resets neutral displays again instead of trusting `gammaNeutralKeys`.
+    private var gammaNeutralKeysAreStale = false
+
     /// Per-display user settings retained by STABLE identity even while a display is disconnected,
     /// so warmth / DDC opt-in / layer override survive an unplug→replug (stable identity,
     /// re-applies per-display state). Keyed by `persistentKey`.
@@ -367,6 +377,16 @@ public actor WarmthEngine {
     /// (the default). Set = use this exact coordinate for the solar sunset calc. No permission, no network.
     public func setUserCoordinate(_ coordinate: TimeZoneCoordinates.Coordinate?) async {
         box.userCoordinate = coordinate
+        await reapply()
+        publish()
+    }
+
+    /// The opt-in late-night stage of Sunset mode: deepen to `stage.target` by a clock bedtime and
+    /// hold it until sunrise. `nil` (the default) leaves Sunset exactly as it was. Ignored in
+    /// every other mode, and by displays with their own warmth.
+    public func setLateNightStage(_ stage: LateNightStage?) async {
+        guard stage != box.lateNight else { return }
+        box.lateNight = stage
         await reapply()
         publish()
     }
@@ -739,9 +759,11 @@ public actor WarmthEngine {
         scheduleCatchUpReasserts()
     }
 
-    /// Resend current warmth after display/session changes without an intervening neutral reset.
+    /// Resend current warmth after display/session changes. Warm displays are rewritten without a
+    /// neutral reset first; neutral gamma displays are reset once more.
     private func reassertDisplayWarmth() async {
         let before = box.value
+        gammaNeutralKeysAreStale = true
         await reapply()
         if box.value != before { publish() }
     }
@@ -862,6 +884,12 @@ public actor WarmthEngine {
     func simulateCatchUpReassert() async {
         await reassertDisplayWarmth()
     }
+
+    /// Test seam: pin the instant, place and calendar the schedule resolves against, so the solar
+    /// path (which hermetic tests otherwise skip) can be driven deterministically.
+    func setScheduleContextForTesting(date: Date, coordinate: TimeZoneCoordinates.Coordinate, calendar: Calendar) {
+        box.testScheduleContext = TestScheduleContext(date: date, coordinate: coordinate, calendar: calendar)
+    }
     #endif
 
     // MARK: ── Sunset ramp ticker ───────────────────────────────────────────────
@@ -915,6 +943,10 @@ public actor WarmthEngine {
 
     private func applyCurrentState() async {
         guard !isShuttingDown else { return }
+        if gammaNeutralKeysAreStale {
+            gammaNeutralKeys.removeAll()
+            gammaNeutralKeysAreStale = false
+        }
         let privateOn = box.value.privateAPIsEnabled
 
         // The Night Shift follower is "available" only when private APIs are on AND it reports a
@@ -930,22 +962,28 @@ public actor WarmthEngine {
         // Real sunset from the system timezone — zero permission (default). Resolved
         // fresh each pass so it tracks travel / DST. Live mode only: hermetic tests pass nil so the
         // fixed-window degrade stays deterministic (the solar ramp is unit-tested in WarmthCore).
-        let solarCoordinate: TimeZoneCoordinates.Coordinate? =
-            injectedDisplays == nil ? (box.userCoordinate ?? TimeZoneCoordinates.current()) : nil
+        let testContext = box.testScheduleContext
+        let solarCoordinate: TimeZoneCoordinates.Coordinate? = testContext?.coordinate
+            ?? (injectedDisplays == nil ? (box.userCoordinate ?? TimeZoneCoordinates.current()) : nil)
 
         let decision = ScheduleResolver.resolveWithDegrade(
             mode: box.value.scheduleMode,
-            at: Date(),
+            at: testContext?.date ?? Date(),
+            calendar: testContext?.calendar ?? .current,
             configuredWarmth: box.value.globalWarmth,
             nightShift: nightShift,
             privateAPIsEnabled: privateOn,
             fallback: configuration.fallbackSchedule,
-            solarCoordinate: solarCoordinate
+            solarCoordinate: solarCoordinate,
+            warmestPoint: box.value.warmestPoint,
+            lateNight: box.lateNight
         )
         box.value.isScheduleActiveNow = decision.isActiveNow
         // Publish the warmth actually being applied (the ramped target) so the popover can show a
         // live, locked Sunset readout: `.off` (neutral) by day, ramping to `globalWarmth` by night.
         box.value.resolvedWarmth = decision.target
+        // Only the late-night stage resolves a Kelvin of its own; nil keeps the usual curve.
+        box.value.resolvedKelvin = decision.isActiveNow ? decision.kelvin : nil
 
         // Global gates. Timed pause is global, like reveal. Exclusion and fullscreen are per display,
         // so a covered or excluded window leaves the other monitors warm.
@@ -1003,6 +1041,11 @@ public actor WarmthEngine {
             }
         }
         let windowOnlyIDs = collectedWindowOnly
+        // A display that follows the schedule takes the schedule's own Kelvin when it resolved one
+        // (the late-night stage). A display with its own warmth stays pinned to it.
+        func effectiveKelvin(_ display: DisplayState, _ warmth: WarmthLevel) -> Kelvin {
+            (display.warmthOverridden ? nil : decision.kelvin) ?? warmth.kelvin(warmestPoint: warmestPoint)
+        }
         func effectiveWarmth(_ display: DisplayState) -> WarmthLevel {
             let displayOn = engineOn
                 && !isDisplaySuspendedByExclusion(display.id)
@@ -1017,6 +1060,7 @@ public actor WarmthEngine {
             let target: DisplayMethod = windowOnlyIDs.contains(display.id) ? .windowFilter : layer
             if display.appliedMethod == .gamma && target != .gamma { return true }
             return layer == .gamma && effectiveWarmth(display) == .off
+                && !gammaNeutralKeys.contains(display.id.persistentKey)
         }
 
         for display in snapshot.filter(resetsGamma) + snapshot.filter({ !resetsGamma($0) }) {
@@ -1043,13 +1087,20 @@ public actor WarmthEngine {
                     await restoreHardwareAndClearDirty(id)
                 } else if layer == .colorFilter {
                     await resetColorFilter(id)
+                } else if layer == .gamma {
+                    if !gammaNeutralKeys.contains(key) {
+                        do {
+                            try await gamma.reset(id)
+                            gammaNeutralKeys.insert(key)
+                        } catch {}
+                    }
                 } else {
                     try? await backend(for: layer)?.reset(id)
                 }
                 appliedMethod = .off
                 lastError = pendingColorFilterError(for: id)
             } else if targetLayer == .windowFilter {
-                let kelvin = effective.kelvin(warmestPoint: warmestPoint)
+                let kelvin = effectiveKelvin(display, effective)
                 do {
                     try await windowFilter.apply(kelvin, to: id)
                     appliedMethod = .windowFilter
@@ -1065,7 +1116,7 @@ public actor WarmthEngine {
                     )
                 }
             } else {
-                let kelvin = effective.kelvin(warmestPoint: warmestPoint)
+                let kelvin = effectiveKelvin(display, effective)
                 if layer == .hardware {
                     // Write-ahead the dirty flag BEFORE the DDC write: a crash mid-write is then
                     // recoverable on the next launch (the panel does not restore itself).
@@ -1111,6 +1162,9 @@ public actor WarmthEngine {
                         )
                     }
                 } else {
+                    // Forget "neutral" before the write, so a failed or interrupted write still
+                    // gets a real reset the next time this display goes off.
+                    if layer == .gamma { gammaNeutralKeys.remove(key) }
                     try? await backend(for: layer)?.apply(kelvin, to: id)
                     appliedMethod = layer
                     lastError = nil
@@ -1252,6 +1306,13 @@ public actor WarmthEngine {
     }
 }
 
+/// A fixed instant, place and calendar for the schedule, injected by tests.
+struct TestScheduleContext {
+    let date: Date
+    let coordinate: TimeZoneCoordinates.Coordinate
+    let calendar: Calendar
+}
+
 // MARK: - WarmthStateBox (engine-private mutable container)
 
 /// Bundles the observable `WarmthState` with engine-private fields that aren't part of the
@@ -1260,6 +1321,10 @@ private struct WarmthStateBox {
     var value: WarmthState
     var excludedApps: Set<String> = []
     var userCoordinate: TimeZoneCoordinates.Coordinate? = nil
+    /// The opt-in late-night stage of Sunset mode. Nil = off.
+    var lateNight: LateNightStage? = nil
+    /// Set only by tests, to resolve the schedule against a fixed instant and place.
+    var testScheduleContext: TestScheduleContext? = nil
     /// The frontmost app's bundle id reported by the app-side `FrontmostAppMonitor` (nil = none /
     /// unresolvable). Engine-private — not part of the published surface.
     var frontmostBundleID: String? = nil

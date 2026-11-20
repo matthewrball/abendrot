@@ -142,6 +142,17 @@ enum Control {
         return cozy ? PreferenceKey.manualCozyWarmthStrength : PreferenceKey.manualWarmthStrength
     }
 
+    /// The late-night stage as saved, with the defaults and repairs the app applies on launch.
+    static func configuredLateNight() -> LateNightSnapshot {
+        LateNightSnapshot.configured(
+            enabled: configuredBool(PreferenceKey.lateNightEnabled),
+            bedtimeMinutes: configuredInt(PreferenceKey.bedtimeMinutes),
+            warmthStrength: configuredDouble(PreferenceKey.lateNightWarmthStrength),
+            cozy: configuredBool(PreferenceKey.lateNightCozy),
+            easeMinutes: configuredInt(PreferenceKey.lateNightEaseMinutes)
+        )
+    }
+
     /// The persisted exclusion set (sorted), empty when unset.
     static func configuredExcludedApps() -> [String] {
         guard let apps = preference(PreferenceKey.excludedApps) as? [String] else { return [] }
@@ -203,6 +214,22 @@ enum Control {
         if let fullscreen = patch.pausesForFullScreen {
             setPreference(PreferenceKey.pausesForFullScreen, fullscreen as CFBoolean)
         }
+        // Late-night stage: the five plain keys AppModel's setters write.
+        if let v = patch.lateNightEnabled {
+            setPreference(PreferenceKey.lateNightEnabled, v as CFBoolean)
+        }
+        if let v = patch.bedtimeMinutes {
+            setPreference(PreferenceKey.bedtimeMinutes, v as CFNumber)
+        }
+        if let v = patch.lateNightWarmthStrength {
+            setPreference(PreferenceKey.lateNightWarmthStrength, v as CFNumber)
+        }
+        if let v = patch.lateNightCozy {
+            setPreference(PreferenceKey.lateNightCozy, v as CFBoolean)
+        }
+        if let v = patch.lateNightEaseMinutes {
+            setPreference(PreferenceKey.lateNightEaseMinutes, v as CFNumber)
+        }
         synchronize()
     }
 
@@ -239,6 +266,11 @@ enum Control {
         return false
     }
 }
+
+/// The CLI's own semver (independent of the app's MARKETING_VERSION; surfaced in `status --json`).
+/// Declared here, not in `main.swift`: a global in `main.swift` is only initialised when the
+/// top-level code runs, so it would be empty under the test bundle.
+let cliVersion = "1.0.2"
 
 // MARK: - CLI exit codes
 //

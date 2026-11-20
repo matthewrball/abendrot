@@ -45,6 +45,72 @@ public enum ControlValidation {
         return kelvin
     }
 
+    // MARK: Late-night stage
+
+    /// "20:00–04:00 in 30-minute steps", built from the core's own range and step.
+    static var bedtimeRule: String {
+        let range = LateNightStage.bedtimeRange
+        return "\(LateNightSnapshot.clock(minutes: range.lowerBound))–\(LateNightSnapshot.clock(minutes: range.upperBound))"
+            + " in \(LateNightStage.bedtimeStep)-minute steps"
+    }
+
+    /// A bedtime is a clock time (minutes after midnight, 0..<1440) the app itself offers:
+    /// `LateNightStage.bedtimeRange` on `LateNightStage.bedtimeStep`. Rejected, never snapped.
+    public static func validatedBedtimeMinutes(_ minutes: Int) throws -> Int {
+        guard LateNightStage.isAllowedBedtime(minutesOfDay: minutes) else {
+            let got = (0..<1440).contains(minutes) ? LateNightSnapshot.clock(minutes: minutes) : "\(minutes) minutes"
+            throw ControlError.badInput("bedtime must be \(bedtimeRule), got \(got)")
+        }
+        return minutes
+    }
+
+    /// Parse a bedtime typed at the CLI and validate it. Accepts a 24-hour `HH:MM` (`23:30`,
+    /// `0:30`) or a 12-hour time with an am/pm suffix (`11pm`, `11:30pm`, `11:30 PM`). A bare
+    /// number is refused: `11` could mean either half of the day.
+    public static func parsedBedtime(_ raw: String) throws -> Int {
+        func bad() -> ControlError {
+            .badInput("bedtime must be a time like 23:30 or 11:30pm (\(bedtimeRule)), got '\(raw)'")
+        }
+        var text = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        var meridiem: String?
+        for (suffix, name) in [("a.m.", "am"), ("p.m.", "pm"), ("am", "am"), ("pm", "pm")] where text.hasSuffix(suffix) {
+            meridiem = name
+            text = String(text.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+            break
+        }
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        func number(_ part: Substring, digits: ClosedRange<Int>) -> Int? {
+            guard digits.contains(part.utf8.count), part.utf8.allSatisfy({ (48...57).contains($0) }) else { return nil }
+            return Int(part)
+        }
+        guard parts.count == 1 || parts.count == 2,
+              var hour = number(parts[0], digits: 1...2) else { throw bad() }
+        let minute: Int
+        if parts.count == 2 {
+            guard let parsed = number(parts[1], digits: 2...2), parsed < 60 else { throw bad() }
+            minute = parsed
+        } else {
+            guard meridiem != nil else { throw bad() }
+            minute = 0
+        }
+        if let meridiem {
+            guard (1...12).contains(hour) else { throw bad() }
+            hour = hour % 12 + (meridiem == "pm" ? 12 : 0)
+        } else {
+            guard (0...23).contains(hour) else { throw bad() }
+        }
+        return try validatedBedtimeMinutes(hour * 60 + minute)
+    }
+
+    /// The ease before bedtime is one of `LateNightStage.allowedEaseMinutes`.
+    public static func validatedEaseMinutes(_ minutes: Int) throws -> Int {
+        guard LateNightStage.allowedEaseMinutes.contains(minutes) else {
+            let allowed = LateNightStage.allowedEaseMinutes.map(String.init).joined(separator: ", ")
+            throw ControlError.badInput("ease must be one of \(allowed) minutes, got \(minutes)")
+        }
+        return minutes
+    }
+
     /// Reveal behaviour is the two `RevealMode` raw values.
     public static func validatedRevealMode(_ string: String) throws -> String {
         guard string == "hold" || string == "toggle" else {

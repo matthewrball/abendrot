@@ -25,6 +25,9 @@ extension ScheduleResolver {
     /// - fallback: the fixed evening window used only when no `solarCoordinate` is available.
     /// - solarCoordinate: the user's timezone-approximated location; when present, the degrade
     /// path uses a real solar sunset ramp instead of the fixed window. (Founder: zero-permission.)
+    /// - warmestPoint: the Kelvin that strength 1.0 maps to. Read only with `lateNight`.
+    /// - lateNight: the opt-in late-night stage. Applies to Sunset mode on the solar path only;
+    /// nil leaves every decision exactly as it was.
     public static func resolveWithDegrade(
         mode: ScheduleMode,
         at date: Date,
@@ -33,7 +36,9 @@ extension ScheduleResolver {
         nightShift: Bool?,
         privateAPIsEnabled: Bool,
         fallback: CustomSchedule,
-        solarCoordinate: TimeZoneCoordinates.Coordinate? = nil
+        solarCoordinate: TimeZoneCoordinates.Coordinate? = nil,
+        warmestPoint: Kelvin = .everydayWarmest,
+        lateNight: LateNightStage? = nil
     ) -> ScheduleDecision {
         switch mode {
         case .followSystemNightShift:
@@ -42,6 +47,18 @@ extension ScheduleResolver {
             // Abendrot computes its own sunset rather than deferring to Night Shift's schedule.
             // (Founder M1.)
             if let solarCoordinate {
+                // Opt-in late-night stage. Without one this is the unchanged call below.
+                if let lateNight {
+                    return solarRampDecision(
+                        at: date,
+                        latitude: solarCoordinate.latitude,
+                        longitude: solarCoordinate.longitude,
+                        configuredWarmth: configuredWarmth,
+                        warmestPoint: warmestPoint,
+                        lateNight: lateNight,
+                        calendar: calendar
+                    )
+                }
                 return solarRampDecision(
                     at: date,
                     latitude: solarCoordinate.latitude,

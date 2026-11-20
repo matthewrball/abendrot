@@ -68,6 +68,17 @@ public enum PreferenceKey {
     public static let pausesForFullScreen = "pausesForFullScreen"
     /// Experimental, direct download: keep only an excluded app's windows neutral.
     public static let keepsOtherWindowsWarm = "keepsOtherWindowsWarm"
+    /// Sunset mode's opt-in late-night stage. Absent means off.
+    public static let lateNightEnabled = "lateNightEnabled"
+    /// Bedtime as minutes after midnight on the Mac's clock, 0..<1440.
+    public static let bedtimeMinutes = "bedtimeMinutes"
+    /// Late-night warmth, 0.0–1.0 on the everyday curve.
+    public static let lateNightWarmthStrength = "lateNightWarmthStrength"
+    /// Go all the way to Cozy at bedtime instead of `lateNightWarmthStrength`.
+    public static let lateNightCozy = "lateNightCozy"
+    /// Length of the ease that ends at bedtime, in minutes: one of
+    /// `LateNightStage.allowedEaseMinutes`. Absent means the default 60.
+    public static let lateNightEaseMinutes = "lateNightEaseMinutes"
 }
 
 // MARK: - DisplaySettingsPreference

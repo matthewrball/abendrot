@@ -77,22 +77,20 @@ struct Status: ParsableCommand {
 // MARK: - get <key>
 
 struct Get: ParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Print one configured setting (warmth, mode, max-warmth, cozy, reveal-mode, location, enabled).")
-    @Argument(help: "warmth | mode | max-warmth | cozy | reveal-mode | location | enabled") var key: String
+    static let configuration = CommandConfiguration(abstract: "Print one configured setting (warmth, mode, max-warmth, cozy, reveal-mode, location, enabled, late-night, bedtime, late-night-…).")
+    @Argument(help: ArgumentHelp(stringLiteral: GetReport.keyList)) var key: String
     @Flag(name: .long, help: "Emit machine-readable JSON.") var json = false
 
     func run() throws {
         if json {
             guard let object = GetReport.jsonObject(forKey: key) else {
-                throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | cozy | reveal-mode | location | enabled",
-                           code: CLIExit.badInput)
+                throw fail("unknown key '\(key)' — try \(GetReport.keyList)", code: CLIExit.badInput)
             }
             print(object)
             return
         }
         guard let (_, value) = GetReport.value(forKey: key) else {
-            throw fail("unknown key '\(key)' — try warmth | mode | max-warmth | cozy | reveal-mode | location | enabled",
-                       code: CLIExit.badInput)
+            throw fail("unknown key '\(key)' — try \(GetReport.keyList)", code: CLIExit.badInput)
         }
         print(value)
     }
@@ -130,7 +128,7 @@ struct Cozy: ParsableCommand {
     }
 }
 
-/// Parse the `on`/`off` verb shared by `cozy`. Returns nil for anything else (caller → exit 2).
+/// Parse the `on`/`off` verb shared by `cozy`, `pause fullscreen` and `late-night cozy`. Returns nil for anything else (caller → exit 2).
 func boolFromOnOff(_ raw: String) -> Bool? {
     switch raw.lowercased() {
     case "on": return true
@@ -403,6 +401,169 @@ struct PauseFullScreen: ParsableCommand {
     func run() throws {
         try applySettings(try PauseCommand.fullscreenPatch(state), json: json)
     }
+}
+
+// MARK: - late-night
+//
+// Sunset mode's opt-in second stage ("Deepen late at night" in Settings → General): the evening
+// still arrives with the real sunset, then eases warmer before a bedtime and holds until sunrise.
+// Each command sends only its own field, through the same persist → post → ack path as `set`.
+
+enum LateNightCommand {
+    static func enabledPatch(_ on: Bool) -> SettingsPatch {
+        SettingsPatch(lateNightEnabled: on)
+    }
+
+    static func bedtimePatch(_ raw: String) throws -> SettingsPatch {
+        SettingsPatch(bedtimeMinutes: try requireValid { try ControlValidation.parsedBedtime(raw) })
+    }
+
+    static func cozyPatch(_ state: String) throws -> SettingsPatch {
+        guard let on = boolFromOnOff(state) else {
+            throw fail("late-night cozy must be on|off, got \(state)", code: CLIExit.badInput)
+        }
+        return SettingsPatch(lateNightCozy: on)
+    }
+
+    static func easePatch(_ minutes: Int) throws -> SettingsPatch {
+        SettingsPatch(lateNightEaseMinutes: try requireValid { try ControlValidation.validatedEaseMinutes(minutes) })
+    }
+
+    /// A strength, or a Kelvin mapped onto the everyday curve the late-night slider uses (1900K at
+    /// 1.0, whatever the evening's own ceiling is). Leaves "Switch to Cozy at bedtime" alone, as
+    /// the Settings slider does.
+    static func warmthPatch(strength: Double?, kelvin: Int?) throws -> (patch: SettingsPatch, note: String?) {
+        if strength != nil, kelvin != nil {
+            throw fail("give a strength OR --kelvin, not both", code: CLIExit.badInput)
+        }
+        if let kelvin {
+            let validKelvin = try requireValid { try ControlValidation.validatedKelvin(kelvin) }
+            let warmest = Kelvin.everydayWarmest
+            let note = validKelvin < warmest.value
+                ? "\(validKelvin)K is warmer than late-night warmth reaches (\(warmest.value)K); applied the warmest point — use `abendrot late-night cozy on` to go warmer"
+                : nil
+            let strength = WarmthCurve.strength(forKelvin: Kelvin(validKelvin), warmestPoint: warmest)
+            return (SettingsPatch(lateNightWarmthStrength: strength), note)
+        }
+        guard let strength else {
+            throw fail("provide a strength 0.0–1.0 or --kelvin <K>", code: CLIExit.badInput)
+        }
+        let valid = try requireValid { try ControlValidation.validatedStrength(strength) }
+        return (SettingsPatch(lateNightWarmthStrength: valid), nil)
+    }
+
+    /// What a saved change is still waiting on, given the stage and mode as they were before it:
+    /// another schedule mode, the stage being off, or Cozy-at-bedtime overriding a warmth.
+    static func notes(for patch: SettingsPatch, mode: ControlScheduleMode, stage: LateNightSnapshot) -> [String] {
+        var notes: [String] = []
+        let enabled = patch.lateNightEnabled ?? stage.enabled
+        if patch.lateNightEnabled == nil, !enabled {
+            notes.append("late-night is off; saved for when it is on (abendrot late-night on)")
+        }
+        if patch.lateNightWarmthStrength != nil, patch.lateNightCozy ?? stage.cozy {
+            notes.append("'Switch to Cozy at bedtime' is on, so bedtime still goes to Cozy; saved this warmth for when it is off (abendrot late-night cozy off)")
+        }
+        if patch.lateNightEnabled != false, mode != .sunset {
+            notes.append("late-night takes effect in Sunset mode (current mode: \(mode.rawValue)); saved")
+        }
+        return notes
+    }
+
+    /// Print the notes to stderr (stdout stays `ok` / the JSON result), then run the shared flow.
+    static func apply(_ patch: SettingsPatch, note: String? = nil, json: Bool) throws {
+        let pending = notes(for: patch, mode: Control.configuredScheduleMode(), stage: Control.configuredLateNight())
+        ([note].compactMap { $0 } + pending).forEach(printErr)
+        try applySettings(patch, json: json)
+    }
+}
+
+struct LateNight: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "late-night",
+        abstract: "Sunset mode's late-night stage: ease warmer before a bedtime, then hold until sunrise.",
+        discussion: "Off by default, and it only acts in Sunset mode; in other modes the settings are saved for later. With no subcommand, prints the configured stage.",
+        subcommands: [
+            LateNightStatus.self, LateNightOn.self, LateNightOff.self, LateNightBedtime.self,
+            LateNightWarmth.self, LateNightCozy.self, LateNightEase.self,
+        ],
+        defaultSubcommand: LateNightStatus.self
+    )
+}
+
+struct LateNightStatus: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "status",
+        abstract: "Show the configured late-night stage (the default when no subcommand is given)."
+    )
+    @Flag(name: .long, help: "Emit machine-readable JSON.") var json = false
+
+    func run() throws {
+        // A running app's snapshot knows what the stage is doing right now; otherwise saved values.
+        let live = Control.runningSnapshot()
+        let stage = live?.lateNight ?? Control.configuredLateNight()
+        let mode = live?.scheduleMode ?? Control.configuredScheduleMode()
+        print(json ? LateNightReport.json(stage: stage, mode: mode) : LateNightReport.human(stage: stage, mode: mode))
+    }
+}
+
+struct LateNightOn: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "on", abstract: "Turn the late-night stage on.")
+    @Flag(name: .long) var json = false
+    func run() throws { try LateNightCommand.apply(LateNightCommand.enabledPatch(true), json: json) }
+}
+
+struct LateNightOff: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "off", abstract: "Turn the late-night stage off. Its settings are kept.")
+    @Flag(name: .long) var json = false
+    func run() throws { try LateNightCommand.apply(LateNightCommand.enabledPatch(false), json: json) }
+}
+
+struct LateNightBedtime: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "bedtime",
+        abstract: "Set the bedtime the ease ends at: 20:00–04:00 in 30-minute steps."
+    )
+    @Argument(help: "24-hour HH:MM (23:30), or 12-hour with am/pm (11:30pm). On this Mac's clock.") var time: String
+    @Flag(name: .long) var json = false
+
+    func run() throws { try LateNightCommand.apply(try LateNightCommand.bedtimePatch(time), json: json) }
+}
+
+struct LateNightWarmth: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "warmth",
+        abstract: "Set late-night warmth 0.0–1.0 (1.0 = 1900K), or target a Kelvin with --kelvin."
+    )
+    @Argument(help: "Warmth strength 0.0–1.0 (omit when using --kelvin).") var strength: Double?
+    @Option(name: .long, help: "Target Kelvin (500–6500) instead of a strength; the warmest it reaches is 1900.") var kelvin: Int?
+    @Flag(name: .long) var json = false
+
+    func run() throws {
+        let result = try LateNightCommand.warmthPatch(strength: strength, kelvin: kelvin)
+        try LateNightCommand.apply(result.patch, note: result.note, json: json)
+    }
+}
+
+struct LateNightCozy: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "cozy",
+        abstract: "Switch to Cozy (~500K) at bedtime instead of the late-night warmth: on or off."
+    )
+    @Argument(help: "on | off") var state: String
+    @Flag(name: .long) var json = false
+
+    func run() throws { try LateNightCommand.apply(try LateNightCommand.cozyPatch(state), json: json) }
+}
+
+struct LateNightEase: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "ease",
+        abstract: "Set how long the ease before bedtime takes: 15, 30, 45, 60, 90 or 120 minutes."
+    )
+    @Argument(help: "Minutes: 15 | 30 | 45 | 60 | 90 | 120 (default 60).") var minutes: Int
+    @Flag(name: .long) var json = false
+
+    func run() throws { try LateNightCommand.apply(try LateNightCommand.easePatch(minutes), json: json) }
 }
 
 // MARK: - reveal

@@ -39,6 +39,8 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
     public var pauseKind: String?
     /// Standing fullscreen-cover preference. Nil on a snapshot that predates the field.
     public var pausesForFullScreen: Bool?
+    /// Sunset mode's late-night stage as configured. Nil on a snapshot that predates the field.
+    public var lateNight: LateNightSnapshot?
     public var displays: [DisplaySnapshot]
 
     /// The single source of truth for "is cozy on": the warmest-point ceiling is below the everyday
@@ -67,6 +69,7 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
         pauseUntil: Date? = nil,
         pauseKind: String? = nil,
         pausesForFullScreen: Bool? = nil,
+        lateNight: LateNightSnapshot? = nil,
         displays: [DisplaySnapshot]
     ) {
         self.schemaVersion = schemaVersion
@@ -90,6 +93,7 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
         self.pauseUntil = pauseUntil
         self.pauseKind = pauseKind
         self.pausesForFullScreen = pausesForFullScreen
+        self.lateNight = lateNight
         self.displays = displays
     }
 
@@ -105,6 +109,94 @@ public struct ControlStateSnapshot: Codable, Sendable, Equatable {
     public static func directoryURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent(AbendrotControl.appSupportDirectoryName, isDirectory: true)
+    }
+}
+
+// MARK: - LateNightSnapshot
+//
+// Sunset mode's opt-in late-night stage, as `status --json` reports it under `lateNight`. The
+// whole object is optional on `ControlStateSnapshot`, and the fields added after the first four
+// settings are optional here, so an older app's snapshot and an older CLI both keep decoding with
+// no `schemaVersion` bump. `bedtime` and `kelvin` are derived in the init, so the app's snapshot
+// and the CLI's configured-values fallback cannot disagree on either.
+public struct LateNightSnapshot: Codable, Sendable, Equatable {
+    public var enabled: Bool
+    /// Bedtime on the Mac's own clock, 24-hour "HH:MM".
+    public var bedtime: String
+    /// The same bedtime as minutes after midnight, 0..<1440.
+    public var bedtimeMinutes: Int
+    /// The saved late-night warmth, 0.0–1.0 on the everyday curve. Kept while `cozy` overrides it.
+    public var warmthStrength: Double
+    /// The colour the screen reaches at bedtime: Cozy's floor when `cozy`, else `warmthStrength`
+    /// on the everyday curve.
+    public var kelvin: Int
+    /// Go all the way to Cozy at bedtime.
+    public var cozy: Bool
+    /// Length of the ease that ends at bedtime, in minutes.
+    public var easeMinutes: Int?
+    /// What the stage is doing to the screen right now, from the running app only. One of the
+    /// `LateNightPhase` raw values:
+    /// - `inactive`: not contributing (daytime, the evening before the ease, another mode, the
+    /// stage or warmth off), or the screen is held neutral by a pause or a reveal;
+    /// - `easing`: getting warmer over the ease before bed;
+    /// - `held`: the ease is done and nothing is moving;
+    /// - `releasing`: on its way back to day, after sunrise or over the last hour before midday.
+    ///
+    /// Nil when the app is closed. A plain string, so a consumer must tolerate values it does not
+    /// know: `releasing` was added after the first three without a `schemaVersion` bump.
+    public var phase: String?
+
+    public static let phaseInactive = LateNightPhase.inactive.rawValue
+    public static let phaseEasing = LateNightPhase.easing.rawValue
+    public static let phaseHeld = LateNightPhase.held.rawValue
+    public static let phaseReleasing = LateNightPhase.releasing.rawValue
+
+    public init(
+        enabled: Bool,
+        bedtimeMinutes: Int,
+        warmthStrength: Double,
+        cozy: Bool,
+        easeMinutes: Int?,
+        phase: String? = nil
+    ) {
+        self.enabled = enabled
+        self.bedtime = Self.clock(minutes: bedtimeMinutes)
+        self.bedtimeMinutes = ((bedtimeMinutes % 1440) + 1440) % 1440
+        self.warmthStrength = warmthStrength
+        self.kelvin = Self.targetKelvin(strength: warmthStrength, cozy: cozy).value
+        self.cozy = cozy
+        self.easeMinutes = easeMinutes
+        self.phase = phase
+    }
+
+    /// The stage from raw saved preferences (nil = key absent), with the defaults and repairs the
+    /// app applies on launch. The app's load and the CLI's app-closed fallback both come through
+    /// here, so `get` and `status` report what the app will actually use.
+    public static func configured(
+        enabled: Bool?, bedtimeMinutes: Int?, warmthStrength: Double?, cozy: Bool?, easeMinutes: Int?,
+        phase: String? = nil
+    ) -> LateNightSnapshot {
+        LateNightSnapshot(
+            enabled: enabled ?? false,
+            bedtimeMinutes: bedtimeMinutes.map(LateNightStage.clampedBedtime(minutesOfDay:))
+                ?? LateNightStage.defaultBedtimeMinutes,
+            warmthStrength: warmthStrength.flatMap { try? ControlValidation.validatedStrength($0) } ?? 1,
+            cozy: cozy ?? false,
+            easeMinutes: easeMinutes.map(LateNightStage.nearestEaseMinutes(to:)) ?? LateNightStage.defaultEaseMinutes,
+            phase: phase
+        )
+    }
+
+    /// The one rule for the late-night colour, shared by the app, the snapshot and the CLI.
+    public static func targetKelvin(strength: Double, cozy: Bool) -> Kelvin {
+        cozy ? .warmestSupported : WarmthLevel(strength: strength).kelvin(warmestPoint: .everydayWarmest)
+    }
+
+    /// Minutes after midnight (any integer; wrapped into one day) as 24-hour "HH:MM".
+    public static func clock(minutes: Int) -> String {
+        let clock = ((minutes % 1440) + 1440) % 1440
+        let hour = clock / 60, minute = clock % 60
+        return (hour < 10 ? "0" : "") + String(hour) + ":" + (minute < 10 ? "0" : "") + String(minute)
     }
 }
 

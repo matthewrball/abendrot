@@ -33,6 +33,17 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
     public var clearPause: Bool?
     /// Standing fullscreen-cover preference.
     public var pausesForFullScreen: Bool?
+    /// Sunset mode's opt-in late-night stage, on or off.
+    public var lateNightEnabled: Bool?
+    /// Bedtime as minutes after midnight (0..<1440). Validated by
+    /// `ControlValidation.validatedBedtimeMinutes`: 20:00–04:00 in 30-minute steps.
+    public var bedtimeMinutes: Int?
+    /// Late-night warmth, 0.0–1.0 on the everyday curve. Validated like `globalWarmthStrength`.
+    public var lateNightWarmthStrength: Double?
+    /// Go all the way to Cozy at bedtime instead of `lateNightWarmthStrength`.
+    public var lateNightCozy: Bool?
+    /// Length of the ease that ends at bedtime. Validated by `ControlValidation.validatedEaseMinutes`.
+    public var lateNightEaseMinutes: Int?
 
     public init(
         isEnabled: Bool? = nil,
@@ -48,7 +59,12 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         pauseUntil: Date? = nil,
         pauseKind: String? = nil,
         clearPause: Bool? = nil,
-        pausesForFullScreen: Bool? = nil
+        pausesForFullScreen: Bool? = nil,
+        lateNightEnabled: Bool? = nil,
+        bedtimeMinutes: Int? = nil,
+        lateNightWarmthStrength: Double? = nil,
+        lateNightCozy: Bool? = nil,
+        lateNightEaseMinutes: Int? = nil
     ) {
         self.isEnabled = isEnabled
         self.globalWarmthStrength = globalWarmthStrength
@@ -64,6 +80,11 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
         self.pauseKind = pauseKind
         self.clearPause = clearPause
         self.pausesForFullScreen = pausesForFullScreen
+        self.lateNightEnabled = lateNightEnabled
+        self.bedtimeMinutes = bedtimeMinutes
+        self.lateNightWarmthStrength = lateNightWarmthStrength
+        self.lateNightCozy = lateNightCozy
+        self.lateNightEaseMinutes = lateNightEaseMinutes
     }
 
     /// True when no field is set — used by the app to decide a message is a no-op patch.
@@ -73,6 +94,8 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
             && userLatitude == nil && userLongitude == nil && clearUserCoordinate == nil
             && cozy == nil && pauseUntil == nil && pauseKind == nil
             && clearPause == nil && pausesForFullScreen == nil
+            && lateNightEnabled == nil && bedtimeMinutes == nil && lateNightWarmthStrength == nil
+            && lateNightCozy == nil && lateNightEaseMinutes == nil
     }
 }
 

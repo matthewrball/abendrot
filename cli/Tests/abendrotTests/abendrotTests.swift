@@ -100,6 +100,84 @@ final class abendrotTests: XCTestCase {
         XCTAssertEqual(WarmthCurve.strength(forKelvin: warmest, warmestPoint: warmest), 1.0, accuracy: 0.02)
     }
 
+    func testWarmthCurveIsExactAtTheEnds() {
+        // The search used to stop one step short of the end: 1900K came back as
+        // 0.9999999701976776 (1 − 2⁻²⁵), and that is what was stored and printed.
+        for warmest in [Kelvin.everydayWarmest, Kelvin.warmestSupported, Kelvin(2700)] {
+            XCTAssertEqual(WarmthCurve.strength(forKelvin: warmest, warmestPoint: warmest), 1.0)
+            XCTAssertEqual(WarmthCurve.strength(forKelvin: Kelvin.warmestSupported, warmestPoint: warmest), 1.0)
+            XCTAssertEqual(WarmthCurve.strength(forKelvin: Kelvin.neutral, warmestPoint: warmest), 0.0)
+        }
+        // In between, the strength returned really produces the Kelvin asked for.
+        for kelvin in stride(from: 1900, through: 6500, by: 50) {
+            let strength = WarmthCurve.strength(forKelvin: Kelvin(kelvin), warmestPoint: .everydayWarmest)
+            XCTAssertEqual(WarmthLevel(strength: strength).kelvin(warmestPoint: .everydayWarmest).value, kelvin)
+        }
+    }
+
+    func testLateNightWarmthIsStoredExactlyAsAsked() throws {
+        for asked in [1.0, 0.0, 0.5, 0.8, 0.1, 0.35] {
+            XCTAssertEqual(try LateNightCommand.warmthPatch(strength: asked, kelvin: nil).patch.lateNightWarmthStrength, asked)
+        }
+        XCTAssertEqual(try LateNightCommand.warmthPatch(strength: nil, kelvin: 1900).patch.lateNightWarmthStrength, 1.0)
+        XCTAssertEqual(try LateNightCommand.warmthPatch(strength: nil, kelvin: 1000).patch.lateNightWarmthStrength, 1.0)
+        XCTAssertEqual(try LateNightCommand.warmthPatch(strength: nil, kelvin: 6500).patch.lateNightWarmthStrength, 0.0)
+
+        // Through the same CFPreferences write and read the persist path uses, in a throwaway domain.
+        let domain = "app.abendrot.cli-tests.\(UUID().uuidString)" as CFString
+        defer {
+            CFPreferencesSetAppValue("strength" as CFString, nil, domain)
+            CFPreferencesAppSynchronize(domain)
+        }
+        let stored = try XCTUnwrap(try LateNightCommand.warmthPatch(strength: nil, kelvin: 1900).patch.lateNightWarmthStrength)
+        CFPreferencesSetAppValue("strength" as CFString, stored as CFNumber, domain)
+        CFPreferencesAppSynchronize(domain)
+        let read = (CFPreferencesCopyAppValue("strength" as CFString, domain) as? NSNumber)?.doubleValue
+        XCTAssertEqual(read, 1.0)
+        let report = LateNightSnapshot.configured(
+            enabled: true, bedtimeMinutes: 1380, warmthStrength: read, cozy: false, easeMinutes: 60
+        )
+        XCTAssertEqual(report.warmthStrength, 1.0)
+        XCTAssertEqual(String(describing: report.warmthStrength), "1.0")
+    }
+
+    func testLateNightReportsEveryPhase() {
+        func stage(_ phase: String?) -> LateNightSnapshot {
+            LateNightSnapshot.configured(
+                enabled: true, bedtimeMinutes: 1380, warmthStrength: 1, cozy: false, easeMinutes: 60, phase: phase
+            )
+        }
+        func now(_ phase: String?) -> String? {
+            LateNightReport.human(stage: stage(phase), mode: .sunset)
+                .split(separator: "\n").first { $0.hasPrefix("Now:") }.map(String.init)
+        }
+        XCTAssertEqual(now("easing"), "Now:        easing")
+        XCTAssertEqual(now("held"), "Now:        holding the late-night colour")
+        XCTAssertEqual(now("releasing"), "Now:        releasing back to day")
+        XCTAssertEqual(now("inactive"), "Now:        not active")
+        XCTAssertNil(now(nil))
+        XCTAssertNil(now("somethingNew"), "an unknown phase prints no Now line")
+
+        let plan = "Late night: " + LateNightReport.plan(stage(nil))
+        XCTAssertEqual(StatusReport.lateNightLine(stage: stage("easing"), mode: .sunset), plan + " (easing now)")
+        XCTAssertEqual(StatusReport.lateNightLine(stage: stage("held"), mode: .sunset), plan + " (holding now)")
+        XCTAssertEqual(StatusReport.lateNightLine(stage: stage("releasing"), mode: .sunset), plan + " (releasing now)")
+        XCTAssertEqual(StatusReport.lateNightLine(stage: stage("inactive"), mode: .sunset), plan)
+        XCTAssertEqual(StatusReport.lateNightLine(stage: stage("somethingNew"), mode: .sunset), plan)
+    }
+
+    func testCorruptStoredLateNightNumbersReportSanely() {
+        // What NSNumber.intValue / doubleValue hand back for `defaults write … -float -1e30`.
+        let stage = LateNightSnapshot.configured(
+            enabled: true, bedtimeMinutes: .min, warmthStrength: -1e30, cozy: false, easeMinutes: .min
+        )
+        XCTAssertFalse(LateNightReport.human(stage: stage, mode: .sunset).isEmpty)
+        XCTAssertNotNil(StatusReport.lateNightLine(stage: stage, mode: .sunset))
+        XCTAssertEqual(stage.easeMinutes, 15)
+        XCTAssertEqual(stage.warmthStrength, 1)
+        XCTAssertEqual(NSNumber(value: -1e30 as Float).intValue, Int.min)
+    }
+
     func testWarmthCurveTracksEngineForwardMapping() {
         // For a few strengths, invert the Kelvin the engine would produce and recover the strength.
         let warmest = Kelvin(1900)
@@ -307,6 +385,244 @@ final class abendrotTests: XCTestCase {
         try Data(repeating: 0, count: SecureAtomicFileWriter.maxSnapshotBytes + 1).write(to: state)
 
         XCTAssertNil(Control.readLiveness(fileURL: state))
+    }
+
+    // MARK: late-night (Sunset mode's second stage)
+
+    private func stage(
+        enabled: Bool = true, bedtime: Int = 1380, strength: Double = 1, cozy: Bool = false,
+        ease: Int? = 60, phase: String? = nil
+    ) -> LateNightSnapshot {
+        LateNightSnapshot(enabled: enabled, bedtimeMinutes: bedtime, warmthStrength: strength,
+                          cozy: cozy, easeMinutes: ease, phase: phase)
+    }
+
+    func testLateNightCommandsParse() throws {
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night"]) is LateNightStatus)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "--json"]) is LateNightStatus)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "status", "--json"]) is LateNightStatus)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "on"]) is LateNightOn)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "off"]) is LateNightOff)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "bedtime", "23:30"]) is LateNightBedtime)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "warmth", "0.8"]) is LateNightWarmth)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "warmth", "--kelvin", "2200"]) is LateNightWarmth)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "cozy", "on"]) is LateNightCozy)
+        XCTAssertTrue(try Abendrot.parseAsRoot(["late-night", "ease", "90"]) is LateNightEase)
+        XCTAssertThrowsError(try Abendrot.parseAsRoot(["late-night", "maybe"]))
+        XCTAssertThrowsError(try Abendrot.parseAsRoot(["late-night", "ease", "soon"]))
+        XCTAssertThrowsError(try Abendrot.parseAsRoot(["late-night", "bedtime"]))
+    }
+
+    func testLateNightOnOffPatchCarriesOnlyTheToggle() {
+        let on = LateNightCommand.enabledPatch(true)
+        XCTAssertEqual(on, SettingsPatch(lateNightEnabled: true))
+        XCTAssertNil(on.isEnabled, "late-night on must not touch the master toggle")
+        XCTAssertNil(on.scheduleMode, "late-night on must not switch the mode")
+        XCTAssertEqual(LateNightCommand.enabledPatch(false), SettingsPatch(lateNightEnabled: false))
+    }
+
+    func testLateNightBedtimePatchAcceptsOfferedTimes() throws {
+        XCTAssertEqual(try LateNightCommand.bedtimePatch("23:30"), SettingsPatch(bedtimeMinutes: 1410))
+        XCTAssertEqual(try LateNightCommand.bedtimePatch("20:00").bedtimeMinutes, 1200)
+        XCTAssertEqual(try LateNightCommand.bedtimePatch("00:30").bedtimeMinutes, 30)
+        XCTAssertEqual(try LateNightCommand.bedtimePatch("04:00").bedtimeMinutes, 240)
+        XCTAssertEqual(try LateNightCommand.bedtimePatch("11pm").bedtimeMinutes, 1380)
+        XCTAssertEqual(try LateNightCommand.bedtimePatch("11:30pm").bedtimeMinutes, 1410)
+        XCTAssertEqual(try LateNightCommand.bedtimePatch("12:30AM").bedtimeMinutes, 30)
+    }
+
+    func testLateNightBedtimePatchRejectsOffStepOutOfRangeAndGarbage() {
+        for raw in ["23:15", "22:45", "11:10pm"] {            // off the half hour
+            assertBadInput(try { _ = try LateNightCommand.bedtimePatch(raw) }())
+        }
+        for raw in ["19:30", "04:30", "12:00", "7pm", "5am"] {   // outside 20:00–04:00
+            assertBadInput(try { _ = try LateNightCommand.bedtimePatch(raw) }())
+        }
+        for raw in ["", "late", "23", "2300", "24:00", "23:60", "13pm", "23:00pm", "11p", "23:00:00"] {
+            assertBadInput(try { _ = try LateNightCommand.bedtimePatch(raw) }())
+        }
+    }
+
+    func testLateNightCozyPatchAcceptsOnlyOnOrOff() throws {
+        XCTAssertEqual(try LateNightCommand.cozyPatch("on"), SettingsPatch(lateNightCozy: true))
+        XCTAssertEqual(try LateNightCommand.cozyPatch("OFF"), SettingsPatch(lateNightCozy: false))
+        XCTAssertNil(try LateNightCommand.cozyPatch("on").cozy, "must not flip the everyday Cozy mode")
+        assertBadInput(try { _ = try LateNightCommand.cozyPatch("maybe") }())
+    }
+
+    func testLateNightWarmthPatchFromStrength() throws {
+        let result = try LateNightCommand.warmthPatch(strength: 0.5, kelvin: nil)
+        XCTAssertEqual(result.patch, SettingsPatch(lateNightWarmthStrength: 0.5))
+        XCTAssertNil(result.note)
+        XCTAssertNil(result.patch.lateNightCozy, "the Settings slider leaves 'Switch to Cozy' alone; so does this")
+        XCTAssertNil(result.patch.globalWarmthStrength, "must not touch the evening warmth")
+        XCTAssertEqual(try LateNightCommand.warmthPatch(strength: 0, kelvin: nil).patch.lateNightWarmthStrength, 0)
+        XCTAssertEqual(try LateNightCommand.warmthPatch(strength: 1, kelvin: nil).patch.lateNightWarmthStrength, 1)
+        assertBadInput(try { _ = try LateNightCommand.warmthPatch(strength: 1.5, kelvin: nil) }())
+        assertBadInput(try { _ = try LateNightCommand.warmthPatch(strength: -0.1, kelvin: nil) }())
+        assertBadInput(try { _ = try LateNightCommand.warmthPatch(strength: .nan, kelvin: nil) }())
+    }
+
+    func testLateNightWarmthPatchFromKelvinUsesTheEverydayCurve() throws {
+        for target in [1900, 2200, 2700, 3400, 5000] {
+            let result = try LateNightCommand.warmthPatch(strength: nil, kelvin: target)
+            let strength = try XCTUnwrap(result.patch.lateNightWarmthStrength)
+            let landed = WarmthLevel(strength: strength).kelvin(warmestPoint: .everydayWarmest).value
+            XCTAssertEqual(landed, target, accuracy: 15, "\(target)K")
+            XCTAssertNil(result.note)
+        }
+        // Warmer than the slider reaches: lands on its warmest end and says how to go further.
+        let floor = try LateNightCommand.warmthPatch(strength: nil, kelvin: 1200)
+        XCTAssertEqual(try XCTUnwrap(floor.patch.lateNightWarmthStrength), 1, accuracy: 0.001)
+        XCTAssertTrue(try XCTUnwrap(floor.note).contains("late-night cozy on"))
+        assertBadInput(try { _ = try LateNightCommand.warmthPatch(strength: nil, kelvin: 100) }())
+        assertBadInput(try { _ = try LateNightCommand.warmthPatch(strength: nil, kelvin: 9000) }())
+    }
+
+    func testLateNightWarmthPatchRejectsBothOrNeither() {
+        assertBadInput(try { _ = try LateNightCommand.warmthPatch(strength: 0.5, kelvin: 2200) }())
+        assertBadInput(try { _ = try LateNightCommand.warmthPatch(strength: nil, kelvin: nil) }())
+    }
+
+    func testLateNightEasePatchAcceptsOnlyTheAllowedLengths() throws {
+        for minutes in [15, 30, 45, 60, 90, 120] {
+            XCTAssertEqual(try LateNightCommand.easePatch(minutes), SettingsPatch(lateNightEaseMinutes: minutes))
+        }
+        for minutes in [0, -30, 10, 20, 50, 75, 100, 121, 180] {
+            assertBadInput(try { _ = try LateNightCommand.easePatch(minutes) }())
+        }
+    }
+
+    func testLateNightNotesSayWhenAChangeWaitsOnSomethingElse() {
+        // Sunset mode, stage on, nothing in the way: nothing to add.
+        XCTAssertEqual(LateNightCommand.notes(for: SettingsPatch(bedtimeMinutes: 1380), mode: .sunset, stage: stage()), [])
+        // Another mode: saved, but says where it acts.
+        let manual = LateNightCommand.notes(for: SettingsPatch(lateNightEnabled: true), mode: .alwaysOn, stage: stage(enabled: false))
+        XCTAssertEqual(manual.count, 1)
+        XCTAssertTrue(manual[0].contains("Sunset mode"), manual[0])
+        XCTAssertTrue(manual[0].contains("always-on"), manual[0])
+        // Stage off: a bedtime is saved for later. Turning it on or off needs no such note.
+        let off = LateNightCommand.notes(for: SettingsPatch(bedtimeMinutes: 1380), mode: .sunset, stage: stage(enabled: false))
+        XCTAssertTrue(off.contains { $0.contains("late-night on") }, "\(off)")
+        XCTAssertEqual(LateNightCommand.notes(for: SettingsPatch(lateNightEnabled: true), mode: .sunset, stage: stage(enabled: false)), [])
+        XCTAssertEqual(LateNightCommand.notes(for: SettingsPatch(lateNightEnabled: false), mode: .sunset, stage: stage()), [])
+        // Warmth while 'Switch to Cozy at bedtime' is on: saved, Cozy still wins, as in Settings.
+        let cozy = LateNightCommand.notes(for: SettingsPatch(lateNightWarmthStrength: 0.5), mode: .sunset, stage: stage(cozy: true))
+        XCTAssertTrue(cozy.contains { $0.contains("late-night cozy off") }, "\(cozy)")
+        XCTAssertEqual(LateNightCommand.notes(for: SettingsPatch(lateNightWarmthStrength: 0.5), mode: .sunset, stage: stage()), [])
+    }
+
+    func testGetReportLateNightKeys() {
+        let night = stage(bedtime: 30, strength: 0.5, cozy: false, ease: 90)
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night", stage: night)?.value, "on")
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night", stage: stage(enabled: false))?.value, "off")
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "bedtime", stage: night)?.value, "00:30")
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night-warmth", stage: night)?.value, "0.50")
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night-kelvin", stage: night)?.value, String(night.kelvin))
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night-cozy", stage: night)?.value, "off")
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night-ease", stage: night)?.value, "90")
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night-ease", stage: stage(ease: nil))?.value, "60")
+        XCTAssertNil(GetReport.lateNightValue(forKey: "late-night-nonsense", stage: night))
+        XCTAssertNil(GetReport.lateNightValue(forKey: "warmth", stage: night))
+        // Cozy at bedtime reports Cozy's floor and keeps the saved strength.
+        let cozy = stage(strength: 0.5, cozy: true)
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night-kelvin", stage: cozy)?.value,
+                       String(Kelvin.warmestSupported.value))
+        XCTAssertEqual(GetReport.lateNightValue(forKey: "late-night-warmth", stage: cozy)?.value, "0.50")
+    }
+
+    func testGetResolvesEveryDocumentedKey() {
+        // Every key the help text names resolves, against whatever is saved on this Mac (read-only).
+        XCTAssertEqual(GetReport.keys.suffix(6), [
+            "late-night", "bedtime", "late-night-warmth", "late-night-kelvin", "late-night-cozy", "late-night-ease",
+        ])
+        for key in GetReport.keys {
+            XCTAssertNotNil(GetReport.value(forKey: key), key)
+            XCTAssertNotNil(GetReport.jsonObject(forKey: key), key)
+        }
+        XCTAssertTrue(GetReport.jsonObject(forKey: "bedtime")!.hasPrefix("{\"bedtime\":\""))
+        XCTAssertTrue(GetReport.jsonObject(forKey: "late-night")!.hasPrefix("{\"late-night\":\"o"))
+        XCTAssertTrue(GetReport.jsonObject(forKey: "late-night-ease")!.hasPrefix("{\"late-night-ease\":"))
+        XCTAssertFalse(GetReport.jsonObject(forKey: "late-night-ease")!.contains("\":\""), "ease is a bare number")
+    }
+
+    func testLateNightReportJSONShape() throws {
+        let night = stage(bedtime: 1410, strength: 0.9, cozy: false, ease: 45, phase: "easing")
+        let json = LateNightReport.json(stage: night, mode: .sunset)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(Set(object.keys), [
+            "enabled", "bedtime", "bedtimeMinutes", "warmthStrength", "kelvin", "cozy", "easeMinutes",
+            "phase", "scheduleMode", "activeInCurrentMode",
+        ])
+        XCTAssertEqual(object["enabled"] as? Bool, true)
+        XCTAssertEqual(object["bedtime"] as? String, "23:30")
+        XCTAssertEqual(object["bedtimeMinutes"] as? Int, 1410)
+        XCTAssertEqual(object["warmthStrength"] as? Double, 0.9)
+        XCTAssertEqual(object["kelvin"] as? Int, night.kelvin)
+        XCTAssertEqual(object["cozy"] as? Bool, false)
+        XCTAssertEqual(object["easeMinutes"] as? Int, 45)
+        XCTAssertEqual(object["phase"] as? String, "easing")
+        XCTAssertEqual(object["scheduleMode"] as? String, "sunset")
+        XCTAssertEqual(object["activeInCurrentMode"] as? Bool, true)
+
+        // App closed: no phase key. Another mode, or the stage off: not active.
+        let closed = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(LateNightReport.json(stage: stage(), mode: .alwaysOn).utf8)) as? [String: Any])
+        XCTAssertNil(closed["phase"])
+        XCTAssertEqual(closed["scheduleMode"] as? String, "always-on")
+        XCTAssertEqual(closed["activeInCurrentMode"] as? Bool, false)
+        let disabled = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(LateNightReport.json(stage: stage(enabled: false), mode: .sunset).utf8)) as? [String: Any])
+        XCTAssertEqual(disabled["activeInCurrentMode"] as? Bool, false)
+    }
+
+    func testLateNightReportHumanText() {
+        let text = LateNightReport.human(stage: stage(bedtime: 1410, strength: 1, ease: 90), mode: .sunset)
+        XCTAssertTrue(text.contains("Late night: on"), text)
+        XCTAssertTrue(text.contains("23:30"), text)
+        XCTAssertTrue(text.contains("1 hr 30 min"), text)
+        XCTAssertTrue(text.contains("1900K"), text)
+        XCTAssertFalse(text.contains("Sunset mode"), text)
+
+        let manual = LateNightReport.human(stage: stage(cozy: true), mode: .alwaysOn)
+        XCTAssertTrue(manual.contains("takes effect in Sunset mode"), manual)
+        XCTAssertTrue(manual.contains("Cozy"), manual)
+        XCTAssertTrue(LateNightReport.human(stage: stage(enabled: false), mode: .sunset).contains("Late night: off"))
+        XCTAssertTrue(LateNightReport.human(stage: stage(phase: "held"), mode: .sunset).contains("holding"))
+    }
+
+    func testStatusGainsALateNightLineOnlyWhenTheStageIsOn() {
+        func snapshot(_ lateNight: LateNightSnapshot?, mode: ControlScheduleMode = .sunset) -> ControlStateSnapshot {
+            ControlStateSnapshot(
+                appVersion: "1.0.2", appBuild: "7", pid: 1, appLaunchID: "L", updatedAt: Date(),
+                lastAppliedRequestID: nil, isEnabled: true, scheduleMode: mode, isScheduleActiveNow: true,
+                isRevealing: false, globalWarmthStrength: 0.7, globalKelvin: 2412, warmestPointKelvin: 1900,
+                revealMode: "hold", excludedApps: [], lateNight: lateNight, displays: []
+            )
+        }
+        XCTAssertFalse(StatusReport.human(snapshot: snapshot(nil), running: true).contains("Late night"))
+        XCTAssertFalse(StatusReport.human(snapshot: snapshot(stage(enabled: false)), running: true).contains("Late night"))
+        let on = StatusReport.human(snapshot: snapshot(stage(bedtime: 1410, ease: 30, phase: "easing")), running: true)
+        XCTAssertTrue(on.contains("Late night: bedtime 23:30"), on)
+        XCTAssertTrue(on.contains("30 min"), on)
+        XCTAssertTrue(on.contains("easing now"), on)
+        // A snapshot left by an app that died keeps its last phase; it must not be reported.
+        let stale = snapshot(stage(bedtime: 1410, ease: 30, phase: "easing"))
+        XCTAssertFalse(StatusReport.human(snapshot: stale, running: false).contains("easing now"))
+        XCTAssertFalse(StatusReport.json(snapshot: stale, running: false).contains("\"phase\""))
+        XCTAssertTrue(StatusReport.json(snapshot: stale, running: true).contains("\"phase\":\"easing\""))
+        let manual = StatusReport.human(snapshot: snapshot(stage(), mode: .alwaysOn), running: true)
+        XCTAssertTrue(manual.contains("takes effect in Sunset mode"), manual)
+
+        // status --json carries the whole object, and an older app's snapshot simply has none.
+        let json = StatusReport.json(snapshot: snapshot(stage(bedtime: 1410, ease: 30)), running: true)
+        let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        let lateNight = object?["lateNight"] as? [String: Any]
+        XCTAssertEqual(lateNight?["bedtime"] as? String, "23:30")
+        XCTAssertEqual(lateNight?["easeMinutes"] as? Int, 30)
+        let older = try? JSONSerialization.jsonObject(
+            with: Data(StatusReport.json(snapshot: snapshot(nil), running: true).utf8)) as? [String: Any]
+        XCTAssertNil(older?["lateNight"])
     }
 
     private func assertBadInput(_ expression: @autoclosure () throws -> Void, file: StaticString = #filePath, line: UInt = #line) {

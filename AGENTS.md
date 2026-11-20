@@ -85,13 +85,17 @@ abendrot status --json   # see the JSON field reference below
 Print one configured (persisted) setting. Works whether or not the app is running, because
 it reads the preference domain directly.
 
-`<key>` is one of: `warmth` | `mode` | `max-warmth` | `cozy` | `reveal-mode` | `location` | `enabled`
+`<key>` is one of: `warmth` | `mode` | `max-warmth` | `cozy` | `reveal-mode` | `location` | `enabled` |
+`late-night` | `bedtime` | `late-night-warmth` | `late-night-kelvin` | `late-night-cozy` | `late-night-ease`
 
 ```sh
 abendrot get warmth          # 0.80
 abendrot get mode            # always-on
 abendrot get location        # auto    (or "37.77 -122.42" when set manually)
 abendrot get enabled --json  # {"enabled":true}
+abendrot get late-night      # on | off
+abendrot get bedtime         # 23:00   (24-hour, on this Mac's clock)
+abendrot get late-night-ease # 60      (minutes)
 ```
 
 ### `abendrot on [--json]` / `abendrot off [--json]`
@@ -204,6 +208,49 @@ abendrot pause resume
 abendrot pause fullscreen on
 ```
 
+### `abendrot late-night [status] [--json]` / `on` / `off` / `bedtime <time>` / `warmth [<strength>] [--kelvin <kelvin>]` / `cozy on|off` / `ease <minutes>`
+
+Sunset mode's opt-in second stage ("Deepen late at night" in Settings → General). The evening
+still arrives with the real sunset; the screen then eases warmer before a bedtime and holds
+until sunrise. Off by default. It only acts in **Sunset mode**: in `always-on` or `off` the
+commands still save the value, exit 0, and print `late-night takes effect in Sunset mode` to
+stderr. Each setting command accepts `--json` and sends only its own field.
+
+- `late-night` or `late-night status` prints the configured stage. With `--json` it prints the
+  `lateNight` object from `status --json` plus `scheduleMode` and `activeInCurrentMode`.
+  While the app runs in Sunset mode with the stage on, a `Now:` line says what the stage is doing:
+  `easing`, `holding the late-night colour`, `releasing back to day` or `not active`. `status`
+  appends `(easing now)`, `(holding now)` or `(releasing now)` to its `Late night:` line.
+- `on` / `off` turn the stage on or off. `off` keeps the other settings.
+- `bedtime <time>` takes a 24-hour `HH:MM` (`23:30`, `00:30`) or a 12-hour time with am/pm
+  (`11pm`, `11:30pm`, `1am`), on this Mac's clock. Allowed: `20:00`–`04:00` in 30-minute steps.
+  Anything else exits 2; it is never rounded.
+- `warmth <strength>` takes `0.0`–`1.0` on the everyday curve (`1.0` = 1900K, whatever the
+  max-warmth ceiling is). `--kelvin <K>` (`500`–`6500`) maps a Kelvin onto that curve; a Kelvin
+  below 1900 lands on 1900 and says so. Setting a warmth does **not** turn `cozy` off, as in
+  Settings: while `late-night cozy` is on, bedtime still goes to Cozy and a note says so.
+- `cozy on|off` goes to Cozy (~500K) at bedtime instead of the late-night warmth.
+- `ease <minutes>` sets how long the ease that ends at bedtime takes: `15`, `30`, `45`, `60`,
+  `90` or `120`. Default `60`. Any other number exits 2.
+
+A late-night level no warmer than the evening changes nothing. If the sun sets less than the
+ease length before bedtime, the ease starts at sunset instead and ends that much later.
+
+```sh
+abendrot late-night on
+abendrot late-night bedtime 23:30
+abendrot late-night ease 90
+abendrot late-night warmth 1.0
+abendrot late-night
+# Late night: on
+# Bedtime: 23:30
+# Ease: 1 hr 30 min before bedtime
+# Warmth: 1.00 (~1900K)
+# Cozy: off
+abendrot late-night --json
+# {"activeInCurrentMode":true,"bedtime":"23:30","bedtimeMinutes":1410,"cozy":false,"easeMinutes":90,"enabled":true,"kelvin":1900,"phase":"inactive","scheduleMode":"sunset","warmthStrength":1}
+```
+
 ### `abendrot debug fullscreen [--delay <seconds>]`
 
 Print what Abendrot sees when it decides whether each screen is full screen: the verdict per
@@ -254,6 +301,12 @@ prints usage.
 | Pause until sunrise | `pause sunrise` | Date + String | next local sunrise | Exit 2 if warmth is off, or if sunrise is unavailable for this location today. |
 | End a timed pause | `pause resume` | flag | — | Clears `pauseUntil` and `pauseKind`. Does not require warmth to be on. |
 | Full-screen pause | `pause fullscreen on/off` | Bool | `on` or `off` | Exit 2 for any other word. A standing preference, not a timed pause. |
+| Late-night stage | `late-night on` / `late-night off` | Bool | — | Off by default. Acts in Sunset mode only; saved in any mode. |
+| Bedtime | `late-night bedtime <time>` | Int (minutes after midnight) | `20:00`–`04:00`, 30-minute steps | `HH:MM` or `11:30pm`. Off-step or out of range exits 2. |
+| Late-night warmth | `late-night warmth <strength>` | Double | `0.0`–`1.0` | Everyday curve: `1.0` = 1900K. Leaves `late-night cozy` as it is. |
+| Late-night warmth by Kelvin | `late-night warmth --kelvin <K>` | Int | `500`–`6500` | Mapped onto the everyday curve; 1900 and below store exactly `1.0`, 6500 stores `0.0`. |
+| Cozy at bedtime | `late-night cozy on/off` | Bool | `on` or `off` | Go to `~500K` at bedtime instead of the late-night warmth. |
+| Ease before bedtime | `late-night ease <minutes>` | Int | `15` \| `30` \| `45` \| `60` \| `90` \| `120` | Default `60`. The ease ends at bedtime. |
 | Excluded apps | `exclude add\|remove <bundle-id>` | String | a macOS bundle id | e.g. `com.apple.dt.Xcode`. |
 | Reveal (transient) | `reveal [--hold <s>]` | Double | `0`–`300` seconds, default `3` | Live-only; not persisted. |
 
@@ -269,7 +322,8 @@ full live snapshot plus the CLI-only fields. When the app is **not** running, `r
 `false` and a reduced set of last-saved fields is surfaced (the persisted values:
 `isEnabled`, `scheduleMode`, `globalWarmthStrength` if set, `warmestPointKelvin`,
 `revealMode` if set, `excludedApps`, `pauseUntil` and `pauseKind` while a timed pause is
-still active, and `pausesForFullScreen` if set). Always check `running` first.
+still active, `pausesForFullScreen` if set, and `lateNight` without its `phase`). Always check
+`running` first.
 
 Example (app running):
 
@@ -297,6 +351,16 @@ Example (app running):
   "pauseUntil": "2026-11-09T06:12:00Z",
   "pauseKind": "untilSunrise",
   "pausesForFullScreen": true,
+  "lateNight": {
+    "enabled": true,
+    "bedtime": "23:00",
+    "bedtimeMinutes": 1380,
+    "warmthStrength": 1,
+    "kelvin": 1900,
+    "cozy": false,
+    "easeMinutes": 60,
+    "phase": "inactive"
+  },
   "displays": [
     {
       "id": "37D8832A-2D66-02CA-B9F7-8F30A301B230",
@@ -335,7 +399,21 @@ Example (app running):
 | `pauseUntil` | String (ISO-8601) or absent | Timed-pause end. Present only while that end is still in the future. Turning warmth off clears it. |
 | `pauseKind` | String or absent | `oneHour` \| `untilSunrise`. Present only with `pauseUntil`. |
 | `pausesForFullScreen` | Bool or absent | Standing preference: pause a display while a window covers it or while it shows a native full-screen Space. Independent of the timed pause. |
+| `lateNight` | object or absent | Sunset mode's late-night stage (see below). Absent from an app older than the stage. |
 | `displays` | [object] | Per-display status (see below). |
+
+The `lateNight` object (also what `abendrot late-night --json` prints):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `enabled` | Bool | The stage is turned on. It still only acts in Sunset mode. |
+| `bedtime` | String | Bedtime on this Mac's clock, 24-hour `HH:MM`. |
+| `bedtimeMinutes` | Int | The same bedtime as minutes after midnight, `0`–`1439`. |
+| `warmthStrength` | Double | Saved late-night warmth, `0.0`–`1.0` on the everyday curve. Kept while `cozy` overrides it. |
+| `kelvin` | Int | The colour reached at bedtime: `500` when `cozy`, else `warmthStrength` on the everyday curve. |
+| `cozy` | Bool | Go to Cozy at bedtime. |
+| `easeMinutes` | Int or absent | Length of the ease that ends at bedtime. Treat absent as `60`. |
+| `phase` | String or absent | Running app only. `inactive`: the stage is not changing the screen now (day, the evening before the ease, another mode, a late-night level no warmer than the evening), or the screen is held neutral by a timed, until-sunrise or full-screen pause or a reveal. `easing`: getting warmer before bed. `held`: the ease is done and nothing is moving. `releasing`: cooling back to day, after sunrise or over the last hour before midday when the sun does not rise. A sunrise that stops the ease short goes straight from `easing` to `releasing`; the stage is never held part-way. Treat an unknown value as "something else": `releasing` was added without a `schemaVersion` bump, and more may follow. |
 
 Each `displays[]` object:
 
@@ -423,6 +501,11 @@ Domain: `app.abendrot.Abendrot`
 | `pauseKind` | String | `oneHour` \| `untilSunrise` | `defaults write app.abendrot.Abendrot pauseKind -string oneHour` |
 | `pausesForFullScreen` | Bool | standing full-screen preference | `defaults write app.abendrot.Abendrot pausesForFullScreen -bool true` |
 | `keepsOtherWindowsWarm` | Bool | experimental, direct download: keep only an excluded app's windows neutral | `defaults write app.abendrot.Abendrot keepsOtherWindowsWarm -bool true` |
+| `lateNightEnabled` | Bool or absent | Sunset mode's opt-in late-night stage: ease warmer before bedtime, hold until sunrise. Absent = off | `defaults write app.abendrot.Abendrot lateNightEnabled -bool true` |
+| `bedtimeMinutes` | Number (Int) | bedtime as minutes after midnight on the Mac's clock, 8 PM–4 AM: `1200`–`1439` or `0`–`240`, on a 30-minute step. A time outside the range is moved to the nearer end, and a time off the step (`1395`, 23:15) snaps to the nearest step, the earlier one on a tie. Absent = `1380` (11 PM) | `defaults write app.abendrot.Abendrot bedtimeMinutes -int 1380` |
+| `lateNightWarmthStrength` | Number (Double) | `0.0`–`1.0` on the everyday curve (1900 K at `1.0`). Absent or invalid = `1.0`. A level no warmer than the evening changes nothing | `defaults write app.abendrot.Abendrot lateNightWarmthStrength -float 1.0` |
+| `lateNightCozy` | Bool or absent | go to the Cozy floor at bedtime instead of `lateNightWarmthStrength` | `defaults write app.abendrot.Abendrot lateNightCozy -bool true` |
+| `lateNightEaseMinutes` | Number (Int) or absent | length of the ease that ends at bedtime: `15`, `30`, `45`, `60`, `90` or `120`. Any other number is moved to the nearest of these. Absent = `60` | `defaults write app.abendrot.Abendrot lateNightEaseMinutes -int 60` |
 | `displaySettings` | **Data** (JSON of validated per-display settings) | app-managed; use the CLI/UI | not a plain scalar — do not hand-edit |
 | `userLatitude` | Number (Double) | `-90.0`–`90.0` | `defaults write app.abendrot.Abendrot userLatitude -float 37.77` |
 | `userLongitude` | Number (Double) | `-180.0`–`180.0` | `defaults write app.abendrot.Abendrot userLongitude -float -122.42` |

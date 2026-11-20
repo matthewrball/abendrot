@@ -123,6 +123,10 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
 
     private var cornerRadius: CGFloat?
 
+    /// The transparent margin around this Mac's menu windows. Zero until a menu window proves
+    /// one. It depends on the system, so it is kept after tracking stops. It is never stored.
+    private var menuMargin: CGFloat = 0
+
     private var bundleIDs: [pid_t: String] = [:]
     private var excludedBundleIDs: Set<String> = []
     /// The excluded app that was frontmost before the screenshot tool took focus.
@@ -163,6 +167,11 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
         let windows = listedWindows()
         let floating = floatingOwners(in: windows, besides: owner)
         noteFloatingWindows(in: windows, frontExcluded: frontExcluded)
+        if windows.contains(where: { $0.layer == WindowHolePolicy.popUpMenuLayer }),
+           let proven = WindowHolePolicy.observedMenuMargin(
+               in: windows, displays: Self.onlineDisplayBounds().map(\.bounds)) {
+            menuMargin = proven
+        }
         for (_, panel) in panels {
             panel.setSharingType(capturing ? .none : .readOnly)
             let display = CGDisplayBounds(panel.displayID)
@@ -171,7 +180,8 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
                 owner: owner,
                 display: display,
                 cornerRadius: cornerRadius ?? 0,
-                floatingOwners: floating)
+                floatingOwners: floating,
+                menuMargin: menuMargin)
             panel.setTiles(WindowHolePolicy.warmTiles(around: region, in: display), display: display)
         }
     }

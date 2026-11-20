@@ -65,6 +65,32 @@ abendrot \- control the Abendrot screen-warmth app from the terminal or an AI as
 .BR on | off
 .RB [ \-\-json ]
 .br
+.B abendrot late-night
+.RB [ status ]
+.RB [ \-\-json ]
+.br
+.B abendrot late-night
+.BR on | off
+.RB [ \-\-json ]
+.br
+.B abendrot late-night bedtime
+.I time
+.RB [ \-\-json ]
+.br
+.B abendrot late-night warmth
+.RI [ strength ]
+.RB [ \-\-kelvin
+.IR kelvin ]
+.RB [ \-\-json ]
+.br
+.B abendrot late-night cozy
+.BR on | off
+.RB [ \-\-json ]
+.br
+.B abendrot late-night ease
+.I minutes
+.RB [ \-\-json ]
+.br
 .B abendrot debug fullscreen
 .RB [ \-\-delay
 .IR seconds ]
@@ -114,7 +140,8 @@ not running, the last-saved (persisted) values are shown instead.
 Print one configured setting.
 .I key
 is one of
-.BR warmth ", " mode ", " max-warmth ", " cozy ", " reveal-mode ", " location ", " enabled .
+.BR warmth ", " mode ", " max-warmth ", " cozy ", " reveal-mode ", " location ", " enabled ,
+.BR late-night ", " bedtime ", " late-night-warmth ", " late-night-kelvin ", " late-night-cozy ", " late-night-ease .
 Reads the preference domain directly, so it works whether or not the app is running.
 .TP
 .B on \fR[\fB\-\-json\fR]
@@ -185,6 +212,56 @@ enabled), or clear an active timed pause with
 Enable or disable automatic per-display warmth pause while an app covers the display or uses a
 native full-screen Space.
 .TP
+.B late-night \fR[\fBstatus\fR] [\fB\-\-json\fR]
+Show Sunset mode's late-night stage as configured: on or off, bedtime, ease length, warmth and
+Cozy. The stage is off by default and only acts in Sunset mode; in other modes its settings are
+saved and a note on standard error says so.
+While the app runs, a
+.B Now:
+line (and the
+.B phase
+field of
+.BR \-\-json )
+says what the stage is doing:
+.B easing
+(getting warmer before bed),
+.B held
+(the ease is done),
+.B releasing
+(cooling back to day after sunrise, or over the last hour before midday when the sun does not rise) or
+.B inactive
+(not changing the screen, or the screen is paused or revealed). A sunrise that stops the ease short
+goes straight from easing to releasing. Scripts should tolerate phase values they do not know.
+.TP
+.B late-night \fBon\fR|\fBoff\fR \fR[\fB\-\-json\fR]
+Turn the late-night stage on or off. The evening still arrives with the real sunset; with the
+stage on, the screen eases warmer before bedtime and holds until sunrise.
+.TP
+.B late-night bedtime \fItime\fR \fR[\fB\-\-json\fR]
+Set the bedtime the ease ends at, on this Mac's clock. A 24-hour
+.B HH:MM
+or a 12-hour time with am/pm
+.RB ( 11:30pm ).
+Allowed:
+.BR 20:00 \(en 04:00
+in 30-minute steps. Other times are rejected (exit 2), not rounded.
+.TP
+.B late-night warmth \fR[\fIstrength\fR] [\fB\-\-kelvin\fR \fIkelvin\fR] [\fB\-\-json\fR]
+Set the late-night warmth:
+.BR 0.0 \(en 1.0
+on the everyday curve (1.0 = 1900K), or a Kelvin with
+.BR \-\-kelvin .
+Does not change
+.BR "late-night cozy" .
+.TP
+.B late-night cozy \fBon\fR|\fBoff\fR \fR[\fB\-\-json\fR]
+Go to Cozy (~500K) at bedtime instead of the late-night warmth.
+.TP
+.B late-night ease \fIminutes\fR \fR[\fB\-\-json\fR]
+Set how long the ease before bedtime takes:
+.BR 15 ", " 30 ", " 45 ", " 60 ", " 90 " or " 120
+minutes (default 60).
+.TP
 .B debug fullscreen \fR[\fB\-\-delay\fR \fIseconds\fR]
 Inspect full-screen detection state per display (window owners, layers, and sizes only, never
 window titles). Optional delay 0\(en60 seconds.
@@ -210,7 +287,7 @@ prints an object of the form
 .TP
 .B \-\-kelvin \fIkelvin\fR
 For
-.BR "set warmth" :
+.BR "set warmth" " and " "late-night warmth" :
 target an effective Kelvin
 .RB ( 500 \(en 6500 )
 instead of a strength.

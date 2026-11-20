@@ -87,6 +87,11 @@ struct GeneralTab: View {
                             .foregroundStyle(Theme.Color.textFaint)
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+
+                    // Sunset's opt-in second stage sits with the sunset it extends.
+                    LateNightSection(model: model)
+                        .padding(.top, 6)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
                 }
             }
             .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: ScheduleModeOption(model.state.scheduleMode))

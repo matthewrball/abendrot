@@ -271,12 +271,19 @@ struct PopoverView: View {
         Binding(get: { model.state.resolvedWarmth.strength }, set: { _ in })
     }
 
+    /// With the evening at zero and a late-night stage on, the first warmth comes before bedtime.
+    private var sunsetNeutralCaption: String {
+        model.lateNightEnabled && model.eveningKelvin >= .neutral
+            ? "Neutral now. Warmth eases in before bedtime."
+            : "Neutral now. Warmth eases in around sunset."
+    }
+
     /// Explains the locked slider and links to the editable maximum (Settings → General).
     private var sunsetLockCaption: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(model.state.isScheduleActiveNow
                  ? ScheduleModeOption.followSunset.subtitle
-                 : "Neutral now. Warmth eases in around sunset.")
+                 : sunsetNeutralCaption)
                 .font(Theme.Typography.ui(11))
                 .foregroundStyle(Theme.Color.textFaint)
                 .fixedSize(horizontal: false, vertical: true)

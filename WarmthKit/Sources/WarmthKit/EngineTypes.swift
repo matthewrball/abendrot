@@ -55,6 +55,10 @@ public struct WarmthState: Sendable, Equatable {
     /// (`globalWarmth` in Always-on; `globalWarmth × sunset-ramp` in Sunset; `.off`/neutral by day).
     /// Published so the popover can show a live, locked readout in Sunset mode instead of the peak.
     public var resolvedWarmth: WarmthLevel
+    /// The exact colour temperature the schedule resolved, when it is one that
+    /// `resolvedWarmth × warmestPoint` cannot express (the late-night stage past the evening
+    /// level). Nil otherwise, including by day and in Manual. Read `appliedKelvin`, not this.
+    public var resolvedKelvin: Kelvin?
     /// The Kelvin the warmth slider's max (strength 1.0) maps to — published so the UI can show
     /// an accurate Kelvin readout instead of assuming a default.
     public var warmestPoint: Kelvin
@@ -78,6 +82,7 @@ public struct WarmthState: Sendable, Equatable {
         isRevealing: Bool = false,
         globalWarmth: WarmthLevel = .off,
         resolvedWarmth: WarmthLevel = .off,
+        resolvedKelvin: Kelvin? = nil,
         warmestPoint: Kelvin = Kelvin.everydayWarmest,
         privateAPIsEnabled: Bool = true,
         displays: [DisplayState] = [],
@@ -92,6 +97,7 @@ public struct WarmthState: Sendable, Equatable {
         self.isRevealing = isRevealing
         self.globalWarmth = globalWarmth
         self.resolvedWarmth = resolvedWarmth
+        self.resolvedKelvin = resolvedKelvin
         self.warmestPoint = warmestPoint
         self.privateAPIsEnabled = privateAPIsEnabled
         self.displays = displays
@@ -99,6 +105,12 @@ public struct WarmthState: Sendable, Equatable {
         self.pausesForFullScreen = pausesForFullScreen
         self.isFullScreenPauseActive = isFullScreenPauseActive
         self.keepsOtherWindowsWarm = keepsOtherWindowsWarm
+    }
+
+    /// The colour temperature the schedule is asking for right now on displays that follow the
+    /// global warmth: the resolved Kelvin when the schedule carries one, else the usual curve.
+    public var appliedKelvin: Kelvin {
+        resolvedKelvin ?? resolvedWarmth.kelvin(warmestPoint: warmestPoint)
     }
 }
 
