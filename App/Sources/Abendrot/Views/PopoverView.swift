@@ -97,6 +97,9 @@ struct PopoverView: View {
         }
         .padding(20)
         .frame(width: 330)
+        // Always the content's own height. Otherwise the popover can open a couple of points short and
+        // SwiftUI shrinks the Mode labels to fit, then restores them after the advanced section collapses.
+        .fixedSize(horizontal: false, vertical: true)
         // Big corner hit targets: the whole TOP-RIGHT corner opens Settings; the whole
         // BOTTOM-RIGHT corner toggles the advanced expansion. Overlays pinned to the card's actual
         // corners (added after `.padding(20)`, so they reach the real edges, over the padding) and they

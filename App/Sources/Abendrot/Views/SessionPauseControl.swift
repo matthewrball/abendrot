@@ -79,13 +79,6 @@ struct SessionPauseControl: View {
                 fullScreenRow
             }
             .padding(.horizontal, -10)
-            if let footnote {
-                Text(footnote)
-                    .font(Theme.Typography.ui(11))
-                    .foregroundStyle(Theme.Color.textFaint)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel(footnote)
-            }
         }
         .animation(Theme.Motion.warm(reduceMotion: reduceMotion), value: model.state.timedPause)
     }
@@ -375,13 +368,6 @@ struct SessionPauseControl: View {
         return appExcluded
             ? "Warmth is paused whenever \(appName) is in front. Click to resume."
             : "Pause warmth whenever \(appName) is in front. It's added to Excluded apps in Settings."
-    }
-
-    private var footnote: String? {
-        if model.state.timedPause != nil {
-            return "Your schedule is unchanged. Warmth returns on its own."
-        }
-        return nil
     }
 
     private func pillHelp(_ id: PausePill) -> String {
