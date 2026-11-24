@@ -3,7 +3,7 @@
   <MASTER_PAD_VERSION_INFO>
     <MASTER_PAD_VERSION>3.11</MASTER_PAD_VERSION>
     <MASTER_PAD_EDITOR>Abendrot</MASTER_PAD_EDITOR>
-    <MASTER_PAD_EDITOR_VERSION>1.1.18</MASTER_PAD_EDITOR_VERSION>
+    <MASTER_PAD_EDITOR_VERSION>1.1.19</MASTER_PAD_EDITOR_VERSION>
     <INFO_CODE_PAGE>UTF-8</INFO_CODE_PAGE>
   </MASTER_PAD_VERSION_INFO>
   <Company_Info>
@@ -35,9 +35,9 @@
   </Company_Info>
   <Program_Info>
     <Program_Name>Abendrot</Program_Name>
-    <Program_Version>1.1.18</Program_Version>
+    <Program_Version>1.1.19</Program_Version>
     <Program_Release_Month>11</Program_Release_Month>
-    <Program_Release_Day>20</Program_Release_Day>
+    <Program_Release_Day>23</Program_Release_Day>
     <Program_Release_Year>2026</Program_Release_Year>
     <Program_Cost_Dollars>0</Program_Cost_Dollars>
     <Program_Type>Freeware</Program_Type>
@@ -45,7 +45,7 @@
     <Program_Install_Support>Install and Uninstall</Program_Install_Support>
     <Program_OS_Support>Mac OS X</Program_OS_Support>
     <Program_Language>English</Program_Language>
-    <Program_Change_Info>The Sunset and Manual labels in the menu-bar popover keep one size, so nothing shifts after the advanced section closes. Removed the note under a timed pause.</Program_Change_Info>
+    <Program_Change_Info>The warmth slider goes down to about 5% less blue light. With other windows kept warm, menus on macOS 27, menu bar popups and the Stage Manager strip no longer show a box over an excluded app.</Program_Change_Info>
     <Program_Specific_Category>Desktop</Program_Specific_Category>
     <Program_Categories>Desktop::Other</Program_Categories>
     <Program_Category_Class>Desktop::Other</Program_Category_Class>
@@ -104,7 +104,7 @@ Source: https://github.com/matthewrball/abendrot</Char_Desc_2000>
       <Application_XML_File_URL>https://raw.githubusercontent.com/matthewrball/abendrot/main/pad/abendrot.xml</Application_XML_File_URL>
     </Application_URLs>
     <Download_URLs>
-      <Primary_Download_URL>https://github.com/matthewrball/abendrot/releases/download/v1.1.18/Abendrot-1.1.18.dmg</Primary_Download_URL>
+      <Primary_Download_URL>https://github.com/matthewrball/abendrot/releases/download/v1.1.19/Abendrot-1.1.19.dmg</Primary_Download_URL>
       <Secondary_Download_URL>https://abendrot.app/download/</Secondary_Download_URL>
       <Additional_Download_URL_1>https://github.com/matthewrball/abendrot/releases/latest</Additional_Download_URL_1>
       <Additional_Download_URL_2></Additional_Download_URL_2>

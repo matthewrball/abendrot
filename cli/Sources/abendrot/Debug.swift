@@ -109,6 +109,13 @@ enum FullScreenReport {
         for window in menus.prefix(12) {
             lines.append("  " + row(window, app, radii))
         }
+        // Menu-bar extras, their status items and their popovers, of any app: a popover is cut at the
+        // popover, not its window, when its top sits where the arrow puts it under a status item.
+        let status = windows.filter { ($0[kCGWindowLayer as String] as? Int) == WindowHolePolicy.statusLayer }
+        lines.append("Status-level windows (up to 24):\(status.isEmpty ? " none" : "")")
+        for window in status.prefix(24) {
+            lines.append("  " + row(window, app, radii))
+        }
         // Floating windows of the front app, e.g. a player's own full-screen mode above normal windows.
         if let pid = front?.processIdentifier {
             let raised = windows.filter {

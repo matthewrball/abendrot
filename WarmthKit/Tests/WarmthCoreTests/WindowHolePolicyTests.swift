@@ -377,7 +377,7 @@ struct WindowHolePolicyTests {
         let margin = try #require(WindowHolePolicy.observedMenuMargin(in: reporterWindows, displays: [display]))
         let region = WindowHolePolicy.neutralRegion(
             windows: reporterWindows, owner: terminal, display: display, menuMargin: margin)
-        #expect(region == [helpMenu])
+        #expect(sameRegion(region, WindowHolePolicy.roundedInterior(helpMenu, radius: WindowHolePolicy.paddedMenuCornerRadius)))
         // The menu bar beside the menu and the margin around it stay warm.
         for point in [CGPoint(x: 280, y: 20), CGPoint(x: 720, y: 20), CGPoint(x: 280, y: 100),
                       CGPoint(x: 720, y: 100), CGPoint(x: 500, y: 200), CGPoint(x: 500, y: 20)] {
@@ -432,7 +432,8 @@ struct WindowHolePolicyTests {
         let own = WindowHolePolicy.neutralRegion(windows: [
             .init(bounds: menuWindow, layer: 101, owner: terminal),
         ], owner: terminal, display: display, menuMargin: 75)
-        #expect(own == [menuWindow.insetBy(dx: 75, dy: 75)])
+        #expect(sameRegion(own, WindowHolePolicy.roundedInterior(
+            menuWindow.insetBy(dx: 75, dy: 75), radius: WindowHolePolicy.paddedMenuCornerRadius)))
 
         // A menu-bar app's menu cannot be told from an overlay, so it cuts no warm box.
         let excluded = CGRect(x: 60, y: 40, width: 1100, height: 800)
@@ -456,7 +457,7 @@ struct WindowHolePolicyTests {
         ]
         let region = WindowHolePolicy.neutralRegion(
             windows: windows, owner: finder, display: display, menuMargin: 75)
-        #expect(region == [menu])
+        #expect(sameRegion(region, WindowHolePolicy.roundedInterior(menu, radius: WindowHolePolicy.paddedMenuCornerRadius)))
         // A context menu proves nothing itself. Until a pull-down menu has been seen, the old box stays.
         #expect(WindowHolePolicy.observedMenuMargin(in: windows, displays: [display]) == nil)
         #expect(WindowHolePolicy.neutralRegion(windows: windows, owner: finder, display: display) == [window])
@@ -483,16 +484,16 @@ struct WindowHolePolicyTests {
             windows: windows, owner: terminal, display: display, menuMargin: 75)
         for body in [menu, submenu] {
             #expect(!isNeutral(region, CGPoint(x: body.midX, y: body.midY)))
-            #expect(!isNeutral(region, CGPoint(x: body.minX + 1, y: body.maxY - 1)))
-            #expect(!isNeutral(region, CGPoint(x: body.maxX - 1, y: body.maxY - 1)))
+            #expect(!isNeutral(region, CGPoint(x: body.minX + 1, y: body.midY)))
+            #expect(!isNeutral(region, CGPoint(x: body.midX, y: body.maxY - 1)))
         }
         // The margin is not a warm box: the excluded window shows through it.
         #expect(isNeutral(region, CGPoint(x: menu.minX - 30, y: menu.midY)))
         #expect(isNeutral(region, CGPoint(x: menu.midX, y: menu.maxY + 30)))
         #expect(isNeutral(region, CGPoint(x: submenu.maxX + 30, y: submenu.midY)))
-        let covered = [menu, submenu].map { $0.intersection(excluded) }
-        #expect(area(region) == excluded.width * excluded.height - area(covered)
-            + menu.intersection(submenu).width * menu.intersection(submenu).height)
+        // Outside each menu's rounded corner the excluded window shows, neutral.
+        #expect(isNeutral(region, CGPoint(x: menu.minX + 0.5, y: menu.maxY - 0.5)))
+        #expect(isNeutral(region, CGPoint(x: submenu.maxX - 0.5, y: submenu.maxY - 0.5)))
         let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
         expectTilesMatch(tiles, hole: region, in: display)
     }
@@ -520,7 +521,8 @@ struct WindowHolePolicyTests {
             .init(bounds: window, layer: 101, owner: 3),
             .init(bounds: excluded, layer: 0, owner: terminal),
         ], owner: terminal, display: display, menuMargin: 75)
-        #expect(area(region) == excluded.width * excluded.height - menu.width * menu.height)
+        let outside = WindowHolePolicy.roundedExterior(menu, radius: WindowHolePolicy.paddedMenuCornerRadius)
+        #expect(abs(area(region) - (excluded.width * excluded.height - menu.width * menu.height + area(outside))) < 1e-6)
         #expect(!isNeutral(region, CGPoint(x: menu.midX, y: menu.midY)))
         #expect(isNeutral(region, CGPoint(x: window.minX + 10, y: window.midY)))
     }
@@ -763,5 +765,341 @@ struct WindowHolePolicyTests {
             .init(bounds: window, layer: 101, owner: terminal, cornerRadius: 12),
         ], owner: terminal, display: display, cornerRadius: 16, menuMargin: 75)
         #expect(sameRegion(neutral, WindowHolePolicy.roundedInterior(menu, radius: 12)))
+    }
+
+    // MARK: Padded menus on macOS 27 and the Stage Manager strip (#30 after 1.1.18)
+
+    /// 5 pt in from a corner, in the 1 pt row 3 pt down. The curve sits 4.1 pt in there for a
+    /// 13 pt radius and 6.0 pt for a 16 pt one, so the point is inside the first, outside the second.
+    private func between13And16(_ rect: CGRect, corner: Int) -> CGPoint {
+        switch corner {
+        case 0: return CGPoint(x: rect.minX + 5, y: rect.minY + 3.5)
+        case 1: return CGPoint(x: rect.maxX - 5, y: rect.minY + 3.5)
+        case 2: return CGPoint(x: rect.minX + 5, y: rect.maxY - 3.5)
+        default: return CGPoint(x: rect.maxX - 5, y: rect.maxY - 3.5)
+        }
+    }
+
+    @Test("A padded menu reporting no radius is cut at the menu's own corner, not the titled default")
+    func paddedMenuWithoutRadiusUsesMenuCorner() {
+        // The reporter's Finder menu on macOS 27.2: one layer-101 window, radius 0. The 16 pt hole
+        // left a warm sliver inside every corner of the 13 pt menu.
+        let window = CGRect(x: -70, y: -41, width: 379, height: 455)
+        let menu = window.insetBy(dx: 75, dy: 75)
+        let finder: Int32 = 9
+        for reported: CGFloat? in [nil, 0] {
+            let region = WindowHolePolicy.neutralRegion(windows: [
+                .init(bounds: window, layer: 101, owner: finder, cornerRadius: reported),
+                .init(bounds: menuBar, layer: 24, owner: 1, isRegularApp: false),
+            ], owner: finder, display: display, cornerRadius: 16, menuMargin: 75)
+            #expect(sameRegion(region, WindowHolePolicy.roundedInterior(
+                menu.intersection(display), radius: WindowHolePolicy.paddedMenuCornerRadius)))
+            for corner in 0...3 {
+                #expect(isNeutral(region, between13And16(menu, corner: corner)), "corner \(corner)")
+            }
+            #expect(!isNeutral(region, CGPoint(x: menu.minX + 0.5, y: menu.maxY - 0.5)))
+            #expect(!isNeutral(region, CGPoint(x: menu.maxX - 0.5, y: menu.minY + 0.5)))
+        }
+    }
+
+    @Test("Another app's padded menu over an excluded window keeps its rounded corners")
+    func warmPaddedMenuKeepsRoundedCorners() {
+        let excluded = CGRect(x: 60, y: 40, width: 1100, height: 800)
+        let window = CGRect(x: 400, y: 300, width: 310, height: 270)
+        let menu = window.insetBy(dx: 75, dy: 75)
+        let region = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: window, layer: 101, owner: 3, cornerRadius: 0),
+            .init(bounds: excluded, layer: 0, owner: terminal),
+        ], owner: terminal, display: display, cornerRadius: 16, menuMargin: 75)
+        // Outside the menu's curve the excluded window shows; inside it the menu stays warm.
+        #expect(isNeutral(region, CGPoint(x: menu.minX + 0.5, y: menu.minY + 0.5)))
+        #expect(isNeutral(region, CGPoint(x: menu.maxX - 0.5, y: menu.maxY - 0.5)))
+        for corner in 0...3 {
+            #expect(!isNeutral(region, between13And16(menu, corner: corner)), "corner \(corner)")
+        }
+        #expect(!isNeutral(region, CGPoint(x: menu.midX, y: menu.midY)))
+        let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
+        expectTilesMatch(tiles, hole: region, in: display)
+    }
+
+    @Test("Menus that are not padded keep the old radii exactly")
+    func unpaddedMenusUnchanged() {
+        // macOS 26: the window is the menu. No margin, so no padded radius, whatever is reported.
+        let menu = CGRect(x: 600, y: 300, width: 184, height: 120)
+        let excluded = CGRect(x: 100, y: 100, width: 1200, height: 800)
+        for reported: CGFloat? in [nil, 0, 12] {
+            let neutral = WindowHolePolicy.neutralRegion(
+                windows: [.init(bounds: menu, layer: 101, owner: 7, cornerRadius: reported)],
+                owner: 7, display: display, cornerRadius: 16)
+            #expect(sameRegion(neutral, WindowHolePolicy.roundedInterior(menu, radius: reported.flatMap { $0 > 0 ? $0 : nil } ?? 16)))
+            let warm = WindowHolePolicy.neutralRegion(windows: [
+                .init(bounds: menu, layer: 101, owner: 3, cornerRadius: reported),
+                .init(bounds: excluded, layer: 0, owner: 7),
+            ], owner: 7, display: display)
+            let square = reported.flatMap { $0 > 0 ? $0 : nil } == nil
+            #expect(isNeutral(warm, CGPoint(x: menu.minX + 0.5, y: menu.minY + 0.5)) == !square)
+        }
+    }
+
+    /// The reporter's list on macOS 27.2 with Stage Manager on, Finder in front and every window
+    /// in the strip, front to back. Stage Manager lists a window of its own at each thumbnail.
+    private let stageManager: Int32 = 40
+    private let finderApp: Int32 = 9
+    private var stripWindows: [WindowHolePolicy.Window] {
+        [
+            .init(bounds: CGRect(x: -7, y: 267, width: 66, height: 82), layer: 0, owner: stageManager,
+                  isRegularApp: false, isStageManager: true),
+            .init(bounds: CGRect(x: 16, y: 216, width: 160, height: 120), layer: 0, owner: stageManager,
+                  isRegularApp: false, isStageManager: true),
+            .init(bounds: CGRect(x: 16, y: 216, width: 160, height: 120), layer: 0, owner: finderApp,
+                  cornerRadius: 36.9056),
+            .init(bounds: CGRect(x: 32, y: 340, width: 138, height: 152), layer: 0, owner: stageManager,
+                  isRegularApp: false, isStageManager: true),
+            .init(bounds: CGRect(x: 32, y: 340, width: 138, height: 152), layer: 0, owner: 21, cornerRadius: 47.45),
+            .init(bounds: CGRect(x: 32, y: 518, width: 138, height: 155), layer: 0, owner: stageManager,
+                  isRegularApp: false, isStageManager: true),
+            .init(bounds: CGRect(x: 32, y: 518, width: 138, height: 155), layer: 0, owner: 22, cornerRadius: 47.45),
+        ]
+    }
+
+    @Test("The excluded app's thumbnail in the Stage Manager strip stays warm")
+    func stageStripThumbnailIsNoHole() {
+        #expect(WindowHolePolicy.neutralRegion(
+            windows: stripWindows, owner: finderApp, display: display, cornerRadius: 16).isEmpty)
+        // The same with the browser as the excluded front app: its thumbnail stays warm too.
+        #expect(WindowHolePolicy.neutralRegion(
+            windows: stripWindows, owner: 21, display: display, cornerRadius: 16).isEmpty)
+    }
+
+    @Test("A window on the stage is still a hole, and Stage Manager's own windows never are")
+    func stageWindowStaysAHole() {
+        let stage = CGRect(x: 220, y: 90, width: 1000, height: 700)
+        let windows = stripWindows + [.init(bounds: stage, layer: 0, owner: finderApp, cornerRadius: 16)]
+        let region = WindowHolePolicy.neutralRegion(windows: windows, owner: finderApp, display: display, cornerRadius: 16)
+        #expect(sameRegion(region, WindowHolePolicy.roundedInterior(stage, radius: 16)))
+        // A Stage Manager window that matches no app window changes nothing; nor does an app
+        // window 2 pt off a Stage Manager window.
+        let near = CGRect(x: 18, y: 216, width: 160, height: 120)
+        let offset = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: CGRect(x: 16, y: 216, width: 160, height: 120), layer: 0, owner: stageManager,
+                  isRegularApp: false, isStageManager: true),
+            .init(bounds: near, layer: 0, owner: finderApp, cornerRadius: 16),
+        ], owner: finderApp, display: display, cornerRadius: 16)
+        #expect(sameRegion(offset, WindowHolePolicy.roundedInterior(near, radius: 16)))
+        // Same corner, another size: a window on the stage that happens to start at a thumbnail.
+        let larger = CGRect(x: 16, y: 216, width: 900, height: 600)
+        let sized = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: CGRect(x: 16, y: 216, width: 160, height: 120), layer: 0, owner: stageManager,
+                  isRegularApp: false, isStageManager: true),
+            .init(bounds: larger, layer: 0, owner: finderApp, cornerRadius: 16),
+        ], owner: finderApp, display: display, cornerRadius: 16)
+        #expect(sameRegion(sized, WindowHolePolicy.roundedInterior(larger, radius: 16)))
+        // Stage Manager excluded (as if): its own windows are not thumbnails of themselves.
+        let own = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: stage, layer: 0, owner: stageManager, isRegularApp: false, isStageManager: true),
+        ], owner: stageManager, display: display, cornerRadius: 16)
+        #expect(sameRegion(own, WindowHolePolicy.roundedInterior(stage, radius: 16)))
+    }
+
+    @Test("Without Stage Manager windows, nothing changes")
+    func noStageManagerNoChange() {
+        let plain = stripWindows.filter { !$0.isStageManager }
+        let region = WindowHolePolicy.neutralRegion(windows: plain, owner: finderApp, display: display, cornerRadius: 16)
+        #expect(sameRegion(region, WindowHolePolicy.roundedInterior(
+            CGRect(x: 16, y: 216, width: 160, height: 120), radius: 36.9056)))
+    }
+
+    // MARK: Menu-bar extra popovers (#30 after 1.1.18)
+
+    /// SoloFan's popover in the reporter's screenshot: a 340 pt popover in a 366 pt window that
+    /// starts 5 pt above the bottom of the menu bar, with the arrow under its status item. On
+    /// macOS 26 Control Center owns every status item, not the app.
+    private let popoverWindow = CGRect(x: 300, y: 28, width: 366, height: 426)
+    private var popoverBody: CGRect { popoverWindow.insetBy(dx: 13, dy: 13) }
+    private let soloFan: Int32 = 30
+    private let controlCenter: Int32 = 33
+    private var soloFanItem: WindowHolePolicy.Window {
+        .init(bounds: CGRect(x: 460, y: 0, width: 46, height: 33), layer: WindowHolePolicy.statusLayer,
+              owner: controlCenter, isRegularApp: false)
+    }
+    private var bar: WindowHolePolicy.Window {
+        .init(bounds: menuBar, layer: 24, owner: 1, isRegularApp: false)
+    }
+    private let video = CGRect(x: 60, y: 40, width: 1100, height: 800)
+
+    private func popoverPanel(_ bounds: CGRect, owner: Int32 = 30, radius: CGFloat? = nil,
+                              measured: Bool = false) -> WindowHolePolicy.Window {
+        .init(bounds: bounds, layer: WindowHolePolicy.statusLayer, owner: owner, isRegularApp: false,
+              isMeasured: measured, cornerRadius: radius)
+    }
+
+    /// The excluded video window with `windows` in front, on a Mac that reports radii.
+    private func overVideo(_ windows: [WindowHolePolicy.Window], radii: Bool = true) -> [CGRect] {
+        WindowHolePolicy.neutralRegion(
+            windows: windows + [bar, .init(bounds: video, layer: 0, owner: terminal)],
+            owner: terminal, display: display, cornerRadius: 16, reportsCornerRadii: radii)
+    }
+
+    private var plainVideo: [CGRect] { WindowHolePolicy.roundedInterior(video, radius: 16) }
+
+    @Test("An excluded menu-bar app's popover is neutral at the popover, not its window")
+    func excludedPopoverIsNeutralAtItsBody() {
+        for reported: CGFloat? in [nil, 0] {
+            let region = WindowHolePolicy.neutralRegion(
+                windows: [popoverPanel(popoverWindow, radius: reported), soloFanItem, bar],
+                owner: terminal, display: display, cornerRadius: 16, floatingOwners: [soloFan],
+                reportsCornerRadii: true)
+            #expect(sameRegion(region, WindowHolePolicy.roundedInterior(
+                popoverBody, radius: WindowHolePolicy.popoverCornerRadius)))
+            // The margin around it stays warm.
+            #expect(!isNeutral(region, CGPoint(x: popoverWindow.minX + 6, y: popoverWindow.midY)))
+            #expect(!isNeutral(region, CGPoint(x: popoverWindow.midX, y: popoverWindow.maxY - 6)))
+            #expect(isNeutral(region, CGPoint(x: popoverBody.minX + 1, y: popoverBody.midY)))
+        }
+    }
+
+    @Test("Another menu-bar app's popover over an excluded window stays warm at the popover only")
+    func otherPopoverStaysWarmAtItsBody() {
+        // Also when the app owns its status item itself, as before macOS 26.
+        let ownItem = WindowHolePolicy.Window(bounds: soloFanItem.bounds, layer: WindowHolePolicy.statusLayer,
+                                              owner: soloFan, isRegularApp: false)
+        #expect(sameRegion(overVideo([popoverPanel(popoverWindow), ownItem]),
+                           overVideo([popoverPanel(popoverWindow), soloFanItem])))
+        // Within the slack of the arrow's line.
+        let lower = popoverWindow.offsetBy(dx: 0, dy: 1.5)
+        #expect(!isNeutral(overVideo([popoverPanel(lower), soloFanItem]),
+                           CGPoint(x: lower.midX, y: lower.midY)))
+        let region = overVideo([popoverPanel(popoverWindow), soloFanItem])
+        #expect(!isNeutral(region, CGPoint(x: popoverBody.midX, y: popoverBody.midY)))
+        #expect(!isNeutral(region, CGPoint(x: popoverBody.minX + 1, y: popoverBody.midY)))
+        // Its shadow margin and the square outside its corners show the excluded window.
+        #expect(isNeutral(region, CGPoint(x: popoverWindow.minX + 6, y: popoverBody.midY)))
+        #expect(isNeutral(region, CGPoint(x: popoverBody.minX + 0.5, y: popoverBody.maxY - 0.5)))
+        let tiles = WindowHolePolicy.warmTiles(around: region, in: display)
+        expectTilesMatch(tiles, hole: region, in: display)
+    }
+
+    @Test("Status-level windows that are not popovers keep the old behaviour")
+    func statusWindowsThatAreNotPopovers() {
+        // An accessory app's status-level window is not an occluder unless it is a popover.
+        let cases: [(String, [WindowHolePolicy.Window])] = [
+            ("the status item alone", [soloFanItem]),
+            ("below the menu bar", [popoverPanel(CGRect(x: 300, y: 200, width: 366, height: 426)), soloFanItem]),
+            ("reports its own radius", [popoverPanel(popoverWindow, radius: 12), soloFanItem]),
+            ("spans the display", [popoverPanel(CGRect(x: -10, y: 5, width: 1532, height: 990)), soloFanItem]),
+            ("invisible item", [popoverPanel(popoverWindow),
+                                .init(bounds: soloFanItem.bounds, layer: WindowHolePolicy.statusLayer,
+                                      owner: controlCenter, alpha: 0, isRegularApp: false)]),
+            // The Dock lists empty status-level windows at the origin.
+            ("empty item", [popoverPanel(CGRect(x: -20, y: 28, width: 366, height: 426)),
+                            .init(bounds: .zero, layer: WindowHolePolicy.statusLayer, owner: 34, isRegularApp: false)]),
+            ("item above the bar", [popoverPanel(popoverWindow),
+                                    .init(bounds: CGRect(x: 460, y: -30, width: 46, height: 33),
+                                          layer: WindowHolePolicy.statusLayer, owner: controlCenter, isRegularApp: false)]),
+            // Another status-level panel under the bar is not a status item.
+            ("item below the bar", [popoverPanel(popoverWindow),
+                                    .init(bounds: CGRect(x: 460, y: 40, width: 46, height: 33),
+                                          layer: WindowHolePolicy.statusLayer, owner: controlCenter, isRegularApp: false)]),
+            // A notch tool's expanded panel starts at the top edge of the display.
+            ("from the top edge", [popoverPanel(CGRect(x: 593, y: 0, width: 325, height: 200), owner: 31),
+                                   .init(bounds: CGRect(x: 593, y: 0, width: 325, height: 32),
+                                         layer: WindowHolePolicy.statusLayer, owner: 31, isRegularApp: false)]),
+            // Aurell on macOS 26.6: its strip in the bar, and a panel it shows just under the bar.
+            ("notch panel under the bar", [popoverPanel(CGRect(x: 515, y: 32, width: 480, height: 48), owner: 31),
+                                           .init(bounds: CGRect(x: 593, y: 0, width: 325, height: 32),
+                                                 layer: WindowHolePolicy.statusLayer, owner: 31, isRegularApp: false)]),
+            ("too low for the arrow", [popoverPanel(popoverWindow.offsetBy(dx: 0, dy: 2)), soloFanItem]),
+            ("too short", [popoverPanel(CGRect(x: 300, y: 28, width: 366, height: 40)), soloFanItem]),
+            ("item on another layer", [popoverPanel(popoverWindow),
+                                       .init(bounds: soloFanItem.bounds, layer: 101, owner: controlCenter,
+                                             isRegularApp: false)]),
+            ("item off the bar", [popoverPanel(CGRect(x: -20, y: 28, width: 366, height: 426)),
+                                  .init(bounds: CGRect(x: -10, y: 0, width: 46, height: 33),
+                                        layer: WindowHolePolicy.statusLayer, owner: controlCenter, isRegularApp: false)]),
+            ("above the menu bar", [popoverPanel(popoverWindow.offsetBy(dx: 0, dy: -40)), soloFanItem]),
+            // A strip under the bar with no status item of its app above it.
+            ("no status item", [popoverPanel(CGRect(x: 0, y: 33, width: 1512, height: 300))]),
+            ("item not under it", [popoverPanel(popoverWindow),
+                                   .init(bounds: CGRect(x: 1200, y: 0, width: 46, height: 33),
+                                         layer: WindowHolePolicy.statusLayer, owner: controlCenter, isRegularApp: false)]),
+            ("too narrow", [popoverPanel(CGRect(x: 470, y: 28, width: 40, height: 426)), soloFanItem]),
+        ]
+        for (name, windows) in cases {
+            #expect(sameRegion(overVideo(windows), plainVideo), "\(name)")
+        }
+        // Where WindowServer reports no radii (before macOS 26), a real popover keeps the old rules too.
+        #expect(sameRegion(overVideo([popoverPanel(popoverWindow), soloFanItem], radii: false), plainVideo))
+        // Without a menu bar listed there is nothing to hang from: the old window bounds.
+        let neutral = WindowHolePolicy.neutralRegion(
+            windows: [popoverPanel(popoverWindow)], owner: terminal, display: display, cornerRadius: 16,
+            floatingOwners: [soloFan], reportsCornerRadii: true)
+        #expect(sameRegion(neutral, WindowHolePolicy.roundedInterior(popoverWindow, radius: 16)))
+    }
+
+    @Test("The excluded app's own status-level panel under the menu bar is not shrunk")
+    func excludedStatusPanelKeepsItsBounds() {
+        // A floating toolbar of the excluded app, hanging from the bar, with no status item.
+        let panel = CGRect(x: 200, y: 33, width: 700, height: 120)
+        let region = WindowHolePolicy.neutralRegion(
+            windows: [.init(bounds: panel, layer: WindowHolePolicy.statusLayer, owner: terminal), bar],
+            owner: terminal, display: display, cornerRadius: 16, reportsCornerRadii: true)
+        #expect(sameRegion(region, WindowHolePolicy.roundedInterior(panel, radius: 16)))
+    }
+
+    @Test("A popover on a second display is cut against that display's menu bar")
+    func popoverOnSecondDisplay() {
+        let second = CGRect(x: 1512, y: 0, width: 1920, height: 1080)
+        let secondBar = WindowHolePolicy.Window(bounds: CGRect(x: 1512, y: 0, width: 1920, height: 25),
+                                                layer: 24, owner: 1, isRegularApp: false)
+        let window = CGRect(x: 2000, y: 20, width: 366, height: 426)
+        let item = WindowHolePolicy.Window(bounds: CGRect(x: 2160, y: 0, width: 46, height: 25),
+                                           layer: WindowHolePolicy.statusLayer, owner: controlCenter, isRegularApp: false)
+        let excluded = CGRect(x: 1600, y: 60, width: 1200, height: 800)
+        let windows = [popoverPanel(window), item, secondBar, bar, .init(bounds: excluded, layer: 0, owner: terminal)]
+        let there = WindowHolePolicy.neutralRegion(
+            windows: windows, owner: terminal, display: second, cornerRadius: 16, reportsCornerRadii: true)
+        let body = window.insetBy(dx: 13, dy: 13)
+        #expect(!isNeutral(there, CGPoint(x: body.midX, y: body.midY)))
+        #expect(isNeutral(there, CGPoint(x: window.minX + 6, y: body.midY)))
+        // The first display's menu bar does not count for it.
+        let here = WindowHolePolicy.neutralRegion(
+            windows: windows, owner: terminal, display: display, cornerRadius: 16, reportsCornerRadii: true)
+        #expect(here.isEmpty)
+    }
+
+    @Test("This app's measured popover is never re-cut as another app's popover")
+    func ownPopoverUnchanged() {
+        // No radius, so only `isMeasured` keeps it out of the popover rule.
+        let measured = CGRect(x: 300, y: 28, width: 330, height: 520)
+        let item = WindowHolePolicy.Window(bounds: CGRect(x: 440, y: 0, width: 46, height: 33),
+                                           layer: WindowHolePolicy.statusLayer, owner: controlCenter, isRegularApp: false)
+        let region = overVideo([popoverPanel(measured, owner: 2, measured: true), item])
+        #expect(!isNeutral(region, CGPoint(x: measured.minX + 1, y: measured.midY)))
+        #expect(!isNeutral(region, CGPoint(x: measured.minX + 6, y: measured.midY)))
+        #expect(isNeutral(region, CGPoint(x: measured.minX - 1, y: measured.midY)))
+    }
+
+    @Test("Only layer-0 windows are Stage Manager thumbnails")
+    func stageThumbnailsAreLayerZero() {
+        let frame = CGRect(x: 16, y: 216, width: 160, height: 120)
+        // An excluded app's floating window that happens to sit on a thumbnail frame stays neutral.
+        let floating = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: frame, layer: 0, owner: stageManager, isRegularApp: false, isStageManager: true),
+            .init(bounds: frame, layer: 3, owner: finderApp, cornerRadius: 16),
+        ], owner: finderApp, display: display, cornerRadius: 16)
+        #expect(sameRegion(floating, WindowHolePolicy.roundedInterior(frame, radius: 16)))
+        // A Stage Manager window on another layer is not a thumbnail frame.
+        let raised = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: frame, layer: 3, owner: stageManager, isRegularApp: false, isStageManager: true),
+            .init(bounds: frame, layer: 0, owner: finderApp, cornerRadius: 16),
+        ], owner: finderApp, display: display, cornerRadius: 16)
+        #expect(sameRegion(raised, WindowHolePolicy.roundedInterior(frame, radius: 16)))
+        // Same origin and width, another height: not its twin.
+        let taller = CGRect(x: 16, y: 216, width: 160, height: 300)
+        let tall = WindowHolePolicy.neutralRegion(windows: [
+            .init(bounds: frame, layer: 0, owner: stageManager, isRegularApp: false, isStageManager: true),
+            .init(bounds: taller, layer: 0, owner: finderApp, cornerRadius: 16),
+        ], owner: finderApp, display: display, cornerRadius: 16)
+        #expect(sameRegion(tall, WindowHolePolicy.roundedInterior(taller, radius: 16)))
     }
 }

@@ -316,8 +316,13 @@ struct FrostBackground: View {
 /// to the vector `SunsetArcGlyph` if the icon image can't be loaded. Used in the popover header and
 /// Settings → About (the menu-bar status item keeps the monochrome template glyph).
 struct AppIconView: View {
+    /// Drawn once at the largest size shown (About, 88 pt), so the popover header shows it in step
+    /// with the rest of the popover instead of a few frames late.
+    private static let icon = NSImage(named: NSImage.applicationIconName)
+        .map { AppIdentity.rasterized($0, points: 88) }
+
     var body: some View {
-        if let icon = NSImage(named: NSImage.applicationIconName) {
+        if let icon = Self.icon {
             Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)

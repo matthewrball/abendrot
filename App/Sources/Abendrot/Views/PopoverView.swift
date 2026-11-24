@@ -313,10 +313,12 @@ struct PopoverView: View {
 // MARK: - Advanced expansion transition
 
 private extension AnyTransition {
-    /// The glass "grows": new rows fade up + expand from the top.
+    /// The glass "grows": new rows fade in with a short drop. Not `.move(edge: .top)`: that started
+    /// the rows a full section height up, drawn over the app and full-screen rows above them.
+    /// 6 pt stays inside the section's own 14 pt top padding.
     static var advancedExpansion: AnyTransition {
         .asymmetric(
-            insertion: .move(edge: .top).combined(with: .opacity),
+            insertion: .opacity.combined(with: .offset(y: -6)),
             removal: .opacity
         )
     }

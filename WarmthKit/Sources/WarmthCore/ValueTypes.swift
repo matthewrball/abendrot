@@ -41,6 +41,11 @@ public struct WarmthLevel: Hashable, Sendable, Codable {
 
     public static let off = WarmthLevel(strength: 0)
 
+    /// The soft end of the warmth slider: still a visible warm, never true off (true off is the
+    /// master toggle). On the everyday 1900K ceiling it is about 6019K, which the blue-light
+    /// label reads as ≈5% less blue-channel light.
+    public static let softestSliderStrength = 0.033
+
     /// Target CCT for a strength, given the user's configured warmest point.
     ///
     /// Interpolates in **mired** space (reciprocal megakelvin, M = 1e6/K), not Kelvin. Perceived

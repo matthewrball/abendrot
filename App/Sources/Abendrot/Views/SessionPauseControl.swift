@@ -34,9 +34,39 @@ enum AppIdentity {
         return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
     }
 
+    /// One drawn bitmap per app, reused. A fresh `NSWorkspace` image on every redraw made SwiftUI
+    /// crossfade the app row's icon during the advanced expand/collapse animation (a visible blink).
+    @MainActor
     static func icon(for bundleID: String) -> NSImage? {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        let key = url.path as NSString
+        if let cached = iconCache.object(forKey: key) { return cached }
+        let icon = rasterized(NSWorkspace.shared.icon(forFile: url.path), points: 32)
+        iconCache.setObject(icon, forKey: key)
+        return icon
+    }
+
+    @MainActor private static let iconCache = NSCache<NSString, NSImage>()
+
+    /// Draws `image` once into a 2x bitmap `points` wide, so showing it never waits on a lazy render.
+    static func rasterized(_ image: NSImage, points: CGFloat) -> NSImage {
+        let pixels = Int(points * 2)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return image }
+        // Set the point size before making the context, so it draws at 2x across the whole bitmap.
+        rep.size = NSSize(width: points, height: points)
+        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return image }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        context.imageInterpolation = .high
+        image.draw(in: NSRect(x: 0, y: 0, width: points, height: points))
+        NSGraphicsContext.restoreGraphicsState()
+        let out = NSImage(size: rep.size)
+        out.addRepresentation(rep)
+        return out
     }
 }
 

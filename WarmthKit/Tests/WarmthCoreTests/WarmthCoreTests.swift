@@ -57,6 +57,19 @@ struct WarmthLevelTests {
         }
     }
 
+    @Test("the slider's softest end reads 5% less blue on the everyday 1900K ceiling")
+    func softestSliderStrengthReadsFivePercent() {
+        let floor = WarmthLevel(strength: WarmthLevel.softestSliderStrength)
+        let kelvin = floor.kelvin(warmestPoint: .everydayWarmest)
+        // Same figure BlueLightReductionLabel prints: (1 − blue gain) as a rounded percent.
+        let percent = Int(((1 - rgbGain(for: kelvin).blue) * 100).rounded())
+        #expect(percent == 5)
+        #expect(kelvin.value > 5900 && kelvin.value < 6100)
+        // Still a visible warm, never true off (true off is the master toggle).
+        #expect(WarmthLevel.softestSliderStrength > 0)
+        #expect(kelvin < Kelvin.neutral)
+    }
+
     @Test("midpoint sits strictly between endpoints")
     func midpoint() {
         let warmest = Kelvin(2700)

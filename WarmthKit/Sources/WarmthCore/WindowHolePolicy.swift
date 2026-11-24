@@ -24,6 +24,9 @@ public enum WindowHolePolicy {
         /// The corner radius of the visible surface, as WindowServer or this app reports it. Nil,
         /// zero, or a value that is not finite means unknown.
         public var cornerRadius: CGFloat?
+        /// Owned by Stage Manager (`com.apple.WindowManager`), which lists a window of its own at
+        /// the bounds of each thumbnail in its strip.
+        public var isStageManager: Bool
 
         public init(
             bounds: CGRect,
@@ -32,7 +35,8 @@ public enum WindowHolePolicy {
             alpha: Double = 1,
             isRegularApp: Bool = true,
             isMeasured: Bool = false,
-            cornerRadius: CGFloat? = nil
+            cornerRadius: CGFloat? = nil,
+            isStageManager: Bool = false
         ) {
             self.bounds = bounds
             self.layer = layer
@@ -41,6 +45,7 @@ public enum WindowHolePolicy {
             self.isRegularApp = isRegularApp
             self.isMeasured = isMeasured
             self.cornerRadius = cornerRadius
+            self.isStageManager = isStageManager
         }
 
         /// `cornerRadius` when it is a usable radius.
@@ -58,12 +63,36 @@ public enum WindowHolePolicy {
     /// `kCGMainMenuWindowLevel`: the menu bar, one window per display that shows it.
     public static let mainMenuLayer = Int(CGWindowLevelForKey(.mainMenuWindow))
 
+    /// `kCGStatusWindowLevel`: menu-bar extras and the popovers they open.
+    public static let statusLayer = Int(CGWindowLevelForKey(.statusWindow))
+
+    /// How far an `NSPopover`'s window reaches past the popover on every side: room for the arrow
+    /// and the shadow. WindowServer lists the whole window. Measured on macOS 26.7 (a 340 x 400 pt
+    /// popover in a 366 x 426 pt window) and matching the reporter's macOS 27.2 screenshot.
+    static let popoverMargin: CGFloat = 13
+    /// The radius of the popover's glass on macOS 26, which this app reads from its own popover.
+    /// The window reports none.
+    static let popoverCornerRadius: CGFloat = 20
+    /// A menu-bar extra's popover window starts this far above the bottom of the menu bar: 28 pt
+    /// under a 33 pt bar, for this app's popover on macOS 26.6 and SoloFan's on the reporter's 27.2.
+    static let popoverOverlapsMenuBar: CGFloat = 5
+    /// How far from that line a popover window's top may sit.
+    static let popoverTopSlack: CGFloat = 1.5
+
     /// A menu opens this far below the menu bar.
     static let menuGapBelowMenuBar: CGFloat = 1
     /// How far a menu's top may sit from that line and still count as hanging from the menu bar.
     static let menuAttachSlack: CGFloat = 2
     /// The smallest menu a padded menu window can hold.
     static let minMenuBody: CGFloat = 16
+
+    /// The corner radius of the menu inside a padded menu window. WindowServer reports the
+    /// window's radius, which is 0 there: the menu is drawn inside a larger transparent window.
+    /// Without this the hole fell back to the titled-window radius (16 pt), leaving a warm sliver
+    /// inside an excluded app's menu corners and a warm square outside another app's menu.
+    /// Measured on macOS 27.2: a circle fitted to the drawn corner of three menus in the
+    /// reporter's screenshots gave 13.0 pt each. Only padded menus use it.
+    static let paddedMenuCornerRadius: CGFloat = 13
 
     /// The widest shadow margin a window may add around another window of the same app.
     static let maxShadowMargin: CGFloat = 128
@@ -83,20 +112,28 @@ public enum WindowHolePolicy {
     /// curve keeps the colour of what is behind it: warm around a neutral window, neutral around a
     /// warm menu or popover in front of one. `cornerRadius` is the fallback for a neutral window
     /// whose radius is unknown (a titled window's). A warm window with no known radius is cut
-    /// square. A window that fills the display is square: its corners are the screen's corners.
+    /// square. A menu inside a padded window with no known radius takes `paddedMenuCornerRadius`.
+    /// A window that fills the display is square: its corners are the screen's corners.
+    /// A menu-bar extra's popover counts at the popover, not its window, and stays warm like a menu
+    /// when its app is not excluded. Only with `reportsCornerRadii`, true where WindowServer reports
+    /// window radii: elsewhere every radius is unknown, and status-level windows keep the old rules.
+    /// The excluded app's thumbnail in the Stage Manager strip is not a hole: it is drawn tilted,
+    /// so a rectangle at its bounds misses its corners and shows the wallpaper beside it neutral.
     public static func neutralRegion(
         windows: [Window],
         owner: Int32,
         display: CGRect,
         cornerRadius: CGFloat = 0,
         floatingOwners: Set<Int32> = [],
-        menuMargin: CGFloat = 0
+        menuMargin: CGFloat = 0,
+        reportsCornerRadii: Bool = false
     ) -> [CGRect] {
         var region: [CGRect] = []
         var occluders: [Occluder] = []
         let shadows = shadowFrames(in: windows, display: display)
         let menuBar = menuBar(in: windows, display: display)
         let menuOwners = ownersWithMenuBarMenu(in: windows, menuBar: menuBar, menuMargin: menuMargin)
+        let thumbnails = stageThumbnailFrames(in: windows)
         for (index, window) in windows.enumerated() {
             guard window.alpha > 0.01, !window.bounds.isEmpty else { continue }
             // Desktop-level windows sit behind everything. Finder's desktop is one of them, so an
@@ -109,16 +146,28 @@ public enum WindowHolePolicy {
             let floating = window.layer > 0 && !covers
             let neutral = (window.owner == owner && (window.layer == 0 || floating))
                 || (floating && floatingOwners.contains(window.owner))
+            if neutral, window.layer == 0, isStageThumbnail(window, frames: thumbnails) { continue }
             var bounds = window.bounds
+            var reportedRadius = window.knownCornerRadius
             if window.layer == popUpMenuLayer, !window.isMeasured {
                 // Another accessory app's window is trusted as a menu only while that app has a
                 // menu hanging from the menu bar. The volume control has other margins.
                 let isMenu = neutral || window.isRegularApp || menuOwners.contains(window.owner)
                 guard isMenu, let body = menuBody(of: window.bounds, menuMargin: menuMargin) else { continue }
+                if body != window.bounds, reportedRadius == nil { reportedRadius = paddedMenuCornerRadius }
                 bounds = body
             }
+            // Only where WindowServer reports radii (macOS 26 and later) is a missing radius a sign of
+            // a popover, and only there were its margin and radius measured.
+            let popover = reportsCornerRadii && window.layer == statusLayer && !window.isMeasured
+                && reportedRadius == nil
+                ? popoverBody(of: window, in: windows, menuBar: menuBar) : nil
+            if let popover {
+                bounds = popover
+                reportedRadius = popoverCornerRadius
+            }
             if neutral {
-                let radius = covers ? 0 : (window.knownCornerRadius ?? cornerRadius)
+                let radius = covers ? 0 : (reportedRadius ?? cornerRadius)
                 for piece in roundedInterior(bounds, radius: radius) {
                     let clipped = piece.intersection(display)
                     if !clipped.isNull, !clipped.isEmpty {
@@ -127,12 +176,32 @@ public enum WindowHolePolicy {
                 }
                 continue
             }
-            if countsAsOccluder(window, display: display) {
-                let radius = covers ? 0 : (window.knownCornerRadius ?? 0)
+            if popover != nil || countsAsOccluder(window, display: display) {
+                let radius = covers ? 0 : (reportedRadius ?? 0)
                 occluders.append(Occluder(bounds: bounds, radius: radius))
             }
         }
         return region
+    }
+
+    // MARK: Stage Manager
+
+    /// Bounds of Stage Manager's own normal-level windows: one per thumbnail in its strip.
+    private static func stageThumbnailFrames(in windows: [Window]) -> [CGRect] {
+        windows.filter { $0.isStageManager && $0.layer == 0 && $0.alpha > 0.01 && !$0.bounds.isEmpty }
+            .map(\.bounds)
+    }
+
+    /// An app window that Stage Manager is showing as a thumbnail in its strip: it lists the app's
+    /// window at the thumbnail's bounds, and a window of its own at the same bounds. A window on
+    /// the stage has no such twin.
+    private static func isStageThumbnail(_ window: Window, frames: [CGRect]) -> Bool {
+        guard !window.isStageManager else { return false }
+        let bounds = window.bounds
+        return frames.contains { frame in
+            abs(frame.minX - bounds.minX) <= 1 && abs(frame.minY - bounds.minY) <= 1
+                && abs(frame.width - bounds.width) <= 1 && abs(frame.height - bounds.height) <= 1
+        }
     }
 
     // MARK: Menu windows
@@ -160,6 +229,28 @@ public enum WindowHolePolicy {
             }
         }
         return seen
+    }
+
+    /// The popover inside a menu-bar extra's popover window: a status-level window whose top sits
+    /// where a popover's arrow puts it, `popoverOverlapsMenuBar` above the bottom of the menu bar,
+    /// under a status item. Nil for anything else, or with no menu bar listed. The item may belong
+    /// to any process: on macOS 26 Control Center owns every app's status item. A notch tool's
+    /// panel at the top edge or just under the bar, and a strip with no item above it, are not
+    /// popovers.
+    private static func popoverBody(of window: Window, in windows: [Window], menuBar: CGRect?) -> CGRect? {
+        let bounds = window.bounds
+        guard let menuBar,
+              abs(bounds.minY - (menuBar.maxY - popoverOverlapsMenuBar)) <= popoverTopSlack,
+              bounds.width >= 2 * popoverMargin + minMenuBody,
+              bounds.height >= 2 * popoverMargin + minMenuBody else { return nil }
+        let body = bounds.insetBy(dx: popoverMargin, dy: popoverMargin)
+        let hasItem = windows.contains { item in
+            item.layer == statusLayer && item.alpha > 0.01 && !item.bounds.isEmpty
+                && item.bounds.minY >= menuBar.minY - 1 && item.bounds.maxY <= menuBar.maxY + 1
+                && item.bounds.minX >= menuBar.minX - 1 && item.bounds.maxX <= menuBar.maxX + 1
+                && item.bounds.midX >= body.minX && item.bounds.midX <= body.maxX
+        }
+        return hasItem ? body : nil
     }
 
     /// The menu inside a menu-level window. Nil when the window is too small to hold a padded menu.

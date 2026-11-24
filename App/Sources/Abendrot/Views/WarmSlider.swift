@@ -56,9 +56,8 @@ struct WarmSlider: View {
     /// marks you see line up exactly with the clicks you hear. More = finer/denser mini ticks.
     private let detentCount = 110
     /// Left edge of the visible slider: still soft, not true off. True off lives in the master toggle.
-    // 0.104 maps to ~5193K on the everyday 1900K curve, which the shared blue-light label reports
-    // as ≈15% less blue-channel light. Keep the soft end factually aligned with the label.
-    private let minimumSoftStrength = 0.104
+    /// ≈5% less blue light on the everyday ceiling; WarmthLevelTests keeps it aligned with the label.
+    private let minimumSoftStrength = WarmthLevel.softestSliderStrength
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 12) {

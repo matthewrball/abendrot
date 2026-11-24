@@ -123,6 +123,9 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
 
     private var cornerRadius: CGFloat?
 
+    /// Whether the last window list came with WindowServer's corner radii (macOS 26 and later).
+    private var reportsCornerRadii = false
+
     /// The transparent margin around this Mac's menu windows. Zero until a menu window proves
     /// one. It depends on the system, so it is kept after tracking stops. It is never stored.
     private var menuMargin: CGFloat = 0
@@ -181,12 +184,14 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
                 display: display,
                 cornerRadius: cornerRadius ?? 0,
                 floatingOwners: floating,
-                menuMargin: menuMargin)
+                menuMargin: menuMargin,
+                reportsCornerRadii: reportsCornerRadii)
             panel.setTiles(WindowHolePolicy.warmTiles(around: region, in: display), display: display)
         }
     }
 
     private static let screenCaptureBundleID = "com.apple.screencaptureui"
+    private static let stageManagerBundleID = "com.apple.WindowManager"
 
     /// After focus leaves, the tracking timer is the only thing still running. When the last
     /// floating window closes, or moves to another display, the engine has to choose the layer again.
@@ -264,7 +269,9 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
         guard let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
             as? [[String: Any]] else { return [] }
         let panelNumbers = Set(panels.values.map(\.windowNumber))
-        let radii = Self.cornerRadii(of: raw.compactMap { $0[kCGWindowNumber as String] as? Int })
+        let reported = Self.cornerRadii(of: raw.compactMap { $0[kCGWindowNumber as String] as? Int })
+        reportsCornerRadii = reported != nil
+        let radii = reported ?? [:]
         return raw.compactMap { window in
             guard let boundsDict = window[kCGWindowBounds as String] as? [String: Any],
                   var rect = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) else { return nil }
@@ -302,7 +309,8 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
                 alpha: window[kCGWindowAlpha as String] as? Double ?? 1,
                 isRegularApp: regular,
                 isMeasured: measured,
-                cornerRadius: radius
+                cornerRadius: radius,
+                isStageManager: bundleID(for: owner) == Self.stageManagerBundleID
             )
         }
     }
@@ -311,12 +319,13 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
     /// sample, not cached: a window has no radius until it is ordered in, and one query for every
     /// on-screen window costs well under a tenth of a millisecond. Older macOS has no such query,
     /// so every radius stays unknown and the hole keeps the titled-window radius as before.
-    private static func cornerRadii(of numbers: [Int]) -> [Int: CGFloat] {
+    /// Nil when this macOS has no such query, so a missing radius means nothing.
+    private static func cornerRadii(of numbers: [Int]) -> [Int: CGFloat]? {
         let listed = numbers.filter { $0 > 0 && $0 <= Int(UInt32.max) }
         guard !listed.isEmpty else { return [:] }
         let ids = listed.map { UInt32($0) }
         var values = [Double](repeating: 0, count: ids.count)
-        guard WKCopyWindowCornerRadii(ids, ids.count, &values) else { return [:] }
+        guard WKCopyWindowCornerRadii(ids, ids.count, &values) else { return nil }
         var radii: [Int: CGFloat] = [:]
         for (number, value) in zip(listed, values) where value.isFinite && value > 0 && value < 80 {
             radii[number] = CGFloat(value)
