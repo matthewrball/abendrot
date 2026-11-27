@@ -53,11 +53,23 @@ public enum WindowHolePolicy {
             guard let cornerRadius, cornerRadius.isFinite, cornerRadius > 0 else { return nil }
             return cornerRadius
         }
+
+        /// Whether this window may be the transparent window of a padded menu. False for a window
+        /// that WindowServer reports a corner radius for: WindowServer rounds a window at its own
+        /// bounds, so the window is drawn to its edges and carries no transparent margin. A padded
+        /// menu's window reports none (macOS 27.2: radius 0, the menu drawn inside it). Apps raise
+        /// ordinary windows to the menu level too, such as LuLu's connection alert. A window made
+        /// clear behind a glass view reports no radius either (LuLu 4.5.7's alert; a stand-in reads
+        /// 0 on macOS 26.6), so it still counts as a possible menu.
+        public var canBePaddedMenu: Bool {
+            knownCornerRadius == nil
+        }
     }
 
     /// `kCGPopUpMenuWindowLevel`: menus, context menus, and menu-bar extra windows. On some Macs
     /// the window is the menu. On others it carries a wide transparent margin on every side, and
-    /// the window list reports nothing that tells the two apart. See `observedMenuMargin`.
+    /// the window list reports nothing that tells the two apart. See `observedMenuMargin`. Apps
+    /// also raise ordinary windows to this level; see `Window.canBePaddedMenu`.
     public static let popUpMenuLayer = Int(CGWindowLevelForKey(.popUpMenuWindow))
 
     /// `kCGMainMenuWindowLevel`: the menu bar, one window per display that shows it.
@@ -90,9 +102,14 @@ public enum WindowHolePolicy {
     /// window's radius, which is 0 there: the menu is drawn inside a larger transparent window.
     /// Without this the hole fell back to the titled-window radius (16 pt), leaving a warm sliver
     /// inside an excluded app's menu corners and a warm square outside another app's menu.
-    /// Measured on macOS 27.2: a circle fitted to the drawn corner of three menus in the
-    /// reporter's screenshots gave 13.0 pt each. Only padded menus use it.
-    static let paddedMenuCornerRadius: CGFloat = 13
+    /// Measured on macOS 27.2.1 (#39), per device row against the menu's own outline, in ten
+    /// corners of four of the reporter's screenshots: a menu-bar app's menu, Finder's Apple and
+    /// File menus, and a contextual menu. The least-squares circle is 12.2 to 12.3 pt in every
+    /// corner (12.3 to 12.4 pt fitted to the outline rounded to whole pixels). The corner macOS
+    /// draws is a continuous curve, not a circle, and the cut steps in 1 pt rows; at 12.25 pt no
+    /// row leaves more than about a pixel of menu or backdrop on the wrong side. The 13 pt used
+    /// before left up to 2.3 pixels of a warm menu's bright rim neutral. Only padded menus use it.
+    static let paddedMenuCornerRadius: CGFloat = 12.25
 
     /// The widest shadow margin a window may add around another window of the same app.
     static let maxShadowMargin: CGFloat = 128
@@ -106,8 +123,10 @@ public enum WindowHolePolicy {
     /// is never a hole or a warm box. Desktop windows, including Finder's, are never a hole.
     /// Overlays that are invisible or span the whole display are ignored.
     /// `menuMargin` is the transparent margin of this Mac's menu windows, proven by
-    /// `observedMenuMargin`. Menu-level windows count at their bounds inset by it. Zero, the
-    /// default, means no margin has been proven: their bounds are then taken as the menu.
+    /// `observedMenuMargin`. Menu-level windows count at their bounds inset by it, except an
+    /// ordinary window an app raised to that level (`canBePaddedMenu` is false), which counts at
+    /// its bounds. Zero, the default, means no margin has been proven: their bounds are then taken
+    /// as the menu.
     /// Each window is cut at its own `cornerRadius` when one is known, so the square outside the
     /// curve keeps the colour of what is behind it: warm around a neutral window, neutral around a
     /// warm menu or popover in front of one. `cornerRadius` is the fallback for a neutral window
@@ -153,9 +172,14 @@ public enum WindowHolePolicy {
                 // Another accessory app's window is trusted as a menu only while that app has a
                 // menu hanging from the menu bar. The volume control has other margins.
                 let isMenu = neutral || window.isRegularApp || menuOwners.contains(window.owner)
-                guard isMenu, let body = menuBody(of: window.bounds, menuMargin: menuMargin) else { continue }
-                if body != window.bounds, reportedRadius == nil { reportedRadius = paddedMenuCornerRadius }
-                bounds = body
+                guard isMenu else { continue }
+                // Only a window that can be a padded menu is cut at the menu inside it. An ordinary
+                // window raised to this level counts at its bounds, like any other window.
+                if window.canBePaddedMenu {
+                    guard let body = menuBody(of: window.bounds, menuMargin: menuMargin) else { continue }
+                    if body != window.bounds, reportedRadius == nil { reportedRadius = paddedMenuCornerRadius }
+                    bounds = body
+                }
             }
             // Only where WindowServer reports radii (macOS 26 and later) is a missing radius a sign of
             // a popover, and only there were its margin and radius measured.
@@ -211,24 +235,73 @@ public enum WindowHolePolicy {
     /// edge is padded by the distance to that line. Nil without such a window: a context menu, a
     /// menu that starts under the menu bar, or a display with no menu bar listed proves nothing.
     /// Only a regular app's window counts. Notch tools and system overlays are accessory apps and
-    /// may sit above the top edge for other reasons.
+    /// may sit above the top edge for other reasons. So does a window that can't be a padded menu
+    /// (`Window.canBePaddedMenu`): WindowServer rounds it at its own bounds, so it has no margin.
+    /// The menu inside the window, its bounds inset by the margin read, must lie on the display it
+    /// is measured against, to within `menuBodySlack`: a menu is always drawn on one display. A
+    /// window above a display's top edge that is on another display, such as an alert dragged
+    /// across onto a display whose top is lower, reads a margin it does not have.
+    /// A reading from a window whose part above the display's top edge lies on another display is
+    /// ambiguous (`menuMarginReading`). The largest reading that is not ambiguous is returned;
+    /// without one, the largest ambiguous one.
     public static func observedMenuMargin(in windows: [Window], displays: [CGRect]) -> CGFloat? {
-        var seen: CGFloat?
+        menuMarginReading(in: windows, displays: displays)?.margin
+    }
+
+    /// How far past its display's edge the menu inside a proving window may reach.
+    static let menuBodySlack: CGFloat = 1
+
+    /// The margin `observedMenuMargin` reads, the bounds of the window it reads it from (the first
+    /// one listed, front to back, when several read the same), and whether the reading is
+    /// ambiguous. A reading is ambiguous when the window's part above the display's top edge lies
+    /// on another display, by more than `otherDisplayOverlap` both ways. Over a display with nothing above
+    /// it, only a window placed above the top edge can be there. Over a display stacked below
+    /// another, an ordinary window dragged down across the boundary reads exactly like a padded menu
+    /// hanging from that display's menu bar, so one such reading proves nothing.
+    static func menuMarginReading(
+        in windows: [Window],
+        displays: [CGRect]
+    ) -> (margin: CGFloat, window: CGRect, ambiguous: Bool)? {
+        var clear: (margin: CGFloat, window: CGRect)?
+        var ambiguous: (margin: CGFloat, window: CGRect)?
         for display in displays {
             guard let menuBar = menuBar(in: windows, display: display) else { continue }
             let menuTop = menuBar.maxY + menuGapBelowMenuBar
+            let onDisplay = display.insetBy(dx: -menuBodySlack, dy: -menuBodySlack)
             for window in windows
-            where window.layer == popUpMenuLayer && window.isRegularApp && !window.isMeasured {
+            where window.layer == popUpMenuLayer && window.isRegularApp && !window.isMeasured
+                && window.canBePaddedMenu {
                 let bounds = window.bounds
                 guard window.alpha > 0.01, bounds.midX >= display.minX, bounds.midX < display.maxX else { continue }
                 let margin = menuTop - bounds.minY
                 guard bounds.minY < display.minY, margin <= maxShadowMargin,
                       bounds.width >= 2 * margin + minMenuBody,
-                      bounds.height >= 2 * margin + minMenuBody else { continue }
-                seen = max(seen ?? 0, margin)
+                      bounds.height >= 2 * margin + minMenuBody,
+                      onDisplay.contains(bounds.insetBy(dx: margin, dy: margin)) else { continue }
+                if reachesAnotherDisplay(bounds, above: display, among: displays) {
+                    if margin > (ambiguous?.margin ?? 0) { ambiguous = (margin, bounds) }
+                } else if margin > (clear?.margin ?? 0) {
+                    clear = (margin, bounds)
+                }
             }
         }
-        return seen
+        if let clear { return (clear.margin, clear.window, false) }
+        return ambiguous.map { ($0.margin, $0.window, true) }
+    }
+
+    /// How far, both ways, a window's part above a display's top edge must overlap another display
+    /// to make its reading ambiguous. Displays that only touch overlap by nothing.
+    static let otherDisplayOverlap: CGFloat = 1
+
+    /// Whether the part of `bounds` above `display`'s top edge overlaps another of `displays` by
+    /// more than `otherDisplayOverlap` both ways. That part ends where `display` and any mirror of it
+    /// begin, so it never overlaps them.
+    private static func reachesAnotherDisplay(_ bounds: CGRect, above display: CGRect, among displays: [CGRect]) -> Bool {
+        let above = CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: display.minY - bounds.minY)
+        return displays.contains { other in
+            let overlap = above.intersection(other)
+            return !overlap.isNull && overlap.width > otherDisplayOverlap && overlap.height > otherDisplayOverlap
+        }
     }
 
     /// The popover inside a menu-bar extra's popover window: a status-level window whose top sits
@@ -263,7 +336,7 @@ public enum WindowHolePolicy {
     /// Accessory apps whose menu-level windows are menus. Without a proven margin every owner
     /// counts, at its bounds. With one, only an owner with a menu hanging from the menu bar
     /// counts; its other menu-level windows are submenus. With no menu bar listed none counts, so
-    /// such a window cuts no warm box.
+    /// such a window cuts no warm box. Only a window that can be a padded menu hangs as one.
     private static func ownersWithMenuBarMenu(
         in windows: [Window],
         menuBar: CGRect?,
@@ -273,11 +346,12 @@ public enum WindowHolePolicy {
         guard menuMargin > 0 else { return Set(menus.map(\.owner)) }
         guard let menuBar else { return [] }
         let windowTop = menuBar.maxY + menuGapBelowMenuBar - menuMargin
-        return Set(menus.filter { abs($0.bounds.minY - windowTop) <= menuAttachSlack }.map(\.owner))
+        return Set(menus.filter { $0.canBePaddedMenu && abs($0.bounds.minY - windowTop) <= menuAttachSlack }
+            .map(\.owner))
     }
 
     /// The menu bar on `display`: a menu-bar-level strip across its top edge.
-    private static func menuBar(in windows: [Window], display: CGRect) -> CGRect? {
+    static func menuBar(in windows: [Window], display: CGRect) -> CGRect? {
         windows.first { window in
             let bounds = window.bounds
             return window.layer == mainMenuLayer && window.alpha > 0.01

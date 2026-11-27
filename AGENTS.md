@@ -257,8 +257,16 @@ Print what Abendrot sees when it decides whether each screen is full screen: the
 display, whether Finder's desktop and the Dock's full-screen backdrop are present, the top app
 window, and the desktop-level, app-level, menu-level and status-level (menu-bar items with their
 owners, and the panels and popovers they open) window list with each window's corner
-radius as WindowServer reports it. Window owners, layers, sizes and radii only, never titles.
-`--delay` (0-60) waits first so you can switch to the full-screen app or open a menu.
+radius as WindowServer reports it. Each menu-level row also says whether Keep other windows warm
+may take it for a padded menu: `padded menu: possible`, or `padded menu: no (reports a radius)`.
+A radius of 80 pt or more counts as none, as in the app. On macOS 26 and later the row also shows
+the window's WindowServer tags and how far its shadow box reaches past each edge
+(`shadow left/top/right/bottom`, or `shadow none`). A `Menu margin remembered:` line shows the stored
+`windowFilterMenuMargin` (see the appendix): `none`, `unreadable value, not used`, or
+`<margin> pt, proven on <build>` followed by `(this Mac), used when Keep other windows warm is on`
+or the reason this Mac does not use it (another build, an unknown build, before macOS 26, or no
+window corner query). Window owners, layers, sizes, radii, tags and shadow boxes only, never
+titles. `--delay` (0-60) waits first so you can switch to the full-screen app or open a menu.
 
 ```sh
 abendrot debug fullscreen --delay 5
@@ -503,6 +511,7 @@ Domain: `app.abendrot.Abendrot`
 | `pauseKind` | String | `oneHour` \| `untilSunrise` | `defaults write app.abendrot.Abendrot pauseKind -string oneHour` |
 | `pausesForFullScreen` | Bool | standing full-screen preference | `defaults write app.abendrot.Abendrot pausesForFullScreen -bool true` |
 | `keepsOtherWindowsWarm` | Bool | experimental, direct download: keep only an excluded app's windows neutral | `defaults write app.abendrot.Abendrot keepsOtherWindowsWarm -bool true` |
+| `windowFilterMenuMargin` | Dictionary: `build` String, `margin` Number | app-managed, not a setting: the transparent margin of this Mac's padded menu windows (`0` < margin ≤ `128` pt) and the OS build (`kern.osversion`) it was proven on. Used and written only on macOS 26 and later, while Keep other windows warm cuts menus. The first regular-app menu window that hangs from the menu bar and holds still for 0.2 s sets it; after that a larger value needs a second still window of another size, seen in the same session, to agree within 0.5 pt, and so does any window whose part above the screen's top edge lies on another display. No reading lowers it; the front app's unpadded menu-bar menu proves there is no margin and removes it. Another window parked above the top edge can set a wrong first value: delete the key to forget it. Absent, invalid or from another build: ignored, and menus count at their whole windows until a menu proves the margin. `abendrot debug fullscreen` prints it | `defaults read app.abendrot.Abendrot windowFilterMenuMargin`; forget a wrong value with `defaults delete app.abendrot.Abendrot windowFilterMenuMargin` |
 | `lateNightEnabled` | Bool or absent | Sunset mode's opt-in late-night stage: ease warmer before bedtime, hold until sunrise. Absent = off | `defaults write app.abendrot.Abendrot lateNightEnabled -bool true` |
 | `bedtimeMinutes` | Number (Int) | bedtime as minutes after midnight on the Mac's clock, 8 PM–4 AM: `1200`–`1439` or `0`–`240`, on a 30-minute step. A time outside the range is moved to the nearer end, and a time off the step (`1395`, 23:15) snaps to the nearest step, the earlier one on a tie. Absent = `1380` (11 PM) | `defaults write app.abendrot.Abendrot bedtimeMinutes -int 1380` |
 | `lateNightWarmthStrength` | Number (Double) | `0.0`–`1.0` on the everyday curve (1900 K at `1.0`). Absent or invalid = `1.0`. A level no warmer than the evening changes nothing | `defaults write app.abendrot.Abendrot lateNightWarmthStrength -float 1.0` |

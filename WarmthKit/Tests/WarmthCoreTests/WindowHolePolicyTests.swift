@@ -749,22 +749,23 @@ struct WindowHolePolicyTests {
         }
     }
 
-    @Test("A padded menu's body takes the radius its window reports")
-    func paddedMenuBodyUsesReportedRadius() {
+    @Test("A menu-level window that reports a radius is drawn to its edges, so it is not inset (#38)")
+    func roundedMenuLevelWindowIsNotInset() {
+        // WindowServer rounds a window at its own bounds. A padded menu's window reports radius 0
+        // (macOS 27.2), so a window that reports one is an ordinary window, such as an alert.
         let excluded = CGRect(x: 60, y: 40, width: 1100, height: 800)
         let window = CGRect(x: 400, y: 300, width: 310, height: 270)
-        let menu = window.insetBy(dx: 75, dy: 75)
         let warm = WindowHolePolicy.neutralRegion(windows: [
             .init(bounds: window, layer: 101, owner: 3, cornerRadius: 12),
             .init(bounds: excluded, layer: 0, owner: terminal),
         ], owner: terminal, display: display, menuMargin: 75)
-        #expect(isNeutral(warm, CGPoint(x: menu.minX + 0.5, y: menu.minY + 0.5)))
-        #expect(!isNeutral(warm, CGPoint(x: menu.midX, y: menu.midY)))
+        #expect(isNeutral(warm, CGPoint(x: window.minX + 0.5, y: window.minY + 0.5)))
+        #expect(!isNeutral(warm, CGPoint(x: window.minX + 30, y: window.midY)))
 
         let neutral = WindowHolePolicy.neutralRegion(windows: [
             .init(bounds: window, layer: 101, owner: terminal, cornerRadius: 12),
         ], owner: terminal, display: display, cornerRadius: 16, menuMargin: 75)
-        #expect(sameRegion(neutral, WindowHolePolicy.roundedInterior(menu, radius: 12)))
+        #expect(sameRegion(neutral, WindowHolePolicy.roundedInterior(window, radius: 12)))
     }
 
     // MARK: Padded menus on macOS 27 and the Stage Manager strip (#30 after 1.1.18)

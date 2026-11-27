@@ -126,9 +126,20 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
     /// Whether the last window list came with WindowServer's corner radii (macOS 26 and later).
     private var reportsCornerRadii = false
 
-    /// The transparent margin around this Mac's menu windows. Zero until a menu window proves
-    /// one. It depends on the system, so it is kept after tracking stops. It is never stored.
-    private var menuMargin: CGFloat = 0
+    /// The transparent margin around this Mac's menu windows. Zero until a menu window proves one.
+    /// It depends on the system, so it is kept after tracking stops. Where WindowServer reports
+    /// corner radii (macOS 26 and later) it is remembered across launches with the OS build it was
+    /// proven on: the first menu after launch is then cut at the menu, not at its window. Read from
+    /// the app's defaults on the first sample; written only when it changes, never per sample
+    /// (`MenuMarginMemory`). Elsewhere every launch starts at zero, as in 1.1.19.
+    private lazy var menuMargin = MenuMarginMemory(
+        stored: MenuMarginMemory.Record(storedValue: UserDefaults.standard.object(forKey: MenuMarginMemory.defaultsKey)),
+        build: Self.osBuild,
+        persists: Self.windowServerReportsCornerRadii)
+
+    /// Whether this macOS has WindowServer's corner radius query (macOS 26 and later, where it was
+    /// checked). Asks for no window, so it does not depend on any one sample's query succeeding.
+    private static let windowServerReportsCornerRadii: Bool = WKCopyWindowCornerRadii(nil, 0, nil)
 
     private var bundleIDs: [pid_t: String] = [:]
     private var excludedBundleIDs: Set<String> = []
@@ -170,10 +181,18 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
         let windows = listedWindows()
         let floating = floatingOwners(in: windows, besides: owner)
         noteFloatingWindows(in: windows, frontExcluded: frontExcluded)
-        if windows.contains(where: { $0.layer == WindowHolePolicy.popUpMenuLayer }),
-           let proven = WindowHolePolicy.observedMenuMargin(
-               in: windows, displays: Self.onlineDisplayBounds().map(\.bounds)) {
-            menuMargin = proven
+        // Menu-bar menus belong to the frontmost app, and only a window well inside the titled
+        // corner can be an unpadded menu. Every sample is noted, a sample with no menu-level window
+        // as proving nothing, so a reading counts only from a window that held still for 0.2 s,
+        // timed on the media clock: extra samples from apply, rebuildPanels or a Space change do
+        // not shorten it.
+        let proof = windows.contains(where: { $0.layer == WindowHolePolicy.popUpMenuLayer })
+            ? WindowHolePolicy.menuMarginProof(
+                in: windows, displays: Self.onlineDisplayBounds().map(\.bounds),
+                titledRadius: cornerRadius ?? 0, frontOwner: front?.processIdentifier)
+            : nil
+        if let write = menuMargin.note(proof, at: CACurrentMediaTime()) {
+            Self.storeMenuMargin(write)
         }
         for (_, panel) in panels {
             panel.setSharingType(capturing ? .none : .readOnly)
@@ -184,11 +203,33 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
                 display: display,
                 cornerRadius: cornerRadius ?? 0,
                 floatingOwners: floating,
-                menuMargin: menuMargin,
+                menuMargin: menuMargin.margin,
                 reportsCornerRadii: reportsCornerRadii)
             panel.setTiles(WindowHolePolicy.warmTiles(around: region, in: display), display: display)
         }
     }
+
+    /// Keeps the menu margin record in the app's own defaults, beside its settings. The Debug build
+    /// and the installed app share that domain, which is right: the margin belongs to the OS build.
+    private static func storeMenuMargin(_ write: MenuMarginMemory.Write) {
+        switch write {
+        case .save(let record):
+            UserDefaults.standard.set(record.storedValue, forKey: MenuMarginMemory.defaultsKey)
+        case .clear:
+            UserDefaults.standard.removeObject(forKey: MenuMarginMemory.defaultsKey)
+        }
+    }
+
+    /// This Mac's OS build (`kern.osversion`, such as 26B131), or nil when it cannot be read. Not
+    /// the version string, which is localized: a build names exactly one release.
+    private static let osBuild: String? = {
+        var size = 0
+        guard sysctlbyname("kern.osversion", nil, &size, nil, 0) == 0, size > 1 else { return nil }
+        var bytes = [UInt8](repeating: 0, count: size)
+        guard sysctlbyname("kern.osversion", &bytes, &size, nil, 0) == 0 else { return nil }
+        let build = String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        return build.isEmpty ? nil : build
+    }()
 
     private static let screenCaptureBundleID = "com.apple.screencaptureui"
     private static let stageManagerBundleID = "com.apple.WindowManager"
@@ -319,7 +360,8 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
     /// sample, not cached: a window has no radius until it is ordered in, and one query for every
     /// on-screen window costs well under a tenth of a millisecond. Older macOS has no such query,
     /// so every radius stays unknown and the hole keeps the titled-window radius as before.
-    /// Nil when this macOS has no such query, so a missing radius means nothing.
+    /// Nil when this macOS has no such query, so a missing radius means nothing. A value that
+    /// `WindowHolePolicy.usableCornerRadius` refuses is left out, as unknown.
     private static func cornerRadii(of numbers: [Int]) -> [Int: CGFloat]? {
         let listed = numbers.filter { $0 > 0 && $0 <= Int(UInt32.max) }
         guard !listed.isEmpty else { return [:] }
@@ -327,8 +369,8 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
         var values = [Double](repeating: 0, count: ids.count)
         guard WKCopyWindowCornerRadii(ids, ids.count, &values) else { return nil }
         var radii: [Int: CGFloat] = [:]
-        for (number, value) in zip(listed, values) where value.isFinite && value > 0 && value < 80 {
-            radii[number] = CGFloat(value)
+        for (number, value) in zip(listed, values) {
+            if let radius = WindowHolePolicy.usableCornerRadius(value) { radii[number] = radius }
         }
         return radii
     }
@@ -358,8 +400,7 @@ public final class WindowFilterBackend: WarmthBackend, ExcludedWindowFilter {
     private static func surfaceCornerRadius(behind content: NSView) -> CGFloat? {
         guard #available(macOS 26, *), let frameView = content.superview else { return nil }
         for case let glass as NSGlassEffectView in frameView.subviews where glass.frame == frameView.bounds {
-            let radius = glass.cornerRadius
-            if radius.isFinite, radius > 0, radius < 80 { return radius }
+            if let radius = WindowHolePolicy.usableCornerRadius(Double(glass.cornerRadius)) { return radius }
         }
         return nil
     }
