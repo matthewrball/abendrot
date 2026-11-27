@@ -45,15 +45,15 @@
     <Program_Install_Support>Install and Uninstall</Program_Install_Support>
     <Program_OS_Support>Mac OS X</Program_OS_Support>
     <Program_Language>English</Program_Language>
-    <Program_Change_Info>With other windows kept warm on macOS 27, Abendrot remembers the edge around menus across restarts once a menu has shown it, so an excluded app's menus should no longer start with a box. There, menu-level alerts that report corners are cut at their edges, and menu corners follow a closer curve.</Program_Change_Info>
+    <Program_Change_Info>With other windows kept warm on macOS 27, Abendrot remembers the edge around menus across restarts once an excluded app's menu-bar menus have shown it, so menus should no longer start with a box. Menu-level alerts that report corners should be cut at their edges; menu corners follow a closer curve.</Program_Change_Info>
     <Program_Specific_Category>Desktop</Program_Specific_Category>
     <Program_Categories>Desktop::Other</Program_Categories>
     <Program_Category_Class>Desktop::Other</Program_Category_Class>
     <Program_System_Requirements>macOS 12 Monterey or later, Apple silicon or Intel</Program_System_Requirements>
     <File_Info>
-      <File_Size_Bytes>10316266</File_Size_Bytes>
-      <File_Size_K>10074</File_Size_K>
-      <File_Size_MB>9.84</File_Size_MB>
+      <File_Size_Bytes>10367538</File_Size_Bytes>
+      <File_Size_K>10124</File_Size_K>
+      <File_Size_MB>9.89</File_Size_MB>
     </File_Info>
     <Expire_Info>
       <Has_Expire_Info>N</Has_Expire_Info>
